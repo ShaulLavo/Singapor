@@ -95,6 +95,7 @@ import {
   updateGutterContributions,
   updateGutterWidthIfNeeded,
   updateMountedRowsAfterSameLineEdit,
+  updateSpacerHeight,
   updateSpacerWidth,
   viewportPointMetrics,
 } from "./virtualizedTextViewRows";
@@ -681,10 +682,14 @@ export class VirtualizedTextView {
   private renderSnapshot(snapshot: FixedRowVirtualizerSnapshot): void {
     const view = this.view;
     updateGutterWidthIfNeeded(view);
+    updateSpacerHeight(view, snapshot);
     updateSpacerWidth(view);
     renderBlockLanes(view, snapshot);
     const key = rowsKey(view, snapshot);
-    if (key === view.lastRenderedRowsKey) return;
+    if (key === view.lastRenderedRowsKey) {
+      view.onViewportChange?.();
+      return;
+    }
 
     view.lastRenderedRowsKey = key;
     renderRows(view, snapshot, (rowSlotId) => deleteTokenRangesForRow(view, rowSlotId));

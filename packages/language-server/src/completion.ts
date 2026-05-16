@@ -1,0 +1,434 @@
+import type { DocumentSessionChange, EditorSelectionRange, TextEdit } from "@editor/core";
+import { lspPositionToOffset } from "@editor/lsp";
+import type * as lsp from "vscode-languageserver-protocol";
+
+export const LANGUAGE_SERVER_COMPLETION_EDIT_FEATURE_ID = "editor.language-server.completion-edit";
+
+export const COMPLETION_REQUEST_DEBOUNCE_MS = 80;
+
+export type LanguageServerCompletionEditFeature = {
+  applyCompletion(application: LanguageServerCompletionApplication): boolean;
+};
+
+export type LanguageServerCompletionApplication = {
+  readonly edits: readonly TextEdit[];
+  readonly selection: EditorSelectionRange;
+};
+
+export type LanguageServerCompletionTrigger = {
+  readonly triggerKind: 1 | 2;
+  readonly triggerCharacter?: string;
+};
+
+export type CompletionWidgetShowOptions = {
+  readonly anchor: DOMRect;
+  readonly items: readonly lsp.CompletionItem[];
+  readonly selectedIndex?: number;
+};
+
+export type CompletionWidgetController = {
+  show(options: CompletionWidgetShowOptions): void;
+  hide(): void;
+  isVisible(): boolean;
+  containsTarget(target: EventTarget | null): boolean;
+  moveSelection(delta: number): void;
+  selectedItem(): lsp.CompletionItem | null;
+  dispose(): void;
+};
+
+export type CompletionWidgetOptions = {
+  readonly document: Document;
+  readonly themeSource: HTMLElement;
+  onSelect(index: number): void;
+};
+
+const COMPLETION_WIDGET_GAP_PX = 4;
+const COMPLETION_WIDGET_WIDTH_PX = 320;
+const COMPLETION_WIDGET_MAX_HEIGHT_PX = 280;
+const COMPLETION_WIDGET_MARGIN_PX = 12;
+const COMPLETION_TRIGGER_CHARACTERS = new Set([".", '"', "'", "`", "/", "@", "<", "#"]);
+const COMPLETION_THEME_VARIABLES = [
+  "--editor-background",
+  "--editor-foreground",
+  "--editor-caret-color",
+] as const;
+
+export function createCompletionWidgetController(
+  options: CompletionWidgetOptions,
+): CompletionWidgetController {
+  const element = createCompletionWidgetElement(options.document);
+  options.document.body.append(element);
+
+  let items: readonly lsp.CompletionItem[] = [];
+  let selectedIndex = 0;
+  let disposed = false;
+
+  const render = (): void => {
+    element.replaceChildren();
+    for (let index = 0; index < items.length; index += 1) {
+      element.append(completionRowElement(element.ownerDocument, items[index]!, index));
+    }
+    syncSelectedRows(element, selectedIndex);
+  };
+
+  const show = (showOptions: CompletionWidgetShowOptions): void => {
+    items = showOptions.items;
+    selectedIndex = clampIndex(showOptions.selectedIndex ?? 0, items.length);
+    syncEditorThemeVariables(element, options.themeSource);
+    positionCompletionWidget(element, showOptions.anchor);
+    render();
+    element.hidden = items.length === 0;
+  };
+
+  const hide = (): void => {
+    element.hidden = true;
+    element.replaceChildren();
+    items = [];
+    selectedIndex = 0;
+  };
+
+  const moveSelection = (delta: number): void => {
+    if (items.length === 0) return;
+
+    selectedIndex = wrapIndex(selectedIndex + delta, items.length);
+    syncSelectedRows(element, selectedIndex);
+  };
+
+  const selectedItem = (): lsp.CompletionItem | null => items[selectedIndex] ?? null;
+
+  const handlePointerDown = (event: PointerEvent): void => {
+    const row = completionRowTarget(event.target);
+    if (!row) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    selectedIndex = rowIndex(row);
+    syncSelectedRows(element, selectedIndex);
+    options.onSelect(selectedIndex);
+  };
+
+  element.addEventListener("pointerdown", handlePointerDown);
+
+  const dispose = (): void => {
+    if (disposed) return;
+
+    disposed = true;
+    element.removeEventListener("pointerdown", handlePointerDown);
+    element.remove();
+  };
+
+  return {
+    show,
+    hide,
+    isVisible: () => !element.hidden,
+    containsTarget: (target) => target instanceof Node && element.contains(target),
+    moveSelection,
+    selectedItem,
+    dispose,
+  };
+}
+
+export function completionItems(
+  result: lsp.CompletionList | readonly lsp.CompletionItem[] | null,
+): readonly lsp.CompletionItem[] {
+  if (!result) return [];
+  if (isCompletionList(result)) return result.items ?? [];
+  return result;
+}
+
+export function completionTriggerFromChange(
+  change: DocumentSessionChange | null,
+): LanguageServerCompletionTrigger | null {
+  if (!change || change.kind !== "edit") return null;
+  if (change.edits.length !== 1) return null;
+
+  const edit = change.edits[0];
+  if (!edit || edit.text.length !== 1) return null;
+
+  const character = edit.text;
+  if (COMPLETION_TRIGGER_CHARACTERS.has(character)) {
+    return { triggerKind: 2, triggerCharacter: character };
+  }
+  if (isIdentifierCharacter(character)) return { triggerKind: 1 };
+  return null;
+}
+
+export function completionApplication(
+  text: string,
+  offset: number,
+  item: lsp.CompletionItem,
+): LanguageServerCompletionApplication | null {
+  const primary = completionPrimaryEdit(text, offset, item);
+  if (!primary) return null;
+
+  const additional = additionalCompletionEdits(text, item.additionalTextEdits ?? []);
+  const edits = [primary, ...additional];
+  const head = completionSelectionHead(primary, additional);
+  return {
+    edits,
+    selection: { anchor: head, head },
+  };
+}
+
+export function completionAnchorRange(
+  text: string,
+  offset: number,
+): { readonly start: number; readonly end: number } {
+  if (text.length === 0) return { start: 0, end: 0 };
+
+  const end = Math.max(1, Math.min(offset, text.length));
+  return { start: end - 1, end };
+}
+
+function createCompletionWidgetElement(document: Document): HTMLDivElement {
+  const element = document.createElement("div");
+  element.className = "editor-language-server-completion";
+  element.hidden = true;
+  element.setAttribute("role", "listbox");
+  Object.assign(element.style, {
+    position: "fixed",
+    zIndex: "1001",
+    width: `${COMPLETION_WIDGET_WIDTH_PX}px`,
+    maxWidth: `calc(100vw - ${COMPLETION_WIDGET_MARGIN_PX * 2}px)`,
+    maxHeight: `${COMPLETION_WIDGET_MAX_HEIGHT_PX}px`,
+    overflowX: "hidden",
+    overflowY: "auto",
+    padding: "3px",
+    border: "1px solid color-mix(in srgb, var(--editor-foreground, #d4d4d8) 22%, transparent)",
+    borderRadius: "6px",
+    boxSizing: "border-box",
+    background:
+      "color-mix(in srgb, var(--editor-background, #18181b) 96%, var(--editor-foreground, #e4e4e7) 4%)",
+    color: "var(--editor-foreground, #e4e4e7)",
+    boxShadow: "0 12px 30px color-mix(in srgb, var(--editor-background, #000000) 60%, transparent)",
+    font: "12px/1.35 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+    userSelect: "none",
+    scrollbarGutter: "stable",
+  });
+  return element;
+}
+
+function completionRowElement(
+  document: Document,
+  item: lsp.CompletionItem,
+  index: number,
+): HTMLDivElement {
+  const row = document.createElement("div");
+  row.className = "editor-language-server-completion-item";
+  row.dataset.index = String(index);
+  row.setAttribute("role", "option");
+  Object.assign(row.style, {
+    display: "grid",
+    gridTemplateColumns: "44px minmax(0, 1fr) auto",
+    alignItems: "center",
+    gap: "8px",
+    minHeight: "24px",
+    padding: "2px 7px",
+    borderRadius: "4px",
+    cursor: "default",
+    whiteSpace: "nowrap",
+  });
+  row.append(
+    completionKindElement(document, item.kind),
+    completionLabelElement(document, item),
+    completionDetailElement(document, item),
+  );
+  return row;
+}
+
+function completionKindElement(
+  document: Document,
+  kind: lsp.CompletionItemKind | undefined,
+): HTMLSpanElement {
+  const element = document.createElement("span");
+  element.textContent = completionKindLabel(kind);
+  Object.assign(element.style, {
+    minWidth: "0",
+    overflow: "hidden",
+    color: "color-mix(in srgb, var(--editor-foreground, #e4e4e7) 62%, transparent)",
+    fontSize: "10px",
+    textTransform: "uppercase",
+  });
+  return element;
+}
+
+function completionLabelElement(document: Document, item: lsp.CompletionItem): HTMLSpanElement {
+  const element = document.createElement("span");
+  element.textContent = `${item.label}${item.labelDetails?.detail ?? ""}`;
+  Object.assign(element.style, {
+    minWidth: "0",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  });
+  return element;
+}
+
+function completionDetailElement(document: Document, item: lsp.CompletionItem): HTMLSpanElement {
+  const element = document.createElement("span");
+  element.textContent = item.labelDetails?.description ?? item.detail ?? "";
+  Object.assign(element.style, {
+    minWidth: "0",
+    maxWidth: "140px",
+    overflow: "hidden",
+    color: "color-mix(in srgb, var(--editor-foreground, #e4e4e7) 58%, transparent)",
+    textOverflow: "ellipsis",
+  });
+  return element;
+}
+
+function syncSelectedRows(element: HTMLDivElement, selectedIndex: number): void {
+  const rows = element.querySelectorAll<HTMLElement>(".editor-language-server-completion-item");
+  for (const row of rows) syncSelectedRow(row, rowIndex(row) === selectedIndex);
+}
+
+function syncSelectedRow(row: HTMLElement, selected: boolean): void {
+  row.setAttribute("aria-selected", selected ? "true" : "false");
+  row.style.background = selected
+    ? "color-mix(in srgb, var(--editor-caret-color, #60a5fa) 26%, transparent)"
+    : "transparent";
+}
+
+function positionCompletionWidget(element: HTMLDivElement, anchor: DOMRect): void {
+  const view = element.ownerDocument.defaultView;
+  const width = view?.innerWidth ?? 1024;
+  const height = view?.innerHeight ?? 768;
+  const left = Math.min(
+    Math.max(COMPLETION_WIDGET_MARGIN_PX, anchor.left),
+    Math.max(
+      COMPLETION_WIDGET_MARGIN_PX,
+      width - COMPLETION_WIDGET_WIDTH_PX - COMPLETION_WIDGET_MARGIN_PX,
+    ),
+  );
+  const belowTop = anchor.bottom + COMPLETION_WIDGET_GAP_PX;
+  const aboveTop = anchor.top - COMPLETION_WIDGET_MAX_HEIGHT_PX - COMPLETION_WIDGET_GAP_PX;
+  const top =
+    belowTop + COMPLETION_WIDGET_MAX_HEIGHT_PX <= height || aboveTop < COMPLETION_WIDGET_MARGIN_PX
+      ? belowTop
+      : Math.max(COMPLETION_WIDGET_MARGIN_PX, aboveTop);
+
+  element.style.left = `${left}px`;
+  element.style.top = `${Math.min(top, height - COMPLETION_WIDGET_MARGIN_PX)}px`;
+}
+
+function syncEditorThemeVariables(element: HTMLElement, source: HTMLElement): void {
+  const style = source.ownerDocument.defaultView?.getComputedStyle(source);
+  if (!style) return;
+
+  for (const variable of COMPLETION_THEME_VARIABLES) {
+    const value = style.getPropertyValue(variable);
+    if (value) element.style.setProperty(variable, value);
+  }
+}
+
+function completionPrimaryEdit(
+  text: string,
+  offset: number,
+  item: lsp.CompletionItem,
+): TextEdit | null {
+  const textEdit = completionTextEdit(item);
+  if (textEdit) return lspTextEditToTextEdit(text, textEdit, item.insertTextFormat);
+
+  const range = defaultCompletionReplacementRange(text, offset);
+  return {
+    from: range.start,
+    to: range.end,
+    text: plainCompletionText(item.insertText ?? item.label, item.insertTextFormat),
+  };
+}
+
+function completionTextEdit(item: lsp.CompletionItem): lsp.TextEdit | null {
+  const textEdit = item.textEdit;
+  if (!textEdit) return null;
+  if ("range" in textEdit) return textEdit;
+  return { range: textEdit.insert, newText: textEdit.newText };
+}
+
+function lspTextEditToTextEdit(
+  text: string,
+  edit: lsp.TextEdit,
+  format: lsp.InsertTextFormat | undefined,
+): TextEdit {
+  return {
+    from: lspPositionToOffset(text, edit.range.start),
+    to: lspPositionToOffset(text, edit.range.end),
+    text: plainCompletionText(edit.newText, format),
+  };
+}
+
+function additionalCompletionEdits(
+  text: string,
+  edits: readonly lsp.TextEdit[],
+): readonly TextEdit[] {
+  return edits.map((edit) => lspTextEditToTextEdit(text, edit, undefined));
+}
+
+function completionSelectionHead(primary: TextEdit, additional: readonly TextEdit[]): number {
+  let head = primary.from + primary.text.length;
+  for (const edit of additional) {
+    if (edit.to > primary.from) continue;
+    head += edit.text.length - (edit.to - edit.from);
+  }
+  return Math.max(0, head);
+}
+
+function defaultCompletionReplacementRange(
+  text: string,
+  offset: number,
+): { readonly start: number; readonly end: number } {
+  let start = Math.max(0, Math.min(offset, text.length));
+  while (start > 0 && isIdentifierCharacter(text[start - 1] ?? "")) start -= 1;
+
+  let end = Math.max(0, Math.min(offset, text.length));
+  while (end < text.length && isIdentifierCharacter(text[end] ?? "")) end += 1;
+  return { start, end };
+}
+
+function plainCompletionText(text: string, format: lsp.InsertTextFormat | undefined): string {
+  if (format !== 2) return text;
+  return text.replace(/\$\{\d+:([^}]*)\}/g, "$1").replace(/\$\d+/g, "");
+}
+
+function completionRowTarget(target: EventTarget | null): HTMLElement | null {
+  if (!(target instanceof Element)) return null;
+  return target.closest<HTMLElement>(".editor-language-server-completion-item");
+}
+
+function rowIndex(row: HTMLElement): number {
+  const parsed = Number(row.dataset.index);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function clampIndex(index: number, length: number): number {
+  if (length <= 0) return 0;
+  return Math.min(Math.max(0, index), length - 1);
+}
+
+function wrapIndex(index: number, length: number): number {
+  if (length <= 0) return 0;
+  return ((index % length) + length) % length;
+}
+
+function completionKindLabel(kind: lsp.CompletionItemKind | undefined): string {
+  if (kind === 2) return "meth";
+  if (kind === 3) return "fn";
+  if (kind === 5) return "field";
+  if (kind === 6) return "var";
+  if (kind === 7) return "class";
+  if (kind === 8) return "iface";
+  if (kind === 9) return "mod";
+  if (kind === 10) return "prop";
+  if (kind === 13) return "enum";
+  if (kind === 14) return "key";
+  if (kind === 20) return "member";
+  return "text";
+}
+
+function isIdentifierCharacter(value: string): boolean {
+  return /^[A-Za-z0-9_$]$/.test(value);
+}
+
+function isCompletionList(
+  value: lsp.CompletionList | readonly lsp.CompletionItem[],
+): value is lsp.CompletionList {
+  return !Array.isArray(value);
+}

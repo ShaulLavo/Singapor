@@ -164,6 +164,38 @@ describe("VirtualizedTextView", () => {
     });
   });
 
+  it("updates bottom scroll padding when the rendered row window is unchanged", () => {
+    view.setText(createLines(3));
+    view.setScrollMetrics(0, 20);
+
+    const spacer = container.querySelector(".editor-virtualized-spacer") as HTMLElement;
+    expect(spacer.style.height).toBe("60px");
+
+    view.setScrollMetrics(0, 100);
+
+    expect(view.getState().scrollHeight).toBe(140);
+    expect(spacer.style.height).toBe("140px");
+  });
+
+  it("notifies viewport changes when the rendered row window is unchanged", () => {
+    view.dispose();
+    const events: number[] = [];
+    view = new VirtualizedTextView(container, {
+      rowHeight: 20,
+      overscan: 2,
+      highlightRegistry: mockRegistry,
+      onViewportChange: () => events.push(view.getState().scrollTop),
+      selectionHighlightName: "test-selection",
+    });
+    view.setText(createLines(10));
+    view.setScrollMetrics(0, 100);
+    events.length = 0;
+
+    view.setScrollMetrics(1, 100);
+
+    expect(events).toEqual([1]);
+  });
+
   it("spaces rows with rowGap without adding a trailing gap", () => {
     view.dispose();
     view = new VirtualizedTextView(container, {

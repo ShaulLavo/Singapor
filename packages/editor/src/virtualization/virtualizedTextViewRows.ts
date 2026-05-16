@@ -1601,6 +1601,13 @@ export function updateSpacerWidth(view: VirtualizedTextViewInternal): void {
   applySpacerWidth(view);
 }
 
+export function updateSpacerHeight(
+  view: VirtualizedTextViewInternal,
+  snapshot: FixedRowVirtualizerSnapshot,
+): void {
+  applyTotalHeight(view, snapshot);
+}
+
 function spacerWidth(view: VirtualizedTextViewInternal): number {
   const viewportWidth = view.virtualizer.getSnapshot().viewportWidth;
   return Math.max(viewportWidth, view.contentWidth + gutterWidth(view));
