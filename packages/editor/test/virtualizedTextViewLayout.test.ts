@@ -10,6 +10,7 @@ import {
   hasVariableRows,
   rowHeight,
   rowForOffset,
+  rowForViewportY,
   rowSizes,
   rowTop,
   scrollableHeight,
@@ -124,6 +125,34 @@ describe("virtualized text view layout", () => {
     expect(rowTop(view, 1)).toBe(24);
   });
 
+  it("caches variable row sizes for repeated geometry lookups", () => {
+    const blockRows: BlockRow[] = [
+      { id: "panel", anchorBufferRow: 0, placement: "after", heightRows: 2 },
+    ];
+    const displayRows = [textRow(0, 0, 0, 1), blockRow(1, 0, "after", 2), textRow(2, 1, 2, 3)];
+    const view = layoutView({
+      text: "x\ny",
+      lineStarts: [0, 2],
+      displayRows,
+      foldMap: null,
+      blockRows,
+      wrapEnabled: false,
+    });
+    view.rowGap = 4;
+
+    const sizes = rowSizes(view);
+    expect(sizes).toEqual([20, 40, 20]);
+
+    guardArrayIndexRead(displayRows, 0, "unexpected row size rebuild");
+    guardArrayIndexRead(displayRows, 1, "unexpected row size rebuild");
+    guardArrayIndexRead(displayRows, 2, "unexpected row size rebuild");
+
+    expect(rowSizes(view)).toBe(sizes);
+    expect(rowTop(view, 2)).toBe(68);
+    expect(rowHeight(view, 1)).toBe(40);
+    expect(rowForViewportY(view, 22)).toBe(1);
+  });
+
   it("uses measured row metrics without re-entering the virtualizer", () => {
     const view = layoutView({
       text: "x",
@@ -206,6 +235,7 @@ type LayoutFields = Pick<
 function layoutView(fields: LayoutFields): VirtualizedTextViewInternal {
   return {
     ...fields,
+    scrollElement: { scrollTop: 0 } as HTMLDivElement,
     textLength: fields.text.length,
     lineStartOffsetIndex: createLineStartOffsetIndex(fields.lineStarts.length),
     virtualizer: throwingVirtualizer(),

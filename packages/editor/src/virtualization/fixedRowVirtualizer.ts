@@ -1,3 +1,11 @@
+import {
+  createRowHeightIndex,
+  rowHeightIndexRowAfterOffset,
+  rowHeightIndexRowAtOffset,
+  rowHeightIndexStart,
+  type RowHeightIndex,
+} from "./rowHeightIndex";
+
 export type FixedRowVisibleRange = {
   readonly start: number;
   readonly end: number;
@@ -224,10 +232,9 @@ export class FixedRowVirtualizer {
   }
 
   private getVisibleRange(): FixedRowVisibleRange {
-    if (this.options.rowSizes) {
+    if (this.options.rowHeightIndex) {
       return computeVariableRowVisibleRange({
-        rowSizes: this.options.rowSizes,
-        rowGap: this.options.rowGap,
+        rowHeightIndex: this.options.rowHeightIndex,
         scrollTop: this.scrollTop,
         viewportHeight: this.viewportHeight,
         enabled: this.options.enabled,
@@ -252,8 +259,8 @@ export class FixedRowVirtualizer {
     }
 
     const window = computeOverscannedRange(count, range, this.options.overscan);
-    if (this.options.rowSizes)
-      return collectVariableVirtualItems(this.options.rowSizes, this.options.rowGap, window);
+    if (this.options.rowHeightIndex)
+      return collectVariableVirtualItems(this.options.rowHeightIndex, window);
 
     this.pruneItemCache(window);
     return this.collectVirtualItems(window);
@@ -369,17 +376,21 @@ type NormalizedFixedRowVirtualizerOptions = Required<
   Omit<FixedRowVirtualizerOptions, "rowSizes">
 > & {
   readonly rowSizes: readonly number[] | null;
+  readonly rowHeightIndex: RowHeightIndex | null;
 };
 
 function normalizeOptions(
   options: FixedRowVirtualizerOptions,
 ): NormalizedFixedRowVirtualizerOptions {
   const count = normalizeCount(options.count);
+  const rowGap = normalizeRowGap(options.rowGap);
+  const rowSizes = normalizeRowSizes(options.rowSizes, count);
   return {
     count,
     rowHeight: normalizeRowHeight(options.rowHeight),
-    rowGap: normalizeRowGap(options.rowGap),
-    rowSizes: normalizeRowSizes(options.rowSizes, count),
+    rowGap,
+    rowSizes,
+    rowHeightIndex: rowSizes ? createRowHeightIndex(rowSizes, rowGap) : null,
     overscan: normalizeOverscan(options.overscan),
     enabled: options.enabled ?? true,
   };
@@ -389,37 +400,35 @@ function denormalizeOptions(
   options: NormalizedFixedRowVirtualizerOptions,
 ): FixedRowVirtualizerOptions {
   return {
-    ...options,
+    count: options.count,
+    rowHeight: options.rowHeight,
+    rowGap: options.rowGap,
     rowSizes: options.rowSizes ?? undefined,
+    overscan: options.overscan,
+    enabled: options.enabled,
   };
 }
 
 function computeTotalSize(options: NormalizedFixedRowVirtualizerOptions): number {
-  if (options.rowSizes) {
-    return (
-      sumRows(options.rowSizes, 0, options.rowSizes.length) +
-      totalRowGap(options.rowSizes.length, options.rowGap)
-    );
-  }
+  if (options.rowHeightIndex) return options.rowHeightIndex.totalSize;
 
   return computeFixedRowTotalSize(options.count, options.rowHeight, options.rowGap);
 }
 
 function computeVariableRowVisibleRange(options: {
-  readonly rowSizes: readonly number[];
-  readonly rowGap: number;
+  readonly rowHeightIndex: RowHeightIndex;
   readonly scrollTop: number;
   readonly viewportHeight: number;
   readonly enabled?: boolean;
 }): FixedRowVisibleRange {
-  const count = options.rowSizes.length;
+  const count = options.rowHeightIndex.rowSizes.length;
   if (options.enabled === false || count === 0) return { start: 0, end: 0 };
 
   const scrollTop = Math.max(0, normalizeNumber(options.scrollTop));
   const viewportHeight = Math.max(0, normalizeNumber(options.viewportHeight));
-  const start = rowIndexAtOffset(options.rowSizes, options.rowGap, scrollTop);
+  const start = rowHeightIndexRowAtOffset(options.rowHeightIndex, scrollTop);
   const end = clamp(
-    rowIndexAfterOffset(options.rowSizes, options.rowGap, scrollTop + viewportHeight),
+    rowHeightIndexRowAfterOffset(options.rowHeightIndex, scrollTop + viewportHeight),
     start + 1,
     count,
   );
@@ -427,49 +436,20 @@ function computeVariableRowVisibleRange(options: {
 }
 
 function collectVariableVirtualItems(
-  rowSizes: readonly number[],
-  rowGap: number,
+  rowHeightIndex: RowHeightIndex,
   range: FixedRowVisibleRange,
 ): FixedRowVirtualItem[] {
   const items: FixedRowVirtualItem[] = [];
-  let start = sumRows(rowSizes, 0, range.start) + range.start * rowGap;
 
   for (let index = range.start; index < range.end; index += 1) {
-    const size = rowSizes[index] ?? DEFAULT_ROW_HEIGHT;
-    items.push({ index, start, size });
-    start += size + gapAfterRow(index, rowSizes.length, rowGap);
+    items.push({
+      index,
+      start: rowHeightIndexStart(rowHeightIndex, index),
+      size: rowHeightIndex.rowSizes[index] ?? DEFAULT_ROW_HEIGHT,
+    });
   }
 
   return items;
-}
-
-function rowIndexAtOffset(rowSizes: readonly number[], rowGap: number, offset: number): number {
-  let top = 0;
-  for (let index = 0; index < rowSizes.length; index += 1) {
-    const bottom = top + rowSizes[index]!;
-    if (offset < bottom) return index;
-
-    const nextTop = bottom + gapAfterRow(index, rowSizes.length, rowGap);
-    if (offset < nextTop) return Math.min(index + 1, rowSizes.length - 1);
-    top = nextTop;
-  }
-
-  return Math.max(0, rowSizes.length - 1);
-}
-
-function rowIndexAfterOffset(rowSizes: readonly number[], rowGap: number, offset: number): number {
-  let top = 0;
-  for (let index = 0; index < rowSizes.length; index += 1) {
-    if (offset <= top) return index;
-
-    const bottom = top + rowSizes[index]!;
-    if (offset <= bottom) return index + 1;
-
-    top = bottom + gapAfterRow(index, rowSizes.length, rowGap);
-    if (offset <= top) return index + 1;
-  }
-
-  return rowSizes.length;
 }
 
 function fixedRowIndexAtOffset(
@@ -498,19 +478,8 @@ function fixedRowIndexAfterOffset(
   return Math.min(index + 1, count);
 }
 
-function sumRows(rowSizes: readonly number[], start: number, end: number): number {
-  let sum = 0;
-  for (let index = start; index < end; index += 1) sum += rowSizes[index] ?? 0;
-  return sum;
-}
-
 function totalRowGap(count: number, rowGap: number): number {
   return Math.max(0, count - 1) * rowGap;
-}
-
-function gapAfterRow(index: number, count: number, rowGap: number): number {
-  if (index >= count - 1) return 0;
-  return rowGap;
 }
 
 function normalizeRowSizes(

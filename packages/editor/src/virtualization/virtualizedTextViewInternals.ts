@@ -6,6 +6,7 @@ import type { EditorToken, EditorTokenStyle } from "../tokens";
 import type { BrowserTextMetrics } from "./browserMetrics";
 import type { FixedRowVirtualizer } from "./fixedRowVirtualizer";
 import type { LineStartOffsetIndex } from "./lineStartIndex";
+import type { RowHeightIndex } from "./rowHeightIndex";
 import type {
   EditorCursorLineHighlightOptions,
   HiddenCharactersMode,
@@ -109,6 +110,11 @@ export interface VirtualizedTextViewInternal {
   foldMarkerByStartRow: ReadonlyMap<number, VirtualizedFoldMarker>;
   foldMarkerByKey: ReadonlyMap<string, VirtualizedFoldMarker>;
   blockRows: readonly BlockRow[];
+  rowHeightIndex: RowHeightIndex | null;
+  rowHeightIndexDisplayRows: readonly DisplayRow[] | null;
+  rowHeightIndexRowHeight: number;
+  rowHeightIndexRowGap: number;
+  rowHeightIndexVariable: boolean | null;
   blockLanes: readonly BlockLane[];
   blockLaneElements: Map<string, MountedVirtualizedBlockLane>;
   wrapEnabled: boolean;

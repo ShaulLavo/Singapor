@@ -12,6 +12,12 @@ import type { TextEdit } from "../tokens";
 import { clamp } from "../style-utils";
 import { createLineStartOffsetIndex, type LineStartOffsetIndex } from "./lineStartIndex";
 import {
+  createRowHeightIndex,
+  rowHeightIndexRowAtOffset,
+  rowHeightIndexStart,
+  type RowHeightIndex,
+} from "./rowHeightIndex";
+import {
   asFoldPoint,
   computeLineStarts,
   foldMapMatchesText,
@@ -149,13 +155,7 @@ export function updateVirtualizerRows(view: VirtualizedTextViewInternal): void {
 }
 
 export function rowSizes(view: VirtualizedTextViewInternal): readonly number[] | undefined {
-  if (!hasVariableRows(view)) return undefined;
-
-  const rowHeight = view.metrics.rowHeight;
-  return view.displayRows.map((row) => {
-    if (row.kind === "block") return blockRowHeightPx(row, rowHeight);
-    return rowHeight;
-  });
+  return variableRowHeightIndex(view)?.rowSizes;
 }
 
 export function hasVariableRows(view: VirtualizedTextViewInternal): boolean {
@@ -168,14 +168,14 @@ export function hasVariableRows(view: VirtualizedTextViewInternal): boolean {
 }
 
 export function rowTop(view: VirtualizedTextViewInternal, row: number): number {
-  const sizes = rowSizes(view);
-  if (!sizes) return row * rowStride(view);
+  const index = variableRowHeightIndex(view);
+  if (!index) return row * rowStride(view);
 
-  return sizedRowsTop(sizes, view.rowGap, row);
+  return rowHeightIndexStart(index, row);
 }
 
 export function rowHeight(view: VirtualizedTextViewInternal, row: number): number {
-  return rowSizes(view)?.[row] ?? getRowHeight(view);
+  return variableRowHeightIndex(view)?.rowSizes[row] ?? getRowHeight(view);
 }
 
 export function scrollPastEndPadding(
@@ -365,10 +365,10 @@ export function bufferRowForOffset(view: VirtualizedTextViewInternal, offset: nu
 
 export function rowForViewportY(view: VirtualizedTextViewInternal, y: number): number {
   const offset = view.scrollElement.scrollTop + y;
-  const sizes = rowSizes(view);
-  if (!sizes) return fixedRowForOffset(view, offset);
+  const index = variableRowHeightIndex(view);
+  if (!index) return fixedRowForOffset(view, offset);
 
-  return sizedRowForOffset(sizes, view.rowGap, offset);
+  return rowHeightIndexRowAtOffset(index, offset);
 }
 
 export function visibleLineCount(view: VirtualizedTextViewInternal): number {
@@ -423,10 +423,10 @@ export function rowForSnapshotOffset(
   y: number,
 ): number {
   const offset = snapshot.scrollTop + y;
-  const sizes = rowSizes(view);
-  if (!sizes) return fixedRowForOffset(view, offset);
+  const index = variableRowHeightIndex(view);
+  if (!index) return fixedRowForOffset(view, offset);
 
-  return sizedRowForOffset(sizes, view.rowGap, offset);
+  return rowHeightIndexRowAtOffset(index, offset);
 }
 
 function rowStride(view: VirtualizedTextViewInternal): number {
@@ -441,35 +441,6 @@ function fixedRowForOffset(view: VirtualizedTextViewInternal, offset: number): n
   if (offset < rowBottom) return row;
 
   return Math.min(row + 1, visibleLineCount(view) - 1);
-}
-
-function sizedRowsTop(sizes: readonly number[], rowGap: number, row: number): number {
-  let top = 0;
-  for (let index = 0; index < row; index += 1) {
-    top += sizes[index] ?? 0;
-    if (index < sizes.length - 1) top += rowGap;
-  }
-
-  return top;
-}
-
-function sizedRowForOffset(sizes: readonly number[], rowGap: number, offset: number): number {
-  let top = 0;
-  for (let row = 0; row < sizes.length; row += 1) {
-    const bottom = top + (sizes[row] ?? 0);
-    if (offset < bottom) return row;
-
-    const nextTop = bottom + gapAfterSizedRow(row, sizes.length, rowGap);
-    if (offset < nextTop) return Math.min(row + 1, sizes.length - 1);
-    top = nextTop;
-  }
-
-  return Math.max(0, sizes.length - 1);
-}
-
-function gapAfterSizedRow(row: number, rowCount: number, rowGap: number): number {
-  if (row >= rowCount - 1) return 0;
-  return rowGap;
 }
 
 function usesDisplayRowTransforms(view: VirtualizedTextViewInternal): boolean {
@@ -508,6 +479,36 @@ function normalizeBlockHeightRows(heightRows: number): number {
 function blockRowHeightPx(row: DisplayRow, rowHeight: number): number {
   if (row.kind !== "block") return rowHeight;
   return row.heightPx ?? row.heightRows * rowHeight;
+}
+
+function variableRowHeightIndex(view: VirtualizedTextViewInternal): RowHeightIndex | null {
+  const rowHeight = getRowHeight(view);
+  if (cachedRowHeightIndexValid(view, rowHeight)) return view.rowHeightIndex;
+
+  view.rowHeightIndexDisplayRows = view.displayRows;
+  view.rowHeightIndexRowHeight = rowHeight;
+  view.rowHeightIndexRowGap = view.rowGap;
+  view.rowHeightIndexVariable = hasVariableRows(view);
+  view.rowHeightIndex = view.rowHeightIndexVariable
+    ? createRowHeightIndex(createRowSizes(view.displayRows, rowHeight), view.rowGap)
+    : null;
+  return view.rowHeightIndex;
+}
+
+function cachedRowHeightIndexValid(view: VirtualizedTextViewInternal, rowHeight: number): boolean {
+  if (view.rowHeightIndexVariable === null) return false;
+  if (view.rowHeightIndexDisplayRows !== view.displayRows) return false;
+  if (view.rowHeightIndexRowHeight !== rowHeight) return false;
+  return view.rowHeightIndexRowGap === view.rowGap;
+}
+
+function createRowSizes(rows: readonly DisplayRow[], rowHeight: number): readonly number[] {
+  const sizes = Array.from({ length: rows.length }, () => rowHeight);
+  for (let index = 0; index < rows.length; index += 1) {
+    sizes[index] = blockRowHeightPx(rows[index]!, rowHeight);
+  }
+
+  return sizes;
 }
 
 function textDisplayRowForOffset(
