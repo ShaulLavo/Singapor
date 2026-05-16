@@ -74,10 +74,11 @@ const getWorker = (): Worker | null => {
   if (!supportsWorkers()) return null;
   if (worker) return worker;
 
-  worker = new Worker(new URL("./treeSitter.worker.ts", import.meta.url), { type: "module" });
-  worker.onmessage = handleWorkerMessage;
-  worker.onerror = handleWorkerError;
-  return worker;
+  const handle = new Worker(new URL("./treeSitter.worker.ts", import.meta.url), { type: "module" });
+  handle.onmessage = handleWorkerMessage;
+  handle.onerror = (event) => handleWorkerError(handle, event);
+  worker = handle;
+  return handle;
 };
 
 const ensureWorkerReady = async (): Promise<Worker | null> => {
@@ -254,8 +255,12 @@ const handleWorkerMessage = (event: MessageEvent<TreeSitterWorkerResponse>): voi
   pending.reject(new Error(response.error));
 };
 
-const handleWorkerError = (event: ErrorEvent): void => {
+const handleWorkerError = (failedWorker: Worker, event: ErrorEvent): void => {
+  if (failedWorker !== worker) return;
+
   const error = new Error(event.message || "Tree-sitter worker failed");
+  failedWorker.terminate();
+  worker = null;
   rejectPendingRequests(error);
   initPromise = null;
   registeredLanguageSignatures.clear();

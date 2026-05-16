@@ -30,6 +30,10 @@ class FakeWorker {
     this.terminated = true;
   }
 
+  public get isTerminated(): boolean {
+    return this.terminated;
+  }
+
   private resolveRequest(message: FakeWorkerRequest): void {
     if (this.terminated) return;
 
@@ -79,6 +83,26 @@ describe("tree-sitter worker client language registration cache", () => {
 
     expect(registerLanguageRequests()).toHaveLength(2);
   });
+
+  it("creates a fresh worker after a worker error rejects an in-flight request", async () => {
+    const client = await loadWorkerClient();
+    const descriptor = languageDescriptor("typescript");
+    const registration = client.registerTreeSitterLanguagesWithWorker([descriptor]);
+    const firstWorker = fakeWorkerAt(0);
+
+    firstWorker.onerror?.({ message: "boom" } as ErrorEvent);
+
+    await expect(registration).rejects.toThrow("boom");
+    await client.registerTreeSitterLanguagesWithWorker([descriptor]);
+    const nextWorker = fakeWorkerAt(1);
+
+    expect(firstWorker.isTerminated).toBe(true);
+    expect(fakeWorkers).toHaveLength(2);
+    expect(nextWorker.messages.some((message) => message.payload.type === "init")).toBe(true);
+    expect(
+      nextWorker.messages.some((message) => message.payload.type === "registerLanguages"),
+    ).toBe(true);
+  });
 });
 
 async function loadWorkerClient(): Promise<WorkerClientModule> {
@@ -93,6 +117,12 @@ function registerLanguageRequests(): FakeWorkerRequest[] {
   return fakeWorkers.flatMap((worker) =>
     worker.messages.filter((message) => message.payload.type === "registerLanguages"),
   );
+}
+
+function fakeWorkerAt(index: number): FakeWorker {
+  const fakeWorker = fakeWorkers[index];
+  if (!fakeWorker) throw new Error(`Expected fake worker at index ${index}`);
+  return fakeWorker;
 }
 
 function languageDescriptor(
