@@ -72,6 +72,29 @@ describe("DiffView split panes", () => {
     expect(diffView.getCurrentHunk()?.index).toBe(1);
   });
 
+  it("toggles expandable hunk rows from gutter clicks", () => {
+    const { container } = renderDiffView({
+      file: prefixSkippedDiff(),
+      mode: "stacked",
+    });
+    const pane = queryPane(container, "stacked");
+    const view = queryVirtualizedView(pane);
+
+    expect(pane.textContent).toContain("Show 2 unmodified lines");
+
+    moveVirtualizedGutter(view, 0);
+    expect(view.style.cursor).toBe("pointer");
+
+    clickVirtualizedGutter(view, 0);
+
+    expect(pane.textContent).toContain("Hide 2 unmodified lines");
+    expect(pane.textContent).toContain("alpha");
+    expect(pane.textContent).toContain("beta");
+
+    view.dispatchEvent(pointerEvent("mouseleave", 0));
+    expect(view.style.cursor).toBe("");
+  });
+
   it("applies configured editor theme variables to panes", () => {
     const { container } = renderDiffView({
       theme: {
@@ -180,6 +203,7 @@ describe("DiffView split panes", () => {
 type RenderDiffViewOptions = {
   readonly createHandle?: DiffSplitPaneOptions["createHandle"];
   readonly file?: DiffFile;
+  readonly mode?: "split" | "stacked";
   readonly syntaxBackend?: DiffSyntaxBackend;
   readonly syntaxHighlight?: boolean;
   readonly theme?: EditorTheme | null;
@@ -189,6 +213,7 @@ function renderDiffView(options: RenderDiffViewOptions = {}) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const diffView = new DiffView(container, {
+    mode: options.mode,
     showFileList: false,
     syntaxBackend: options.syntaxBackend,
     splitPane: {
@@ -216,10 +241,48 @@ function multiHunkDiff() {
   });
 }
 
+function prefixSkippedDiff() {
+  return createTextDiff({
+    contextLines: 0,
+    oldFile: { path: "note.txt", text: "alpha\nbeta\ngamma\n" },
+    newFile: { path: "note.txt", text: "alpha\nbeta\nGAMMA\n" },
+  });
+}
+
 function querySplit(container: HTMLElement): HTMLElement {
   const split = container.querySelector<HTMLElement>(".editor-diff-split");
   if (!split) throw new Error("Expected split diff");
   return split;
+}
+
+function queryPane(container: HTMLElement, side: "old" | "new" | "stacked"): HTMLElement {
+  const pane = container.querySelector<HTMLElement>(`.editor-diff-pane-${side}`);
+  if (!pane) throw new Error(`Expected ${side} diff pane`);
+  return pane;
+}
+
+function queryVirtualizedView(container: HTMLElement): HTMLElement {
+  const view = container.querySelector<HTMLElement>(".editor-virtualized");
+  if (!view) throw new Error("Expected virtualized diff view");
+  return view;
+}
+
+function clickVirtualizedGutter(view: HTMLElement, y: number): void {
+  view.dispatchEvent(pointerEvent("mousedown", y));
+  view.dispatchEvent(pointerEvent("click", y));
+}
+
+function moveVirtualizedGutter(view: HTMLElement, y: number): void {
+  view.dispatchEvent(pointerEvent("mousemove", y));
+}
+
+function pointerEvent(type: string, clientY: number): MouseEvent {
+  return new MouseEvent(type, {
+    bubbles: true,
+    button: 0,
+    clientY,
+    detail: 1,
+  });
 }
 
 function createRecordingSyntaxBackend(parsedTexts: string[]): DiffSyntaxBackend {

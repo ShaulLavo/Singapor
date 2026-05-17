@@ -1,9 +1,13 @@
 import type { VirtualizedTextView, VirtualizedTextViewState } from "@editor/core";
 import {
   diffGutterColor,
-  diffGutterText,
-  diffGutterWidthCharacters,
+  diffGutterIndicatorColor,
+  diffGutterIndicatorText,
+  diffGutterLayout,
+  diffGutterNumberText,
   type DiffGutterSide,
+  type DiffGutterLayout,
+  type DiffGutterLaneKind,
 } from "./gutters";
 import type { DiffRenderRow } from "./types";
 
@@ -26,6 +30,10 @@ type DiffGutterColors = {
 
 type DiffGutterEntry = {
   readonly backgroundColor: string;
+  readonly lanes: readonly DiffGutterLaneEntry[];
+};
+
+type DiffGutterLaneEntry = {
   readonly color: string;
   readonly text: string;
 };
@@ -53,8 +61,7 @@ const DEFAULT_FOREGROUND_COLOR = "#71717a";
 const DEFAULT_HUNK_COLOR = "#9cdcfe";
 const DEFAULT_HUNK_BACKGROUND = "rgba(105, 177, 255, 0.16)";
 const DEFAULT_PLACEHOLDER_BACKGROUND = "rgba(255, 255, 255, 0.08)";
-const GUTTER_RESERVED_WIDTH = 30;
-const GUTTER_PADDING_RIGHT = 6;
+const GUTTER_PADDING_RIGHT = 4;
 
 export function createDiffCanvasGutterRenderer(
   view: VirtualizedTextView,
@@ -107,7 +114,8 @@ function renderDiffCanvasGutter(
 ): void {
   const state = view.getState();
   const bounds = mountedGutterBounds(state);
-  const width = gutterWidth(state, cache.rows, side);
+  const layout = diffGutterLayout(side, cache.rows, state.lineCount, state.metrics.characterWidth);
+  const width = layout.width;
   positionCanvas(canvas, bounds.top);
   resizeCanvas(canvas, width, bounds.height);
 
@@ -125,7 +133,7 @@ function renderDiffCanvasGutter(
     state,
     cache.entries,
     style.font,
-    width,
+    layout,
     bounds,
   );
 }
@@ -151,7 +159,7 @@ function renderMountedGutterRows(
   state: VirtualizedTextViewState,
   entries: readonly DiffGutterEntry[],
   font: string,
-  width: number,
+  layout: DiffGutterLayout,
   bounds: MountedGutterBounds,
 ): void {
   applyGutterTextStyle(context, font);
@@ -160,7 +168,7 @@ function renderMountedGutterRows(
     if (row.startOffset !== lineStarts[row.bufferRow]) continue;
 
     const top = row.top - bounds.top;
-    drawGutterRow(context, row.bufferRow, top, row.height, entries, width);
+    drawGutterRow(context, row.bufferRow, top, row.height, entries, layout);
   }
 }
 
@@ -182,18 +190,32 @@ function drawGutterRow(
   top: number,
   height: number,
   entries: readonly DiffGutterEntry[],
-  width: number,
+  layout: DiffGutterLayout,
 ): void {
   const entry = entries[rowIndex];
   if (!entry) return;
 
   if (entry.backgroundColor) {
     context.fillStyle = entry.backgroundColor;
-    context.fillRect(0, top, width, height);
+    context.fillRect(0, top, layout.width, height);
   }
-  if (!entry.text) return;
+
+  for (const [index, lane] of layout.lanes.entries()) {
+    drawGutterLane(context, entry.lanes[index], lane, top, height);
+  }
+}
+
+function drawGutterLane(
+  context: CanvasRenderingContext2D,
+  entry: DiffGutterLaneEntry | undefined,
+  lane: DiffGutterLayout["lanes"][number],
+  top: number,
+  height: number,
+): void {
+  if (!entry?.text) return;
+
   context.fillStyle = entry.color;
-  context.fillText(entry.text, width - GUTTER_PADDING_RIGHT, top + height / 2);
+  context.fillText(entry.text, lane.left + lane.width - GUTTER_PADDING_RIGHT, top + height / 2);
 }
 
 function applyGutterTextStyle(context: CanvasRenderingContext2D, font: string): void {
@@ -209,9 +231,42 @@ function gutterEntries(
 ): readonly DiffGutterEntry[] {
   return rows.map((row) => ({
     backgroundColor: diffGutterBackgroundColor(row, side, colors),
-    color: diffGutterColor(row, side, colors),
-    text: diffGutterText(row, side),
+    lanes: gutterEntryLanes(row, side, colors),
   }));
+}
+
+function gutterEntryLanes(
+  row: DiffRenderRow,
+  side: DiffGutterSide,
+  colors: DiffGutterColors,
+): readonly DiffGutterLaneEntry[] {
+  if (side === "stacked") {
+    return [
+      gutterLaneEntry(row, "old", colors),
+      gutterLaneEntry(row, "new", colors),
+      gutterLaneEntry(row, "indicator", colors),
+    ];
+  }
+
+  return [gutterLaneEntry(row, side, colors), gutterLaneEntry(row, "indicator", colors)];
+}
+
+function gutterLaneEntry(
+  row: DiffRenderRow,
+  kind: DiffGutterLaneKind,
+  colors: DiffGutterColors,
+): DiffGutterLaneEntry {
+  if (kind === "indicator") {
+    return {
+      color: diffGutterIndicatorColor(row, colors),
+      text: diffGutterIndicatorText(row),
+    };
+  }
+
+  return {
+    color: diffGutterColor(row, kind, colors),
+    text: diffGutterNumberText(row, kind),
+  };
 }
 
 function diffGutterBackgroundColor(
@@ -266,15 +321,6 @@ function cssValue(
   fallback: string,
 ): string {
   return style?.getPropertyValue(property).trim() || fallback;
-}
-
-function gutterWidth(
-  state: VirtualizedTextViewState,
-  rows: readonly DiffRenderRow[],
-  side: DiffGutterSide,
-): number {
-  const characters = diffGutterWidthCharacters(side, rows, state.lineCount);
-  return Math.ceil(characters * state.metrics.characterWidth + GUTTER_RESERVED_WIDTH);
 }
 
 function positionCanvas(canvas: HTMLCanvasElement, top: number): void {

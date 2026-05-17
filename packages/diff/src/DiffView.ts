@@ -5,13 +5,10 @@ import {
   type VirtualizedTextHighlightRange,
   type VirtualizedTextRowDecoration,
 } from "@editor/core";
-import {
-  canUseShikiWorker,
-  createShikiHighlighterSession,
-} from "@editor/core/shiki";
+import { canUseShikiWorker, createShikiHighlighterSession } from "@editor/core/shiki";
 import { ResizablePaneGroup, type ResizablePaneLayout } from "@editor/panes";
 import { createDiffCanvasGutterRenderer, type DiffCanvasGutterRenderer } from "./canvasGutter";
-import { diffGutterWidthCharacters } from "./gutters";
+import { diffGutterWidth } from "./gutters";
 import { joinRenderLines, languageIdForPath } from "./lines";
 import { createSplitProjection, createStackedProjection } from "./projection";
 import type {
@@ -266,11 +263,7 @@ export class DiffView {
     const view = new VirtualizedTextView(host, {
       className: "editor-diff-text editor-virtualized",
       gutterWidth: (context) =>
-        Math.ceil(
-          diffGutterWidthCharacters(side, getRows(), context.lineCount) *
-            context.metrics.characterWidth +
-            30,
-        ),
+        diffGutterWidth(side, getRows(), context.lineCount, context.metrics.characterWidth),
       lineHeight: this.options.lineHeight,
       onViewportChange: () => gutterRenderer?.render(),
       overscan: this.options.overscan ?? DEFAULT_DIFF_OVERSCAN,
@@ -298,15 +291,21 @@ export class DiffView {
     getRows: () => readonly DiffRenderRow[],
   ): () => void {
     const onCopy = (event: ClipboardEvent) => this.handlePaneCopy(event, view, getRows);
-    const onClick = (event: MouseEvent) => this.handlePaneClick(event, getRows);
+    const onClick = (event: MouseEvent) => this.handlePaneClick(event, view, getRows);
     const onMouseDown = (event: MouseEvent) => this.handlePaneMouseDown(event, view, getRows);
+    const onMouseLeave = () => this.clearPaneCursor(view);
+    const onMouseMove = (event: MouseEvent) => this.updatePaneCursor(event, view, getRows);
     view.scrollElement.addEventListener("copy", onCopy);
     view.scrollElement.addEventListener("click", onClick);
     view.scrollElement.addEventListener("mousedown", onMouseDown);
+    view.scrollElement.addEventListener("mouseleave", onMouseLeave);
+    view.scrollElement.addEventListener("mousemove", onMouseMove);
     return () => {
       view.scrollElement.removeEventListener("copy", onCopy);
       view.scrollElement.removeEventListener("click", onClick);
       view.scrollElement.removeEventListener("mousedown", onMouseDown);
+      view.scrollElement.removeEventListener("mouseleave", onMouseLeave);
+      view.scrollElement.removeEventListener("mousemove", onMouseMove);
     };
   }
 
@@ -318,6 +317,10 @@ export class DiffView {
     if (event.button !== 0) return;
     if (event.detail !== 1) return;
     if (event.defaultPrevented) return;
+    if (this.isHunkTogglePointerEvent(event, view, getRows)) {
+      event.preventDefault();
+      return;
+    }
 
     const offset = this.textOffsetFromPanePoint(view, event.clientX, event.clientY);
     event.preventDefault();
@@ -411,14 +414,45 @@ export class DiffView {
     );
   }
 
-  private handlePaneClick(event: MouseEvent, getRows: () => readonly DiffRenderRow[]): void {
-    const target = event.target;
-    if (!(target instanceof Element)) return;
+  private updatePaneCursor(
+    event: MouseEvent,
+    view: VirtualizedTextView,
+    getRows: () => readonly DiffRenderRow[],
+  ): void {
+    const cursor = this.isHunkTogglePointerEvent(event, view, getRows) ? "pointer" : "";
+    if (view.scrollElement.style.cursor === cursor) return;
 
-    const rowElement = target.closest<HTMLElement>("[data-editor-virtual-row]");
-    if (!rowElement) return;
+    view.scrollElement.style.cursor = cursor;
+  }
 
-    this.toggleRowHunk(getRows()[Number(rowElement.dataset.editorVirtualRow)]);
+  private clearPaneCursor(view: VirtualizedTextView): void {
+    if (!view.scrollElement.style.cursor) return;
+
+    view.scrollElement.style.cursor = "";
+  }
+
+  private handlePaneClick(
+    event: MouseEvent,
+    view: VirtualizedTextView,
+    getRows: () => readonly DiffRenderRow[],
+  ): void {
+    const rowIndex = paneClickRowIndex(event, view);
+    if (rowIndex === null) return;
+
+    this.toggleRowHunk(getRows()[rowIndex]);
+  }
+
+  private isHunkTogglePointerEvent(
+    event: MouseEvent,
+    view: VirtualizedTextView,
+    getRows: () => readonly DiffRenderRow[],
+  ): boolean {
+    const rowIndex = paneClickRowIndex(event, view);
+    if (rowIndex === null) return false;
+
+    const row = getRows()[rowIndex];
+    if (row?.type !== "hunk") return false;
+    return Boolean(row.expandable);
   }
 
   private toggleRowHunk(row: DiffRenderRow | undefined): void {
@@ -771,6 +805,31 @@ export class DiffView {
   }
 }
 
+function paneClickRowIndex(event: MouseEvent, view: VirtualizedTextView): number | null {
+  const target = event.target;
+  if (target instanceof Element) {
+    const rowElement = target.closest<HTMLElement>("[data-editor-virtual-row]");
+    if (rowElement) return Number(rowElement.dataset.editorVirtualRow);
+  }
+
+  return paneRowIndexFromPoint(view, event.clientY);
+}
+
+function paneRowIndexFromPoint(view: VirtualizedTextView, clientY: number): number | null {
+  const bounds = view.scrollElement.getBoundingClientRect();
+  if (clientY < bounds.top || clientY > bounds.bottom) return null;
+
+  const y = clientY - bounds.top + view.scrollElement.scrollTop;
+  const lineStarts = view.getLineStarts();
+  for (const row of view.getState().mountedRows) {
+    if (row.startOffset !== lineStarts[row.bufferRow]) continue;
+    if (y < row.top || y >= row.top + row.height) continue;
+    return row.bufferRow;
+  }
+
+  return null;
+}
+
 function selectedPathForFiles(files: readonly DiffFile[], current: string | null): string | null {
   if (current && files.some((file) => file.path === current)) return current;
   return files[0]?.path ?? null;
@@ -805,7 +864,10 @@ type ProjectDiffSyntaxTokensOptions = {
   readonly sources: readonly DiffSyntaxTokenSource[];
 };
 
-function syntaxSourcesForPane(file: DiffFile, side: MountedPane["side"]): readonly DiffSyntaxSource[] {
+function syntaxSourcesForPane(
+  file: DiffFile,
+  side: MountedPane["side"],
+): readonly DiffSyntaxSource[] {
   if (side === "stacked") {
     return [syntaxSource(file.oldLines, "old"), syntaxSource(file.newLines, "new")];
   }
