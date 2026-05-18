@@ -222,12 +222,7 @@ class MinimapContribution implements EditorViewContribution {
   }
 
   private updateNativeScrollbarGutter(): void {
-    const scrollElementScrollHeight = safeScrollHeight(this.context.scrollElement);
-    const signature = nativeScrollbarGutterSignature(
-      this.latestSnapshot,
-      this.reservedWidth,
-      scrollElementScrollHeight,
-    );
+    const signature = nativeScrollbarGutterSignature(this.latestSnapshot, this.reservedWidth);
     if (signature === this.scrollbarGutterSignature) return;
 
     this.scrollbarGutterSignature = signature;
@@ -236,7 +231,6 @@ class MinimapContribution implements EditorViewContribution {
       this.reservedWidth,
       this.scrollElementBorderMetrics,
       this.scrollbarGutterFallback,
-      scrollElementScrollHeight,
     );
     if (
       gutter.vertical === this.verticalScrollbarWidth &&
@@ -374,7 +368,6 @@ function nativeScrollbarGutter(
   reservedOverlayWidth: number,
   border: ScrollElementBorderMetrics,
   fallback: ScrollbarGutterFallbackMetrics,
-  scrollElementScrollHeight: number,
 ): {
   readonly vertical: number;
   readonly horizontal: number;
@@ -382,8 +375,7 @@ function nativeScrollbarGutter(
   const viewport = snapshot.viewport;
   const hasVerticalScrollbar =
     viewport.clientHeight > 0 &&
-    Math.max(viewport.scrollHeight, snapshot.totalHeight, scrollElementScrollHeight) >
-      viewport.clientHeight;
+    Math.max(viewport.scrollHeight, snapshot.totalHeight) > viewport.clientHeight;
   const hasHorizontalScrollbar =
     viewport.clientWidth > 0 && viewport.scrollWidth > viewport.clientWidth;
   const vertical = hasVerticalScrollbar
@@ -407,18 +399,9 @@ function scrollbarGutterOrFallback(measured: number, fallback: number): number {
   return fallback;
 }
 
-function safeScrollHeight(element: HTMLElement): number {
-  try {
-    return element.scrollHeight;
-  } catch {
-    return 0;
-  }
-}
-
 function nativeScrollbarGutterSignature(
   snapshot: EditorViewSnapshot,
   reservedOverlayWidth: number,
-  scrollElementScrollHeight: number,
 ): string {
   const viewport = snapshot.viewport;
   return [
@@ -429,7 +412,6 @@ function nativeScrollbarGutterSignature(
     viewport.borderBoxHeight ?? "",
     viewport.borderBoxWidth ?? "",
     snapshot.totalHeight,
-    scrollElementScrollHeight,
     reservedOverlayWidth,
   ].join(":");
 }
