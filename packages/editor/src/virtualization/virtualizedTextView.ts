@@ -268,7 +268,7 @@ export class VirtualizedTextView {
       maxVisualColumnsSeen: 0,
       lastWidthScanStart: 0,
       lastWidthScanEnd: -1,
-      tokenRangesFollowLastTextEdit: false,
+      sameLineTokenEdit: null,
       lineHeightOverride,
       rowGap,
       metrics: { ...measuredMetrics, rowHeight },
@@ -320,7 +320,7 @@ export class VirtualizedTextView {
 
   public setText(text: string, textSnapshot = createStringTextSnapshot(text)): void {
     const view = this.view;
-    view.tokenRangesFollowLastTextEdit = false;
+    view.sameLineTokenEdit = null;
     view.tokenRenderIndexDirty = true;
     const { lineCountChanged } = setTextLayoutState(view, text, textSnapshot);
     if (lineCountChanged) view.gutterWidthDirty = true;
@@ -723,14 +723,22 @@ export class VirtualizedTextView {
   private applySameLineEdit(patch: SameLineEditPatch, nextText: TextSnapshot): void {
     const view = this.view;
     const snapshot = view.virtualizer.getSnapshot();
-    view.tokenRangesFollowLastTextEdit = true;
     view.tokenRenderIndexDirty = true;
     applySameLineTextLayout(view, patch, nextText);
     clampStoredSelection(view);
     resetContentWidthScan(view);
     clearRowGeometryCaches(view);
     updateContentWidth(view, snapshot.virtualItems);
-    updateMountedRowsAfterSameLineEdit(view, snapshot.virtualItems, patch, snapshot);
+    const editedRowPatchedInPlace = updateMountedRowsAfterSameLineEdit(
+      view,
+      snapshot.virtualItems,
+      patch,
+      snapshot,
+    );
+    view.sameLineTokenEdit = {
+      rowIndex: patch.rowIndex,
+      editedRowPatchedInPlace,
+    };
     renderHiddenCharacters(view);
   }
 

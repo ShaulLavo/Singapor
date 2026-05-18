@@ -64,6 +64,11 @@ export type TokenRenderEntry = {
   readonly sourceIndex: number;
 };
 
+export type SameLineTokenEdit = {
+  readonly rowIndex: number;
+  readonly editedRowPatchedInPlace: boolean;
+};
+
 export interface VirtualizedTextViewInternal {
   readonly scrollElement: HTMLDivElement;
   readonly inputElement: HTMLTextAreaElement;
@@ -139,7 +144,7 @@ export interface VirtualizedTextViewInternal {
   maxVisualColumnsSeen: number;
   lastWidthScanStart: number;
   lastWidthScanEnd: number;
-  tokenRangesFollowLastTextEdit: boolean;
+  sameLineTokenEdit: SameLineTokenEdit | null;
   lineHeightOverride: number | null;
   rowGap: number;
   metrics: BrowserTextMetrics;

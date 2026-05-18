@@ -1296,6 +1296,24 @@ describe("VirtualizedTextView", () => {
     expect(tokenHighlightRanges().length).toBeGreaterThan(0);
   });
 
+  it("rebuilds token style rules once for indexed viewport styles", () => {
+    const lines = ["first", "second", "third"];
+    const offsets = lineStartOffsets(lines);
+    const tokens = treeSitterCapturesToEditorTokens([
+      { captureName: "variable", startIndex: offsets[0]!, endIndex: offsets[0]! + 5 },
+      { captureName: "string", startIndex: offsets[1]!, endIndex: offsets[1]! + 6 },
+      { captureName: "keyword", startIndex: offsets[2]!, endIndex: offsets[2]! + 5 },
+    ]);
+
+    view.setText(lines.join("\n"));
+    view.setScrollMetrics(0, 60);
+
+    const styleWrites = countStyleTextContentWrites(() => view.setTokens(tokens));
+
+    expect(styleWrites).toBe(1);
+    expect(tokenHighlightNames()).toHaveLength(3);
+  });
+
   it("skips token highlight work when same-line edits only move existing token ranges", () => {
     view.setText("world");
     view.setScrollMetrics(0, 20);
@@ -1346,7 +1364,7 @@ describe("VirtualizedTextView", () => {
     }
   });
 
-  it("repaints token highlights only for rows with changed local segments", () => {
+  it("rebuilds token highlights below same-line edits even when local segments match", () => {
     view.setText("aa\nbb");
     view.setScrollMetrics(0, 40);
     view.setTokens([
@@ -1355,8 +1373,8 @@ describe("VirtualizedTextView", () => {
     ]);
 
     const rowOne = view.getState().mountedRows.find((row) => row.index === 1)!;
-    const preserved = tokenHighlightRangeForNode(rowOne.textNode);
-    expect(preserved).toBeDefined();
+    const previous = tokenHighlightRangeForNode(rowOne.textNode);
+    expect(previous).toBeDefined();
 
     view.applyEdit({ from: 1, to: 1, text: "X" }, "aXa\nbb");
     view.setTokens([
@@ -1365,10 +1383,44 @@ describe("VirtualizedTextView", () => {
       { start: 4, end: 6, style: { color: "#ff0000" } },
     ]);
 
-    expect([...preserved!.highlight]).toContain(preserved!.range);
-    expect(preserved!.range.startContainer).toBe(rowOne.textNode);
-    expect(preserved!.range.startOffset).toBe(0);
-    expect(preserved!.range.endOffset).toBe(2);
+    const next = tokenHighlightRangeForNode(rowOne.textNode);
+    expect(next).toBeDefined();
+    expect([...previous!.highlight]).not.toContain(previous!.range);
+    expect(next!.range).not.toBe(previous!.range);
+    expect(next!.range.startContainer).toBe(rowOne.textNode);
+    expect(next!.range.startOffset).toBe(0);
+    expect(next!.range.endOffset).toBe(2);
+  });
+
+  it("keeps lower-row token highlights at row-local offsets across repeated typing", () => {
+    let text = "aa\nbb\ncc";
+    let tokens = [
+      { start: 0, end: 2, style: { color: "#ff0000" } },
+      { start: 3, end: 5, style: { color: "#ff0000" } },
+      { start: 6, end: 8, style: { color: "#ff0000" } },
+    ];
+    view.setText(text);
+    view.setScrollMetrics(0, 60);
+    view.setTokens(tokens);
+
+    for (const typed of ["X", "Y"]) {
+      const edit = { from: 1, to: 1, text: typed };
+      const nextText = `${text.slice(0, edit.from)}${typed}${text.slice(edit.to)}`;
+      const rowOne = view.getState().mountedRows.find((row) => row.index === 1)!;
+      const previous = tokenHighlightRangeForNode(rowOne.textNode);
+
+      view.applyEdit(edit, nextText);
+      tokens = [...projectTokensThroughEdit(tokens, edit, text)];
+      view.setTokens(tokens);
+      text = nextText;
+
+      const next = tokenHighlightRangeForNode(rowOne.textNode);
+      expect(next).toBeDefined();
+      if (previous) expect([...previous.highlight]).not.toContain(previous.range);
+      expect(next!.range.startContainer).toBe(rowOne.textNode);
+      expect(next!.range.startOffset).toBe(0);
+      expect(next!.range.endOffset).toBe(2);
+    }
   });
 
   it("does not repaint when the token list is unchanged", () => {
@@ -1956,6 +2008,43 @@ function tokenHighlightRangeForNode(
   }
 
   return undefined;
+}
+
+function countStyleTextContentWrites(callback: () => void): number {
+  const target = textContentDescriptorTarget();
+  const descriptor = target ? Object.getOwnPropertyDescriptor(target, "textContent") : undefined;
+  if (!descriptor?.set || !descriptor.get) {
+    callback();
+    return 0;
+  }
+
+  let writes = 0;
+  Object.defineProperty(target, "textContent", {
+    configurable: true,
+    get: descriptor.get,
+    set(value) {
+      if (this instanceof HTMLStyleElement) writes += 1;
+      descriptor.set!.call(this, value);
+    },
+  });
+
+  try {
+    callback();
+    return writes;
+  } finally {
+    Object.defineProperty(target, "textContent", descriptor);
+  }
+}
+
+function textContentDescriptorTarget(): object | null {
+  let target: object | null = HTMLStyleElement.prototype;
+  while (target) {
+    if (Object.getOwnPropertyDescriptor(target, "textContent")) return target;
+
+    target = Object.getPrototypeOf(target);
+  }
+
+  return null;
 }
 
 function hiddenCharacterMarkers(container: HTMLElement): HTMLElement[] {

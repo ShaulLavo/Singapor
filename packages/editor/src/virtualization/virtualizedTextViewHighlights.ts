@@ -60,19 +60,17 @@ export function adoptTokens(
 ): void {
   if (canKeepLiveTokenRanges(view, tokens)) {
     view.tokens = tokens;
-    view.tokenRangesFollowLastTextEdit = false;
     view.tokenRenderIndexDirty = true;
+    reconcileTokenHighlightsAfterSameLineEdit(view);
     return;
   }
 
   if (editorTokensEqual(view.tokens, tokens)) {
     view.tokens = tokens;
-    view.tokenRangesFollowLastTextEdit = false;
     renderTokenHighlights(view);
     return;
   }
 
-  view.tokenRangesFollowLastTextEdit = false;
   view.tokens = tokens;
   view.tokenRenderIndexDirty = true;
   renderTokenHighlights(view);
@@ -233,6 +231,7 @@ export function clampStoredSelection(view: VirtualizedTextViewInternal): void {
 }
 
 export function renderTokenHighlights(view: VirtualizedTextViewInternal): void {
+  const forceStartRow = takeSameLineTokenEditRebuildStartRow(view);
   if (!view.highlightRegistry || view.tokens.length === 0 || view.textLength === 0) {
     clearTokenHighlights(view);
     return;
@@ -243,22 +242,71 @@ export function renderTokenHighlights(view: VirtualizedTextViewInternal): void {
   // separate transition/overlay strategy that preserves the current range model.
   const mountedRows = getMountedRows(view);
   const segmentsByRow = tokenSegmentsForRows(view, mountedRows);
+  let styleRulesDirty = false;
   for (const row of mountedRows) {
-    reconcileTokenHighlightsForRow(view, row, segmentsByRow.get(row.tokenHighlightSlotId) ?? []);
+    styleRulesDirty =
+      reconcileTokenHighlightsForRow(
+        view,
+        row,
+        segmentsByRow.get(row.tokenHighlightSlotId) ?? [],
+        shouldForceTokenRowRebuild(row, forceStartRow),
+      ) || styleRulesDirty;
   }
+  if (styleRulesDirty) rebuildStyleRules(view);
 }
 
 function reconcileTokenHighlightsForRow(
   view: VirtualizedTextViewInternal,
   row: MountedVirtualizedTextRow,
   segments: readonly TokenRowSegment[],
-): void {
+  force = false,
+): boolean {
   const signature = tokenRowSignature(row, segments);
-  if (view.rowTokenSignatures.get(row.tokenHighlightSlotId) === signature) return;
+  if (!force && view.rowTokenSignatures.get(row.tokenHighlightSlotId) === signature) return false;
 
   deleteTokenRangesForRow(view, row.tokenHighlightSlotId);
-  addTokenSegmentsForRow(view, row, segments);
+  const styleRulesDirty = addTokenSegmentsForRow(view, row, segments);
   view.rowTokenSignatures.set(row.tokenHighlightSlotId, signature);
+  return styleRulesDirty;
+}
+
+function reconcileTokenHighlightsAfterSameLineEdit(view: VirtualizedTextViewInternal): void {
+  const forceStartRow = takeSameLineTokenEditRebuildStartRow(view);
+  if (forceStartRow === null) return;
+
+  const rows = getMountedRows(view).filter((row) => row.index >= forceStartRow);
+  if (rows.length === 0) return;
+
+  const segmentsByRow = tokenSegmentsForRows(view, rows);
+  let styleRulesDirty = false;
+  for (const row of rows) {
+    styleRulesDirty =
+      reconcileTokenHighlightsForRow(
+        view,
+        row,
+        segmentsByRow.get(row.tokenHighlightSlotId) ?? [],
+        true,
+      ) || styleRulesDirty;
+  }
+  if (styleRulesDirty) rebuildStyleRules(view);
+}
+
+function takeSameLineTokenEditRebuildStartRow(
+  view: VirtualizedTextViewInternal,
+): number | null {
+  const edit = view.sameLineTokenEdit;
+  view.sameLineTokenEdit = null;
+  if (!edit) return null;
+
+  return edit.editedRowPatchedInPlace ? edit.rowIndex + 1 : edit.rowIndex;
+}
+
+function shouldForceTokenRowRebuild(
+  row: MountedVirtualizedTextRow,
+  forceStartRow: number | null,
+): boolean {
+  if (forceStartRow === null) return false;
+  return row.index >= forceStartRow;
 }
 
 function ensureTokenRenderIndex(view: VirtualizedTextViewInternal): void {
@@ -498,7 +546,7 @@ function addTokenSegmentsForRow(
   view: VirtualizedTextViewInternal,
   row: MountedVirtualizedTextRow,
   segments: readonly TokenRowSegment[],
-): void {
+): boolean {
   const rangesByStyle = new Map<string, AbstractRange[]>();
   const document = view.scrollElement.ownerDocument;
   let styleRulesDirty = false;
@@ -524,7 +572,7 @@ function addTokenSegmentsForRow(
     view.rowTokenRanges.set(row.tokenHighlightSlotId, rangesByStyle);
   }
 
-  if (styleRulesDirty) rebuildStyleRules(view);
+  return styleRulesDirty;
 }
 
 function ensureTokenGroup(
@@ -618,7 +666,7 @@ function canKeepLiveTokenRanges(
   view: VirtualizedTextViewInternal,
   tokens: readonly EditorToken[],
 ): boolean {
-  if (!view.tokenRangesFollowLastTextEdit) return false;
+  if (!view.sameLineTokenEdit) return false;
   const projectionStatus = tokenProjectionLiveRangeStatus(view.tokens, tokens);
   if (projectionStatus !== null) return projectionStatus;
   if (view.tokens.length !== tokens.length) return false;

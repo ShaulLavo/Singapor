@@ -6,6 +6,7 @@ import {
 } from "../../gutters/src/index.ts";
 
 import { VirtualizedTextView } from "../src";
+import { projectTokensThroughEdit } from "../src/editor/tokenProjection";
 
 describe.skipIf(typeof globalThis.Highlight === "undefined")(
   "VirtualizedTextView native browser geometry",
@@ -165,8 +166,49 @@ describe.skipIf(typeof globalThis.Highlight === "undefined")(
       );
       hiddenFoldStyle.remove();
     });
+
+    it("recreates native token ranges for rows below same-line edits", () => {
+      view?.dispose();
+      view = new VirtualizedTextView(container, {
+        rowHeight: 20,
+        overscan: 0,
+        selectionHighlightName: "native-token-test",
+      });
+      let text = "aa\nbb\ncc";
+      let tokens = [
+        { start: 0, end: 2, style: { color: "#ff0000" } },
+        { start: 3, end: 5, style: { color: "#ff0000" } },
+        { start: 6, end: 8, style: { color: "#ff0000" } },
+      ];
+      view.setText(text);
+      view.setScrollMetrics(0, 60);
+      view.setTokens(tokens);
+
+      const rowOne = view.getState().mountedRows.find((row) => row.index === 1)!;
+      const previous = nativeTokenRangeForNode("native-token-test-token-0", rowOne.textNode);
+      expect(previous).toBeDefined();
+
+      const edit = { from: 1, to: 1, text: "X" };
+      const nextText = `${text.slice(0, edit.from)}${edit.text}${text.slice(edit.to)}`;
+      view.applyEdit(edit, nextText);
+      tokens = [...projectTokensThroughEdit(tokens, edit, text)];
+      view.setTokens(tokens);
+      text = nextText;
+
+      const next = nativeTokenRangeForNode("native-token-test-token-0", rowOne.textNode);
+      expect(next).toBeDefined();
+      expect(next).not.toBe(previous);
+      expect(previous!.startOffset).toBe(0);
+      expect(next!.startOffset).toBe(0);
+      expect(next!.endOffset).toBe(2);
+    });
   },
 );
+
+function nativeTokenRangeForNode(name: string, node: Text): AbstractRange | undefined {
+  const highlight = CSS.highlights.get(name);
+  return [...(highlight ?? [])].find((range) => range.startContainer === node);
+}
 
 function withThrowingNativeCaretApis(document: Document, callback: () => void): void {
   const caretPosition = Object.getOwnPropertyDescriptor(document, "caretPositionFromPoint");

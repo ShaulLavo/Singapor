@@ -568,13 +568,18 @@ export function updateMountedRowsAfterSameLineEdit(
   items: readonly FixedRowVirtualItem[],
   patch: SameLineEditPatch,
   snapshot: FixedRowVirtualizerSnapshot,
-): void {
+): boolean {
   const updatePass = createRowUpdatePass(view);
+  let editedRowPatchedInPlace = false;
   for (const item of items) {
     const row = view.rowElements.get(item.index);
     if (!row) continue;
-    updateRowAfterSameLineEdit(view, row, item, patch, snapshot, updatePass);
+    if (updateRowAfterSameLineEdit(view, row, item, patch, snapshot, updatePass)) {
+      editedRowPatchedInPlace = true;
+    }
   }
+
+  return editedRowPatchedInPlace;
 }
 
 function updateRowAfterSameLineEdit(
@@ -584,10 +589,17 @@ function updateRowAfterSameLineEdit(
   patch: SameLineEditPatch,
   snapshot: FixedRowVirtualizerSnapshot,
   updatePass: RowUpdatePass,
-): void {
+): boolean {
   const state = rowUpdateState(view, item.index, updatePass);
 
-  updateRowElementForSameLineEdit(view, row, item, state, patch, snapshot);
+  const editedRowPatchedInPlace = updateRowElementForSameLineEdit(
+    view,
+    row,
+    item,
+    state,
+    patch,
+    snapshot,
+  );
   updateMutableRow(row, {
     bufferRow: state.bufferRow,
     endOffset: state.endOffset,
@@ -609,6 +621,7 @@ function updateRowAfterSameLineEdit(
     chunkKey: rowChunkKey(view, state.text, snapshot),
     displayKind: state.kind,
   });
+  return editedRowPatchedInPlace;
 }
 
 function updateRowElementForSameLineEdit(
@@ -618,19 +631,28 @@ function updateRowElementForSameLineEdit(
   state: RowUpdateState,
   patch: SameLineEditPatch,
   snapshot: FixedRowVirtualizerSnapshot,
-): void {
+): boolean {
   updateRowFrame(view, row, item, state.kind);
   applyRowDecoration(view, row, item.index);
   updateGutterRowElement(view, row, item, state);
   if (state.kind === "block") {
     setBlockRowContent(view, row, item, state);
     updateRowFoldPresentation(row, state.foldMarker);
-    return;
+    return false;
   }
 
   disposeBlockRowMount(row);
-  updateRowTextForSameLineEdit(view, row, item, state.text, patch, state.startOffset, snapshot);
+  const editedRowPatchedInPlace = updateRowTextForSameLineEdit(
+    view,
+    row,
+    item,
+    state.text,
+    patch,
+    state.startOffset,
+    snapshot,
+  );
   updateRowFoldPresentation(row, state.foldMarker);
+  return editedRowPatchedInPlace;
 }
 
 function setBlockRowContent(
@@ -716,30 +738,31 @@ function updateRowTextForSameLineEdit(
   patch: SameLineEditPatch,
   startOffset: number,
   snapshot: FixedRowVirtualizerSnapshot,
-): void {
+): boolean {
   if (item.index !== patch.rowIndex) {
     if (row.text !== text) updateRowTextChunks(view, row, text, startOffset, snapshot);
     if (row.text === text) syncRowChunkOffsets(row, startOffset);
-    return;
+    return false;
   }
 
   if (row.textNode.data !== row.text) {
     updateRowTextChunks(view, row, text, startOffset, snapshot);
-    return;
+    return false;
   }
 
   if (shouldChunkLine(view, text)) {
     updateRowTextChunks(view, row, text, startOffset, snapshot);
-    return;
+    return false;
   }
 
   row.textNode.replaceData(patch.localFrom, patch.deleteLength, patch.text);
   if (row.textRenderMode === "simple") {
     syncSimpleDirectRowChunk(row, text, startOffset);
-    return;
+    return true;
   }
 
   syncDirectRowChunk(row, text, startOffset);
+  return true;
 }
 
 function syncRowChunkOffsets(row: MountedVirtualizedTextRow, startOffset: number): void {
