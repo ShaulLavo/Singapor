@@ -5,6 +5,7 @@ import type { PieceTableSnapshot } from "./pieceTable/pieceTableTypes";
 import type { EditorTheme } from "./theme";
 import type { EditorToken, TextEdit } from "./tokens";
 import type { EditorBlockProvider } from "./editorBlocks";
+import type { DisplayTextRowSource, InjectedTextRow } from "./displayTransforms";
 import {
   type EditorSyntaxLanguageId,
   type EditorSyntaxProvider,
@@ -17,6 +18,7 @@ import type {
   EditorCursorLineHighlightOptions,
   VirtualizedFoldMarker,
   VirtualizedTextHighlightStyle,
+  VirtualizedTextRowDecoration,
 } from "./virtualization/virtualizedTextViewTypes";
 
 export type EditorDisposable = {
@@ -92,6 +94,9 @@ export type EditorViewportSnapshot = {
 export type EditorVisibleRowSnapshot = {
   readonly index: number;
   readonly bufferRow: number;
+  readonly source: DisplayTextRowSource | "block";
+  readonly injectedTextRowId?: string;
+  readonly metadata?: unknown;
   readonly startOffset: number;
   readonly endOffset: number;
   readonly text: string;
@@ -197,6 +202,11 @@ export type EditorFeatureContributionContext = {
     style: VirtualizedTextHighlightStyle,
   ): void;
   clearRangeHighlight(name: string): void;
+  setRowDecorations(
+    sourceId: string,
+    decorations: ReadonlyMap<number, VirtualizedTextRowDecoration>,
+  ): void;
+  clearRowDecorations(sourceId: string): void;
   registerCommand(command: EditorCommandId, handler: EditorCommandHandler): EditorDisposable;
   registerFeature<T>(id: string, feature: T): EditorDisposable;
 };
@@ -217,16 +227,34 @@ export type EditorGutterWidthContext = {
 export type EditorGutterRowContext = {
   readonly index: number;
   readonly bufferRow: number;
+  readonly source: DisplayTextRowSource | "block";
   readonly startOffset: number;
   readonly endOffset: number;
   readonly text: string;
   readonly kind: "text" | "block";
+  readonly injectedTextRowId?: string;
+  readonly metadata?: unknown;
   readonly primaryText: boolean;
   readonly cursorLine: boolean;
   readonly cursorLineHighlight: Required<EditorCursorLineHighlightOptions>;
   readonly foldMarker: VirtualizedFoldMarker | null;
   readonly lineCount: number;
   toggleFold(marker: VirtualizedFoldMarker): void;
+};
+
+export type EditorInjectedTextRow = InjectedTextRow;
+
+export type EditorInjectedTextRowProviderContext = {
+  readonly documentId: string | null;
+  readonly text: string;
+  readonly lineCount: number;
+};
+
+export type EditorInjectedTextRowProvider = {
+  getInjectedTextRows(
+    context: EditorInjectedTextRowProviderContext,
+  ): readonly EditorInjectedTextRow[];
+  onDidChangeInjectedTextRows?(listener: () => void): EditorDisposable;
 };
 
 export type EditorGutterContribution = {
@@ -245,6 +273,7 @@ export type EditorPluginContext = {
   registerEditorFeatureContribution(provider: EditorFeatureContributionProvider): EditorDisposable;
   registerGutterContribution(contribution: EditorGutterContribution): EditorDisposable;
   registerBlockProvider(provider: EditorBlockProvider): EditorDisposable;
+  registerInjectedTextRowProvider(provider: EditorInjectedTextRowProvider): EditorDisposable;
 };
 
 export type EditorPlugin = {
@@ -261,6 +290,7 @@ export type EditorPluginHostEvents = {
   onEditorFeatureContributionProviderRemoved?(provider: EditorFeatureContributionProvider): void;
   onGutterContributionsChanged?(): void;
   onBlockProvidersChanged?(): void;
+  onInjectedTextRowProvidersChanged?(): void;
 };
 
 type ActiveEditorPlugin = {
@@ -275,8 +305,13 @@ export class EditorPluginHost implements EditorDisposable {
   private readonly editorFeatureContributions: EditorFeatureContributionProvider[] = [];
   private readonly gutterContributions: EditorGutterContribution[] = [];
   private readonly blockProviders: EditorBlockProvider[] = [];
+  private readonly injectedTextRowProviders: EditorInjectedTextRowProvider[] = [];
   private readonly blockProviderInvalidationDisposables = new Map<
     EditorBlockProvider,
+    EditorDisposable
+  >();
+  private readonly injectedTextRowProviderInvalidationDisposables = new Map<
+    EditorInjectedTextRowProvider,
     EditorDisposable
   >();
   private readonly activePlugins = new Map<EditorPlugin, ActiveEditorPlugin>();
@@ -393,6 +428,10 @@ export class EditorPluginHost implements EditorDisposable {
     return this.blockProviders;
   }
 
+  public getInjectedTextRowProviders(): readonly EditorInjectedTextRowProvider[] {
+    return this.injectedTextRowProviders;
+  }
+
   public getViewContributionProviders(): readonly EditorViewContributionProvider[] {
     return this.viewContributions;
   }
@@ -420,6 +459,11 @@ export class EditorPluginHost implements EditorDisposable {
     }
     this.blockProviderInvalidationDisposables.clear();
     this.blockProviders.length = 0;
+    for (const disposable of this.injectedTextRowProviderInvalidationDisposables.values()) {
+      disposable.dispose();
+    }
+    this.injectedTextRowProviderInvalidationDisposables.clear();
+    this.injectedTextRowProviders.length = 0;
   }
 
   private retainPlugin(plugin: EditorPlugin): void {
@@ -503,6 +547,7 @@ export class EditorPluginHost implements EditorDisposable {
         this.registerEditorFeatureContribution(provider),
       registerGutterContribution: (contribution) => this.registerGutterContribution(contribution),
       registerBlockProvider: (provider) => this.registerBlockProvider(provider),
+      registerInjectedTextRowProvider: (provider) => this.registerInjectedTextRowProvider(provider),
     };
   }
 
@@ -616,6 +661,33 @@ export class EditorPluginHost implements EditorDisposable {
     this.blockProviderInvalidationDisposables.get(provider)?.dispose();
     this.blockProviderInvalidationDisposables.delete(provider);
     this.events.onBlockProvidersChanged?.();
+  }
+
+  private registerInjectedTextRowProvider(
+    provider: EditorInjectedTextRowProvider,
+  ): EditorDisposable {
+    this.injectedTextRowProviders.push(provider);
+    const invalidationDisposable = provider.onDidChangeInjectedTextRows?.(() => {
+      this.events.onInjectedTextRowProvidersChanged?.();
+    });
+    if (invalidationDisposable) {
+      this.injectedTextRowProviderInvalidationDisposables.set(provider, invalidationDisposable);
+    }
+    this.events.onInjectedTextRowProvidersChanged?.();
+
+    return {
+      dispose: () => this.unregisterInjectedTextRowProvider(provider),
+    };
+  }
+
+  private unregisterInjectedTextRowProvider(provider: EditorInjectedTextRowProvider): void {
+    const index = this.injectedTextRowProviders.indexOf(provider);
+    if (index === -1) return;
+
+    this.injectedTextRowProviders.splice(index, 1);
+    this.injectedTextRowProviderInvalidationDisposables.get(provider)?.dispose();
+    this.injectedTextRowProviderInvalidationDisposables.delete(provider);
+    this.events.onInjectedTextRowProvidersChanged?.();
   }
 }
 

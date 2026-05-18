@@ -33,8 +33,11 @@ export type BlockPoint = Point & {
   readonly [blockPointBrand]: true;
 };
 
-export type DisplayTextRow = {
+export type DisplayTextRowSource = "document" | "injected";
+
+export type DisplayDocumentTextRow = {
   readonly kind: "text";
+  readonly source: "document";
   readonly index: number;
   readonly bufferRow: number;
   readonly startOffset: number;
@@ -45,6 +48,29 @@ export type DisplayTextRow = {
   readonly sourceEndColumn: number;
   readonly wrapSegment: number;
 };
+
+export type DisplayInjectedTextRow = {
+  readonly kind: "text";
+  readonly source: "injected";
+  readonly id: string;
+  readonly index: number;
+  readonly bufferRow: number;
+  readonly anchorBufferRow: number;
+  readonly placement: InjectedTextRowPlacement;
+  readonly order: number;
+  readonly startOffset: number;
+  readonly endOffset: number;
+  readonly text: string;
+  readonly sourceText: string;
+  readonly sourceStartColumn: number;
+  readonly sourceEndColumn: number;
+  readonly wrapSegment: number;
+  readonly className?: string;
+  readonly gutterClassName?: string;
+  readonly metadata?: unknown;
+};
+
+export type DisplayTextRow = DisplayDocumentTextRow | DisplayInjectedTextRow;
 
 export type DisplayBlockRow = {
   readonly kind: "block";
@@ -64,6 +90,19 @@ export type DisplayBlockRow = {
 export type DisplayRow = DisplayTextRow | DisplayBlockRow;
 
 export type BlockRowPlacement = "before" | "after";
+
+export type InjectedTextRowPlacement = "before" | "after";
+
+export type InjectedTextRow = {
+  readonly id: string;
+  readonly anchorBufferRow: number;
+  readonly placement: InjectedTextRowPlacement;
+  readonly text: string;
+  readonly order?: number;
+  readonly className?: string;
+  readonly gutterClassName?: string;
+  readonly metadata?: unknown;
+};
 
 export type BlockLanePlacement = "left" | "right";
 
@@ -97,6 +136,18 @@ type MutableBlockRowsAtBufferRow = {
 };
 
 type BlockRowIndex = ReadonlyMap<number, BlockRowsAtBufferRow>;
+
+type InjectedTextRowsAtBufferRow = {
+  readonly before: readonly InjectedTextRow[];
+  readonly after: readonly InjectedTextRow[];
+};
+
+type MutableInjectedTextRowsAtBufferRow = {
+  readonly before: InjectedTextRow[];
+  readonly after: InjectedTextRow[];
+};
+
+type InjectedTextRowIndex = ReadonlyMap<number, InjectedTextRowsAtBufferRow>;
 
 export type WrapSegment = {
   readonly inputRow: number;
@@ -230,6 +281,18 @@ export function blockPointToBufferPoint(
   return blockRowFallbackPoint(row, bias);
 }
 
+export function isDocumentTextDisplayRow(
+  row: DisplayRow | undefined,
+): row is DisplayDocumentTextRow {
+  return row?.kind === "text" && row.source === "document";
+}
+
+export function isInjectedTextDisplayRow(
+  row: DisplayRow | undefined,
+): row is DisplayInjectedTextRow {
+  return row?.kind === "text" && row.source === "injected";
+}
+
 export function createDisplayRows(options: {
   readonly lineStarts: readonly number[];
   readonly text: string;
@@ -237,14 +300,16 @@ export function createDisplayRows(options: {
   readonly visibleLineCount: number;
   readonly wrapColumn?: number | null;
   readonly blocks?: readonly BlockRow[];
+  readonly injectedTextRows?: readonly InjectedTextRow[];
   readonly tabSize?: number;
 }): DisplayRow[] {
   const rows: DisplayRow[] = [];
   const blocks = blockRowIndex(options.blocks ?? []);
+  const injectedTextRows = injectedTextRowIndex(options.injectedTextRows ?? []);
   const tabSize = options.tabSize ?? DEFAULT_TAB_SIZE;
 
   for (let visibleRow = 0; visibleRow < options.visibleLineCount; visibleRow += 1) {
-    appendDisplayRowsForVisibleRow(rows, visibleRow, blocks, options, tabSize);
+    appendDisplayRowsForVisibleRow(rows, visibleRow, blocks, injectedTextRows, options, tabSize);
   }
 
   return rows;
@@ -280,6 +345,7 @@ const appendDisplayRowsForVisibleRow = (
   rows: DisplayRow[],
   visibleRow: number,
   blocks: BlockRowIndex,
+  injectedTextRows: InjectedTextRowIndex,
   options: {
     readonly lineStarts: readonly number[];
     readonly text: string;
@@ -291,8 +357,17 @@ const appendDisplayRowsForVisibleRow = (
   const bufferRow = options.bufferRowForVisibleRow(visibleRow);
   const text = lineText(options.text, options.lineStarts, bufferRow);
   const startOffset = lineStartOffset(options.text, options.lineStarts, bufferRow);
+  appendInjectedTextRows(
+    rows,
+    injectedTextRows,
+    bufferRow,
+    "before",
+    startOffset,
+    options.wrapColumn,
+    tabSize,
+  );
   appendBlockRows(rows, blocks, bufferRow, "before", startOffset);
-  appendTextDisplayRows(rows, bufferRow, text, startOffset, options.wrapColumn, tabSize);
+  appendDocumentTextDisplayRows(rows, bufferRow, text, startOffset, options.wrapColumn, tabSize);
   appendBlockRows(
     rows,
     blocks,
@@ -300,9 +375,18 @@ const appendDisplayRowsForVisibleRow = (
     "after",
     lineEndOffset(options.text, options.lineStarts, bufferRow),
   );
+  appendInjectedTextRows(
+    rows,
+    injectedTextRows,
+    bufferRow,
+    "after",
+    lineEndOffset(options.text, options.lineStarts, bufferRow),
+    options.wrapColumn,
+    tabSize,
+  );
 };
 
-const appendTextDisplayRows = (
+const appendDocumentTextDisplayRows = (
   rows: DisplayRow[],
   bufferRow: number,
   text: string,
@@ -314,6 +398,7 @@ const appendTextDisplayRows = (
   for (const segment of segments) {
     rows.push({
       kind: "text",
+      source: "document",
       index: rows.length,
       bufferRow,
       startOffset: startOffset + segment.startColumn,
@@ -326,6 +411,62 @@ const appendTextDisplayRows = (
     });
   }
 };
+
+const appendInjectedTextRows = (
+  rows: DisplayRow[],
+  injectedTextRows: InjectedTextRowIndex,
+  bufferRow: number,
+  placement: InjectedTextRowPlacement,
+  offset: number,
+  wrapColumn: number | null | undefined,
+  tabSize: number,
+): void => {
+  const rowInjections = injectedTextRows.get(bufferRow)?.[placement];
+  if (!rowInjections) return;
+
+  for (const injected of rowInjections) {
+    appendInjectedTextRowSegments(rows, injected, offset, wrapColumn, tabSize);
+  }
+};
+
+const appendInjectedTextRowSegments = (
+  rows: DisplayRow[],
+  injected: InjectedTextRow,
+  offset: number,
+  wrapColumn: number | null | undefined,
+  tabSize: number,
+): void => {
+  const segments = textSegments(injected.text, wrapColumn, tabSize);
+  for (const segment of segments) {
+    rows.push(injectedTextDisplayRow(rows.length, injected, offset, segment));
+  }
+};
+
+const injectedTextDisplayRow = (
+  index: number,
+  injected: InjectedTextRow,
+  offset: number,
+  segment: Omit<WrapSegment, "inputRow" | "outputRow">,
+): DisplayInjectedTextRow => ({
+  kind: "text",
+  source: "injected",
+  id: injected.id,
+  index,
+  bufferRow: injected.anchorBufferRow,
+  anchorBufferRow: injected.anchorBufferRow,
+  placement: injected.placement,
+  order: injected.order ?? 0,
+  startOffset: offset,
+  endOffset: offset,
+  text: injected.text.slice(segment.startColumn, segment.endColumn),
+  sourceText: injected.text,
+  sourceStartColumn: segment.startColumn,
+  sourceEndColumn: segment.endColumn,
+  wrapSegment: segment.segmentIndex,
+  ...(injected.className === undefined ? {} : { className: injected.className }),
+  ...(injected.gutterClassName === undefined ? {} : { gutterClassName: injected.gutterClassName }),
+  ...(injected.metadata === undefined ? {} : { metadata: injected.metadata }),
+});
 
 const appendBlockRows = (
   rows: DisplayRow[],
@@ -495,6 +636,19 @@ const normalizeBlockRows = (blocks: readonly BlockRow[]): readonly BlockRow[] =>
 
 const placementOrder = (placement: BlockRowPlacement): number => (placement === "before" ? 0 : 1);
 
+const normalizeInjectedTextRows = (rows: readonly InjectedTextRow[]): readonly InjectedTextRow[] =>
+  rows
+    .filter((row) => row.id.length > 0)
+    .filter((row) => row.anchorBufferRow >= 0)
+    .toSorted((left, right) => {
+      return (
+        left.anchorBufferRow - right.anchorBufferRow ||
+        placementOrder(left.placement) - placementOrder(right.placement) ||
+        (left.order ?? 0) - (right.order ?? 0) ||
+        left.id.localeCompare(right.id)
+      );
+    });
+
 const lanePlacementOrder = (placement: BlockLanePlacement): number =>
   placement === "left" ? 0 : 1;
 
@@ -503,6 +657,16 @@ const blockRowIndex = (blocks: readonly BlockRow[]): BlockRowIndex => {
 
   for (const block of normalizeBlockRows(blocks)) {
     blockRowsAtBufferRow(index, block.anchorBufferRow)[block.placement].push(block);
+  }
+
+  return index;
+};
+
+const injectedTextRowIndex = (rows: readonly InjectedTextRow[]): InjectedTextRowIndex => {
+  const index = new Map<number, MutableInjectedTextRowsAtBufferRow>();
+
+  for (const row of normalizeInjectedTextRows(rows)) {
+    injectedTextRowsAtBufferRow(index, row.anchorBufferRow)[row.placement].push(row);
   }
 
   return index;
@@ -518,6 +682,18 @@ const blockRowsAtBufferRow = (
   const blocks = { before: [], after: [] };
   index.set(bufferRow, blocks);
   return blocks;
+};
+
+const injectedTextRowsAtBufferRow = (
+  index: Map<number, MutableInjectedTextRowsAtBufferRow>,
+  bufferRow: number,
+): MutableInjectedTextRowsAtBufferRow => {
+  const existing = index.get(bufferRow);
+  if (existing) return existing;
+
+  const rows = { before: [], after: [] };
+  index.set(bufferRow, rows);
+  return rows;
 };
 
 const lineText = (text: string, lineStarts: readonly number[], row: number): string =>

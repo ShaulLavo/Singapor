@@ -186,6 +186,7 @@ function createContext(
     registerEditorFeatureContribution: vi.fn(() => ({ dispose: vi.fn() })),
     registerGutterContribution: vi.fn(() => ({ dispose: vi.fn() })),
     registerBlockProvider: vi.fn(() => ({ dispose: vi.fn() })),
+    registerInjectedTextRowProvider: vi.fn(() => ({ dispose: vi.fn() })),
   };
 }
 

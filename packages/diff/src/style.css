@@ -1,6 +1,8 @@
 @import "@editor/panes/style.css";
 
-.editor-diff-view {
+.editor-diff-view,
+.editor-diff-row,
+.editor-diff-gutter-row {
   --editor-diff-added: #5ecc71;
   --editor-diff-deleted: #ff6762;
   --editor-diff-modified: #69b1ff;
@@ -27,7 +29,9 @@
   --editor-diff-border: #3f3f46;
   --editor-diff-split-handle: #71717a;
   --editor-diff-muted: #a1a1aa;
+}
 
+.editor-diff-view {
   background: var(--editor-diff-background, var(--editor-background, #1e1e1e));
   color: var(--editor-diff-foreground, var(--editor-foreground, #d4d4d4));
   display: flex;
@@ -247,6 +251,41 @@
   text-align: right;
   white-space: pre;
   width: 100%;
+}
+
+.editor-live-diff-gutter {
+  align-items: center;
+  box-sizing: border-box;
+  color: var(--editor-gutter-foreground, #71717a);
+  display: grid;
+  font-variant-numeric: tabular-nums;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 12px;
+  height: 100%;
+  padding-right: 4px;
+  width: 100%;
+}
+
+.editor-live-diff-gutter-lane {
+  box-sizing: border-box;
+  min-width: 0;
+  overflow: hidden;
+  padding-right: 4px;
+  text-align: right;
+  white-space: pre;
+}
+
+.editor-live-diff-gutter-indicator {
+  padding-right: 0;
+}
+
+.editor-diff-row-addition .editor-live-diff-gutter,
+.editor-diff-gutter-row-addition .editor-live-diff-gutter {
+  color: var(--editor-diff-added);
+}
+
+.editor-diff-row-deletion .editor-live-diff-gutter,
+.editor-diff-gutter-row-deletion .editor-live-diff-gutter {
+  color: var(--editor-diff-deleted);
 }
 
 .editor-diff-gutter-canvas {

@@ -698,10 +698,12 @@ export class InputSelectionController {
   }
 
   private mouseSelectionOffsetFromPoint(clientX: number, clientY: number): number {
-    return (
+    const offset =
       this.options.view.textOffsetFromPoint(clientX, clientY) ??
-      this.options.view.textOffsetFromViewportPoint(clientX, clientY)
-    );
+      this.options.view.textOffsetFromViewportPoint(clientX, clientY);
+    if (offset !== null) return offset;
+
+    return this.mouseSelectionDrag?.headOffset ?? 0;
   }
 
   private updateMouseSelectionAutoScroll(): void {

@@ -1,5 +1,11 @@
 import type { FoldMap } from "../foldMap";
-import { normalizeTabSize, type BlockLane, type BlockRow } from "../displayTransforms";
+import {
+  normalizeTabSize,
+  isDocumentTextDisplayRow,
+  type BlockLane,
+  type BlockRow,
+  type InjectedTextRow,
+} from "../displayTransforms";
 import { createStringTextSnapshot, type TextSnapshot } from "../documentTextSnapshot";
 import type { EditorTheme } from "../theme";
 import type { EditorGutterContribution, EditorGutterWidthContext } from "../plugins";
@@ -59,6 +65,7 @@ import {
   scrollableHeight,
   setBlockRowsLayout,
   setFoldStateLayout,
+  setInjectedTextRowsLayout,
   materializeLineStarts,
   setTextLayoutState,
   setWrapEnabledLayout,
@@ -232,6 +239,7 @@ export class VirtualizedTextView {
       foldMarkerByStartRow: new Map(),
       foldMarkerByKey: new Map(),
       blockRows: options.blockRows ?? [],
+      injectedTextRows: options.injectedTextRows ?? [],
       rowHeightIndex: null,
       rowHeightIndexDisplayRows: null,
       rowHeightIndexRowHeight: rowHeight,
@@ -491,6 +499,16 @@ export class VirtualizedTextView {
     updateVirtualizerRows(view);
   }
 
+  public setInjectedTextRows(injectedTextRows: readonly InjectedTextRow[]): void {
+    const view = this.view;
+    setInjectedTextRowsLayout(view, injectedTextRows, horizontalViewportColumns(view));
+    resetContentWidthScan(view);
+    clearRowGeometryCaches(view);
+    view.lastRenderedRowsKey = "";
+    view.gutterWidthDirty = true;
+    updateVirtualizerRows(view);
+  }
+
   public setBlockLanes(blockLanes: readonly BlockLane[]): void {
     const view = this.view;
     setBlockLanesLayout(view, blockLanes);
@@ -547,7 +565,7 @@ export class VirtualizedTextView {
   public offsetByDisplayRows(offset: number, rowDelta: number, visualColumn: number): number {
     const view = this.view;
     const row = rowForOffset(view, offset);
-    const targetRow = Math.max(0, Math.min(row + rowDelta, visibleLineCount(view) - 1));
+    const targetRow = documentTextRowByDisplayDelta(view, row, rowDelta);
     return offsetForViewportColumn(view, targetRow, visualColumn);
   }
 
@@ -636,7 +654,7 @@ export class VirtualizedTextView {
     return this.textOffsetFromViewportPoint(clientX, clientY);
   }
 
-  public textOffsetFromViewportPoint(clientX: number, clientY: number): number {
+  public textOffsetFromViewportPoint(clientX: number, clientY: number): number | null {
     const view = this.view;
     const metrics = viewportPointMetrics(view, clientX, clientY);
     if (metrics.verticalDirection < 0)
@@ -644,6 +662,8 @@ export class VirtualizedTextView {
     if (metrics.verticalDirection > 0) return lineEndOffset(view, rowForViewportY(view, metrics.y));
 
     const row = rowForViewportY(view, metrics.y);
+    if (!isDocumentTextDisplayRow(view.displayRows[row])) return null;
+
     const mounted = view.rowElements.get(row);
     if (mounted?.kind === "text") return xToOffset(view, mounted, metrics.x);
 
@@ -728,6 +748,42 @@ export class VirtualizedTextView {
     view.lastRenderedRowsKey = "";
     updateVirtualizerRows(view);
   }
+}
+
+function documentTextRowByDisplayDelta(
+  view: VirtualizedTextViewInternal,
+  row: number,
+  rowDelta: number,
+): number {
+  if (rowDelta === 0) return row;
+
+  const step = rowDelta > 0 ? 1 : -1;
+  let remaining = Math.abs(rowDelta);
+  let current = row;
+  while (remaining > 0) {
+    const next = nextDocumentTextRow(view, current, step);
+    if (next === current) return current;
+
+    current = next;
+    remaining -= 1;
+  }
+
+  return current;
+}
+
+function nextDocumentTextRow(
+  view: VirtualizedTextViewInternal,
+  row: number,
+  step: 1 | -1,
+): number {
+  const end = step > 0 ? visibleLineCount(view) - 1 : 0;
+  let current = row;
+  while (current !== end) {
+    current += step;
+    if (isDocumentTextDisplayRow(view.displayRows[current])) return current;
+  }
+
+  return row;
 }
 
 function normalizeCursorLineHighlight(

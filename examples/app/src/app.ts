@@ -1,5 +1,5 @@
-import { createMergeConflictPlugin, Editor } from "@editor/core/editor";
-import { DiffView } from "@editor/diff";
+import { createMergeConflictPlugin, Editor, type EditorPlugin } from "@editor/core/editor";
+import { createEditorDiffPlugin } from "@editor/diff";
 import "@editor/core/style.css";
 import "@editor/diff/style.css";
 import "@editor/find/style.css";
@@ -54,46 +54,60 @@ export function mountApp(): void {
       console.warn("[typescript-lsp]", error);
     },
   });
+  const liveDiff = createEditorDiffPlugin();
+  const languagePlugins: readonly EditorPlugin[] = [
+    javaScript({ jsx: true }),
+    typeScript({ tsx: true }),
+    html(),
+    css(),
+    json(),
+    markdown(),
+  ];
+  const lineGutter = createLineGutterPlugin();
+  const foldGutter = createFoldGutterPlugin({
+    width: 16,
+    icon: createFoldChevronIcon,
+    iconClassName: "app-fold-gutter-icon",
+  });
+  const sharedPlugins: readonly EditorPlugin[] = [
+    foldGutter,
+    // Shiki highlighter: import createShikiHighlighterPlugin from "@editor/core/shiki".
+    // createShikiHighlighterPlugin({ theme: "github-dark" }),
+    createMergeConflictPlugin(),
+    createEditorFindPlugin(),
+    createScopeLinesPlugin(),
+    createMinimapPlugin(),
+    typeScriptLsp,
+  ];
+  const editPlugins: readonly EditorPlugin[] = [
+    ...languagePlugins,
+    lineGutter,
+    liveDiff,
+    ...sharedPlugins,
+  ];
+  const diffPlugins: readonly EditorPlugin[] = [...languagePlugins, liveDiff, ...sharedPlugins];
   const editor = new Editor(editorPane.editorHost, {
     cursorLineHighlight: {
       gutterNumber: true,
       gutterBackground: ["fold-gutter"],
       rowBackground: true,
     },
-    plugins: [
-      javaScript({ jsx: true }),
-      typeScript({ tsx: true }),
-      html(),
-      css(),
-      json(),
-      markdown(),
-      createLineGutterPlugin(),
-      createFoldGutterPlugin({
-        width: 16,
-        icon: createFoldChevronIcon,
-        iconClassName: "app-fold-gutter-icon",
-      }),
-      // Shiki highlighter: import createShikiHighlighterPlugin from "@editor/core/shiki".
-      // createShikiHighlighterPlugin({ theme: "github-dark" }),
-      createMergeConflictPlugin(),
-      createEditorFindPlugin(),
-      createScopeLinesPlugin(),
-      createMinimapPlugin(),
-      typeScriptLsp,
-    ],
+    plugins: editPlugins,
     onChange: (state) => {
       controller?.updateStatus(state);
     },
   });
-  const diffView = new DiffView(editorPane.diffHost);
-  controller = new SourceController(topBar, sidebar, statusBar, editor, typeScriptLsp, diffView, {
+  controller = new SourceController(topBar, sidebar, statusBar, editor, typeScriptLsp, liveDiff, {
     showEditor: () => {
+      liveDiff.setEnabled(false);
+      editor.setPlugins(editPlugins);
       editorPane.editorHost.hidden = false;
       editorPane.diffHost.hidden = true;
     },
     showDiff: () => {
-      editorPane.editorHost.hidden = true;
-      editorPane.diffHost.hidden = false;
+      editor.setPlugins(diffPlugins);
+      editorPane.editorHost.hidden = false;
+      editorPane.diffHost.hidden = true;
     },
   });
 

@@ -1,5 +1,6 @@
 import {
   blockLaneCoversBufferRow,
+  isDocumentTextDisplayRow,
   normalizeBlockLanes,
   visualColumnLength,
   type BlockLane,
@@ -128,7 +129,7 @@ function textDisplayRowForIndex(
   rowIndex: number,
 ): DisplayTextRow | null {
   const displayRow = view.displayRows[rowIndex];
-  if (displayRow?.kind !== "text") return null;
+  if (!isDocumentTextDisplayRow(displayRow)) return null;
   return displayRow;
 }
 

@@ -144,6 +144,7 @@ function activatePlugin(
     registerEditorFeatureContribution: () => ({ dispose: () => undefined }),
     registerGutterContribution: () => ({ dispose: () => undefined }),
     registerBlockProvider: () => ({ dispose: () => undefined }),
+    registerInjectedTextRowProvider: () => ({ dispose: () => undefined }),
   } satisfies EditorPluginContext);
 
   if (!provider) throw new Error("missing provider");

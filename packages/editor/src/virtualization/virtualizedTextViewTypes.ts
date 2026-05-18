@@ -5,6 +5,8 @@ import type {
   BlockLanePlacement,
   BlockRow,
   BlockRowPlacement,
+  DisplayTextRowSource,
+  InjectedTextRow,
 } from "../displayTransforms";
 import type { BrowserTextMetrics } from "./browserMetrics";
 import type { FixedRowVisibleRange } from "./fixedRowVirtualizer";
@@ -35,6 +37,7 @@ export type VirtualizedTextViewOptions = {
   readonly onViewportChange?: () => void;
   readonly wrap?: boolean;
   readonly blockRows?: readonly BlockRow[];
+  readonly injectedTextRows?: readonly InjectedTextRow[];
   readonly blockRowMount?: VirtualizedBlockRowMount;
   readonly blockLanes?: readonly BlockLane[];
   readonly blockLaneMount?: VirtualizedBlockLaneMount;
@@ -142,6 +145,9 @@ export type VirtualizedFoldMarker = {
 export type VirtualizedTextRow = {
   readonly index: number;
   readonly bufferRow: number;
+  readonly source: DisplayTextRowSource | "block";
+  readonly injectedTextRowId?: string;
+  readonly metadata?: unknown;
   readonly startOffset: number;
   readonly endOffset: number;
   readonly text: string;

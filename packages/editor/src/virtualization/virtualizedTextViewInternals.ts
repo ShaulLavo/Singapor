@@ -1,5 +1,5 @@
 import type { FoldMap } from "../foldMap";
-import type { BlockLane, BlockRow, DisplayRow } from "../displayTransforms";
+import type { BlockLane, BlockRow, DisplayRow, InjectedTextRow } from "../displayTransforms";
 import type { TextSnapshot } from "../documentTextSnapshot";
 import type { EditorGutterContribution, EditorGutterWidthContext } from "../plugins";
 import type { EditorToken, EditorTokenStyle } from "../tokens";
@@ -110,6 +110,7 @@ export interface VirtualizedTextViewInternal {
   foldMarkerByStartRow: ReadonlyMap<number, VirtualizedFoldMarker>;
   foldMarkerByKey: ReadonlyMap<string, VirtualizedFoldMarker>;
   blockRows: readonly BlockRow[];
+  injectedTextRows: readonly InjectedTextRow[];
   rowHeightIndex: RowHeightIndex | null;
   rowHeightIndexDisplayRows: readonly DisplayRow[] | null;
   rowHeightIndexRowHeight: number;

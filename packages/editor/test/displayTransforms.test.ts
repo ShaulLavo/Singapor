@@ -11,6 +11,7 @@ import {
   visualColumnToBufferColumn,
   wrapPointToTabPoint,
   type BlockRow,
+  type InjectedTextRow,
 } from "../src";
 import { computeLineStarts } from "../src/virtualization/virtualizedTextViewHelpers";
 
@@ -89,6 +90,43 @@ describe("display transform core", () => {
       "efgh",
       "ij",
       "xy",
+    ]);
+  });
+
+  it("interleaves injected text rows before and after anchored document rows", () => {
+    const text = "alpha\nbeta";
+    const injectedTextRows: InjectedTextRow[] = [
+      { id: "before-z", anchorBufferRow: 1, placement: "before", order: 2, text: "before z" },
+      { id: "after-a", anchorBufferRow: 0, placement: "after", text: "after a" },
+      { id: "before-a", anchorBufferRow: 1, placement: "before", order: 1, text: "before a" },
+      { id: "before-b", anchorBufferRow: 1, placement: "before", order: 1, text: "before b" },
+    ];
+
+    const rows = createDisplayRows({
+      text,
+      lineStarts: computeLineStarts(text),
+      visibleLineCount: 2,
+      bufferRowForVisibleRow: (row) => row,
+      injectedTextRows,
+    });
+
+    expect(
+      rows.map((row) => ({
+        id: row.kind === "text" && row.source === "injected" ? row.id : undefined,
+        source: row.kind === "text" ? row.source : "block",
+        text: row.text,
+      })),
+    ).toEqual([
+      { id: undefined, source: "document", text: "alpha" },
+      { id: "after-a", source: "injected", text: "after a" },
+      { id: "before-a", source: "injected", text: "before a" },
+      { id: "before-b", source: "injected", text: "before b" },
+      { id: "before-z", source: "injected", text: "before z" },
+      { id: undefined, source: "document", text: "beta" },
+    ]);
+    expect(rows.filter((row) => row.kind === "text" && row.source === "document")).toMatchObject([
+      { bufferRow: 0, startOffset: 0, endOffset: 5 },
+      { bufferRow: 1, startOffset: 6, endOffset: 10 },
     ]);
   });
 

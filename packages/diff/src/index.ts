@@ -1,7 +1,11 @@
 export { DiffView } from "./DiffView";
+export { createEditorDiffPlugin } from "./editorDiffPlugin";
 export { annotateInlineChanges } from "./inline";
+export { createLiveDiffProjection } from "./liveProjection";
 export { createTextDiff, parseGitPatch } from "./model";
 export { createSplitProjection, createStackedProjection } from "./projection";
+export type { EditorDiffPlugin } from "./editorDiffPlugin";
+export type { LiveDiffProjection } from "./liveProjection";
 export type {
   CreateTextDiffOptions,
   DiffFile,

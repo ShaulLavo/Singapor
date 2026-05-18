@@ -279,6 +279,7 @@ function textRow(
 ): DisplayTextRow {
   return {
     kind: "text",
+    source: "document",
     index,
     bufferRow,
     startOffset,

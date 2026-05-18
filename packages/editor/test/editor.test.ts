@@ -15,6 +15,7 @@ import {
   type EditorBlockMountContext,
   type DocumentSessionChange,
   type EditorBlockProviderContext,
+  type EditorFeatureContributionContext,
   type EditorHighlightResult,
   type EditorHighlighterSession,
   type EditorPlugin,
@@ -1913,6 +1914,46 @@ describe("Editor", () => {
 
       expect(commandCalls).toBe(1);
       expect(changes).toContain(null);
+    });
+
+    it("composes source-keyed row decorations without clobbering other sources", () => {
+      let featureContext: EditorFeatureContributionContext | null = null;
+      const plugin: EditorPlugin = {
+        activate: (context) =>
+          context.registerEditorFeatureContribution({
+            createContribution: (context) => {
+              featureContext = context;
+              return { dispose: () => undefined };
+            },
+          }),
+      };
+
+      editor.dispose();
+      editor = new Editor(container, { defaultText: "one\ntwo", plugins: [plugin] });
+
+      featureContext?.setRowDecorations(
+        "first",
+        new Map([[0, { className: "first-row", gutterClassName: "first-gutter" }]]),
+      );
+      featureContext?.setRowDecorations(
+        "second",
+        new Map([
+          [0, { className: "second-row", gutterClassName: "second-gutter" }],
+          [1, { className: "third-row" }],
+        ]),
+      );
+
+      const firstRow = container.querySelector<HTMLElement>('[data-editor-virtual-row="0"]');
+      expect(firstRow?.className).toContain("first-row");
+      expect(firstRow?.className).toContain("second-row");
+
+      featureContext?.clearRowDecorations("first");
+
+      expect(firstRow?.className).not.toContain("first-row");
+      expect(firstRow?.className).toContain("second-row");
+      expect(container.querySelector('[data-editor-virtual-row="1"]')?.className).toContain(
+        "third-row",
+      );
     });
   });
 

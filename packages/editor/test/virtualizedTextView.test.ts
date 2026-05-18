@@ -11,6 +11,7 @@ import {
   measureBrowserTextMetrics,
   treeSitterCapturesToEditorTokens,
   VirtualizedTextView,
+  type EditorGutterRowContext,
   type VirtualizedFoldMarker,
   type VirtualizedTextHighlightRegistry,
 } from "../src";
@@ -694,6 +695,96 @@ describe("VirtualizedTextView", () => {
     expect(rows.map((row) => row.kind)).toEqual(["text", "block", "text"]);
     expect(rows[1]).toMatchObject({ text: "panel", height: 40, startOffset: 3, endOffset: 3 });
     expect(view.textOffsetFromViewportPoint(100, 25)).toBe(3);
+  });
+
+  it("renders injected text rows without changing document offsets", () => {
+    view.setText("abc\ndef");
+    view.setInjectedTextRows([
+      {
+        id: "deleted-line",
+        anchorBufferRow: 1,
+        placement: "before",
+        text: "old",
+        className: "row-deleted",
+        gutterClassName: "gutter-deleted",
+        metadata: { kind: "diff-delete" },
+      },
+    ]);
+    view.setScrollMetrics(0, 60);
+    mockViewport(view.scrollElement, 120, 60);
+
+    expect(view.getLineStarts()).toEqual([0, 4]);
+    expect(view.getState()).toMatchObject({
+      lineCount: 2,
+      totalHeight: 60,
+      mountedRows: [
+        { source: "document", text: "abc", startOffset: 0, endOffset: 3 },
+        {
+          source: "injected",
+          injectedTextRowId: "deleted-line",
+          text: "old",
+          startOffset: 4,
+          endOffset: 4,
+        },
+        { source: "document", text: "def", startOffset: 4, endOffset: 7 },
+      ],
+    });
+    expect(container.querySelector('[data-editor-virtual-row="1"]')?.className).toContain(
+      "row-deleted",
+    );
+    expect(view.offsetByDisplayRows(1, 1, 0)).toBe(4);
+    expect(view.textOffsetFromViewportPoint(8, 25)).toBeNull();
+    expect(view.textOffsetFromDomBoundary(view.getState().mountedRows[1]!.textNode, 1)).toBeNull();
+  });
+
+  it("passes injected row source metadata to gutter contributions", () => {
+    const metadata = { kind: "diff-delete" };
+    const rows = new Map<
+      number,
+      Pick<EditorGutterRowContext, "source" | "injectedTextRowId" | "metadata" | "primaryText">
+    >();
+    view.dispose();
+    view = new VirtualizedTextView(container, {
+      rowHeight: 20,
+      overscan: 0,
+      highlightRegistry: mockRegistry,
+      selectionHighlightName: "test-selection",
+      gutterContributions: [
+        {
+          id: "test-gutter",
+          createCell: (document) => document.createElement("span"),
+          width: () => 24,
+          updateCell: (_element, row) => {
+            rows.set(row.index, {
+              source: row.source,
+              injectedTextRowId: row.injectedTextRowId,
+              metadata: row.metadata,
+              primaryText: row.primaryText,
+            });
+          },
+        },
+      ],
+    });
+
+    view.setText("abc\ndef");
+    view.setInjectedTextRows([
+      {
+        id: "deleted-line",
+        anchorBufferRow: 1,
+        placement: "before",
+        text: "old",
+        metadata,
+      },
+    ]);
+    view.setScrollMetrics(0, 60);
+
+    expect(rows.get(1)).toEqual({
+      source: "injected",
+      injectedTextRowId: "deleted-line",
+      metadata,
+      primaryText: false,
+    });
+    expect(rows.get(2)).toMatchObject({ source: "document", primaryText: true });
   });
 
   it("uses fixed pixel block row heights for visible range calculations", () => {

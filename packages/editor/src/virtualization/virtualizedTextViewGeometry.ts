@@ -186,6 +186,7 @@ export function rangeSegments(
   end: number,
 ): readonly GeometryRangeSegment[] {
   if (row.kind !== "text") return [];
+  if (row.source === "injected") return [];
   if (end <= start) return [];
 
   const segments: GeometryRangeSegment[] = [];

@@ -2,10 +2,12 @@ import { bufferPointToFoldPoint, foldPointToBufferPoint, type FoldMap } from "..
 import {
   bufferColumnToVisualColumn,
   createDisplayRows,
+  isDocumentTextDisplayRow,
   visualColumnToBufferColumn,
   type BlockRow,
   type DisplayRow,
   type DisplayTextRow,
+  type InjectedTextRow,
 } from "../displayTransforms";
 import type { TextSnapshot } from "../documentTextSnapshot";
 import type { TextEdit } from "../tokens";
@@ -108,6 +110,7 @@ export function rebuildDisplayRows(
     bufferRowForVisibleRow: (row) => foldBufferRowForVisibleRow(view, row),
     wrapColumn: view.currentWrapColumn,
     blocks: view.blockRows,
+    injectedTextRows: view.injectedTextRows,
     tabSize: view.tabSize,
   });
 }
@@ -142,6 +145,15 @@ export function setBlockRowsLayout(
   viewportColumns: number | null,
 ): void {
   view.blockRows = blockRows;
+  rebuildDisplayRows(view, viewportColumns);
+}
+
+export function setInjectedTextRowsLayout(
+  view: VirtualizedTextViewInternal,
+  injectedTextRows: readonly InjectedTextRow[],
+  viewportColumns: number | null,
+): void {
+  view.injectedTextRows = injectedTextRows;
   rebuildDisplayRows(view, viewportColumns);
 }
 
@@ -200,7 +212,7 @@ export function displayRowKind(view: VirtualizedTextViewInternal, row: number): 
 export function visualColumnForOffset(view: VirtualizedTextViewInternal, offset: number): number {
   const row = rowForOffset(view, offset);
   const displayRow = view.displayRows[row];
-  if (!displayRow || displayRow.kind === "block") return 0;
+  if (!isDocumentTextDisplayRow(displayRow)) return 0;
 
   const localOffset = clamp(offset - displayRowStartOffset(view, row), 0, displayRow.text.length);
   return bufferColumnToVisualColumn(displayRow.text, localOffset, view.tabSize);
@@ -214,7 +226,7 @@ export function offsetForViewportColumn(
   const displayRow = view.displayRows[row];
   if (!displayRow) return view.textLength;
   const startOffset = displayRowStartOffset(view, row);
-  if (displayRow.kind === "block") return startOffset;
+  if (!isDocumentTextDisplayRow(displayRow)) return startOffset;
 
   const bufferColumn = visualColumnToBufferColumn(
     displayRow.text,
@@ -315,7 +327,8 @@ export function sameLineEditPatch(
   edit: TextEdit,
 ): SameLineEditPatch | null {
   if (view.foldMap) return null;
-  if (view.wrapEnabled || view.blockRows.length > 0) return null;
+  if (view.wrapEnabled || view.blockRows.length > 0 || view.injectedTextRows.length > 0)
+    return null;
   if (edit.from < 0 || edit.to < edit.from || edit.to > view.textLength) return null;
   if (edit.text.includes("\n")) return null;
   if (view.textSnapshot.getTextInRange(edit.from, edit.to).includes("\n")) return null;
@@ -445,7 +458,8 @@ function fixedRowForOffset(view: VirtualizedTextViewInternal, offset: number): n
 
 function usesDisplayRowTransforms(view: VirtualizedTextViewInternal): boolean {
   if (view.wrapEnabled) return true;
-  return view.blockRows.length > 0;
+  if (view.blockRows.length > 0) return true;
+  return view.injectedTextRows.length > 0;
 }
 
 function usesPlainDisplayRows(view: VirtualizedTextViewInternal): boolean {
@@ -456,7 +470,7 @@ function usesPlainDisplayRows(view: VirtualizedTextViewInternal): boolean {
 function displayRowStartOffset(view: VirtualizedTextViewInternal, row: number): number {
   const displayRow = view.displayRows[row];
   if (!displayRow) return view.textLength;
-  if (usesPlainDisplayRows(view) && displayRow.kind === "text")
+  if (usesPlainDisplayRows(view) && isDocumentTextDisplayRow(displayRow))
     return bufferLineStartOffset(view, displayRow.bufferRow);
 
   return displayRow.startOffset;
@@ -465,7 +479,7 @@ function displayRowStartOffset(view: VirtualizedTextViewInternal, row: number): 
 function displayRowEndOffset(view: VirtualizedTextViewInternal, row: number): number {
   const displayRow = view.displayRows[row];
   if (!displayRow) return view.textLength;
-  if (usesPlainDisplayRows(view) && displayRow.kind === "text")
+  if (usesPlainDisplayRows(view) && isDocumentTextDisplayRow(displayRow))
     return bufferLineEndOffset(view, displayRow.bufferRow);
 
   return displayRow.endOffset;
@@ -522,7 +536,7 @@ function textDisplayRowForOffset(
   for (let index = start; index < rows.length; index += 1) {
     const row = rows[index]!;
     if (row.startOffset > offset) return null;
-    if (row.kind !== "text") continue;
+    if (!isDocumentTextDisplayRow(row)) continue;
     if (offset <= row.endOffset) return row;
   }
 
@@ -560,7 +574,7 @@ function textDisplayRowForBufferRow(
     const row = rows[index]!;
     const orderRow = displayRowBufferOrder(row);
     if (orderRow > bufferRow) return null;
-    if (row.kind === "text" && row.bufferRow === bufferRow) return row;
+    if (isDocumentTextDisplayRow(row) && row.bufferRow === bufferRow) return row;
   }
 
   return null;

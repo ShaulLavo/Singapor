@@ -57,6 +57,7 @@ import type {
 import { EditorViewContributionController } from "./viewContributions";
 import type { FoldMap } from "../foldMap";
 import { normalizeTabSize } from "../displayTransforms";
+import type { InjectedTextRow } from "../displayTransforms";
 import { offsetToPoint } from "../pieceTable/positions";
 import {
   EditorPluginHost,
@@ -66,6 +67,7 @@ import {
   type EditorFeatureContributionContext,
   type EditorFeatureContributionProvider,
   type EditorGutterContribution,
+  type EditorInjectedTextRowProviderContext,
   type EditorOverlaySide,
   type EditorPlugin,
   type EditorViewContribution,
@@ -127,6 +129,12 @@ export class Editor {
   private configuredTheme: EditorTheme | null = null;
   private rangeDecorations: readonly EditorRangeDecoration[] = [];
   private appliedRangeDecorationNames: readonly string[] = [];
+  private appliedInjectedTextRows: readonly InjectedTextRow[] = [];
+  private directRowDecorations: ReadonlyMap<number, VirtualizedTextRowDecoration> = new Map();
+  private readonly rowDecorationSources = new Map<
+    string,
+    ReadonlyMap<number, VirtualizedTextRowDecoration>
+  >();
   private readonly tabSize: number;
 
   private get text(): string {
@@ -292,6 +300,7 @@ export class Editor {
         this.removeEditorFeatureContributionProvider(provider),
       onGutterContributionsChanged: () => this.syncGutterContributions(),
       onBlockProvidersChanged: () => this.handleBlockProvidersChanged(),
+      onInjectedTextRowProvidersChanged: () => this.handleInjectedTextRowProvidersChanged(),
     });
     this.inputSelection.install();
     this.initializeDefaultText();
@@ -303,6 +312,7 @@ export class Editor {
     this.text = text;
     this.view.setText(text);
     this.syncEditorBlocks();
+    this.syncInjectedTextRows();
     this.setTokens([]);
     this.clearSyntaxFolds();
     this.applyRangeDecorations();
@@ -320,6 +330,7 @@ export class Editor {
     this.document.setRenderedTextSnapshot(nextTextSnapshot);
     this.view.applyEdit(edit, nextTextSnapshot);
     this.syncEditorBlocks();
+    this.syncInjectedTextRows();
     this.setTokens(tokens);
   }
 
@@ -594,8 +605,8 @@ export class Editor {
   }
 
   setRowDecorations(decorations: ReadonlyMap<number, VirtualizedTextRowDecoration>): void {
-    this.view.setRowDecorations(decorations);
-    this.notifyViewContributions("layout", null);
+    this.directRowDecorations = new Map(decorations);
+    this.applyComposedRowDecorations();
   }
 
   setLineHeight(lineHeight: number): void {
@@ -837,6 +848,72 @@ export class Editor {
     this.blockSurfaces.sync(this.pluginHost.getBlockProviders());
   }
 
+  private handleInjectedTextRowProvidersChanged(): void {
+    if (!this.syncInjectedTextRows()) return;
+
+    this.notifyViewContributions("layout", null);
+    this.inputSelection.syncDomSelection();
+  }
+
+  private syncInjectedTextRows(): boolean {
+    const rows = this.injectedTextRowsForProviders();
+    if (sameInjectedTextRows(this.appliedInjectedTextRows, rows)) return false;
+
+    this.appliedInjectedTextRows = [...rows];
+    this.view.setInjectedTextRows(rows);
+    return true;
+  }
+
+  private injectedTextRowsForProviders(): readonly InjectedTextRow[] {
+    const providers = this.pluginHost.getInjectedTextRowProviders();
+    if (providers.length === 0) return [];
+
+    const context = this.createInjectedTextRowProviderContext();
+    const rows: InjectedTextRow[] = [];
+    for (const provider of providers) rows.push(...provider.getInjectedTextRows(context));
+    return rows;
+  }
+
+  private createInjectedTextRowProviderContext(): EditorInjectedTextRowProviderContext {
+    return {
+      documentId: this.documentId,
+      text: this.getText(),
+      lineCount: this.view.getLineCount(),
+    };
+  }
+
+  private setSourceRowDecorations(
+    sourceId: string,
+    decorations: ReadonlyMap<number, VirtualizedTextRowDecoration>,
+  ): void {
+    if (sourceId.length === 0) return;
+
+    this.rowDecorationSources.set(sourceId, new Map(decorations));
+    this.applyComposedRowDecorations();
+  }
+
+  private clearSourceRowDecorations(sourceId: string): void {
+    if (!this.rowDecorationSources.delete(sourceId)) return;
+
+    this.applyComposedRowDecorations();
+  }
+
+  private applyComposedRowDecorations(): void {
+    this.view.setRowDecorations(this.composedRowDecorations());
+    this.view.refreshGutterWidth();
+    this.notifyViewContributions("layout", null);
+  }
+
+  private composedRowDecorations(): ReadonlyMap<number, VirtualizedTextRowDecoration> {
+    const composed = new Map<number, VirtualizedTextRowDecoration>();
+    mergeRowDecorationMap(composed, this.directRowDecorations);
+    for (const decorations of this.rowDecorationSources.values()) {
+      mergeRowDecorationMap(composed, decorations);
+    }
+
+    return composed;
+  }
+
   private createViewContributionContext(container: HTMLElement): EditorViewContributionContext {
     return {
       container,
@@ -877,6 +954,9 @@ export class Editor {
         this.inputSelection.applyFindEdits(edits, timingName, selection),
       setRangeHighlight: (name, ranges, style) => this.view.setRangeHighlight(name, ranges, style),
       clearRangeHighlight: (name) => this.view.clearRangeHighlight(name),
+      setRowDecorations: (sourceId, decorations) =>
+        this.setSourceRowDecorations(sourceId, decorations),
+      clearRowDecorations: (sourceId) => this.clearSourceRowDecorations(sourceId),
       registerCommand: (command, handler) => this.registerCommandHandler(command, handler),
       registerFeature: (id, feature) => this.registerFeature(id, feature),
     };
@@ -954,11 +1034,14 @@ export class Editor {
       visibleRows: viewState.mountedRows.map((row) => ({
         index: row.index,
         bufferRow: row.bufferRow,
+        source: row.source,
+        injectedTextRowId: row.injectedTextRowId,
+        metadata: row.metadata,
         startOffset: row.startOffset,
         endOffset: row.endOffset,
         text: row.text,
         kind: row.kind,
-        primaryText: row.displayKind === "text",
+        primaryText: row.source === "document" && row.displayKind === "text",
         top: row.top,
         height: row.height,
       })),
@@ -970,6 +1053,8 @@ export class Editor {
     kind: EditorViewContributionUpdateKind,
     change?: DocumentSessionChange | null,
   ): void {
+    if (!this.viewContributions) return;
+
     this.viewContributions.notify(kind, change ?? null);
   }
 
@@ -1166,4 +1251,39 @@ export class Editor {
   private resolvedTheme(): EditorTheme | null {
     return mergeEditorThemes(this.syntax.providerTheme, this.syntax.theme, this.configuredTheme);
   }
+}
+
+function mergeRowDecorationMap(
+  target: Map<number, VirtualizedTextRowDecoration>,
+  source: ReadonlyMap<number, VirtualizedTextRowDecoration>,
+): void {
+  for (const [row, decoration] of source) {
+    target.set(row, mergeRowDecoration(target.get(row), decoration));
+  }
+}
+
+function sameInjectedTextRows(
+  left: readonly InjectedTextRow[],
+  right: readonly InjectedTextRow[],
+): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((row, index) => row === right[index]);
+}
+
+function mergeRowDecoration(
+  base: VirtualizedTextRowDecoration | undefined,
+  next: VirtualizedTextRowDecoration,
+): VirtualizedTextRowDecoration {
+  if (!base) return next;
+
+  return {
+    className: joinClassNames(base.className, next.className),
+    gutterClassName: joinClassNames(base.gutterClassName, next.gutterClassName),
+  };
+}
+
+function joinClassNames(left: string | undefined, right: string | undefined): string | undefined {
+  if (!left) return right;
+  if (!right) return left;
+  return `${left} ${right}`;
 }

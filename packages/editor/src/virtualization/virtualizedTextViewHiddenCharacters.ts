@@ -63,6 +63,7 @@ function hiddenCharacterMarkersForRow(
 ): readonly HiddenCharacterMarker[] {
   if (view.hiddenCharacters === "hidden") return [];
   if (row.kind !== "text") return [];
+  if (row.source === "injected") return [];
 
   const markers: HiddenCharacterMarker[] = [];
   for (const chunk of row.chunks) {

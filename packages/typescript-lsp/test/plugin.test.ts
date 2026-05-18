@@ -1154,6 +1154,7 @@ function activatePlugin(
     registerEditorFeatureContribution: () => ({ dispose: () => undefined }),
     registerGutterContribution: () => ({ dispose: () => undefined }),
     registerBlockProvider: () => ({ dispose: () => undefined }),
+    registerInjectedTextRowProvider: () => ({ dispose: () => undefined }),
   } satisfies EditorPluginContext);
 
   if (!provider) throw new Error("missing provider");
@@ -1192,6 +1193,7 @@ function activatePluginWithCommands(
     },
     registerGutterContribution: () => ({ dispose: () => undefined }),
     registerBlockProvider: () => ({ dispose: () => undefined }),
+    registerInjectedTextRowProvider: () => ({ dispose: () => undefined }),
   } satisfies EditorPluginContext);
 
   if (!provider) throw new Error("missing provider");
@@ -1222,6 +1224,8 @@ function featureContributionContext(
     applyEdits: options.applyEdits ?? vi.fn(),
     setRangeHighlight: vi.fn(),
     clearRangeHighlight: vi.fn(),
+    setRowDecorations: vi.fn(),
+    clearRowDecorations: vi.fn(),
     registerCommand: (commandId, handler) => {
       commands.set(commandId, handler);
       return { dispose: () => commands.delete(commandId) };

@@ -410,7 +410,8 @@ export class DiffView {
   ): number {
     return (
       view.textOffsetFromPoint(clientX, clientY) ??
-      view.textOffsetFromViewportPoint(clientX, clientY)
+      view.textOffsetFromViewportPoint(clientX, clientY) ??
+      0
     );
   }
 

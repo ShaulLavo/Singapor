@@ -1,5 +1,5 @@
-import { createTextDiff, type DiffView, type DiffViewMode } from "@editor/diff";
 import type { Editor } from "@editor/core/editor";
+import type { DiffTextFile, EditorDiffPlugin } from "@editor/diff";
 import type { TypeScriptLspDefinitionTarget } from "@editor/typescript-lsp";
 import type { Sidebar } from "./components/sidebar.ts";
 import type { StatusBar } from "./components/statusBar.ts";
@@ -37,9 +37,8 @@ export class SourceController {
   private readonly statusBar: StatusBar;
   private readonly editor: Editor;
   private readonly sourceWorkspace: SourceWorkspace | null;
-  private readonly diffView: DiffView | null;
+  private readonly liveDiff: EditorDiffPlugin | null;
   private readonly viewHosts: SourceViewHosts | null;
-  private diffMode: DiffViewMode = "split";
   private activeView: "edit" | "diff" = "edit";
 
   constructor(
@@ -48,7 +47,7 @@ export class SourceController {
     statusBar: StatusBar,
     editor: Editor,
     sourceWorkspace: SourceWorkspace | null = null,
-    diffView: DiffView | null = null,
+    liveDiff: EditorDiffPlugin | null = null,
     viewHosts: SourceViewHosts | null = null,
   ) {
     this.topBar = topBar;
@@ -56,13 +55,13 @@ export class SourceController {
     this.statusBar = statusBar;
     this.editor = editor;
     this.sourceWorkspace = sourceWorkspace;
-    this.diffView = diffView;
+    this.liveDiff = liveDiff;
     this.viewHosts = viewHosts;
     this.topBar.setHandlers({
       onEditMode: () => this.showEditMode(),
       onDiffMode: () => this.showDiffMode(),
-      onSplitDiff: () => this.setDiffMode("split"),
-      onStackedDiff: () => this.setDiffMode("stacked"),
+      onSplitDiff: () => undefined,
+      onStackedDiff: () => undefined,
     });
   }
 
@@ -74,7 +73,6 @@ export class SourceController {
 
   updateStatus(state = this.editor.getState()): void {
     this.statusBar.update(this.currentSelectedPath, state);
-    if (this.activeView === "diff") this.renderCurrentDiff();
   }
 
   openDefinition(target: TypeScriptLspDefinitionTarget): boolean {
@@ -167,54 +165,37 @@ export class SourceController {
       text: file.text,
       languageId: languageIdForFilePath(file.path),
     });
-    if (this.activeView === "diff") this.renderCurrentDiff();
+    if (this.activeView === "diff") this.configureCurrentLiveDiff();
     if (reason === "user") this.editor.focus();
     this.updateStatus();
   };
 
   private showEditMode(): void {
     this.activeView = "edit";
+    this.liveDiff?.setEnabled(false);
     this.viewHosts?.showEditor();
     this.topBar.setViewMode("edit");
+    this.topBar.setDiffControlsVisible(false);
     this.editor.focus();
   }
 
   private showDiffMode(): void {
-    if (!this.renderCurrentDiff()) return;
+    if (!this.configureCurrentLiveDiff()) return;
 
     this.activeView = "diff";
+    this.liveDiff?.setEnabled(true);
     this.viewHosts?.showDiff();
     this.topBar.setViewMode("diff");
-    this.topBar.setDiffMode(this.diffMode);
+    this.topBar.setDiffControlsVisible(false);
+    this.editor.focus();
   }
 
-  private setDiffMode(mode: DiffViewMode): void {
-    this.diffMode = mode;
-    this.diffView?.setMode(mode);
-    this.topBar.setDiffMode(mode);
-  }
-
-  private renderCurrentDiff(): boolean {
-    const diffView = this.diffView;
+  private configureCurrentLiveDiff(): boolean {
+    const liveDiff = this.liveDiff;
     const file = this.currentFile();
-    if (!diffView || !file) return false;
+    if (!liveDiff || !file) return false;
 
-    diffView.setMode(this.diffMode);
-    diffView.setFiles([
-      createTextDiff({
-        oldFile: {
-          path: file.path,
-          text: file.text,
-          languageId: languageIdForFilePath(file.path),
-          objectId: file.sha,
-        },
-        newFile: {
-          path: file.path,
-          text: this.editor.getText(),
-          languageId: languageIdForFilePath(file.path),
-        },
-      }),
-    ]);
+    liveDiff.setBaseFile(diffBaseFile(file));
     return true;
   }
 
@@ -242,9 +223,20 @@ export class SourceController {
   private clearActiveFile(): void {
     this.currentSelectedPath = undefined;
     this.sourceWorkspace?.clearWorkspaceFiles();
+    this.liveDiff?.setBaseFile(null);
+    this.liveDiff?.setEnabled(false);
     this.editor.clearDocument();
     this.updateStatus();
   }
+}
+
+function diffBaseFile(file: SourceFile): DiffTextFile {
+  return {
+    path: file.path,
+    text: file.text,
+    languageId: languageIdForFilePath(file.path),
+    objectId: file.sha,
+  };
 }
 
 function selectedFileForSnapshot(

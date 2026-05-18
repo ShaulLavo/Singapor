@@ -521,6 +521,9 @@ export function updateMutableRow(
   values: {
     readonly index: number;
     readonly bufferRow: number;
+    readonly source: MountedVirtualizedTextRow["source"];
+    readonly injectedTextRowId?: string;
+    readonly metadata?: unknown;
     readonly startOffset: number;
     readonly endOffset: number;
     readonly text: string;
@@ -540,6 +543,9 @@ export function updateMutableRow(
   const mutable = row as {
     index: number;
     bufferRow: number;
+    source: MountedVirtualizedTextRow["source"];
+    injectedTextRowId?: string;
+    metadata?: unknown;
     startOffset: number;
     endOffset: number;
     text: string;
@@ -557,6 +563,9 @@ export function updateMutableRow(
   };
   mutable.index = values.index;
   mutable.bufferRow = values.bufferRow;
+  mutable.source = values.source;
+  mutable.injectedTextRowId = values.injectedTextRowId;
+  mutable.metadata = values.metadata;
   mutable.startOffset = values.startOffset;
   mutable.endOffset = values.endOffset;
   mutable.text = values.text;

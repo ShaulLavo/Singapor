@@ -1,7 +1,10 @@
 import {
+  isDocumentTextDisplayRow,
+  isInjectedTextDisplayRow,
   bufferColumnToVisualColumn,
   visualColumnToBufferColumn,
   type DisplayBlockRow,
+  type DisplayInjectedTextRow,
 } from "../displayTransforms";
 import { clamp } from "../style-utils";
 import type {
@@ -175,6 +178,7 @@ function createRow(view: VirtualizedTextViewInternal): MountedVirtualizedTextRow
   return {
     index: -1,
     bufferRow: -1,
+    source: "document",
     startOffset: 0,
     endOffset: 0,
     text: "",
@@ -394,12 +398,15 @@ function rowUpdateState(
 ): RowUpdateState {
   const displayRow = view.displayRows[index];
   const bufferRow = bufferRowForDisplayRow(view, index);
-  const primaryText = displayRow?.kind === "text" && displayRow.sourceStartColumn === 0;
+  const primaryText = isDocumentTextDisplayRow(displayRow) && displayRow.sourceStartColumn === 0;
 
   return {
     blockRow: displayRow?.kind === "block" ? displayRow : null,
     index,
     bufferRow,
+    source: displayRowSource(displayRow),
+    injectedTextRowId: injectedTextRowId(displayRow),
+    metadata: displayRowMetadata(displayRow),
     startOffset: lineStartOffset(view, index),
     endOffset: lineEndOffset(view, index),
     text: displayRow?.text ?? "",
@@ -427,6 +434,9 @@ function mountedRowUpdateState(
     blockRow: blockDisplayRowForIndex(view, row.index),
     index: row.index,
     bufferRow: row.bufferRow,
+    source: row.source,
+    injectedTextRowId: row.injectedTextRowId,
+    metadata: row.metadata,
     startOffset: row.startOffset,
     endOffset: row.endOffset,
     text: row.text,
@@ -449,6 +459,28 @@ function bufferRowForDisplayRow(view: VirtualizedTextViewInternal, index: number
   if (displayRow?.kind === "text") return displayRow.bufferRow;
   if (displayRow?.kind === "block") return displayRow.anchorBufferRow;
   return bufferRowForVirtualRow(view, index);
+}
+
+function displayRowSource(
+  row: VirtualizedTextViewInternal["displayRows"][number] | undefined,
+): EditorGutterRowContext["source"] {
+  if (!row) return "document";
+  if (row.kind === "block") return "block";
+  return row.source;
+}
+
+function injectedTextRowId(
+  row: VirtualizedTextViewInternal["displayRows"][number] | undefined,
+): string | undefined {
+  if (!isInjectedTextDisplayRow(row)) return undefined;
+  return row.id;
+}
+
+function displayRowMetadata(
+  row: VirtualizedTextViewInternal["displayRows"][number] | undefined,
+): unknown {
+  if (!isInjectedTextDisplayRow(row)) return undefined;
+  return row.metadata;
 }
 
 function updateRowFrame(
@@ -489,7 +521,9 @@ function updateRow(
   updateMutableRow(row, {
     bufferRow: state.bufferRow,
     endOffset: state.endOffset,
+    injectedTextRowId: state.injectedTextRowId,
     kind: state.kind,
+    metadata: state.metadata,
     foldCollapsed: state.foldMarker?.collapsed ?? false,
     foldMarkerKey: state.foldMarker?.key ?? "",
     height: item.size,
@@ -497,6 +531,7 @@ function updateRow(
     leftBlockLaneWidth: row.leftBlockLaneWidth,
     rightBlockLaneWidth: row.rightBlockLaneWidth,
     blockLaneKey: row.blockLaneKey,
+    source: state.source,
     startOffset: state.startOffset,
     text: state.text,
     textRevision: view.textRevision,
@@ -514,7 +549,7 @@ function updateRowElement(
   snapshot: FixedRowVirtualizerSnapshot,
 ): void {
   updateRowFrame(view, row, item, state.kind);
-  applyRowDecoration(view, row, state.bufferRow);
+  applyRowDecoration(view, row, item.index);
   updateCursorLineContentClass(view, row, state.cursorVirtualLine);
   updateGutterRowElement(view, row, item, state);
   if (state.kind === "block") {
@@ -556,7 +591,9 @@ function updateRowAfterSameLineEdit(
   updateMutableRow(row, {
     bufferRow: state.bufferRow,
     endOffset: state.endOffset,
+    injectedTextRowId: state.injectedTextRowId,
     kind: state.kind,
+    metadata: state.metadata,
     foldCollapsed: state.foldMarker?.collapsed ?? false,
     foldMarkerKey: state.foldMarker?.key ?? "",
     height: item.size,
@@ -564,6 +601,7 @@ function updateRowAfterSameLineEdit(
     leftBlockLaneWidth: row.leftBlockLaneWidth,
     rightBlockLaneWidth: row.rightBlockLaneWidth,
     blockLaneKey: row.blockLaneKey,
+    source: state.source,
     startOffset: state.startOffset,
     text: state.text,
     textRevision: view.textRevision,
@@ -582,7 +620,7 @@ function updateRowElementForSameLineEdit(
   snapshot: FixedRowVirtualizerSnapshot,
 ): void {
   updateRowFrame(view, row, item, state.kind);
-  applyRowDecoration(view, row, state.bufferRow);
+  applyRowDecoration(view, row, item.index);
   updateGutterRowElement(view, row, item, state);
   if (state.kind === "block") {
     setBlockRowContent(view, row, item, state);
@@ -1231,7 +1269,7 @@ export function foldMarkerForVirtualRow(
 
 function isPrimaryTextRow(view: VirtualizedTextViewInternal, row: number): boolean {
   const displayRow = view.displayRows[row];
-  if (displayRow?.kind !== "text") return false;
+  if (!isDocumentTextDisplayRow(displayRow)) return false;
   return displayRow.sourceStartColumn === 0;
 }
 
@@ -1251,6 +1289,10 @@ function isRowCurrent(
 
   const rowKind = displayRowKind(view, item.index);
   if (row.displayKind !== rowKind) return false;
+  const displayRow = view.displayRows[item.index];
+  if (row.source !== displayRowSource(displayRow)) return false;
+  if (row.injectedTextRowId !== injectedTextRowId(displayRow)) return false;
+  if (row.metadata !== displayRowMetadata(displayRow)) return false;
   if (row.blockMountKey !== blockMountKeyForIndex(view, item.index)) return false;
   if (row.blockLaneKey !== rowBlockLaneInset(view, item.index).key) return false;
 
@@ -1267,16 +1309,16 @@ function isRowCurrent(
 function applyRowDecoration(
   view: VirtualizedTextViewInternal,
   row: MountedVirtualizedTextRow,
-  bufferRow: number,
+  virtualRow: number,
 ): void {
-  if (view.rowDecorations.size === 0) {
+  const decoration = rowDecorationForVirtualRow(view, virtualRow);
+  if (!decoration) {
     clearRowDecoration(row);
     return;
   }
 
-  const decoration = view.rowDecorations.get(bufferRow);
-  setRowDecorationClass(row, decoration?.className ?? "");
-  setRowDecorationGutterClass(row, decoration?.gutterClassName ?? "");
+  setRowDecorationClass(row, decoration.className ?? "");
+  setRowDecorationGutterClass(row, decoration.gutterClassName ?? "");
   setRowDecorationKey(row, rowDecorationKeyForDecoration(decoration));
 }
 
@@ -1295,10 +1337,26 @@ function blockMountKeyForIndex(view: VirtualizedTextViewInternal, index: number)
 }
 
 function rowDecorationKey(view: VirtualizedTextViewInternal, virtualRow: number): string {
-  if (view.rowDecorations.size === 0) return "";
+  return rowDecorationKeyForDecoration(rowDecorationForVirtualRow(view, virtualRow));
+}
 
-  const decoration = view.rowDecorations.get(bufferRowForVirtualRow(view, virtualRow));
-  return rowDecorationKeyForDecoration(decoration);
+function rowDecorationForVirtualRow(
+  view: VirtualizedTextViewInternal,
+  virtualRow: number,
+): VirtualizedTextRowDecoration | undefined {
+  const displayRow = view.displayRows[virtualRow];
+  if (isInjectedTextDisplayRow(displayRow)) return injectedRowDecoration(displayRow);
+
+  return view.rowDecorations.get(bufferRowForVirtualRow(view, virtualRow));
+}
+
+function injectedRowDecoration(row: DisplayInjectedTextRow): VirtualizedTextRowDecoration | undefined {
+  if (!row.className && !row.gutterClassName) return undefined;
+
+  return {
+    className: row.className,
+    gutterClassName: row.gutterClassName,
+  };
 }
 
 function rowDecorationKeyForDecoration(
@@ -1639,6 +1697,7 @@ export function textOffsetFromDomBoundary(
 ): number | null {
   const row = rowFromDomBoundary(view, node);
   if (!row) return null;
+  if (row.source === "injected") return null;
   const mapped = offsetFromDomBoundary(row, node, offset);
   if (mapped !== null) return mapped;
   if (!row.element.contains(node)) return null;
