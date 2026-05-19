@@ -98,7 +98,6 @@ export type MinimapDocumentPayload = {
 
 export type MinimapDocumentEditPayload = {
   readonly lineStarts: readonly number[];
-  readonly tokens: readonly MinimapToken[];
   readonly selections: readonly MinimapSelection[];
   readonly externalDecorations: readonly EditorMinimapDecoration[];
 };

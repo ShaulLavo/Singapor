@@ -7,7 +7,7 @@ import {
 } from "@editor/core";
 import { resolveMinimapOptions } from "../src/options";
 import { MinimapWorkerClient, type MinimapHost } from "../src/workerClient";
-import type { MinimapWorkerResponse } from "../src/types";
+import type { MinimapWorkerRequest, MinimapWorkerResponse } from "../src/types";
 
 describe("MinimapWorkerClient", () => {
   it("skips layout updates for scroll-only viewport changes", () => {
@@ -79,6 +79,52 @@ describe("MinimapWorkerClient", () => {
     }
   });
 
+  it("keeps full token payloads out of same-line edit updates", () => {
+    const runtime = installMinimapRuntime();
+    try {
+      const host = createHost();
+      const client = new MinimapWorkerClient({
+        host,
+        options: resolveMinimapOptions(),
+        snapshot: snapshot({}, { tokens: [{ start: 0, end: 6, style: { color: "#ff0000" } }] }),
+        decorations: [],
+        onLayoutWidth: vi.fn(),
+      });
+      const worker = runtime.workers[0]!;
+      worker.send(renderedResponse(1));
+      worker.postMessage.mockClear();
+
+      const edit: TextEdit = { from: 6, to: 6, text: "x" };
+      client.update(
+        snapshot(
+          { scrollWidth: 168 },
+          {
+            text: "line 1x\nline 2\nline 3",
+            contentWidth: 168,
+            tokens: [{ start: 0, end: 7, style: { color: "#ff0000" } }],
+          },
+        ),
+        "content",
+        documentEdit(edit, "line 1x\nline 2\nline 3"),
+      );
+      runtime.flushAnimationFrames();
+
+      const applyEdit = worker.postMessage.mock.calls[0]?.[0] as Extract<
+        MinimapWorkerRequest,
+        { type: "applyEdit" }
+      >;
+
+      expect(applyEdit.type).toBe("applyEdit");
+      expect("tokens" in applyEdit.document).toBe(false);
+
+      client.dispose();
+      host.root.remove();
+      host.colorScope.remove();
+    } finally {
+      runtime.restore();
+    }
+  });
+
   it("falls back to replaceDocument for deletions", () => {
     const runtime = installMinimapRuntime();
     try {
@@ -134,7 +180,7 @@ function createHost(): MinimapHost {
 
 function snapshot(
   viewport: Partial<EditorViewSnapshot["viewport"]> = {},
-  overrides: Partial<Pick<EditorViewSnapshot, "contentWidth" | "text">> = {},
+  overrides: Partial<Pick<EditorViewSnapshot, "contentWidth" | "text" | "tokens">> = {},
 ): EditorViewSnapshot {
   const text = overrides.text ?? "line 1\nline 2\nline 3";
   const starts = lineStarts(text);
@@ -145,7 +191,7 @@ function snapshot(
     text,
     textVersion: 1,
     lineStarts: starts,
-    tokens: [],
+    tokens: overrides.tokens ?? [],
     selections: [],
     metrics: { rowHeight: 20, characterWidth: 8 },
     lineCount: starts.length,

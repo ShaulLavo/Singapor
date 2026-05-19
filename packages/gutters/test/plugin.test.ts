@@ -43,6 +43,7 @@ describe("gutter plugins", () => {
     contribution.updateCell(cell, {
       index: 0,
       bufferRow: 4,
+      source: "document",
       startOffset: 0,
       endOffset: 0,
       text: "",
@@ -73,6 +74,7 @@ describe("gutter plugins", () => {
     contribution.updateCell(cell, {
       index: 0,
       bufferRow: 2,
+      source: "document",
       startOffset: 0,
       endOffset: 0,
       text: "",
@@ -108,6 +110,7 @@ describe("gutter plugins", () => {
     contribution.updateCell(cell, {
       index: 0,
       bufferRow: 0,
+      source: "document",
       startOffset: 0,
       endOffset: 0,
       text: "",
@@ -131,6 +134,7 @@ describe("gutter plugins", () => {
     contribution.updateCell(cell, {
       index: 1,
       bufferRow: 1,
+      source: "document",
       startOffset: 0,
       endOffset: 0,
       text: "",
@@ -167,6 +171,7 @@ describe("gutter plugins", () => {
     contribution.updateCell(cell, {
       index: 0,
       bufferRow: 0,
+      source: "document",
       startOffset: 0,
       endOffset: 0,
       text: "",

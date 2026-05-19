@@ -5,7 +5,6 @@ import {
   type VirtualizedTextHighlightRange,
   type VirtualizedTextRowDecoration,
 } from "@editor/core";
-import { canUseShikiWorker, createShikiHighlighterSession } from "@editor/core/shiki";
 import { ResizablePaneGroup, type ResizablePaneLayout } from "@editor/panes";
 import { createDiffCanvasGutterRenderer, type DiffCanvasGutterRenderer } from "./canvasGutter";
 import { diffGutterWidth } from "./gutters";
@@ -762,6 +761,10 @@ export class DiffView {
     generation: number,
     backend: Extract<DiffSyntaxBackend, { readonly kind: "shiki" }>,
   ): Promise<void> {
+    const { canUseShikiWorker, createShikiHighlighterSession } = await import(
+      "@editor/core/shiki"
+    );
+    if (pane.syntaxGeneration !== generation) return;
     if (!canUseShikiWorker()) return;
 
     const syntaxText = joinSyntaxLines(pane.rows);

@@ -243,6 +243,35 @@ describe("useEditor", () => {
     mounted.dispose();
   });
 
+  it("keeps live document sessions attached across revision-only renders", () => {
+    const session = createDocumentSession("alpha");
+    const mounted = mountReactEditor({
+      document: {
+        documentId: "a.ts",
+        revision: 1,
+        session,
+        text: session.getText(),
+      },
+    });
+    const instance = mounted.controller.getEditor();
+    expect(instance).not.toBeNull();
+    const attachSpy = vi.spyOn(instance as Editor, "attachSession");
+
+    mounted.render({
+      document: {
+        documentId: "a.ts",
+        revision: 2,
+        session,
+        text: "stale prop text",
+      },
+    });
+
+    expect(attachSpy).not.toHaveBeenCalled();
+    expect(mounted.controller.getText()).toBe("alpha");
+
+    mounted.dispose();
+  });
+
   it("applies targeted reactive options without recreating the editor", () => {
     const mounted = mountReactEditor({
       document: { text: "alpha", documentId: "a.ts", revision: 1 },

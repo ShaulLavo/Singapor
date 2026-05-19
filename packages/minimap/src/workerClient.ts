@@ -53,8 +53,10 @@ export class MinimapWorkerClient {
   private renderInFlight = false;
   private latestSliderHeight = 0;
   private latestSliderNeeded = false;
+  private latestBaseStyles: MinimapBaseStyles | null = null;
   private latestBaseStylesSignature = "";
   private latestLayoutSignature = "";
+  private latestThemeSignature = "";
   private disposed = false;
 
   public constructor(options: MinimapWorkerClientOptions) {
@@ -110,7 +112,9 @@ export class MinimapWorkerClient {
     const mainCanvas = this.host.mainCanvas.transferControlToOffscreen();
     const decorationsCanvas = this.host.decorationsCanvas.transferControlToOffscreen();
     const baseStyles = this.baseStyles();
+    this.latestBaseStyles = baseStyles;
     this.latestBaseStylesSignature = baseStylesSignature(baseStyles);
+    this.latestThemeSignature = themeSignature(snapshot);
     const request: MinimapWorkerRequest = {
       type: "init",
       options: this.options,
@@ -182,8 +186,10 @@ export class MinimapWorkerClient {
     kind: string,
     change: DocumentSessionChange | null | undefined,
   ): void {
-    if (shouldRefreshColorCache(kind)) this.colorResolver.clear();
-    this.syncBaseStyles();
+    if (shouldSyncBaseStyles(kind)) {
+      this.refreshThemeColorCache(snapshot);
+      this.syncBaseStyles();
+    }
 
     if (kind === "tokens") {
       this.post({ type: "updateTokens", tokens: this.tokens(snapshot.tokens) });
@@ -218,9 +224,18 @@ export class MinimapWorkerClient {
     const signature = baseStylesSignature(styles);
     if (signature === this.latestBaseStylesSignature) return;
 
+    this.latestBaseStyles = styles;
     this.latestBaseStylesSignature = signature;
     this.colorResolver.clear();
     this.post({ type: "updateBaseStyles", baseStyles: styles });
+  }
+
+  private refreshThemeColorCache(snapshot: EditorViewSnapshot): void {
+    const signature = themeSignature(snapshot);
+    if (signature === this.latestThemeSignature) return;
+
+    this.latestThemeSignature = signature;
+    this.colorResolver.clear();
   }
 
   private postRender(snapshot: EditorViewSnapshot): void {
@@ -262,7 +277,6 @@ export class MinimapWorkerClient {
   private documentEditPayload(snapshot: EditorViewSnapshot): MinimapDocumentEditPayload {
     return {
       lineStarts: snapshot.lineStarts,
-      tokens: this.tokens(snapshot.tokens),
       selections: selections(snapshot),
       externalDecorations: this.externalDecorations,
     };
@@ -275,7 +289,7 @@ export class MinimapWorkerClient {
   }
 
   private tokens(tokens: readonly EditorToken[]): readonly MinimapToken[] {
-    const foreground = this.baseStyles().foreground;
+    const foreground = this.latestBaseStyles?.foreground ?? this.baseStyles().foreground;
     return tokens.map((token) => ({
       start: token.start,
       end: token.end,
@@ -517,10 +531,9 @@ function isViewportOnly(kind: string): boolean {
   return kind === "viewport" || kind === "layout";
 }
 
-function shouldRefreshColorCache(kind: string): boolean {
+function shouldSyncBaseStyles(kind: string): boolean {
   if (kind === "tokens") return true;
   if (kind === "document") return true;
-  if (kind === "content") return true;
   return kind === "clear";
 }
 
@@ -559,6 +572,10 @@ function minimapBackgroundOpacity(style: CSSStyleDeclaration): number {
   if (!Number.isFinite(value)) return 1;
 
   return Math.min(1, Math.max(0, value));
+}
+
+function themeSignature(snapshot: EditorViewSnapshot): string {
+  return JSON.stringify(snapshot.theme ?? null);
 }
 
 class ColorResolver {

@@ -116,6 +116,34 @@ describe("createScopeLinesPlugin", () => {
     expect(testContext.scrollElement.querySelectorAll(".editor-scope-line-active")).toHaveLength(2);
   });
 
+  it("keeps scope line nodes when content edits leave guide geometry unchanged", () => {
+    const registration = registeredProvider(createScopeLinesPlugin());
+    const testContext = context(
+      snapshot({
+        selections: [{ anchorOffset: 29, headOffset: 29, startOffset: 29, endOffset: 29 }],
+      }),
+    );
+    const contribution = registration?.createContribution(testContext);
+    const originalLines = [
+      ...testContext.scrollElement.querySelectorAll<HTMLElement>(".editor-scope-line"),
+    ];
+
+    contribution?.update(
+      snapshot({
+        textVersion: 2,
+        foldMarkers: shiftedFoldMarkers(1),
+        selections: [{ anchorOffset: 30, headOffset: 30, startOffset: 30, endOffset: 30 }],
+      }),
+      "content",
+    );
+
+    const nextLines = [
+      ...testContext.scrollElement.querySelectorAll<HTMLElement>(".editor-scope-line"),
+    ];
+    expect(nextLines[0]).toBe(originalLines[0]);
+    expect(nextLines[1]).toBe(originalLines[1]);
+  });
+
   it("renders only the nearest cursor scope in current mode", () => {
     const registration = registeredProvider(createScopeLinesPlugin({ mode: "current" }));
     const testContext = context(
@@ -261,6 +289,14 @@ function foldMarkers(): readonly VirtualizedFoldMarker[] {
   ];
 }
 
+function shiftedFoldMarkers(delta: number): readonly VirtualizedFoldMarker[] {
+  return foldMarkers().map((marker) => ({
+    ...marker,
+    key: `${marker.key}:${delta}`,
+    endOffset: marker.endOffset + delta,
+  }));
+}
+
 function fourSpaceFoldMarkers(text: string): readonly VirtualizedFoldMarker[] {
   const starts = lineStarts(text);
   return [
@@ -291,6 +327,7 @@ function visibleRows(text: string): EditorViewSnapshot["visibleRows"] {
     return {
       index,
       bufferRow: index,
+      source: "document",
       startOffset: start,
       endOffset: end,
       text: text.slice(start, end),

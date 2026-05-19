@@ -743,8 +743,9 @@ function documentKey(
   if (!document) return NO_DOCUMENT;
 
   const incremental = document.textSyncMode === "incremental";
-  const revision = incremental ? "" : (document.revision ?? "");
-  const textVersion = incremental ? (document.text ?? "") : "";
+  const liveSession = documentHasLiveSession(document);
+  const revision = incremental || liveSession ? "" : (document.revision ?? "");
+  const textVersion = incremental && !liveSession ? (document.text ?? "") : "";
   const identityKey = documentIdentityKey(document);
   if (identityKey === NO_DOCUMENT) return NO_DOCUMENT;
 
@@ -784,6 +785,12 @@ function sessionIdentity(session: DocumentSession | null | undefined): string {
   nextSessionKey += 1;
   sessionKeys.set(session, key);
   return `${key}`;
+}
+
+function documentHasLiveSession(
+  document: Readonly<{ readonly session?: DocumentSession | null }> & object,
+): boolean {
+  return "session" in document && document.session !== null && document.session !== undefined;
 }
 
 function createEmptyStoreSnapshot(): ReactEditorStoreSnapshot {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MinimapWorkerRenderer } from "../src/renderer";
+import { MinimapWorkerRenderer, projectMinimapTokensThroughEdit } from "../src/renderer";
 import { resolveMinimapOptions } from "../src/options";
 
 describe("MinimapWorkerRenderer", () => {
@@ -49,5 +49,32 @@ describe("MinimapWorkerRenderer", () => {
         },
       }),
     ).toThrow("Unable to create minimap canvas context");
+  });
+
+  it("projects minimap token ranges through same-line insertions", () => {
+    const color = { r: 255, g: 0, b: 0, a: 255 };
+    const tokens = [
+      { start: 0, end: 5, color },
+      { start: 6, end: 10, color },
+    ];
+
+    expect(
+      projectMinimapTokensThroughEdit(tokens, { from: 2, to: 2, text: "X" }, "alpha beta"),
+    ).toEqual([
+      { start: 0, end: 6, color },
+      { start: 7, end: 11, color },
+    ]);
+  });
+
+  it("drops minimap tokens invalidated by multi-line edits", () => {
+    const color = { r: 255, g: 0, b: 0, a: 255 };
+    const tokens = [
+      { start: 0, end: 5, color },
+      { start: 6, end: 10, color },
+    ];
+
+    expect(
+      projectMinimapTokensThroughEdit(tokens, { from: 2, to: 4, text: "\n" }, "alpha beta"),
+    ).toEqual([{ start: 5, end: 9, color }]);
   });
 });

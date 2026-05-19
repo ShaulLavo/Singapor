@@ -91,13 +91,25 @@ export class MinimapWorkerRenderer {
 
   public applyEdit(edit: TextEdit, document: MinimapDocumentEditPayload): void {
     if (!this.state) return;
-    const text = applyTextEdit(this.state.document.text, edit);
+    const previousText = this.state.document.text;
+    const text = applyTextEdit(previousText, edit);
     const lines = text.split("\n");
     const decorations = [
       ...findSectionHeaderDecorations(lines, this.state.options),
       ...document.externalDecorations,
     ];
-    this.state.document = { ...document, text, decorations };
+    const tokens = projectMinimapTokensThroughEdit(
+      this.state.document.tokens,
+      edit,
+      previousText,
+    );
+    this.state.document = {
+      text,
+      lineStarts: document.lineStarts,
+      tokens,
+      selections: document.selections,
+      decorations,
+    };
     this.state.linesDirty = true;
     this.state.decorationsDirty = true;
   }
@@ -678,4 +690,112 @@ function emptyRenderResult(): RenderResult {
 
 function applyTextEdit(text: string, edit: TextEdit): string {
   return `${text.slice(0, edit.from)}${edit.text}${text.slice(edit.to)}`;
+}
+
+export function projectMinimapTokensThroughEdit(
+  tokens: readonly MinimapToken[],
+  edit: TextEdit,
+  previousText: string,
+): readonly MinimapToken[] {
+  const delta = edit.text.length - (edit.to - edit.from);
+  const projected: MinimapToken[] = [];
+  for (const token of tokens) {
+    const next = projectMinimapTokenThroughEdit(token, edit, previousText, delta);
+    if (isRenderableMinimapToken(next)) projected.push(next);
+  }
+  return projected;
+}
+
+function projectMinimapTokenThroughEdit(
+  token: MinimapToken,
+  edit: TextEdit,
+  previousText: string,
+  delta: number,
+): MinimapToken | null {
+  if (edit.from === edit.to) return projectMinimapTokenThroughInsertion(token, edit, previousText);
+  if (token.end <= edit.from) return token;
+  if (token.start >= edit.to) return shiftMinimapToken(token, delta);
+  if (!canResizeMinimapTokenAcrossEdit(token, edit)) return null;
+
+  return { ...token, end: token.end + delta };
+}
+
+function projectMinimapTokenThroughInsertion(
+  token: MinimapToken,
+  edit: TextEdit,
+  previousText: string,
+): MinimapToken {
+  if (shouldExpandMinimapTokenForInsertion(token, edit, previousText)) {
+    return { ...token, end: token.end + edit.text.length };
+  }
+  if (token.start >= edit.from) return shiftMinimapToken(token, edit.text.length);
+
+  return token;
+}
+
+function canResizeMinimapTokenAcrossEdit(token: MinimapToken, edit: TextEdit): boolean {
+  if (edit.text.includes("\n")) return false;
+  return token.start < edit.from && edit.to < token.end;
+}
+
+function shouldExpandMinimapTokenForInsertion(
+  token: MinimapToken,
+  edit: TextEdit,
+  previousText: string,
+): boolean {
+  if (edit.text.length === 0) return false;
+  if (edit.text.includes("\n")) return false;
+  if (token.start < edit.from && edit.from < token.end) return true;
+  if (!isWordLikeText(edit.text)) return false;
+  if (token.end === edit.from) return isWordBeforeOffset(previousText, edit.from);
+  if (token.start === edit.from) {
+    return (
+      !isWordBeforeOffset(previousText, edit.from) && isWordCodePointAt(previousText, edit.from)
+    );
+  }
+
+  return false;
+}
+
+function shiftMinimapToken(token: MinimapToken, delta: number): MinimapToken {
+  return {
+    ...token,
+    start: token.start + delta,
+    end: token.end + delta,
+  };
+}
+
+function isRenderableMinimapToken(token: MinimapToken | null): token is MinimapToken {
+  if (!token) return false;
+  return token.end > token.start;
+}
+
+function isWordLikeText(text: string): boolean {
+  return /^[\p{L}\p{N}_]+$/u.test(text);
+}
+
+function isWordBeforeOffset(text: string, offset: number): boolean {
+  const previous = previousCodePointStart(text, offset);
+  if (previous === null) return false;
+  return isWordCodePointAt(text, previous);
+}
+
+function isWordCodePointAt(text: string, offset: number): boolean {
+  const codePoint = text.codePointAt(offset);
+  if (codePoint === undefined) return false;
+  return /^[\p{L}\p{N}_]$/u.test(String.fromCodePoint(codePoint));
+}
+
+function previousCodePointStart(text: string, offset: number): number | null {
+  if (offset <= 0) return null;
+
+  const previous = offset - 1;
+  const codeUnit = text.charCodeAt(previous);
+  const beforePrevious = previous - 1;
+  const isLowSurrogate = codeUnit >= 0xdc00 && codeUnit <= 0xdfff;
+  if (!isLowSurrogate || beforePrevious < 0) return previous;
+
+  const previousCodeUnit = text.charCodeAt(beforePrevious);
+  const isHighSurrogate = previousCodeUnit >= 0xd800 && previousCodeUnit <= 0xdbff;
+  return isHighSurrogate ? beforePrevious : previous;
 }

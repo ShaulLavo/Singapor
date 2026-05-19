@@ -50,6 +50,10 @@ type ScopeGuidePlacement = {
   readonly indentLevel: number;
 };
 
+type ScopeGuideGeometry = ScopeGuidePlacement & {
+  readonly marker: VirtualizedFoldMarker;
+};
+
 const DEFAULT_MIN_LINE_SPAN = 1;
 const BODY_INDENT_PROBE_LINES = 24;
 const SCOPE_LINE_COLOR_COUNT = 6;
@@ -193,20 +197,35 @@ function createScopeGuide(
   snapshot: EditorViewSnapshot,
   options: ResolvedScopeLinesOptions,
 ): ScopeGuide | null {
+  const geometry = scopeGuideGeometry(marker, snapshot, options);
+  if (!geometry) return null;
+
+  const containsCursor = markerContainsCursor(marker, snapshot);
+
+  return {
+    marker,
+    column: geometry.column,
+    indentLevel: geometry.indentLevel,
+    containsCursor,
+    active: options.showActive && containsCursor,
+  };
+}
+
+function scopeGuideGeometry(
+  marker: VirtualizedFoldMarker,
+  snapshot: EditorViewSnapshot,
+  options: ResolvedScopeLinesOptions,
+): ScopeGuideGeometry | null {
   if (marker.collapsed) return null;
   if (marker.endRow - marker.startRow < options.minLineSpan) return null;
 
   const placement = scopeGuidePlacement(marker, snapshot);
   if (placement.column < 0) return null;
 
-  const containsCursor = markerContainsCursor(marker, snapshot);
-
   return {
     marker,
     column: placement.column,
     indentLevel: placement.indentLevel,
-    containsCursor,
-    active: options.showActive && containsCursor,
   };
 }
 
@@ -289,7 +308,11 @@ function markerContainsCursor(
 ): boolean {
   const cursor = snapshot.selections[0]?.headOffset;
   if (cursor === undefined) return false;
-  return cursor > marker.startOffset && cursor < marker.endOffset;
+  return markerContainsOffset(marker, cursor);
+}
+
+function markerContainsOffset(marker: VirtualizedFoldMarker, offset: number): boolean {
+  return offset > marker.startOffset && offset < marker.endOffset;
 }
 
 function nearestCursorScopeGuides(guides: readonly ScopeGuide[]): ScopeGuide[] {
@@ -365,37 +388,104 @@ function snapshotSignature(
   options: ResolvedScopeLinesOptions,
 ): string {
   return [
-    snapshot.textVersion,
     snapshot.contentWidth,
     snapshot.metrics.characterWidth,
     snapshot.tabSize,
     options.minLineSpan,
     options.mode,
     options.showActive,
-    foldMarkerSignature(snapshot.foldMarkers),
-    selectionSignature(snapshot),
+    scopeGuideSignature(snapshot, options),
     visibleRowSignature(snapshot.visibleRows),
   ].join("|");
 }
 
-function foldMarkerSignature(markers: readonly VirtualizedFoldMarker[]): string {
-  return markers
-    .map((marker) =>
-      [
-        marker.key,
-        marker.startOffset,
-        marker.endOffset,
-        marker.startRow,
-        marker.endRow,
-        marker.collapsed ? 1 : 0,
-      ].join(":"),
-    )
-    .join(",");
+function scopeGuideSignature(
+  snapshot: EditorViewSnapshot,
+  options: ResolvedScopeLinesOptions,
+): string {
+  if (options.mode === "current") return currentScopeGuideSignature(snapshot, options);
+
+  const geometry = scopeGuideGeometrySignature(snapshot, options);
+  if (!options.showActive) return geometry;
+
+  return `${geometry}/${activeScopeGuideSignature(snapshot, options)}`;
 }
 
-function selectionSignature(snapshot: EditorViewSnapshot): string {
-  if (!snapshot.selections[0]) return "";
-  return String(snapshot.selections[0].headOffset);
+function scopeGuideGeometrySignature(
+  snapshot: EditorViewSnapshot,
+  options: ResolvedScopeLinesOptions,
+): string {
+  return scopeGuideGeometries(snapshot, options).map(scopeGuideGeometryKey).join(",");
+}
+
+function currentScopeGuideSignature(
+  snapshot: EditorViewSnapshot,
+  options: ResolvedScopeLinesOptions,
+): string {
+  const current = nearestCursorScopeGuideGeometry(snapshot, options);
+  return current ? scopeGuideGeometryKey(current) : "";
+}
+
+function activeScopeGuideSignature(
+  snapshot: EditorViewSnapshot,
+  options: ResolvedScopeLinesOptions,
+): string {
+  return cursorScopeGuideGeometries(snapshot, options).map(scopeGuideGeometryKey).join(",");
+}
+
+function scopeGuideGeometries(
+  snapshot: EditorViewSnapshot,
+  options: ResolvedScopeLinesOptions,
+): ScopeGuideGeometry[] {
+  const guides: ScopeGuideGeometry[] = [];
+  for (const marker of snapshot.foldMarkers) {
+    const guide = scopeGuideGeometry(marker, snapshot, options);
+    if (guide) guides.push(guide);
+  }
+  return guides;
+}
+
+function cursorScopeGuideGeometries(
+  snapshot: EditorViewSnapshot,
+  options: ResolvedScopeLinesOptions,
+): ScopeGuideGeometry[] {
+  const cursor = snapshot.selections[0]?.headOffset;
+  if (cursor === undefined) return [];
+
+  const guides: ScopeGuideGeometry[] = [];
+  for (const marker of snapshot.foldMarkers) {
+    if (!markerContainsOffset(marker, cursor)) continue;
+
+    const guide = scopeGuideGeometry(marker, snapshot, options);
+    if (guide) guides.push(guide);
+  }
+  return guides;
+}
+
+function nearestCursorScopeGuideGeometry(
+  snapshot: EditorViewSnapshot,
+  options: ResolvedScopeLinesOptions,
+): ScopeGuideGeometry | null {
+  return cursorScopeGuideGeometries(snapshot, options).reduce<ScopeGuideGeometry | null>(
+    nearestScopeGuideGeometry,
+    null,
+  );
+}
+
+function nearestScopeGuideGeometry(
+  current: ScopeGuideGeometry | null,
+  candidate: ScopeGuideGeometry,
+): ScopeGuideGeometry | null {
+  if (!current) return candidate;
+
+  const currentSpan = current.marker.endOffset - current.marker.startOffset;
+  const candidateSpan = candidate.marker.endOffset - candidate.marker.startOffset;
+  if (candidateSpan >= currentSpan) return current;
+  return candidate;
+}
+
+function scopeGuideGeometryKey(guide: ScopeGuideGeometry): string {
+  return [guide.marker.startRow, guide.marker.endRow, guide.column, guide.indentLevel].join(":");
 }
 
 function visibleRowSignature(rows: readonly EditorVisibleRowSnapshot[]): string {
