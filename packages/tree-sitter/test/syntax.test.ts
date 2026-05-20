@@ -404,6 +404,134 @@ describe("Tree-sitter syntax capture conversion", () => {
     thirdEdit.result.resolve(createParseResult(thirdEdit.payload));
     await thirdPromise;
   });
+
+  it("falls back to a full refresh when incremental parsing fails", async () => {
+    const parseVersions: number[] = [];
+    const disposedDocuments: string[] = [];
+    const backend = {
+      disposeDocument: (documentId) => {
+        disposedDocuments.push(documentId);
+      },
+      edit: async () => {
+        throw new Error("incremental parse failed");
+      },
+      parse: async (payload) => {
+        parseVersions.push(payload.snapshotVersion);
+        return createParseResult(payload);
+      },
+      registerLanguages: async () => undefined,
+      select: async () => undefined,
+    } satisfies TreeSitterBackend;
+    const initialText = "const a = 1;";
+    const document = createDocumentSession(initialText);
+    const session = new TreeSitterSyntaxSession({
+      backend,
+      documentId: "file.ts",
+      languageId: "typescript",
+      snapshot: document.getSnapshot(),
+      text: initialText,
+    });
+
+    await session.refresh(document.getSnapshot(), document.getText());
+    const change = document.applyEdits([
+      { from: initialText.length, text: "\nconst b = 2;", to: initialText.length },
+    ]);
+    const result = await session.applyChange(change);
+
+    expect(parseVersions).toEqual([1, 3]);
+    expect(disposedDocuments).toEqual(["file.ts"]);
+    expect(session.getSnapshotVersion()).toBe(3);
+    expect(session.getResult()).toBe(result);
+  });
+
+  it("falls back to a full refresh when current incremental parsing is cancelled", async () => {
+    const parseVersions: number[] = [];
+    const disposedDocuments: string[] = [];
+    const backend = {
+      disposeDocument: (documentId) => {
+        disposedDocuments.push(documentId);
+      },
+      edit: async () => undefined,
+      parse: async (payload) => {
+        parseVersions.push(payload.snapshotVersion);
+        return createParseResult(payload);
+      },
+      registerLanguages: async () => undefined,
+      select: async () => undefined,
+    } satisfies TreeSitterBackend;
+    const initialText = "const a = 1;";
+    const document = createDocumentSession(initialText);
+    const session = new TreeSitterSyntaxSession({
+      backend,
+      documentId: "file.ts",
+      languageId: "typescript",
+      snapshot: document.getSnapshot(),
+      text: initialText,
+    });
+
+    await session.refresh(document.getSnapshot(), document.getText());
+    const change = document.applyEdits([
+      { from: initialText.length, text: "\nconst b = 2;", to: initialText.length },
+    ]);
+    const result = await session.applyChange(change);
+
+    expect(parseVersions).toEqual([1, 3]);
+    expect(disposedDocuments).toEqual(["file.ts"]);
+    expect(session.getSnapshotVersion()).toBe(3);
+    expect(session.getResult()).toBe(result);
+  });
+
+  it("does not run stale incremental fallbacks after a newer edit starts", async () => {
+    const parseVersions: number[] = [];
+    const disposedDocuments: string[] = [];
+    const edits: { payload: TreeSitterEditPayload; result: Deferred<TreeSitterParseResult> }[] = [];
+    const backend = {
+      disposeDocument: (documentId) => {
+        disposedDocuments.push(documentId);
+      },
+      edit: (payload: TreeSitterEditPayload) => {
+        const result = createDeferred<TreeSitterParseResult>();
+        edits.push({ payload, result });
+        return result.promise;
+      },
+      parse: async (payload) => {
+        parseVersions.push(payload.snapshotVersion);
+        return createParseResult(payload);
+      },
+      registerLanguages: async () => undefined,
+      select: async () => undefined,
+    } satisfies TreeSitterBackend;
+    const initialText = "const a = 1;";
+    const document = createDocumentSession(initialText);
+    const session = new TreeSitterSyntaxSession({
+      backend,
+      documentId: "file.ts",
+      languageId: "typescript",
+      snapshot: document.getSnapshot(),
+      text: initialText,
+    });
+
+    await session.refresh(document.getSnapshot(), document.getText());
+    const firstChange = document.applyEdits([
+      { from: initialText.length, text: "!", to: initialText.length },
+    ]);
+    const firstPromise = session.applyChange(firstChange);
+    const secondChange = document.applyEdits([
+      { from: firstChange.text.length, text: "?", to: firstChange.text.length },
+    ]);
+    const secondPromise = session.applyChange(secondChange);
+    await Promise.resolve();
+
+    edits[0]?.result.reject(new Error("stale incremental parse failed"));
+    await firstPromise;
+    const secondEdit = edits[1]!;
+    secondEdit.result.resolve(createParseResult(secondEdit.payload));
+    await secondPromise;
+
+    expect(parseVersions).toEqual([1]);
+    expect(disposedDocuments).toEqual([]);
+    expect(session.getSnapshotVersion()).toBe(3);
+  });
 });
 
 function createCapturingTreeSitterBackend() {

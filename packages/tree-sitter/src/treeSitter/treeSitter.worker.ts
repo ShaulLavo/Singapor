@@ -6,6 +6,7 @@ import {
   type Node,
   type Range as TreeSitterRange,
   type Tree,
+  type TreeCursor,
 } from "web-tree-sitter";
 import parserWasmUrl from "web-tree-sitter/web-tree-sitter.wasm?url";
 import type { TreeSitterLanguageDescriptor } from "./registry";
@@ -228,27 +229,33 @@ const parseDocument = async (
   request: TreeSitterParseRequest,
 ): Promise<TreeSitterParseResult | undefined> =>
   runCancellableRequest(request, async (context) => {
-    const runtime = await ensureRuntime(request.languageId);
-    const source = resolveTreeSitterSourceDescriptor(
-      sourceCache,
-      request.documentId,
-      request.source,
+    const runtime = await runAsyncWorkerPhase("load runtime", () =>
+      ensureRuntime(request.languageId),
+    );
+    const source = runWorkerPhase("resolve source", () =>
+      resolveTreeSitterSourceDescriptor(sourceCache, request.documentId, request.source),
     );
     const parseStart = nowMs();
-    const rootLayer = parseRootLayer(runtime, source, null, context);
-    const parsedDocument = await parseParsedDocument({
-      documentId: request.documentId,
-      snapshotVersion: request.snapshotVersion,
-      languageId: request.languageId,
-      source,
-      rootLayer,
-      context,
-      oldDocument: null,
-      inputEdits: [],
-    });
+    const rootLayer = runWorkerPhase("parse root", () =>
+      parseRootLayer(runtime, source, null, context),
+    );
+    const parsedDocument = await runAsyncWorkerPhase("parse injections", () =>
+      parseParsedDocument({
+        documentId: request.documentId,
+        snapshotVersion: request.snapshotVersion,
+        languageId: request.languageId,
+        source,
+        rootLayer,
+        context,
+        oldDocument: null,
+        inputEdits: [],
+      }),
+    );
     const parseMs = nowMs() - parseStart;
     const queryStart = nowMs();
-    const result = await flattenDocument(parsedDocument, context, request.includeHighlights);
+    const result = await runAsyncWorkerPhase("flatten", () =>
+      flattenDocument(parsedDocument, context, request.includeHighlights),
+    );
     const queryMs = nowMs() - queryStart;
 
     replaceCachedDocument(request.documentId, parsedDocument);
@@ -273,7 +280,9 @@ const editDocument = async (
   request: TreeSitterEditRequest,
 ): Promise<TreeSitterParseResult | undefined> =>
   runCancellableRequest(request, async (context) => {
-    const runtime = await ensureRuntime(request.languageId);
+    const runtime = await runAsyncWorkerPhase("load runtime", () =>
+      ensureRuntime(request.languageId),
+    );
     const cached = cachedDocumentForVersion(
       request.documentId,
       request.languageId,
@@ -283,30 +292,36 @@ const editDocument = async (
 
     const editStart = nowMs();
     const oldRootLayer = rootLayerForDocument(cached);
-    const reusableTree = editReusableTree(oldRootLayer.tree, request.inputEdits);
+    const reusableTree = runWorkerPhase("prepare reusable tree", () =>
+      editReusableTree(oldRootLayer.tree, request.inputEdits),
+    );
     const editMs = nowMs() - editStart;
-    const source = resolveTreeSitterSourceDescriptor(
-      sourceCache,
-      request.documentId,
-      request.source,
+    const source = runWorkerPhase("resolve source", () =>
+      resolveTreeSitterSourceDescriptor(sourceCache, request.documentId, request.source),
     );
     const parseStart = nowMs();
-    const rootLayer = parseRootLayer(runtime, source, reusableTree, context);
-    const parsedDocument = await parseParsedDocument({
-      documentId: request.documentId,
-      snapshotVersion: request.snapshotVersion,
-      languageId: request.languageId,
-      source,
-      rootLayer,
-      context,
-      oldDocument: cached,
-      inputEdits: request.inputEdits,
-    });
+    const rootLayer = runWorkerPhase("parse root", () =>
+      parseRootLayer(runtime, source, reusableTree, context),
+    );
+    const parsedDocument = await runAsyncWorkerPhase("parse injections", () =>
+      parseParsedDocument({
+        documentId: request.documentId,
+        snapshotVersion: request.snapshotVersion,
+        languageId: request.languageId,
+        source,
+        rootLayer,
+        context,
+        oldDocument: cached,
+        inputEdits: request.inputEdits,
+      }),
+    );
     const parseMs = nowMs() - parseStart;
     reusableTree.delete();
 
     const queryStart = nowMs();
-    const result = await flattenDocument(parsedDocument, context, request.includeHighlights);
+    const result = await runAsyncWorkerPhase("flatten", () =>
+      flattenDocument(parsedDocument, context, request.includeHighlights),
+    );
     const queryMs = nowMs() - queryStart;
     replaceCachedDocument(request.documentId, parsedDocument);
 
@@ -351,6 +366,52 @@ const createCancellationContext = (
   budgetMs,
   flag: cancellationBuffer ? new Int32Array(cancellationBuffer) : null,
 });
+
+const runWorkerPhase = <T>(phase: string, run: () => T): T => {
+  try {
+    return run();
+  } catch (error) {
+    throw workerPhaseError(phase, error);
+  }
+};
+
+const runAsyncWorkerPhase = async <T>(phase: string, run: () => Promise<T>): Promise<T> => {
+  try {
+    return await run();
+  } catch (error) {
+    throw workerPhaseError(phase, error);
+  }
+};
+
+const runOptionalWorkerPhase = <T>(phase: string, fallback: T, run: () => T): T => {
+  try {
+    return run();
+  } catch (error) {
+    if (error instanceof SyntaxRequestCancelled) throw error;
+
+    warnOptionalWorkerPhase(phase, error);
+    return fallback;
+  }
+};
+
+const workerPhaseError = (phase: string, error: unknown): Error => {
+  if (error instanceof SyntaxRequestCancelled) return error;
+
+  const message = `Tree-sitter ${phase} failed: ${createErrorMessage(error)}`;
+  const nextError = new Error(message);
+  if (error instanceof Error) {
+    nextError.name = error.name;
+    nextError.stack = error.stack;
+  }
+
+  return nextError;
+};
+
+const warnOptionalWorkerPhase = (phase: string, error: unknown): void => {
+  console.warn(
+    `[tree-sitter-worker] optional phase failed: ${phase}: ${createErrorMessage(error)}`,
+  );
+};
 
 const parseSource = (
   parser: Parser,
@@ -440,12 +501,19 @@ const appendInjectionLayers = async (
   options: ParseParsedDocumentOptions,
 ): Promise<void> => {
   const runtime = await ensureRuntime(parent.languageId);
-  const plans = findInjections(parent, runtime, options.source, options.context);
+  const plans = runOptionalWorkerPhase("find injections", [] as InjectionPlan[], () =>
+    findInjections(parent, runtime, options.source, options.context),
+  );
 
   for (const plan of plans) {
-    const layer = await parseInjectionLayer(plan, options);
-    layers.push(layer);
-    await appendInjectionLayers(layers, layer, options);
+    try {
+      const layer = await parseInjectionLayer(plan, options);
+      layers.push(layer);
+      await appendInjectionLayers(layers, layer, options);
+    } catch (error) {
+      if (error instanceof SyntaxRequestCancelled) throw error;
+      warnOptionalWorkerPhase("parse injection", error);
+    }
   }
 };
 
@@ -563,7 +631,7 @@ const addInjectionMatchPlan = (
   const key = `${parent.id}:combined-injection:${languageId}`;
   const existing = groups.get(key);
   if (existing) {
-    existing.ranges.push(...basePlan.ranges);
+    appendItems(existing.ranges, basePlan.ranges);
     return;
   }
 
@@ -816,11 +884,25 @@ const flattenLayer = async (
   includeHighlights: boolean,
 ): Promise<void> => {
   const runtime = await ensureRuntime(layer.languageId);
-  const treeData = collectTreeData(layer.tree);
-  if (includeHighlights) result.captures.push(...collectCaptures(layer.tree, runtime, context));
-  result.folds.push(...collectFolds(layer.tree, runtime, context));
-  result.brackets.push(...treeData.brackets);
-  result.errors.push(...treeData.errors);
+  const treeData = runOptionalWorkerPhase("collect diagnostics", emptyTreeData(), () =>
+    collectTreeData(layer.tree),
+  );
+  if (includeHighlights) {
+    appendItems(
+      result.captures,
+      runOptionalWorkerPhase("collect highlights", [] as TreeSitterCapture[], () =>
+        collectCaptures(layer.tree, runtime, context),
+      ),
+    );
+  }
+  appendItems(
+    result.folds,
+    runOptionalWorkerPhase("collect folds", [] as FoldRange[], () =>
+      collectFolds(layer.tree, runtime, context),
+    ),
+  );
+  appendItems(result.brackets, treeData.brackets);
+  appendItems(result.errors, treeData.errors);
   if (layer.kind !== "root") result.injections.push(injectionInfoForLayer(layer));
 };
 
@@ -846,6 +928,11 @@ const createEmptyFlattenedDocument = (): Writable<FlattenedDocument> => ({
   injections: [],
 });
 
+const emptyTreeData = (): Pick<TreeSitterParseResult, "brackets" | "errors"> => ({
+  brackets: [],
+  errors: [],
+});
+
 const rangeForNode = (node: Node): TreeSitterRange => ({
   startIndex: node.startIndex,
   endIndex: node.endIndex,
@@ -861,9 +948,21 @@ const sortRanges = (ranges: readonly TreeSitterRange[]): TreeSitterRange[] =>
 const rangeSpan = (
   ranges: readonly TreeSitterRange[],
 ): Pick<TreeSitterRange, "startIndex" | "endIndex"> => ({
-  startIndex: Math.min(...ranges.map((range) => range.startIndex)),
-  endIndex: Math.max(...ranges.map((range) => range.endIndex)),
+  startIndex: minRangeStartIndex(ranges),
+  endIndex: maxRangeEndIndex(ranges),
 });
+
+const minRangeStartIndex = (ranges: readonly TreeSitterRange[]): number => {
+  let result = Infinity;
+  for (const range of ranges) result = Math.min(result, range.startIndex);
+  return result;
+};
+
+const maxRangeEndIndex = (ranges: readonly TreeSitterRange[]): number => {
+  let result = -Infinity;
+  for (const range of ranges) result = Math.max(result, range.endIndex);
+  return result;
+};
 
 const rangesWithBridgeNewlines = (
   ranges: readonly TreeSitterRange[],
@@ -944,58 +1043,92 @@ const collectTreeData = (tree: Tree): Pick<TreeSitterParseResult, "brackets" | "
   const brackets: BracketInfo[] = [];
   const errors: TreeSitterError[] = [];
   const bracketStack: { char: string; index: number }[] = [];
+  const cursor = tree.walk();
 
-  walkTree(
-    tree.rootNode,
-    {
-      onBracket: (info) => brackets.push(info),
-      onError: (info) => errors.push(info),
-    },
-    bracketStack,
-  );
+  try {
+    walkTreeCursor(
+      cursor,
+      {
+        onBracket: (info) => brackets.push(info),
+        onError: (info) => errors.push(info),
+      },
+      bracketStack,
+    );
+  } finally {
+    cursor.delete();
+  }
 
   return { brackets, errors };
 };
 
-const walkTree = (
-  node: Node,
+const walkTreeCursor = (
+  cursor: TreeCursor,
   visitors: TreeWalkVisitors,
   bracketStack: { char: string; index: number }[],
 ): void => {
-  collectNodeDiagnostics(node, visitors, bracketStack);
+  while (true) {
+    collectCursorDiagnostics(cursor, visitors, bracketStack);
 
-  for (const child of node.children) {
-    walkTree(child, visitors, bracketStack);
+    if (cursor.gotoFirstChild()) continue;
+    if (cursor.gotoNextSibling()) continue;
+
+    while (true) {
+      if (!cursor.gotoParent()) return;
+      if (cursor.gotoNextSibling()) break;
+    }
   }
 };
 
-const collectNodeDiagnostics = (
-  node: Node,
+const collectCursorDiagnostics = (
+  cursor: TreeCursor,
   visitors: TreeWalkVisitors,
   bracketStack: { char: string; index: number }[],
 ): void => {
-  const bracket = collectBracket(node, bracketStack);
+  const bracket = collectCursorBracket(cursor, bracketStack);
   if (bracket) visitors.onBracket(bracket);
 
-  const error = collectError(node);
+  const error = collectCursorError(cursor);
   if (error) visitors.onError(error);
 };
+
+const collectCursorBracket = (
+  cursor: TreeCursor,
+  bracketStack: { char: string; index: number }[],
+): BracketInfo | null => collectBracketInfo(cursor.nodeType, cursor.startIndex, bracketStack);
 
 const collectBracket = (
   node: Node,
   bracketStack: { char: string; index: number }[],
+): BracketInfo | null => collectBracketInfo(node.type, node.startIndex, bracketStack);
+
+const collectBracketInfo = (
+  type: string,
+  startIndex: number,
+  bracketStack: { char: string; index: number }[],
 ): BracketInfo | null => {
-  if (OPEN_BRACKETS.has(node.type)) {
-    bracketStack.push({ char: node.type, index: node.startIndex });
-    return { index: node.startIndex, char: node.type, depth: bracketStack.length };
+  if (OPEN_BRACKETS.has(type)) {
+    bracketStack.push({ char: type, index: startIndex });
+    return { index: startIndex, char: type, depth: bracketStack.length };
   }
 
-  if (!CLOSE_BRACKETS.has(node.type)) return null;
+  if (!CLOSE_BRACKETS.has(type)) return null;
 
   const depth = bracketStack.length > 0 ? bracketStack.length : 1;
   const last = bracketStack[bracketStack.length - 1];
-  if (last && BRACKET_PAIRS[last.char] === node.type) bracketStack.pop();
-  return { index: node.startIndex, char: node.type, depth };
+  if (last && BRACKET_PAIRS[last.char] === type) bracketStack.pop();
+  return { index: startIndex, char: type, depth };
+};
+
+const collectCursorError = (cursor: TreeCursor): TreeSitterError | null => {
+  const isError = cursor.nodeType === "ERROR";
+  if (!isError && !cursor.nodeIsMissing) return null;
+
+  return {
+    startIndex: cursor.startIndex,
+    endIndex: cursor.endIndex,
+    isMissing: cursor.nodeIsMissing,
+    message: cursor.nodeType,
+  };
 };
 
 const collectError = (node: Node): TreeSitterError | null => {
@@ -1238,7 +1371,7 @@ const disposeCachedSnapshotsMatchingLanguage = (
   }
 
   cache.snapshots.length = 0;
-  cache.snapshots.push(...retained);
+  appendItems(cache.snapshots, retained);
 };
 
 const disposeAll = (): void => {
@@ -1369,6 +1502,10 @@ const applyTextEdits = (
   return next;
 };
 
+const appendItems = <T>(target: T[], items: readonly T[]): void => {
+  for (const item of items) target.push(item);
+};
+
 const handleRequest = async (request: TreeSitterWorkerRequest): Promise<TreeSitterWorkerResult> => {
   const { payload } = request;
 
@@ -1422,6 +1559,9 @@ export const __treeSitterWorkerInternalsForTests = {
   applyTextEdits,
   collectBracket,
   collectError,
+  collectTreeData,
+  appendItems,
+  rangeSpan,
   resolveTreeSitterSourceDescriptor,
   readTreeSitterPieceTableInput,
 };

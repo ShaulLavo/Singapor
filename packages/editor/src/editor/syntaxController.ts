@@ -211,11 +211,18 @@ export class EditorSyntaxController {
 
     this.syntaxStatus = "loading";
 
+    const delayMs = syntaxRefreshDelay(change);
+    logEditorSyntaxDebug("schedule structural syntax", {
+      ...this.debugContext(documentVersion),
+      changeKind: change?.kind ?? "refresh",
+      delayMs,
+    });
     this.syntaxRequests.schedule({
-      delayMs: syntaxRefreshDelay(change),
+      delayMs,
       run: () => this.loadSyntaxResult(change),
       apply: (result, startedAt) => this.applySyntaxResult(result, documentVersion, startedAt),
-      fail: () => this.applySyntaxError(documentVersion),
+      fail: (error, startedAt) =>
+        this.recoverSyntaxError(documentVersion, change, error, startedAt),
     });
   }
 
@@ -226,11 +233,18 @@ export class EditorSyntaxController {
     const session = this.options.getSession();
     if (!this.highlighterSession || !session) return;
 
+    const delayMs = syntaxRefreshDelay(change);
+    logEditorSyntaxDebug("schedule plugin highlighting", {
+      ...this.debugContext(documentVersion),
+      changeKind: change?.kind ?? "refresh",
+      delayMs,
+    });
     this.highlightRequests.schedule({
-      delayMs: syntaxRefreshDelay(change),
+      delayMs,
       run: () => this.loadHighlightResult(change),
       apply: (result, startedAt) => this.applyHighlightResult(result, documentVersion, startedAt),
-      fail: (_error, startedAt) => this.applyHighlightError(documentVersion, startedAt),
+      fail: (_error, startedAt) =>
+        this.recoverHighlightError(documentVersion, change, _error, startedAt),
     });
   }
 
@@ -267,6 +281,15 @@ export class EditorSyntaxController {
     if (!session || documentVersion !== this.options.getDocumentVersion()) return;
 
     this.syntaxStatus = "ready";
+    logEditorSyntaxDebug("apply structural syntax", {
+      ...this.debugContext(documentVersion),
+      brackets: result.brackets.length,
+      captures: result.captures.length,
+      errors: result.errors.length,
+      folds: result.folds.length,
+      injections: result.injections.length,
+      tokens: result.tokens.length,
+    });
     const nextTokens = this.highlighterSession ? this.currentTokens : result.tokens;
     const tokenChange = session.adoptTokens(nextTokens);
     const timedChange = appendTiming(tokenChange, "editor.syntax", startedAt);
@@ -283,6 +306,11 @@ export class EditorSyntaxController {
     const session = this.options.getSession();
     if (!session || documentVersion !== this.options.getDocumentVersion()) return;
 
+    logEditorSyntaxDebug("apply plugin highlighting", {
+      ...this.debugContext(documentVersion),
+      tokens: result.tokens.length,
+      themeChanged: result.theme !== undefined,
+    });
     if (result.theme !== undefined) this.setHighlighterTheme(result.theme);
     const tokenChange = session.adoptTokens(result.tokens);
     const timedChange = appendTiming(tokenChange, "editor.highlight", startedAt);
@@ -294,18 +322,86 @@ export class EditorSyntaxController {
     if (documentVersion !== this.options.getDocumentVersion()) return;
 
     this.syntaxStatus = "error";
+    warnEditorSyntax("mark structural syntax error", this.debugContext(documentVersion));
     this.options.notifyChange(null);
+  }
+
+  private recoverSyntaxError(
+    documentVersion: number,
+    change: DocumentSessionChange | null,
+    error: unknown,
+    startedAt: number,
+  ): void {
+    if (documentVersion !== this.options.getDocumentVersion()) return;
+    warnEditorSyntax(`structural syntax request failed: ${syntaxErrorMessage(error)}`, {
+      ...this.debugContext(documentVersion),
+      changeKind: change?.kind ?? "refresh",
+      error: syntaxDebugError(error),
+      startedAt,
+    });
+
+    if (!change) {
+      this.applySyntaxError(documentVersion);
+      return;
+    }
+
+    warnEditorSyntax("reload structural syntax after edit failure", {
+      ...this.debugContext(documentVersion),
+      changeKind: change.kind,
+    });
+    this.reloadSyntaxSession();
   }
 
   private applyHighlightError(documentVersion: number, startedAt: number): void {
     const session = this.options.getSession();
     if (!session || documentVersion !== this.options.getDocumentVersion()) return;
 
+    warnEditorSyntax("clear plugin highlighting after error", this.debugContext(documentVersion));
     this.setHighlighterTheme(null);
     const tokenChange = session.adoptTokens([]);
     const timedChange = appendTiming(tokenChange, "editor.highlightError", startedAt);
     this.setTokens([]);
     this.options.notifyChange(timedChange);
+  }
+
+  private recoverHighlightError(
+    documentVersion: number,
+    change: DocumentSessionChange | null,
+    error: unknown,
+    startedAt: number,
+  ): void {
+    if (documentVersion !== this.options.getDocumentVersion()) return;
+    warnEditorSyntax(`plugin highlighting request failed: ${syntaxErrorMessage(error)}`, {
+      ...this.debugContext(documentVersion),
+      changeKind: change?.kind ?? "refresh",
+      error: syntaxDebugError(error),
+      startedAt,
+    });
+
+    if (!change) {
+      this.applyHighlightError(documentVersion, startedAt);
+      return;
+    }
+
+    warnEditorSyntax("reload plugin highlighter after edit failure", {
+      ...this.debugContext(documentVersion),
+      changeKind: change.kind,
+    });
+    this.reloadHighlighterSession();
+  }
+
+  private debugContext(documentVersion: number): EditorSyntaxDebugPayload {
+    const session = this.options.getSession();
+    return {
+      currentDocumentVersion: this.options.getDocumentVersion(),
+      documentId: this.options.getCurrentSessionDocumentId(),
+      documentLength: session?.getSnapshot().length ?? null,
+      documentVersion,
+      hasHighlighterSession: Boolean(this.highlighterSession),
+      hasSyntaxSession: Boolean(this.syntaxSession),
+      languageId: this.options.getLanguageId(),
+      syntaxStatus: this.syntaxStatus,
+    };
   }
 
   private setHighlighterTheme(theme: EditorTheme | null | undefined): void {
@@ -324,3 +420,56 @@ export class EditorSyntaxController {
     this.options.notifyThemeChanged();
   }
 }
+
+type EditorSyntaxDebugPayload = Record<string, unknown>;
+
+const logEditorSyntaxDebug = (message: string, payload: EditorSyntaxDebugPayload): void => {
+  if (!isEditorSyntaxDebugEnabled()) return;
+
+  logEditorSyntaxDebugEnabled();
+  console.info(`[editor-syntax] ${message}`, payload);
+};
+
+const warnEditorSyntax = (message: string, payload: EditorSyntaxDebugPayload): void => {
+  console.warn(`[editor-syntax] ${message}`, payload);
+};
+
+let editorSyntaxDebugEnabledLogged = false;
+
+const logEditorSyntaxDebugEnabled = (): void => {
+  if (editorSyntaxDebugEnabledLogged) return;
+
+  editorSyntaxDebugEnabledLogged = true;
+  console.info("[editor-syntax] debug enabled");
+};
+
+const isEditorSyntaxDebugEnabled = (): boolean => {
+  const scope = globalThis as typeof globalThis & {
+    readonly __EDITOR_SYNTAX_DEBUG__?: unknown;
+    readonly localStorage?: { getItem(key: string): string | null };
+  };
+  if (scope.__EDITOR_SYNTAX_DEBUG__) return true;
+
+  try {
+    return scope.localStorage?.getItem("editorSyntaxDebug") === "1";
+  } catch {
+    return false;
+  }
+};
+
+const syntaxDebugError = (error: unknown): EditorSyntaxDebugPayload => {
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      name: error.name,
+      stack: error.stack,
+    };
+  }
+
+  return { value: String(error) };
+};
+
+const syntaxErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) return error.message;
+  return String(error);
+};

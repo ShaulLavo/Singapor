@@ -42,6 +42,15 @@ describe("LSP position helpers", () => {
     expect(lspPositionToOffset(text, { line: 0, character: 99 })).toBe(2);
     expect(lspPositionToOffset(text, { line: 1, character: 1 })).toBe(5);
   });
+
+  it("treats bare carriage returns as line breaks", () => {
+    const text = "ab\rc";
+
+    expect(offsetToLspPosition(text, 2)).toEqual({ line: 0, character: 2 });
+    expect(offsetToLspPosition(text, 3)).toEqual({ line: 1, character: 0 });
+    expect(lspPositionToOffset(text, { line: 0, character: 99 })).toBe(2);
+    expect(lspPositionToOffset(text, { line: 1, character: 1 })).toBe(4);
+  });
 });
 
 describe("LSP content change helpers", () => {
@@ -65,6 +74,30 @@ describe("LSP content change helpers", () => {
           end: { line: 0, character: 2 },
         },
         text: "B",
+      },
+    ]);
+  });
+
+  it("creates incremental ranges from the original document for descending edits", () => {
+    const changes = textEditsToLspContentChanges("first\nsecond\nthird", [
+      { from: 0, to: 5, text: "FIRST" },
+      { from: 13, to: 18, text: "third\nnext" },
+    ]);
+
+    expect(changes).toEqual([
+      {
+        range: {
+          start: { line: 2, character: 0 },
+          end: { line: 2, character: 5 },
+        },
+        text: "third\nnext",
+      },
+      {
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 5 },
+        },
+        text: "FIRST",
       },
     ]);
   });

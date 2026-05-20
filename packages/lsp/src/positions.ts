@@ -6,28 +6,16 @@ export type LspContentChangeOptions = {
   readonly edits?: readonly LspTextEdit[];
 };
 
-type LineIndex = {
-  readonly starts: readonly number[];
-  readonly ends: readonly number[];
-};
-
-export const offsetToLspPosition = (text: string, offset: number): lsp.Position => {
+export function offsetToLspPosition(text: string, offset: number): lsp.Position {
   if (offset < 0 || offset > text.length) throw new RangeError("invalid offset");
 
-  const index = createLineIndex(text);
-  const line = lineForOffset(index.starts, offset);
-  const start = index.starts[line] ?? 0;
-  const end = index.ends[line] ?? text.length;
-  return { line, character: Math.min(offset, end) - start };
-};
+  return positionForOffset(text, offset);
+}
 
-export const lspPositionToOffset = (text: string, position: lsp.Position): number => {
-  const index = createLineIndex(text);
-  const line = clampInteger(position.line, 0, index.starts.length - 1);
-  const start = index.starts[line] ?? 0;
-  const end = index.ends[line] ?? text.length;
-  return clampInteger(start + position.character, start, end);
-};
+export function lspPositionToOffset(text: string, position: lsp.Position): number {
+  const lineStart = lineStartForLspLine(text, nonNegativeInteger(position.line));
+  return offsetInLine(text, lineStart, nonNegativeInteger(position.character));
+}
 
 export const textEditToLspContentChange = (
   previousText: string,
@@ -35,10 +23,7 @@ export const textEditToLspContentChange = (
 ): lsp.TextDocumentContentChangeEvent => {
   validateTextEdit(previousText, edit);
   return {
-    range: {
-      start: offsetToLspPosition(previousText, edit.from),
-      end: offsetToLspPosition(previousText, edit.to),
-    },
+    range: lspRangeForTextEdit(previousText, edit),
     text: edit.text,
   };
 };
@@ -51,11 +36,12 @@ export const textEditsToLspContentChanges = (
   if (!areValidBatchEdits(previousText, edits)) return [];
 
   const changes: lsp.TextDocumentContentChangeEvent[] = [];
-  let workingText = previousText;
 
   for (const edit of edits.toSorted(compareTextEditsDescending)) {
-    changes.push(textEditToLspContentChange(workingText, edit));
-    workingText = applyTextEdit(workingText, edit);
+    changes.push({
+      range: lspRangeForTextEdit(previousText, edit),
+      text: edit.text,
+    });
   }
 
   return changes;
@@ -76,70 +62,105 @@ export const createLspContentChanges = (
   return changes;
 };
 
-const createLineIndex = (text: string): LineIndex => {
-  const starts = [0];
-  const ends: number[] = [];
-  let lineStart = 0;
+const LF = 10;
+const CR = 13;
+
+function positionForOffset(text: string, offset: number): lsp.Position {
   let index = 0;
+  let line = 0;
+  let lineStart = 0;
 
-  while (index < text.length) {
-    const nextBreak = nextLineBreak(text, index);
-    if (!nextBreak) break;
+  while (index < offset) {
+    const code = text.charCodeAt(index);
+    if (!(code === LF || code === CR)) {
+      index += 1;
+      continue;
+    }
 
-    ends.push(nextBreak.start);
-    starts.push(nextBreak.end);
-    lineStart = nextBreak.end;
-    index = nextBreak.end;
+    const breakEnd = lineBreakEnd(text, index, code);
+    if (offset < breakEnd) return { line, character: index - lineStart };
+
+    index = breakEnd;
+    lineStart = breakEnd;
+    line += 1;
   }
 
-  ends.push(text.length);
-  return { starts, ends: normalizeFinalLineEnd(starts, ends, lineStart, text.length) };
-};
+  return { line, character: offset - lineStart };
+}
 
-const nextLineBreak = (
-  text: string,
-  from: number,
-): { readonly start: number; readonly end: number } | null => {
-  for (let index = from; index < text.length; index += 1) {
-    const char = text[index];
-    if (char === "\n") return { start: index, end: index + 1 };
-    if (char !== "\r") continue;
+function lspRangeForTextEdit(text: string, edit: LspTextEdit): lsp.Range {
+  let index = 0;
+  let line = 0;
+  let lineStart = 0;
 
-    const end = text[index + 1] === "\n" ? index + 2 : index + 1;
-    return { start: index, end };
+  function readPosition(offset: number): lsp.Position {
+    while (index < offset) {
+      const code = text.charCodeAt(index);
+      if (!(code === LF || code === CR)) {
+        index += 1;
+        continue;
+      }
+
+      const breakEnd = lineBreakEnd(text, index, code);
+      if (offset < breakEnd) return { line, character: index - lineStart };
+
+      index = breakEnd;
+      lineStart = breakEnd;
+      line += 1;
+    }
+
+    return { line, character: offset - lineStart };
   }
 
-  return null;
-};
+  return {
+    start: readPosition(edit.from),
+    end: readPosition(edit.to),
+  };
+}
 
-const normalizeFinalLineEnd = (
-  starts: readonly number[],
-  ends: readonly number[],
-  lineStart: number,
-  textLength: number,
-): readonly number[] => {
-  if (starts[starts.length - 1] === lineStart) return ends;
-  return [...ends.slice(0, -1), textLength];
-};
+function lineStartForLspLine(text: string, targetLine: number): number {
+  let index = 0;
+  let line = 0;
+  let lineStart = 0;
 
-const lineForOffset = (starts: readonly number[], offset: number): number => {
-  let low = 0;
-  let high = starts.length - 1;
+  while (line < targetLine && index < text.length) {
+    const code = text.charCodeAt(index);
+    if (!(code === LF || code === CR)) {
+      index += 1;
+      continue;
+    }
 
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
-    const start = starts[mid] ?? 0;
-    if (start <= offset) low = mid + 1;
-    else high = mid - 1;
+    lineStart = lineBreakEnd(text, index, code);
+    index = lineStart;
+    line += 1;
   }
 
-  return Math.max(0, high);
-};
+  return lineStart;
+}
 
-const clampInteger = (value: number, min: number, max: number): number => {
-  const integer = Number.isFinite(value) ? Math.trunc(value) : min;
-  return Math.min(max, Math.max(min, integer));
-};
+function offsetInLine(text: string, lineStart: number, character: number): number {
+  const requestedOffset = lineStart + character;
+  let index = lineStart;
+
+  while (index < requestedOffset && index < text.length) {
+    const code = text.charCodeAt(index);
+    if (code === LF || code === CR) return index;
+    index += 1;
+  }
+
+  return Math.min(requestedOffset, text.length);
+}
+
+function lineBreakEnd(text: string, index: number, code: number): number {
+  if (code !== CR) return index + 1;
+  if (text.charCodeAt(index + 1) === LF) return index + 2;
+  return index + 1;
+}
+
+function nonNegativeInteger(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.trunc(value));
+}
 
 const createFullContentChange = (text: string): lsp.TextDocumentContentChangeEvent => ({ text });
 

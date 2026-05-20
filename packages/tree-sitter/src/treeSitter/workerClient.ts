@@ -17,6 +17,7 @@ import { createTreeSitterSourceDescriptor, type TreeSitterSourceDescriptor } fro
 type PendingRequest = {
   readonly documentId: string | null;
   readonly cancellationFlag: Int32Array | null;
+  readonly payload: TreeSitterWorkerRequestPayload;
   readonly resolve: (result: TreeSitterWorkerResult) => void;
   readonly reject: (error: Error) => void;
 };
@@ -158,6 +159,7 @@ export const selectWithTreeSitter = async (
 };
 
 export const disposeTreeSitterDocument = (documentId: string): void => {
+  logTreeSitterWorkerDebug("dispose document", { documentId });
   sentSourceChunkIds.delete(documentId);
   void postRequest({ type: "disposeDocument", documentId }).catch(() => undefined);
 };
@@ -166,6 +168,10 @@ export const disposeTreeSitterWorker = async (): Promise<void> => {
   if (!worker) return;
 
   try {
+    logTreeSitterWorkerDebug("dispose worker", {
+      pendingRequests: pendingRequests.size,
+      sentSourceDocuments: sentSourceChunkIds.size,
+    });
     await postRequest({ type: "dispose" });
   } finally {
     worker.terminate();
@@ -192,16 +198,17 @@ const postRequest = (payload: TreeSitterWorkerRequestPayload): Promise<TreeSitte
 
   const id = nextRequestId++;
   const request: TreeSitterWorkerRequest = { id, payload };
+  logTreeSitterWorkerDebug("post request", requestDebugInfo(request));
 
   return new Promise((resolve, reject) => {
     pendingRequests.set(id, {
       documentId: documentIdForPayload(payload),
       cancellationFlag: cancellationFlagForPayload(payload),
+      payload,
       resolve,
       reject,
     });
     handle.postMessage(request);
-    markSourceChunksAsSent(payload);
   });
 };
 
@@ -213,10 +220,19 @@ function postDocumentRequest(
 
 const cancelPreviousDocumentRequests = (documentId: string): Int32Array | null => {
   let cancellationFlag: Int32Array | null = null;
+  let cancelledRequests = 0;
 
   for (const pending of pendingRequests.values()) {
     if (pending.documentId !== documentId) continue;
+    cancelledRequests += 1;
     if (pending.cancellationFlag) Atomics.store(pending.cancellationFlag, 0, 1);
+  }
+
+  if (cancelledRequests > 0) {
+    logTreeSitterWorkerDebug("cancel previous document requests", {
+      cancelledRequests,
+      documentId,
+    });
   }
 
   if (supportsSharedCancellation()) {
@@ -248,10 +264,21 @@ const handleWorkerMessage = (event: MessageEvent<TreeSitterWorkerResponse>): voi
 
   pendingRequests.delete(response.id);
   if (response.ok) {
+    logTreeSitterWorkerDebug("request resolved", {
+      ...workerPayloadDebugInfo(pending.payload),
+      id: response.id,
+      result: workerResultDebugInfo(response.result),
+    });
+    markSourceChunksAsSent(pending.payload);
     pending.resolve(response.result);
     return;
   }
 
+  warnTreeSitterWorker(`request rejected: ${response.error}`, {
+    ...workerPayloadDebugInfo(pending.payload),
+    error: response.error,
+    id: response.id,
+  });
   pending.reject(new Error(response.error));
 };
 
@@ -259,6 +286,10 @@ const handleWorkerError = (failedWorker: Worker, event: ErrorEvent): void => {
   if (failedWorker !== worker) return;
 
   const error = new Error(event.message || "Tree-sitter worker failed");
+  warnTreeSitterWorker(`worker error: ${error.message}`, {
+    error: treeSitterWorkerDebugError(error),
+    pendingRequests: pendingRequests.size,
+  });
   failedWorker.terminate();
   worker = null;
   rejectPendingRequests(error);
@@ -268,6 +299,13 @@ const handleWorkerError = (failedWorker: Worker, event: ErrorEvent): void => {
 };
 
 const rejectPendingRequests = (error: Error): void => {
+  if (pendingRequests.size > 0) {
+    warnTreeSitterWorker(`reject pending requests: ${error.message}`, {
+      error: treeSitterWorkerDebugError(error),
+      pendingRequests: pendingRequests.size,
+    });
+  }
+
   for (const request of pendingRequests.values()) request.reject(error);
   pendingRequests.clear();
 };
@@ -344,6 +382,12 @@ const markSourceChunksAsSent = (payload: TreeSitterWorkerRequestPayload): void =
 
   const sent = sourceChunkIdsForDocument(payload.documentId);
   for (const chunk of payload.source.chunks) sent.add(chunk.chunkId);
+  logTreeSitterWorkerDebug("mark source chunks sent", {
+    documentId: payload.documentId,
+    sentChunks: sent.size,
+    sourceChunks: payload.source.chunks.length,
+    type: payload.type,
+  });
 };
 
 const isTreeSitterParseResult = (result: TreeSitterWorkerResult): result is TreeSitterParseResult =>
@@ -353,3 +397,99 @@ const isTreeSitterSelectionResult = (
   result: TreeSitterWorkerResult,
 ): result is TreeSitterSelectionResult =>
   Boolean(result && "status" in result && "ranges" in result);
+
+type TreeSitterWorkerDebugPayload = Record<string, unknown>;
+
+const logTreeSitterWorkerDebug = (message: string, payload: TreeSitterWorkerDebugPayload): void => {
+  if (!isTreeSitterWorkerDebugEnabled()) return;
+
+  logTreeSitterWorkerDebugEnabled();
+  console.info(`[editor-syntax:tree-sitter-worker] ${message}`, payload);
+};
+
+const warnTreeSitterWorker = (message: string, payload: TreeSitterWorkerDebugPayload): void => {
+  console.warn(`[editor-syntax:tree-sitter-worker] ${message}`, payload);
+};
+
+let treeSitterWorkerDebugEnabledLogged = false;
+
+const logTreeSitterWorkerDebugEnabled = (): void => {
+  if (treeSitterWorkerDebugEnabledLogged) return;
+
+  treeSitterWorkerDebugEnabledLogged = true;
+  console.info("[editor-syntax:tree-sitter-worker] debug enabled");
+};
+
+const isTreeSitterWorkerDebugEnabled = (): boolean => {
+  const scope = globalThis as typeof globalThis & {
+    readonly __EDITOR_SYNTAX_DEBUG__?: unknown;
+    readonly localStorage?: { getItem(key: string): string | null };
+  };
+  if (scope.__EDITOR_SYNTAX_DEBUG__) return true;
+
+  try {
+    return scope.localStorage?.getItem("editorSyntaxDebug") === "1";
+  } catch {
+    return false;
+  }
+};
+
+const requestDebugInfo = (request: TreeSitterWorkerRequest): TreeSitterWorkerDebugPayload => ({
+  id: request.id,
+  ...workerPayloadDebugInfo(request.payload),
+});
+
+const workerPayloadDebugInfo = (
+  payload: TreeSitterWorkerRequestPayload,
+): TreeSitterWorkerDebugPayload => {
+  const base = {
+    documentId: documentIdForPayload(payload),
+    type: payload.type,
+  };
+  if (!("source" in payload)) return base;
+
+  return {
+    ...base,
+    generation: payload.generation,
+    length: payload.source.length,
+    pieces: payload.source.pieces.length,
+    sourceChunks: payload.source.chunks.length,
+  };
+};
+
+const workerResultDebugInfo = (
+  result: TreeSitterWorkerResult,
+): TreeSitterWorkerDebugPayload | null => {
+  if (!result) return null;
+  if (isTreeSitterSelectionResult(result)) {
+    return {
+      languageId: result.languageId,
+      ranges: result.ranges.length,
+      snapshotVersion: result.snapshotVersion,
+      status: result.status,
+    };
+  }
+
+  return {
+    brackets: result.brackets.length,
+    captures: result.captures.length,
+    errors: result.errors.length,
+    folds: result.folds.length,
+    injections: result.injections.length,
+    languageId: result.languageId,
+    snapshotVersion: result.snapshotVersion,
+    timings: result.timings,
+  };
+};
+
+const treeSitterWorkerDebugError = (error: unknown): TreeSitterWorkerDebugPayload => {
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      name: error.name,
+      stack: error.stack,
+    };
+  }
+
+  return { value: String(error) };
+};

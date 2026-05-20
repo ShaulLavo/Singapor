@@ -1,17 +1,25 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createPieceTableSnapshot } from "@editor/core";
 import type { TreeSitterLanguageDescriptor } from "../src";
+import type {
+  TreeSitterParseRequest,
+  TreeSitterParseResult,
+  TreeSitterWorkerRequest,
+  TreeSitterWorkerRequestPayload,
+  TreeSitterWorkerResult,
+} from "../src/treeSitter/types";
+import type { TreeSitterParsePayload } from "../src/treeSitter/workerClient.ts";
 
 type WorkerClientModule = typeof import("../src/treeSitter/workerClient.ts");
 
-type FakeWorkerRequest = {
-  readonly id: number;
-  readonly payload: { readonly type: string };
-};
+type FakeWorkerRequest = TreeSitterWorkerRequest;
 
 const fakeWorkers: FakeWorker[] = [];
 let currentClient: WorkerClientModule | null = null;
 
 class FakeWorker {
+  static autoResolve = true;
+
   public onmessage: ((event: MessageEvent) => void) | null = null;
   public onerror: ((event: ErrorEvent) => void) | null = null;
   public readonly messages: FakeWorkerRequest[] = [];
@@ -23,7 +31,7 @@ class FakeWorker {
 
   public postMessage(message: FakeWorkerRequest): void {
     this.messages.push(message);
-    queueMicrotask(() => this.resolveRequest(message));
+    if (FakeWorker.autoResolve) queueMicrotask(() => this.resolveRequest(message));
   }
 
   public terminate(): void {
@@ -34,17 +42,26 @@ class FakeWorker {
     return this.terminated;
   }
 
-  private resolveRequest(message: FakeWorkerRequest): void {
+  public resolveRequest(message: FakeWorkerRequest, result?: TreeSitterWorkerResult): void {
     if (this.terminated) return;
 
     this.onmessage?.({
-      data: { id: message.id, ok: true, result: undefined },
+      data: { id: message.id, ok: true, result },
+    } as MessageEvent);
+  }
+
+  public rejectRequest(message: FakeWorkerRequest, error: string): void {
+    if (this.terminated) return;
+
+    this.onmessage?.({
+      data: { id: message.id, ok: false, error },
     } as MessageEvent);
   }
 }
 
 describe("tree-sitter worker client language registration cache", () => {
   afterEach(async () => {
+    FakeWorker.autoResolve = true;
     await currentClient?.disposeTreeSitterWorker();
     currentClient = null;
     fakeWorkers.length = 0;
@@ -103,6 +120,30 @@ describe("tree-sitter worker client language registration cache", () => {
       nextWorker.messages.some((message) => message.payload.type === "registerLanguages"),
     ).toBe(true);
   });
+
+  it("does not mark document source chunks as sent when a request fails", async () => {
+    FakeWorker.autoResolve = false;
+    const client = await loadWorkerClient();
+    const snapshot = createPieceTableSnapshot("const answer = 1;");
+    const firstParse = client.parseWithTreeSitter(parsePayload(snapshot, 1));
+    const worker = fakeWorkerAt(0);
+
+    worker.resolveRequest(requestOfType(worker, "init"));
+    await flushMicrotasks();
+    const failedRequest = parseRequests(worker)[0]!;
+    expect(failedRequest.payload.source.chunks.length).toBeGreaterThan(0);
+
+    worker.rejectRequest(failedRequest, "parse failed");
+    await expect(firstParse).rejects.toThrow("parse failed");
+
+    const retryParse = client.parseWithTreeSitter(parsePayload(snapshot, 2));
+    await flushMicrotasks();
+    const retryRequest = parseRequests(worker)[1]!;
+
+    expect(retryRequest.payload.source.chunks.length).toBeGreaterThan(0);
+    worker.resolveRequest(retryRequest, parseResult(2));
+    await expect(retryParse).resolves.toMatchObject({ snapshotVersion: 2 });
+  });
 });
 
 async function loadWorkerClient(): Promise<WorkerClientModule> {
@@ -119,10 +160,40 @@ function registerLanguageRequests(): FakeWorkerRequest[] {
   );
 }
 
+async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 function fakeWorkerAt(index: number): FakeWorker {
   const fakeWorker = fakeWorkers[index];
   if (!fakeWorker) throw new Error(`Expected fake worker at index ${index}`);
   return fakeWorker;
+}
+
+function requestOfType<TType extends TreeSitterWorkerRequestPayload["type"]>(
+  worker: FakeWorker,
+  type: TType,
+): Extract<FakeWorkerRequest, { readonly payload: { readonly type: TType } }> {
+  const request = worker.messages.find((message) => message.payload.type === type);
+  if (!request) throw new Error(`Expected ${type} request`);
+  return request as Extract<FakeWorkerRequest, { readonly payload: { readonly type: TType } }>;
+}
+
+function parseRequests(worker: FakeWorker): TreeSitterParseWorkerRequest[] {
+  return worker.messages.filter((message): message is TreeSitterParseWorkerRequest =>
+    isParseRequest(message.payload),
+  );
+}
+
+type TreeSitterParseWorkerRequest = FakeWorkerRequest & {
+  readonly payload: TreeSitterParseRequest;
+};
+
+function isParseRequest(
+  payload: TreeSitterWorkerRequestPayload,
+): payload is TreeSitterParseRequest {
+  return payload.type === "parse";
 }
 
 function languageDescriptor(
@@ -135,5 +206,32 @@ function languageDescriptor(
     highlightQuerySource,
     id,
     wasmUrl: `/${id}.wasm`,
+  };
+}
+
+function parsePayload(
+  snapshot: ReturnType<typeof createPieceTableSnapshot>,
+  snapshotVersion: number,
+): TreeSitterParsePayload {
+  return {
+    documentId: "doc.ts",
+    includeHighlights: true,
+    languageId: "typescript",
+    snapshot,
+    snapshotVersion,
+  };
+}
+
+function parseResult(snapshotVersion: number): TreeSitterParseResult {
+  return {
+    brackets: [],
+    captures: [],
+    documentId: "doc.ts",
+    errors: [],
+    folds: [],
+    injections: [],
+    languageId: "typescript",
+    snapshotVersion,
+    timings: [],
   };
 }

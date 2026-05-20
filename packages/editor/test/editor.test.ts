@@ -4205,6 +4205,43 @@ describe("Editor", () => {
       expect(highlightsMap.size).toBe(1);
     });
 
+    it("reloads the syntax session when edit syntax fails", async () => {
+      const createdTexts: string[] = [];
+      let disposeCount = 0;
+      setEditorSyntaxSessionFactory((options) => {
+        createdTexts.push(options.text);
+        const isInitialSession = createdTexts.length === 1;
+
+        return createMockSyntaxSession({
+          refresh: async () =>
+            createSyntaxResult([{ start: 0, end: 5, style: { color: "#00ff00" } }]),
+          applyChange: async () => {
+            if (!isInitialSession) return createSyntaxResult();
+            throw new Error("incremental syntax failed");
+          },
+          dispose: () => {
+            disposeCount += 1;
+          },
+        });
+      });
+
+      editor.openDocument({
+        documentId: "main.ts",
+        languageId: "typescript",
+        text: "const a = 1;",
+      });
+      await flushMicrotasks();
+      editorRoot().dispatchEvent(createInsertEvent("!"));
+
+      await flushSyntaxDebounce();
+      await flushMicrotasks();
+
+      expect(createdTexts).toEqual(["const a = 1;", "const a = 1;!"]);
+      expect(disposeCount).toBe(1);
+      expect(editor.getState().syntaxStatus).toBe("ready");
+      expect(tokenHighlightRanges()[0]?.startOffset).toBe(0);
+    });
+
     it("keeps projected syntax highlights until edit syntax finishes", async () => {
       const editResult = createDeferred<EditorSyntaxResult>();
       setEditorSyntaxSessionFactory(() =>
@@ -4481,6 +4518,58 @@ describe("Editor", () => {
 
       await flushSyntaxDebounce();
       expect(changes).toEqual(["const a = 1;!?"]);
+      expect(tokenHighlightRanges()[0]?.startOffset).toBe(0);
+    });
+
+    it("reloads the plugin highlighter session when edit highlighting fails", async () => {
+      const createdTexts: string[] = [];
+      let disposeCount = 0;
+      const plugin: EditorPlugin = {
+        activate: (context) =>
+          context.registerHighlighter({
+            createSession: (options) => {
+              createdTexts.push(options.text);
+              const isInitialSession = createdTexts.length === 1;
+
+              return createMockHighlighterSession({
+                refresh: async () =>
+                  createHighlightResult(
+                    isInitialSession ? [] : [{ start: 0, end: 5, style: { color: "#00ff00" } }],
+                  ),
+                applyChange: async () => {
+                  throw new Error("incremental highlighting failed");
+                },
+                dispose: () => {
+                  disposeCount += 1;
+                },
+              });
+            },
+          }),
+      };
+      editor.dispose();
+      editor = new Editor(container, {
+        plugins: withTestLanguagePlugins(plugin),
+      });
+      setEditorSyntaxSessionFactory(() =>
+        createMockSyntaxSession({
+          refresh: async () => createSyntaxResult([]),
+          applyChange: async () => createSyntaxResult([]),
+        }),
+      );
+
+      editor.openDocument({
+        documentId: "main.ts",
+        languageId: "typescript",
+        text: "const a = 1;",
+      });
+      await flushMicrotasks();
+      editorRoot().dispatchEvent(createInsertEvent("!"));
+
+      await flushSyntaxDebounce();
+      await flushMicrotasks();
+
+      expect(createdTexts).toEqual(["const a = 1;", "const a = 1;!"]);
+      expect(disposeCount).toBe(1);
       expect(tokenHighlightRanges()[0]?.startOffset).toBe(0);
     });
 

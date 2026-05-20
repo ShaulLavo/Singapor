@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Node } from "web-tree-sitter";
+import type { Node, Range as TreeSitterRange, Tree } from "web-tree-sitter";
 
 import {
   applyBatchToPieceTable,
@@ -18,8 +18,11 @@ import { __treeSitterWorkerInternalsForTests } from "../src/treeSitter/treeSitte
 const {
   applyTextEdit,
   applyTextEdits,
+  appendItems,
   collectBracket,
   collectError,
+  collectTreeData,
+  rangeSpan,
   readTreeSitterPieceTableInput,
 } = __treeSitterWorkerInternalsForTests;
 
@@ -138,6 +141,30 @@ describe("tree-sitter worker internals", () => {
 
     expect(collectError(node("identifier", 0, 10))).toBeNull();
   });
+
+  it("walks deeply nested trees without recursive stack overflow", () => {
+    const root = nestedNode(12_000);
+
+    expect(collectTreeData(fakeTree(root)).errors).toHaveLength(1);
+  });
+
+  it("appends large worker result arrays without spreading call arguments", () => {
+    const items = Array.from({ length: 200_000 }, (_, index) => index);
+    const target: number[] = [];
+
+    appendItems(target, items);
+
+    expect(target).toHaveLength(items.length);
+    expect(target.at(-1)).toBe(199_999);
+  });
+
+  it("spans large injection range arrays without spreading call arguments", () => {
+    const ranges = Array.from({ length: 200_000 }, (_, index) =>
+      treeSitterRange(index * 2, index * 2 + 1),
+    );
+
+    expect(rangeSpan(ranges)).toEqual({ startIndex: 0, endIndex: 399_999 });
+  });
 });
 
 function cacheWith(
@@ -149,17 +176,108 @@ function cacheWith(
   return cache;
 }
 
+type TestNode = Node & {
+  readonly children: readonly TestNode[];
+};
+
 function node(
   type: string,
   startIndex: number,
   endIndex = startIndex + 1,
   flags: Partial<Pick<Node, "isError" | "isMissing">> = {},
-): Node {
+): TestNode {
   return {
+    children: [],
     type,
     startIndex,
     endIndex,
     isError: flags.isError ?? false,
     isMissing: flags.isMissing ?? false,
-  } as Node;
+  } as unknown as TestNode;
+}
+
+function nestedNode(depth: number): TestNode {
+  let current = node("ERROR", depth, depth + 1, { isError: true });
+  for (let index = depth - 1; index >= 0; index -= 1) {
+    current = {
+      ...node("node", index, depth + 1),
+      children: [current],
+    } as unknown as TestNode;
+  }
+
+  return current;
+}
+
+function fakeTree(root: TestNode): Tree {
+  return {
+    walk: () => new FakeTreeCursor(root),
+  } as unknown as Tree;
+}
+
+function treeSitterRange(startIndex: number, endIndex: number): TreeSitterRange {
+  return {
+    endIndex,
+    endPosition: { column: endIndex, row: 0 },
+    startIndex,
+    startPosition: { column: startIndex, row: 0 },
+  };
+}
+
+class FakeTreeCursor {
+  private readonly path: { node: TestNode; siblings: readonly TestNode[]; index: number }[];
+
+  public constructor(root: TestNode) {
+    this.path = [{ node: root, siblings: [root], index: 0 }];
+  }
+
+  public get nodeType(): string {
+    return this.current.node.type;
+  }
+
+  public get nodeIsMissing(): boolean {
+    return this.current.node.isMissing;
+  }
+
+  public get startIndex(): number {
+    return this.current.node.startIndex;
+  }
+
+  public get endIndex(): number {
+    return this.current.node.endIndex;
+  }
+
+  public gotoFirstChild(): boolean {
+    const children = this.current.node.children;
+    if (children.length === 0) return false;
+
+    this.path.push({ node: children[0]!, siblings: children, index: 0 });
+    return true;
+  }
+
+  public gotoNextSibling(): boolean {
+    const current = this.current;
+    const index = current.index + 1;
+    const node = current.siblings[index];
+    if (!node) return false;
+
+    this.path[this.path.length - 1] = { node, siblings: current.siblings, index };
+    return true;
+  }
+
+  public gotoParent(): boolean {
+    if (this.path.length <= 1) return false;
+
+    this.path.pop();
+    return true;
+  }
+
+  public delete(): void {
+    this.path.length = 0;
+  }
+
+  private get current(): { node: TestNode; siblings: readonly TestNode[]; index: number } {
+    const current = this.path[this.path.length - 1];
+    if (!current) throw new Error("Cursor is disposed");
+    return current;
+  }
 }
