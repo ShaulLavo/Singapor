@@ -367,7 +367,41 @@ describe("token projection", () => {
     });
   });
 
-  it("falls back for overlapping indexed tokens and preserves exact maxEnds", () => {
+  it("bulk-projects overlapping tokens when their ends stay monotonic", () => {
+    const style = { color: "red" };
+    const tokens = indexedTokens([
+      { start: 0, end: 5, style },
+      { start: 0, end: 5, style },
+      { start: 6, end: 10, style },
+    ]);
+
+    const diagnostics = collectPerformanceDiagnostics(() => {
+      const projected = projectTokensThroughEdit(
+        tokens,
+        { from: 5, to: 5, text: "Name" },
+        "alpha beta",
+      );
+      expect(projected).toEqual([
+        { start: 0, end: 9, style },
+        { start: 0, end: 9, style },
+        { start: 10, end: 14, style },
+      ]);
+      expect(getEditorTokenIndex(projected)).toMatchObject({
+        maxEnds: [9, 9, 14],
+        monotonicEnd: true,
+        nonOverlapping: false,
+        sortedByStart: true,
+      });
+    });
+
+    expect(diagnostics.find(tokenProjectionPath)?.detail).toMatchObject({
+      monotonicEnd: true,
+      nonOverlapping: false,
+      path: "indexed.bulk",
+    });
+  });
+
+  it("bulk-projects non-monotonic overlapping indexed tokens and preserves exact maxEnds", () => {
     const style = { color: "red" };
     const tokens = indexedTokens([
       { start: 0, end: 10, style },
@@ -395,7 +429,8 @@ describe("token projection", () => {
     });
 
     expect(diagnostics.find(tokenProjectionPath)?.detail).toMatchObject({
-      path: "indexed.fallback",
+      monotonicEnd: false,
+      path: "indexed.bulk",
     });
   });
 

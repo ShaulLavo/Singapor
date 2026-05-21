@@ -130,11 +130,13 @@ function projectSortedTokenRangesBulk(
   suffixStart: number,
   index: EditorTokenIndex,
 ): readonly EditorToken[] | null {
-  if (!canBulkProjectIndex(index)) return null;
-
   const prefixTokens = tokens.slice(0, prefixEnd);
   const prefixMaxEnds = index.maxEnds.slice(0, prefixEnd) as number[];
-  const builder = createContinuationTokenProjectionBuilder(tokens[prefixEnd - 1], prefixMaxEnds);
+  const builder = createContinuationTokenProjectionBuilder(
+    tokens[prefixEnd - 1],
+    prefixMaxEnds,
+    index,
+  );
   const keepsLiveRanges = appendProjectedTokens(
     builder,
     tokens,
@@ -147,23 +149,18 @@ function projectSortedTokenRangesBulk(
   const suffixTokens = shiftedTokenRange(tokens, suffixStart, delta);
   if (!canKeepBulkIndex(builder, suffixTokens)) return null;
 
-  const maxEnds = projectedBulkMaxEnds(prefixMaxEnds, builder.maxEnds, index, suffixStart, delta);
+  appendSuffixIndexEntries(builder, suffixTokens);
+  const maxEnds = prefixMaxEnds.concat(builder.maxEnds);
   const projectedTokens = prefixTokens.concat(builder.tokens, suffixTokens);
 
   setEditorTokenIndex(projectedTokens, {
     maxEnds,
-    monotonicEnd: true,
-    nonOverlapping: true,
+    monotonicEnd: builder.monotonicEnd,
+    nonOverlapping: builder.nonOverlapping,
     sortedByStart: true,
   });
   tokenProjectionMetadata.set(projectedTokens, { keepsLiveRanges, sourceTokens: tokens });
   return projectedTokens;
-}
-
-function canBulkProjectIndex(index: EditorTokenIndex): boolean {
-  if (!index.sortedByStart) return false;
-  if (!index.monotonicEnd) return false;
-  return index.nonOverlapping;
 }
 
 function canKeepBulkIndex(
@@ -171,11 +168,7 @@ function canKeepBulkIndex(
   suffixTokens: readonly EditorToken[],
 ): boolean {
   if (!builder.sortedByStart) return false;
-  if (!builder.monotonicEnd) return false;
-  if (!builder.nonOverlapping) return false;
-  if (!suffixKeepsSortedStart(builder, suffixTokens)) return false;
-  if (!suffixKeepsMonotonicEnd(builder, suffixTokens)) return false;
-  return suffixKeepsNonOverlapping(builder, suffixTokens);
+  return suffixKeepsSortedStart(builder, suffixTokens);
 }
 
 function projectSortedTokenRanges(
@@ -268,28 +261,19 @@ function shiftedTokenRange(
   );
 }
 
-function projectedBulkMaxEnds(
-  prefixMaxEnds: number[],
-  affectedMaxEnds: readonly number[],
-  index: EditorTokenIndex,
-  suffixStart: number,
-  delta: number,
-): number[] {
-  const maxEnds = prefixMaxEnds;
-  appendNumberRange(maxEnds, affectedMaxEnds, 0, affectedMaxEnds.length, 0);
-  appendNumberRange(maxEnds, index.maxEnds, suffixStart, index.maxEnds.length, delta);
-  return maxEnds;
-}
-
-function appendNumberRange(
-  target: number[],
-  source: readonly number[],
-  start: number,
-  end: number,
-  delta: number,
+function appendSuffixIndexEntries(
+  builder: TokenProjectionBuilder,
+  suffixTokens: readonly EditorToken[],
 ): void {
-  for (let index = start; index < end; index += 1) {
-    target.push(source[index]! + delta);
+  for (const token of suffixTokens) {
+    if (token.start < builder.previousStart) builder.sortedByStart = false;
+    if (token.start < builder.previousEnd) builder.nonOverlapping = false;
+    if (token.end < builder.maxEnd) builder.monotonicEnd = false;
+
+    builder.maxEnd = Math.max(builder.maxEnd, token.end);
+    builder.maxEnds.push(builder.maxEnd);
+    builder.previousEnd = token.end;
+    builder.previousStart = token.start;
   }
 }
 
@@ -300,24 +284,6 @@ function suffixKeepsSortedStart(
   const first = suffixTokens[0];
   if (!first) return true;
   return first.start >= builder.previousStart;
-}
-
-function suffixKeepsMonotonicEnd(
-  builder: TokenProjectionBuilder,
-  suffixTokens: readonly EditorToken[],
-): boolean {
-  const first = suffixTokens[0];
-  if (!first) return true;
-  return first.end >= builder.maxEnd;
-}
-
-function suffixKeepsNonOverlapping(
-  builder: TokenProjectionBuilder,
-  suffixTokens: readonly EditorToken[],
-): boolean {
-  const first = suffixTokens[0];
-  if (!first) return true;
-  return first.start >= builder.previousEnd;
 }
 
 function finishTokenProjection(
@@ -358,12 +324,13 @@ function createTokenProjectionBuilder(
 function createContinuationTokenProjectionBuilder(
   previousToken: EditorToken | undefined,
   prefixMaxEnds: readonly number[],
+  index: EditorTokenIndex,
 ): TokenProjectionBuilder {
   return {
     maxEnd: prefixMaxEnds[prefixMaxEnds.length - 1] ?? 0,
     maxEnds: [],
-    monotonicEnd: true,
-    nonOverlapping: true,
+    monotonicEnd: index.monotonicEnd,
+    nonOverlapping: index.nonOverlapping,
     previousEnd: previousToken?.end ?? -Infinity,
     previousStart: previousToken?.start ?? -Infinity,
     sortedByStart: true,
