@@ -70,12 +70,20 @@ export type InputSelectionControllerOptions = {
   ): void;
 };
 
+type PendingKeyboardTextFallback = {
+  timerId: number;
+  nativeInputGeneration: number;
+  startMs: number;
+  text: string;
+};
+
 export class InputSelectionController {
   private mouseSelectionDrag: MouseSelectionDrag | null = null;
   private mouseSelectionAutoScrollFrame = 0;
   private useSessionSelectionForNextInput = false;
   private nativeInputGeneration = 0;
   private nativeInputHandlersInstalled = false;
+  private pendingKeyboardTextFallback: PendingKeyboardTextFallback | null = null;
 
   constructor(private readonly options: InputSelectionControllerOptions) {}
 
@@ -94,6 +102,7 @@ export class InputSelectionController {
 
   dispose(): void {
     const { el } = this.options;
+    this.cancelPendingKeyboardTextFallback();
     this.uninstallNativeInputHandlers();
     el.removeEventListener("mousedown", this.handleMouseDown);
     el.removeEventListener("beforeinput", this.handleBeforeInput);
@@ -573,10 +582,12 @@ export class InputSelectionController {
 
   private handleNativeInputBeforeInputCapture = (_event: InputEvent): void => {
     this.nativeInputGeneration += 1;
+    this.cancelPendingKeyboardTextFallback();
   };
 
   private handleNativeInputInputCapture = (): void => {
     this.nativeInputGeneration += 1;
+    this.cancelPendingKeyboardTextFallback();
   };
 
   private handleMouseDown = (event: MouseEvent): void => {
@@ -809,6 +820,7 @@ export class InputSelectionController {
     const session = this.session;
     if (!session) return;
     if (!this.options.canEditDocument()) {
+      this.cancelPendingKeyboardTextFallback();
       event.preventDefault();
       return;
     }
@@ -816,6 +828,7 @@ export class InputSelectionController {
     const text = event.data ?? "";
     if (event.inputType !== "insertText" && event.inputType !== "insertLineBreak") return;
 
+    this.cancelPendingKeyboardTextFallback();
     const start = eventStartMs(event);
     const selectionChange = this.selectionChangeBeforeEdit();
     event.preventDefault();
@@ -870,34 +883,87 @@ export class InputSelectionController {
     const fallbackText = keyboardFallbackText(event);
     if (fallbackText === null) return;
 
-    this.preventBrowserTextKeyDefault(event, fallbackText);
-    this.scheduleKeyboardTextFallback(event, fallbackText);
-  };
-
-  private preventBrowserTextKeyDefault(event: KeyboardEvent, text: string): void {
-    if (event.target === this.options.view.inputElement && text !== " ") return;
+    if (this.canWaitForNativeTextInput(event, fallbackText)) {
+      this.scheduleKeyboardTextFallback(event, fallbackText);
+      return;
+    }
 
     event.preventDefault();
+    this.flushPendingKeyboardTextFallback();
+    this.applyKeyboardTextFallback(fallbackText, eventStartMs(event));
+    if (event.target !== this.options.view.inputElement) this.options.view.focusInput();
+  };
+
+  private canWaitForNativeTextInput(event: KeyboardEvent, text: string): boolean {
+    if (text === " ") return false;
+    return event.target === this.options.view.inputElement;
   }
 
   private scheduleKeyboardTextFallback(event: KeyboardEvent, text: string): void {
     const start = eventStartMs(event);
     const nativeInputGeneration = this.nativeInputGeneration;
+    const pending = this.pendingKeyboardTextFallback;
 
-    this.options.el.ownerDocument.defaultView?.setTimeout(() => {
-      const session = this.session;
-      if (!session) return;
-      if (!this.options.canEditDocument()) return;
-      if (this.nativeInputGeneration !== nativeInputGeneration) return;
+    if (pending && pending.nativeInputGeneration === nativeInputGeneration) {
+      pending.text += text;
+      pending.startMs = Math.min(pending.startMs, start);
+      return;
+    }
 
-      const selectionChange = this.selectionChangeBeforeEdit();
-      this.options.view.inputElement.value = "";
-      this.options.applySessionChange(
-        mergeChangeTimings(session.applyText(text), selectionChange),
-        "input.keydownFallback",
-        start,
-      );
-    }, 0);
+    const view = this.options.el.ownerDocument.defaultView;
+    if (!view) return;
+
+    this.cancelPendingKeyboardTextFallback();
+    const next: PendingKeyboardTextFallback = {
+      timerId: 0,
+      nativeInputGeneration,
+      startMs: start,
+      text,
+    };
+    next.timerId = view.setTimeout(() => this.flushPendingKeyboardTextFallback(next), 0);
+    this.pendingKeyboardTextFallback = next;
+  }
+
+  private cancelPendingKeyboardTextFallback(): void {
+    const pending = this.pendingKeyboardTextFallback;
+    if (!pending) return;
+
+    this.pendingKeyboardTextFallback = null;
+    this.options.el.ownerDocument.defaultView?.clearTimeout(pending.timerId);
+  }
+
+  private flushPendingKeyboardTextFallback(expected?: PendingKeyboardTextFallback): void {
+    const pending = this.pendingKeyboardTextFallback;
+    if (!pending) return;
+    if (expected && pending !== expected) return;
+
+    this.pendingKeyboardTextFallback = null;
+    this.options.el.ownerDocument.defaultView?.clearTimeout(pending.timerId);
+    this.applyKeyboardTextFallback(pending.text, pending.startMs, pending.nativeInputGeneration);
+  }
+
+  private applyKeyboardTextFallback(
+    text: string,
+    start: number,
+    nativeInputGeneration?: number,
+  ): void {
+    const session = this.session;
+    if (!session) return;
+    if (!this.options.canEditDocument()) return;
+    if (
+      nativeInputGeneration !== undefined &&
+      this.nativeInputGeneration !== nativeInputGeneration
+    ) {
+      return;
+    }
+
+    const selectionChange = this.selectionChangeBeforeEdit();
+    this.options.view.inputElement.value = "";
+    this.options.applySessionChange(
+      mergeChangeTimings(session.applyText(text), selectionChange),
+      "input.keydownFallback",
+      start,
+    );
   }
 
   private applyIndentToSession(): DocumentSessionChange {

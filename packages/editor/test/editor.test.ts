@@ -312,6 +312,17 @@ function dispatchEditorKey(key: string, init: KeyboardEventInit = {}): KeyboardE
   return event;
 }
 
+function dispatchInputKey(key: string, init: KeyboardEventInit = {}): KeyboardEvent {
+  const event = new KeyboardEvent("keydown", {
+    bubbles: true,
+    cancelable: true,
+    key,
+    ...init,
+  });
+  editorInput().dispatchEvent(event);
+  return event;
+}
+
 function createPasteEvent(text: string): ClipboardEvent {
   const clipboardData = {
     getData: (format: string): string => (format === "text/plain" ? text : ""),
@@ -2089,22 +2100,67 @@ describe("Editor", () => {
       expect(editor.getText()).toBe("abc!");
     });
 
+    it("lets native beforeinput cancel the focused keydown fallback", async () => {
+      const changes: DocumentSessionChange[] = [];
+      editor.dispose();
+      editor = new Editor(container, {
+        plugins: withTestLanguagePlugins(),
+        onChange: (_state, change) => {
+          if (change) changes.push(change);
+        },
+      });
+      const session = createDocumentSession("abc");
+      editor.attachSession(session);
+      editor.focus();
+
+      const keydown = dispatchInputKey("X");
+      editorInput().dispatchEvent(createInsertEvent("X"));
+      await flushTimers();
+
+      const timingNames = changes.flatMap((change) => change.timings.map(({ name }) => name));
+      expect(keydown.defaultPrevented).toBe(false);
+      expect(session.getText()).toBe("abcX");
+      expect(editor.getText()).toBe("abcX");
+      expect(timingNames).toContain("input.beforeinput");
+      expect(timingNames).not.toContain("input.keydownFallback");
+    });
+
     it("falls back to keydown text when native beforeinput never arrives", async () => {
       const session = createDocumentSession("abc");
       editor.attachSession(session);
       editor.focus();
 
-      editorInput().dispatchEvent(
-        new KeyboardEvent("keydown", {
-          bubbles: true,
-          cancelable: true,
-          key: "X",
-        }),
-      );
+      dispatchInputKey("X");
       await flushTimers();
 
       expect(session.getText()).toBe("abcX");
       expect(editor.getText()).toBe("abcX");
+    });
+
+    it("coalesces rapid focused keydown fallback text into one change", async () => {
+      const changes: DocumentSessionChange[] = [];
+      editor.dispose();
+      editor = new Editor(container, {
+        plugins: withTestLanguagePlugins(),
+        onChange: (_state, change) => {
+          if (change) changes.push(change);
+        },
+      });
+      const session = createDocumentSession("abc");
+      editor.attachSession(session);
+      editor.focus();
+
+      dispatchInputKey("X");
+      dispatchInputKey("Y");
+      dispatchInputKey("Z");
+      await flushTimers();
+
+      const fallbackChanges = changes.filter((change) =>
+        change.timings.some(({ name }) => name === "input.keydownFallback"),
+      );
+      expect(session.getText()).toBe("abcXYZ");
+      expect(editor.getText()).toBe("abcXYZ");
+      expect(fallbackChanges).toHaveLength(1);
     });
 
     it("prevents browser scroll defaults when Space uses keydown fallback", async () => {
@@ -2112,9 +2168,11 @@ describe("Editor", () => {
       editor.attachSession(session);
 
       const event = dispatchEditorKey(" ");
+      expect(event.defaultPrevented).toBe(true);
+      expect(session.getText()).toBe("abc ");
+      expect(editor.getText()).toBe("abc ");
       await flushTimers();
 
-      expect(event.defaultPrevented).toBe(true);
       expect(session.getText()).toBe("abc ");
       expect(editor.getText()).toBe("abc ");
     });
@@ -2130,12 +2188,27 @@ describe("Editor", () => {
         key: " ",
       });
       const dispatched = editorInput().dispatchEvent(event);
-      await flushTimers();
-
       expect(dispatched).toBe(false);
       expect(event.defaultPrevented).toBe(true);
       expect(session.getText()).toBe("abc ");
       expect(editor.getText()).toBe("abc ");
+      await flushTimers();
+
+      expect(session.getText()).toBe("abc ");
+      expect(editor.getText()).toBe("abc ");
+    });
+
+    it("keeps forced Space text when native text follows", async () => {
+      const session = createDocumentSession("abc");
+      editor.attachSession(session);
+
+      dispatchEditorKey(" ");
+      editorInput().dispatchEvent(createInsertEvent("X"));
+      await flushTimers();
+
+      expect(document.activeElement).toBe(editorInput());
+      expect(session.getText()).toBe("abc X");
+      expect(editor.getText()).toBe("abc X");
     });
 
     it("inserts a literal tab at collapsed selections", () => {
@@ -2181,17 +2254,36 @@ describe("Editor", () => {
       editor.attachSession(session);
       editor.focus();
 
-      editorInput().dispatchEvent(
-        new KeyboardEvent("keydown", {
-          bubbles: true,
-          cancelable: true,
-          key: "Enter",
-        }),
-      );
+      dispatchInputKey("Enter");
       await flushTimers();
 
       expect(session.getText()).toBe("abc\n");
       expect(editor.getText()).toBe("abc\n");
+    });
+
+    it("does not schedule keydown fallback while composing", async () => {
+      const session = createDocumentSession("abc");
+      editor.attachSession(session);
+      editor.focus();
+
+      dispatchInputKey("X", { isComposing: true });
+      await flushTimers();
+
+      expect(session.getText()).toBe("abc");
+      expect(editor.getText()).toBe("abc");
+    });
+
+    it("clears pending keydown fallback on dispose", async () => {
+      const session = createDocumentSession("abc");
+      editor.attachSession(session);
+      editor.focus();
+
+      dispatchInputKey("X");
+      editor.dispose();
+      await flushTimers();
+
+      expect(session.getText()).toBe("abc");
+      editor = new Editor(container, { plugins: withTestLanguagePlugins() });
     });
 
     it("measures input timing from the browser event timestamp", () => {
