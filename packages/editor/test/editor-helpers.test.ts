@@ -27,6 +27,7 @@ import {
   projectTokensThroughEdit,
   tokenProjectionLiveRangeStatus,
 } from "../src/editor/tokenProjection";
+import type { TextSnapshot } from "../src/documentTextSnapshot";
 import { createPieceTableSnapshot } from "../src/pieceTable/pieceTable";
 import type { FoldRange } from "../src/syntax";
 
@@ -76,6 +77,20 @@ describe("editor fold helpers", () => {
       endLine: 7,
     });
     expect(projection?.keyMap.get(foldRangeKey(fold))).toBe("typescript:block:12:32");
+  });
+
+  it("projects folds from snapshot ranges without materializing full text", () => {
+    const fold = foldRange({ startIndex: 9, endIndex: 18, startLine: 3, endLine: 5 });
+    const projection = projectSyntaxFoldsThroughLineEdit(
+      [fold],
+      { from: 0, to: 6, text: "x" },
+      lazyTextSnapshot("aa\nbb\ncc\ndd\nee\n"),
+    );
+
+    expect(projection?.folds[0]).toMatchObject({
+      startIndex: 4,
+      startLine: 1,
+    });
   });
 });
 
@@ -275,7 +290,45 @@ describe("token projection", () => {
     expect(tokenProjectionLiveRangeStatus(tokens, dropped)).toBe(false);
     expect(tokenProjectionLiveRangeStatus([], shifted)).toBe(false);
   });
+
+  it("uses snapshot ranges for token word-boundary checks", () => {
+    const style = { color: "red" };
+    const tokens = [{ start: 0, end: 5, style }];
+    const projected = projectTokensThroughEdit(
+      tokens,
+      { from: 5, to: 5, text: "Name" },
+      lazyTextSnapshot("alpha beta"),
+    );
+
+    expect(projected).toEqual([{ start: 0, end: 9, style }]);
+  });
+
+  it("handles snapshot-backed surrogate-pair word-boundary checks", () => {
+    const style = { color: "red" };
+    const text = "😀alpha";
+    const tokens = [{ start: 2, end: 7, style }];
+    const projected = projectTokensThroughEdit(
+      tokens,
+      { from: 2, to: 2, text: "X" },
+      lazyTextSnapshot(text),
+    );
+
+    expect(projected).toEqual([{ start: 2, end: 8, style }]);
+  });
 });
+
+function lazyTextSnapshot(text: string): TextSnapshot {
+  return {
+    length: text.length,
+    getText: () => {
+      throw new Error("unexpected full text materialization");
+    },
+    getTextInRange: (start, end) => text.slice(start, end),
+    forEachTextChunk: (visit) => {
+      if (text.length > 0) visit(text, 0, text.length);
+    },
+  };
+}
 
 describe("editor public helper types", () => {
   it("keeps public option and highlight registry contracts assignable", () => {

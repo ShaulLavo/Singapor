@@ -44,6 +44,7 @@ import {
 } from "./occurrences";
 import { lineRangeAtOffset, wordRangeAtOffset } from "./textRanges";
 import { appendTiming, eventStartMs, mergeChangeTimings, nowMs } from "./timing";
+import { measureEditorPerformance } from "./performanceDiagnostics";
 import type { EditorCommandContext, EditorCommandId } from "./commands";
 import type { EditorSelectionSyncMode, EditorSessionOptions } from "./types";
 
@@ -835,11 +836,16 @@ export class InputSelectionController {
 
     this.cancelPendingKeyboardTextFallback();
     const start = eventStartMs(event);
-    const selectionChange = this.selectionChangeBeforeEdit();
+    const selectionChange = measureEditorPerformance("input.selectionChangeBeforeEdit", () =>
+      this.selectionChangeBeforeEdit(),
+    );
     event.preventDefault();
     const inserted = event.inputType === "insertLineBreak" ? "\n" : text;
+    const textChange = measureEditorPerformance("session.applyText", () =>
+      session.applyText(inserted),
+    );
     this.options.applySessionChange(
-      mergeChangeTimings(session.applyText(inserted), selectionChange),
+      mergeChangeTimings(textChange, selectionChange),
       "input.beforeinput",
       start,
     );
@@ -959,16 +965,17 @@ export class InputSelectionController {
     const session = this.session;
     if (!session) return;
     if (!this.options.canEditDocument()) return;
-    if (
-      nativeInputGeneration !== undefined &&
-      this.nativeInputGeneration !== nativeInputGeneration
-    ) return;
+    if (nativeInputGeneration !== undefined && this.nativeInputGeneration !== nativeInputGeneration)
+      return;
 
     if (nativeInputGeneration !== undefined) this.nativeTextInputState = "missing";
-    const selectionChange = this.selectionChangeBeforeEdit();
+    const selectionChange = measureEditorPerformance("input.selectionChangeBeforeEdit", () =>
+      this.selectionChangeBeforeEdit(),
+    );
     this.options.view.inputElement.value = "";
+    const textChange = measureEditorPerformance("session.applyText", () => session.applyText(text));
     this.options.applySessionChange(
-      mergeChangeTimings(session.applyText(text), selectionChange),
+      mergeChangeTimings(textChange, selectionChange),
       "input.keydownFallback",
       start,
     );

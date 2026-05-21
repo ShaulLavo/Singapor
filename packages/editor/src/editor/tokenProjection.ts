@@ -1,4 +1,6 @@
+import type { TextSnapshot } from "../documentTextSnapshot";
 import type { EditorToken, TextEdit } from "../tokens";
+import { recordEditorPerformanceDiagnostic } from "./performanceDiagnostics";
 import {
   appendEditorTokenIndexEntry,
   copyEditorTokenIndex,
@@ -13,24 +15,27 @@ type TokenProjectionMetadata = {
 };
 
 type TokenProjectionBuilder = {
-  readonly maxEnds: number[];
-  readonly tokens: EditorToken[];
+  maxEnds: number[];
+  tokens: EditorToken[];
   maxEnd: number;
   previousStart: number;
   sortedByStart: boolean;
 };
+
+type TokenProjectionText = string | TextSnapshot;
 
 const tokenProjectionMetadata = new WeakMap<readonly EditorToken[], TokenProjectionMetadata>();
 
 export function projectTokensThroughEdit(
   tokens: readonly EditorToken[],
   edit: TextEdit,
-  previousText: string,
+  previousText: TokenProjectionText,
 ): readonly EditorToken[] {
   const delta = edit.text.length - (edit.to - edit.from);
   const indexed = projectIndexedTokensThroughEdit(tokens, edit, previousText, delta);
   if (indexed) return indexed;
 
+  recordTokenProjectionPath("scan", tokens, 0, tokens.length);
   return scanProjectTokensThroughEdit(tokens, edit, previousText, delta);
 }
 
@@ -59,7 +64,7 @@ export function copyTokenProjectionMetadata(
 function scanProjectTokensThroughEdit(
   tokens: readonly EditorToken[],
   edit: TextEdit,
-  previousText: string,
+  previousText: TokenProjectionText,
   delta: number,
 ): readonly EditorToken[] {
   const builder = createTokenProjectionBuilder();
@@ -81,7 +86,7 @@ function scanProjectTokensThroughEdit(
 function projectIndexedTokensThroughEdit(
   tokens: readonly EditorToken[],
   edit: TextEdit,
-  previousText: string,
+  previousText: TokenProjectionText,
   delta: number,
 ): readonly EditorToken[] | null {
   const index = getEditorTokenIndex(tokens);
@@ -91,21 +96,22 @@ function projectIndexedTokensThroughEdit(
   const suffixStart = shiftedSuffixStart(tokens, edit);
   if (prefixEnd > suffixStart) return null;
 
-  return projectSortedTokenRanges(tokens, edit, previousText, delta, prefixEnd, suffixStart);
+  recordTokenProjectionPath("indexed", tokens, prefixEnd, suffixStart);
+  return projectSortedTokenRanges(tokens, edit, previousText, delta, prefixEnd, suffixStart, index);
 }
 
 function projectSortedTokenRanges(
   tokens: readonly EditorToken[],
   edit: TextEdit,
-  previousText: string,
+  previousText: TokenProjectionText,
   delta: number,
   prefixEnd: number,
   suffixStart: number,
+  index: EditorTokenIndex,
 ): readonly EditorToken[] {
-  const builder = createTokenProjectionBuilder();
+  const builder = createTokenProjectionBuilder(tokens, prefixEnd, index);
   let keepsLiveRanges = true;
 
-  appendUnchangedTokens(builder, tokens, 0, prefixEnd);
   keepsLiveRanges = appendProjectedTokens(
     builder,
     tokens,
@@ -135,7 +141,7 @@ function appendProjectedTokens(
   builder: TokenProjectionBuilder,
   tokens: readonly EditorToken[],
   edit: TextEdit,
-  previousText: string,
+  previousText: TokenProjectionText,
   delta: number,
   start: number,
   end: number,
@@ -185,13 +191,37 @@ function finishTokenProjection(
   return projectedTokens;
 }
 
-function createTokenProjectionBuilder(): TokenProjectionBuilder {
+function createTokenProjectionBuilder(
+  tokens: readonly EditorToken[] = [],
+  prefixEnd = 0,
+  index?: EditorTokenIndex,
+): TokenProjectionBuilder {
+  if (prefixEnd > 0 && index) return createPrefixedTokenProjectionBuilder(tokens, prefixEnd, index);
+
   return {
     maxEnd: 0,
     maxEnds: [],
     previousStart: -Infinity,
     sortedByStart: true,
     tokens: [],
+  };
+}
+
+function createPrefixedTokenProjectionBuilder(
+  tokens: readonly EditorToken[],
+  prefixEnd: number,
+  index: EditorTokenIndex,
+): TokenProjectionBuilder {
+  const prefixTokens = tokens.slice(0, prefixEnd);
+  const prefixMaxEnds = index.maxEnds.slice(0, prefixEnd) as number[];
+  const maxEnd = prefixMaxEnds[prefixMaxEnds.length - 1] ?? 0;
+
+  return {
+    maxEnd,
+    maxEnds: prefixMaxEnds,
+    previousStart: prefixTokens[prefixEnd - 1]?.start ?? -Infinity,
+    sortedByStart: true,
+    tokens: prefixTokens,
   };
 }
 
@@ -277,7 +307,7 @@ function firstTokenStartingAfter(tokens: readonly EditorToken[], offset: number)
 function projectTokenThroughEdit(
   token: EditorToken,
   edit: TextEdit,
-  previousText: string,
+  previousText: TokenProjectionText,
   delta: number,
 ): EditorToken | null {
   if (edit.from === edit.to) return projectTokenThroughInsertion(token, edit, previousText);
@@ -291,7 +321,7 @@ function projectTokenThroughEdit(
 function projectTokenThroughInsertion(
   token: EditorToken,
   edit: TextEdit,
-  previousText: string,
+  previousText: TokenProjectionText,
 ): EditorToken {
   if (shouldExpandTokenForInsertion(token, edit, previousText)) {
     return { ...token, end: token.end + edit.text.length };
@@ -309,7 +339,7 @@ function canResizeTokenAcrossEdit(token: EditorToken, edit: TextEdit): boolean {
 function shouldExpandTokenForInsertion(
   token: EditorToken,
   edit: TextEdit,
-  previousText: string,
+  previousText: TokenProjectionText,
 ): boolean {
   if (edit.text.length === 0) return false;
   if (edit.text.includes("\n")) return false;
@@ -342,28 +372,73 @@ function isWordLikeText(text: string): boolean {
   return /^[\p{L}\p{N}_]+$/u.test(text);
 }
 
-function isWordBeforeOffset(text: string, offset: number): boolean {
-  const previous = previousCodePointStart(text, offset);
+function isWordBeforeOffset(text: TokenProjectionText, offset: number): boolean {
+  const previous = previousCodePointBeforeOffset(text, offset);
   if (previous === null) return false;
-  return isWordCodePointAt(text, previous);
+  return isWordText(previous);
 }
 
-function isWordCodePointAt(text: string, offset: number): boolean {
-  const codePoint = text.codePointAt(offset);
+function isWordCodePointAt(text: TokenProjectionText, offset: number): boolean {
+  const codePointText = codePointAtOffset(text, offset);
+  if (codePointText === null) return false;
+  return isWordText(codePointText);
+}
+
+function isWordText(text: string): boolean {
+  const codePoint = text.codePointAt(0);
   if (codePoint === undefined) return false;
   return /^[\p{L}\p{N}_]$/u.test(String.fromCodePoint(codePoint));
 }
 
-function previousCodePointStart(text: string, offset: number): number | null {
+function previousCodePointBeforeOffset(text: TokenProjectionText, offset: number): string | null {
   if (offset <= 0) return null;
 
-  const previous = offset - 1;
-  const codeUnit = text.charCodeAt(previous);
+  const previousText = getProjectionTextInRange(text, Math.max(0, offset - 2), offset);
+  if (previousText.length === 0) return null;
+
+  const previous = previousText.length - 1;
+  const codeUnit = previousText.charCodeAt(previous);
   const beforePrevious = previous - 1;
   const isLowSurrogate = codeUnit >= 0xdc00 && codeUnit <= 0xdfff;
-  if (!isLowSurrogate || beforePrevious < 0) return previous;
+  if (!isLowSurrogate || beforePrevious < 0) return previousText[previous] ?? null;
 
-  const previousCodeUnit = text.charCodeAt(beforePrevious);
+  const previousCodeUnit = previousText.charCodeAt(beforePrevious);
   const isHighSurrogate = previousCodeUnit >= 0xd800 && previousCodeUnit <= 0xdbff;
-  return isHighSurrogate ? beforePrevious : previous;
+  if (!isHighSurrogate) return previousText[previous] ?? null;
+
+  return previousText.slice(beforePrevious);
+}
+
+function codePointAtOffset(text: TokenProjectionText, offset: number): string | null {
+  const length = projectionTextLength(text);
+  if (offset < 0 || offset >= length) return null;
+
+  const codePointText = getProjectionTextInRange(text, offset, Math.min(offset + 2, length));
+  const codePoint = codePointText.codePointAt(0);
+  if (codePoint === undefined) return null;
+  return String.fromCodePoint(codePoint);
+}
+
+function projectionTextLength(text: TokenProjectionText): number {
+  return typeof text === "string" ? text.length : text.length;
+}
+
+function getProjectionTextInRange(text: TokenProjectionText, start: number, end: number): string {
+  if (typeof text === "string") return text.slice(start, end);
+  return text.getTextInRange(start, end);
+}
+
+function recordTokenProjectionPath(
+  path: "indexed" | "scan",
+  tokens: readonly EditorToken[],
+  prefixEnd: number,
+  suffixStart: number,
+): void {
+  recordEditorPerformanceDiagnostic("editor.tokenProjection.path", () => ({
+    affectedCount: Math.max(0, suffixStart - prefixEnd),
+    path,
+    prefixCount: prefixEnd,
+    suffixCount: Math.max(0, tokens.length - suffixStart),
+    tokenCount: tokens.length,
+  }));
 }

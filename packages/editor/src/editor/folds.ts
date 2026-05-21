@@ -1,3 +1,4 @@
+import type { TextSnapshot } from "../documentTextSnapshot";
 import type { FoldRange } from "../syntax/session";
 import type { TextEdit } from "../tokens";
 import type { VirtualizedFoldMarker } from "../virtualization/virtualizedTextView";
@@ -43,7 +44,7 @@ export function foldRangesEqual(left: readonly FoldRange[], right: readonly Fold
 export function projectSyntaxFoldsThroughLineEdit(
   folds: readonly FoldRange[],
   edit: TextEdit,
-  previousText: string,
+  previousText: string | TextSnapshot,
 ): SyntaxFoldProjection | null {
   const lineDelta = editLineDelta(edit, previousText);
   if (lineDelta === 0) return null;
@@ -117,9 +118,14 @@ function resizeFoldRangeEnd(fold: FoldRange, offsetDelta: number, lineDelta: num
   };
 }
 
-function editLineDelta(edit: TextEdit, previousText: string): number {
-  const deletedText = previousText.slice(edit.from, edit.to);
+function editLineDelta(edit: TextEdit, previousText: string | TextSnapshot): number {
+  const deletedText = textInRange(previousText, edit.from, edit.to);
   return countLineBreaks(edit.text) - countLineBreaks(deletedText);
+}
+
+function textInRange(text: string | TextSnapshot, start: number, end: number): string {
+  if (typeof text === "string") return text.slice(start, end);
+  return text.getTextInRange(start, end);
 }
 
 function countLineBreaks(text: string): number {

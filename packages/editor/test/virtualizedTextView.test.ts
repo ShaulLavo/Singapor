@@ -1364,6 +1364,34 @@ describe("VirtualizedTextView", () => {
     }
   });
 
+  it("adopts projected tokens without rescanning styles when live ranges survive", () => {
+    view.setText("world");
+    view.setScrollMetrics(0, 20);
+    const tokens = [{ start: 0, end: 5, style: { color: "#ff0000" } }];
+    view.adoptTokens(tokens);
+    const stringify = vi.spyOn(JSON, "stringify");
+
+    try {
+      view.applyEdit({ from: 2, to: 2, text: "X" }, "woXrld");
+      const projected = projectTokensThroughEdit(tokens, { from: 2, to: 2, text: "X" }, "world");
+      Object.defineProperty(projected[0]!, "style", {
+        configurable: true,
+        get: () => {
+          throw new Error("unexpected token style scan");
+        },
+      });
+
+      view.adoptTokens(projected);
+
+      const tokenStyleCalls = stringify.mock.calls.filter(([value]) =>
+        isTokenStyleSerializationInput(value),
+      );
+      expect(tokenStyleCalls).toHaveLength(0);
+    } finally {
+      stringify.mockRestore();
+    }
+  });
+
   it("rebuilds token highlights below same-line edits even when local segments match", () => {
     view.setText("aa\nbb");
     view.setScrollMetrics(0, 40);

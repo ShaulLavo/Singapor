@@ -13,7 +13,6 @@ import type { EditorToken, TextEdit } from "../tokens";
 import { applyEditorTheme } from "../theme";
 import { measureBrowserTextMetrics, type BrowserTextMetrics } from "./browserMetrics";
 import { FixedRowVirtualizer, type FixedRowVirtualizerSnapshot } from "./fixedRowVirtualizer";
-import { createLineStartOffsetIndex } from "./lineStartIndex";
 import {
   DEFAULT_OVERSCAN,
   DEFAULT_SELECTION_HIGHLIGHT,
@@ -231,7 +230,7 @@ export class VirtualizedTextView {
       tokenRenderStyles: new Map(),
       tokenRenderIndexDirty: true,
       lineStarts: [0],
-      lineStartOffsetIndex: createLineStartOffsetIndex(1),
+      lineStartOffsetIndex: null,
       displayRows: [],
       foldMap: null,
       foldMarkers: [],
@@ -778,11 +777,7 @@ function documentTextRowByDisplayDelta(
   return current;
 }
 
-function nextDocumentTextRow(
-  view: VirtualizedTextViewInternal,
-  row: number,
-  step: 1 | -1,
-): number {
+function nextDocumentTextRow(view: VirtualizedTextViewInternal, row: number, step: 1 | -1): number {
   const end = step > 0 ? visibleLineCount(view) - 1 : 0;
   let current = row;
   while (current !== end) {

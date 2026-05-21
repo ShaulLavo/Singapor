@@ -12,7 +12,7 @@ import {
 import type { TextSnapshot } from "../documentTextSnapshot";
 import type { TextEdit } from "../tokens";
 import { clamp } from "../style-utils";
-import { createLineStartOffsetIndex, type LineStartOffsetIndex } from "./lineStartIndex";
+import { createLineStartOffsetIndex } from "./lineStartIndex";
 import {
   createRowHeightIndex,
   rowHeightIndexRowAtOffset,
@@ -50,7 +50,7 @@ export function setTextLayoutState(
   view.textLength = text.length;
   view.textRevision += 1;
   view.lineStarts = computeLineStarts(text);
-  view.lineStartOffsetIndex = createLineStartOffsetIndex(view.lineStarts.length);
+  view.lineStartOffsetIndex = null;
   view.foldMap = foldMapMatchesText(view.foldMap, view.textLength) ? view.foldMap : null;
   return { lineCountChanged: previousLineCount !== view.lineStarts.length };
 }
@@ -249,8 +249,8 @@ export function lineEndOffset(view: VirtualizedTextViewInternal, row: number): n
 
 export function bufferLineStartOffset(view: VirtualizedTextViewInternal, row: number): number {
   if (row < 0 || row >= view.lineStarts.length) return view.textLength;
-  const offsetIndex = lineStartOffsetIndex(view);
-  return (view.lineStarts[row] ?? 0) + offsetIndex.offsetAt(row);
+  const offset = view.lineStartOffsetIndex?.offsetAt(row) ?? 0;
+  return (view.lineStarts[row] ?? 0) + offset;
 }
 
 export function lineText(view: VirtualizedTextViewInternal, row: number): string {
@@ -271,19 +271,12 @@ function bufferLineEndOffset(view: VirtualizedTextViewInternal, row: number): nu
 }
 
 export function materializeLineStarts(view: VirtualizedTextViewInternal): readonly number[] {
-  const offsetIndex = lineStartOffsetIndex(view);
-  if (!offsetIndex.dirty) return view.lineStarts;
+  const offsetIndex = view.lineStartOffsetIndex;
+  if (!offsetIndex?.dirty) return view.lineStarts;
 
   view.lineStarts = offsetIndex.materialize(view.lineStarts);
-  view.lineStartOffsetIndex = createLineStartOffsetIndex(view.lineStarts.length);
+  view.lineStartOffsetIndex = null;
   return view.lineStarts;
-}
-
-function lineStartOffsetIndex(view: VirtualizedTextViewInternal): LineStartOffsetIndex {
-  if (view.lineStartOffsetIndex) return view.lineStartOffsetIndex;
-
-  view.lineStartOffsetIndex = createLineStartOffsetIndex(view.lineStarts.length);
-  return view.lineStartOffsetIndex;
 }
 
 function shiftLineStartsAfterRow(
@@ -291,7 +284,12 @@ function shiftLineStartsAfterRow(
   rowIndex: number,
   delta: number,
 ): void {
-  lineStartOffsetIndex(view).addSuffix(rowIndex + 1, delta);
+  if (delta === 0) return;
+
+  const offsetIndex =
+    view.lineStartOffsetIndex ?? createLineStartOffsetIndex(view.lineStarts.length);
+  offsetIndex.addSuffix(rowIndex + 1, delta);
+  view.lineStartOffsetIndex = offsetIndex.dirty ? offsetIndex : null;
 }
 
 function updateDisplayRowsAfterSameLineEdit(

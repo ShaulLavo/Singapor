@@ -107,7 +107,7 @@ export interface VirtualizedTextViewInternal {
   tokenRenderStyles: ReadonlyMap<string, EditorTokenStyle>;
   tokenRenderIndexDirty: boolean;
   lineStarts: number[];
-  lineStartOffsetIndex: LineStartOffsetIndex;
+  lineStartOffsetIndex: LineStartOffsetIndex | null;
   displayRows: DisplayRow[];
   foldMap: FoldMap | null;
   foldMarkers: readonly VirtualizedFoldMarker[];

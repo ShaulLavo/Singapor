@@ -103,7 +103,6 @@ class EditorMergeConflictController {
     this.oursHighlightName = `${highlightPrefix}-merge-conflict-ours`;
     this.baseHighlightName = `${highlightPrefix}-merge-conflict-base`;
     this.theirsHighlightName = `${highlightPrefix}-merge-conflict-theirs`;
-    this.refresh();
   }
 
   public dispose(): void {
@@ -119,17 +118,35 @@ class EditorMergeConflictController {
   }
 
   public handleEditorChange(change: DocumentSessionChange | null): void {
-    if (change?.kind === "selection" || change?.kind === "none") return;
+    if (!change) return;
+    if (change.kind === "selection" || change.kind === "none") return;
     if (this.canSkipRefreshForChange(change)) return;
 
     this.refresh();
   }
 
   public getConflicts(): readonly MergeConflictRegion[] {
+    this.refresh();
     return this.conflicts;
   }
 
+  public peekConflicts(): readonly MergeConflictRegion[] {
+    return this.conflicts;
+  }
+
+  public activateFromSnapshot(
+    snapshot: EditorViewSnapshot,
+    kind: EditorViewContributionUpdateKind,
+  ): void {
+    if (kind === "document" || kind === "clear") this.setConflicts([]);
+    if (this.conflicts.length > 0) return;
+    if (!snapshotMayContainMergeConflict(snapshot)) return;
+
+    this.refresh();
+  }
+
   public resolveConflict(index: number, resolution: MergeConflictResolution): boolean {
+    this.refresh();
     const text = this.host.getText();
     const conflict = this.conflicts[index];
     if (!conflict) return false;
@@ -149,6 +166,7 @@ class EditorMergeConflictController {
   }
 
   public revealConflict(index: number): boolean {
+    this.refresh();
     const conflict = this.conflicts[index];
     if (!conflict) return false;
 
@@ -254,14 +272,16 @@ class MergeConflictActionsContribution implements EditorViewContribution {
     this.root.className = "editor-merge-conflict-actions-layer";
     context.scrollElement.appendChild(this.root);
     this.subscription = controller.subscribe(() => this.render(context.getSnapshot()));
+    this.controller.activateFromSnapshot(this.latestSnapshot, "document");
     this.render(this.latestSnapshot);
   }
 
   public update(
     snapshot: EditorViewSnapshot,
-    _kind: EditorViewContributionUpdateKind,
+    kind: EditorViewContributionUpdateKind,
     _change?: DocumentSessionChange | null,
   ): void {
+    this.controller.activateFromSnapshot(snapshot, kind);
     this.latestSnapshot = snapshot;
     this.render(snapshot);
   }
@@ -284,7 +304,7 @@ class MergeConflictActionsContribution implements EditorViewContribution {
 
     const first = rows[0]!;
     const last = rows[rows.length - 1]!;
-    return this.controller.getConflicts().filter((conflict) => {
+    return this.controller.peekConflicts().filter((conflict) => {
       if (conflict.range.end < first.startOffset) return false;
       return conflict.range.start <= last.endOffset + 1;
     });
@@ -428,6 +448,17 @@ function conflictSignature(conflicts: readonly MergeConflictRegion[]): string {
 function isMergeConflictNeutralInsertion(edit: TextEdit): boolean {
   if (edit.from !== edit.to) return false;
   return !MERGE_CONFLICT_MARKER_CHAR_PATTERN.test(edit.text);
+}
+
+function snapshotMayContainMergeConflict(snapshot: EditorViewSnapshot): boolean {
+  return snapshot.visibleRows.some((row) => lineStartsWithMergeConflictMarker(row.text));
+}
+
+function lineStartsWithMergeConflictMarker(text: string): boolean {
+  if (text.startsWith("<<<<<<<")) return true;
+  if (text.startsWith("|||||||")) return true;
+  if (text.startsWith("=======")) return true;
+  return text.startsWith(">>>>>>>");
 }
 
 function shortConflictSideLabel(label: string, fallback: string): string {

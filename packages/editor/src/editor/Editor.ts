@@ -11,6 +11,7 @@ import { InputSelectionController } from "./inputSelectionController";
 import { EditorSyntaxController } from "./syntaxController";
 import { appendTiming, nowMs } from "./timing";
 import { copyTokenProjectionMetadata, projectTokensThroughEdit } from "./tokenProjection";
+import { measureEditorPerformance } from "./performanceDiagnostics";
 import type { EditorCommandContext, EditorCommandId } from "./commands";
 import { normalizeEditorEditInput } from "./editInput";
 import { EditorCommandRouter } from "./commandRouter";
@@ -322,16 +323,28 @@ export class Editor {
   setTokens(tokens: readonly EditorToken[]): void {
     const copiedTokens = [...tokens];
     copyTokenProjectionMetadata(tokens, copiedTokens);
-    this.syntax.setTokens(copiedTokens);
+    this.adoptTokens(copiedTokens);
   }
 
   applyEdit(edit: TextEdit, tokens: readonly EditorToken[], textSnapshot?: TextSnapshot): void {
     const nextTextSnapshot = textSnapshot ?? this.legacyEditTextSnapshot(edit);
     this.document.setRenderedTextSnapshot(nextTextSnapshot);
-    this.view.applyEdit(edit, nextTextSnapshot);
+    measureEditorPerformance("editor.view.applyEdit", () =>
+      this.view.applyEdit(edit, nextTextSnapshot),
+    );
     this.syncEditorBlocks();
     this.syncInjectedTextRows();
-    this.setTokens(tokens);
+    measureEditorPerformance(
+      "editor.tokens.adoptProjected",
+      () => this.adoptTokens(tokens),
+      () => ({
+        tokenCount: tokens.length,
+      }),
+    );
+  }
+
+  private adoptTokens(tokens: readonly EditorToken[]): void {
+    this.syntax.setTokens(tokens);
   }
 
   setDocument(document: EditorDocument): void {
@@ -1118,7 +1131,7 @@ export class Editor {
   ): void {
     let timedChange = change;
     const renderStart = nowMs();
-    this.renderSessionChange(change);
+    measureEditorPerformance("editor.renderSessionChange", () => this.renderSessionChange(change));
     timedChange = appendTiming(timedChange, "editor.render", renderStart);
 
     if (options.revealOffset !== undefined) {
@@ -1134,10 +1147,18 @@ export class Editor {
     }
     const finalChange = appendTiming(timedChange, totalName, totalStart);
     this.sessionOptions.onChange?.(finalChange);
-    this.refreshSyntax(this.documentVersion, finalChange);
-    this.notifyEditorFeatureContributions(finalChange);
-    this.notifyViewContributions(viewContributionKindForChange(finalChange), finalChange);
-    this.notifyChangeWithTiming(finalChange);
+    measureEditorPerformance("editor.refreshSyntax", () =>
+      this.refreshSyntax(this.documentVersion, finalChange),
+    );
+    measureEditorPerformance("editor.notifyEditorFeatureContributions", () =>
+      this.notifyEditorFeatureContributions(finalChange),
+    );
+    measureEditorPerformance("editor.notifyViewContributions", () =>
+      this.notifyViewContributions(viewContributionKindForChange(finalChange), finalChange),
+    );
+    measureEditorPerformance("editor.notifyChangeWithTiming", () =>
+      this.notifyChangeWithTiming(finalChange),
+    );
   }
 
   private renderSessionChange(change: DocumentSessionChange): void {
@@ -1145,17 +1166,18 @@ export class Editor {
     if (change.kind === "selection" || change.kind === "none") return;
 
     if (edit && change.edits.length === 1) {
-      const previousText = this.text;
-      const foldProjection = projectSyntaxFoldsThroughLineEdit(
-        this.foldState.folds,
-        edit,
-        previousText,
+      const previousTextSnapshot = this.textSnapshot;
+      const foldProjection = measureEditorPerformance(
+        "editor.projectSyntaxFolds",
+        () => projectSyntaxFoldsThroughLineEdit(this.foldState.folds, edit, previousTextSnapshot),
+        () => ({ foldCount: this.foldState.folds.length }),
       );
-      this.applyEdit(
-        edit,
-        projectTokensThroughEdit(this.tokens, edit, previousText),
-        documentSessionChangeTextSnapshot(change),
+      const projectedTokens = measureEditorPerformance(
+        "editor.projectTokens",
+        () => projectTokensThroughEdit(this.tokens, edit, previousTextSnapshot),
+        () => ({ tokenCount: this.tokens.length }),
       );
+      this.applyEdit(edit, projectedTokens, documentSessionChangeTextSnapshot(change));
       this.foldState.applyProjection(foldProjection);
       return;
     }

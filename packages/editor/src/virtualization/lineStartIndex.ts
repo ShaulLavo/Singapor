@@ -1,10 +1,9 @@
 export class LineStartOffsetIndex {
-  private readonly tree: number[];
+  private readonly suffixDeltas = new Map<number, number>();
+  private sortedSuffixDeltas: readonly (readonly [number, number])[] | null = null;
   private dirtyValue = false;
 
-  public constructor(public readonly length: number) {
-    this.tree = Array.from({ length: length + 1 }, () => 0);
-  }
+  public constructor(public readonly length: number) {}
 
   public get dirty(): boolean {
     return this.dirtyValue;
@@ -15,8 +14,14 @@ export class LineStartOffsetIndex {
     const row = normalizeRow(startRow);
     if (row >= this.length) return;
 
-    this.add(row + 1, delta);
-    this.dirtyValue = true;
+    const nextDelta = (this.suffixDeltas.get(row) ?? 0) + delta;
+    if (nextDelta === 0) {
+      this.suffixDeltas.delete(row);
+    } else {
+      this.suffixDeltas.set(row, nextDelta);
+    }
+    this.sortedSuffixDeltas = null;
+    this.dirtyValue = this.suffixDeltas.size > 0;
   }
 
   public offsetAt(row: number): number {
@@ -24,8 +29,9 @@ export class LineStartOffsetIndex {
     if (index >= this.length) return 0;
 
     let sum = 0;
-    for (let treeIndex = index + 1; treeIndex > 0; treeIndex -= treeIndex & -treeIndex) {
-      sum += this.tree[treeIndex] ?? 0;
+    for (const [startRow, delta] of this.sortedDeltas()) {
+      if (startRow > index) break;
+      sum += delta;
     }
     return sum;
   }
@@ -33,13 +39,28 @@ export class LineStartOffsetIndex {
   public materialize(lineStarts: readonly number[]): number[] {
     if (!this.dirtyValue) return [...lineStarts];
 
-    return lineStarts.map((start, row) => start + this.offsetAt(row));
+    const materialized: number[] = [];
+    materialized.length = lineStarts.length;
+    const deltas = this.sortedDeltas();
+    let deltaIndex = 0;
+    let offset = 0;
+
+    for (let row = 0; row < lineStarts.length; row += 1) {
+      while (deltaIndex < deltas.length && deltas[deltaIndex]![0] <= row) {
+        offset += deltas[deltaIndex]![1];
+        deltaIndex += 1;
+      }
+      materialized[row] = (lineStarts[row] ?? 0) + offset;
+    }
+
+    return materialized;
   }
 
-  private add(index: number, delta: number): void {
-    for (let treeIndex = index; treeIndex < this.tree.length; treeIndex += treeIndex & -treeIndex) {
-      this.tree[treeIndex] = (this.tree[treeIndex] ?? 0) + delta;
-    }
+  private sortedDeltas(): readonly (readonly [number, number])[] {
+    this.sortedSuffixDeltas ??= [...this.suffixDeltas.entries()].sort(
+      ([left], [right]) => left - right,
+    );
+    return this.sortedSuffixDeltas;
   }
 }
 

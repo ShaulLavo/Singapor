@@ -8,6 +8,7 @@ import {
   applySameLineTextLayout,
   bufferLineStartOffset,
   hasVariableRows,
+  materializeLineStarts,
   rowHeight,
   rowForOffset,
   rowForViewportY,
@@ -199,11 +200,7 @@ describe("virtualized text view layout", () => {
     const view = layoutView({
       text: "a\nb\nc",
       lineStarts: [0, 2, 4],
-      displayRows: [
-        textRow(0, 0, 0, 1, "a"),
-        textRow(1, 1, 2, 3, "b"),
-        textRow(2, 2, 4, 5, "c"),
-      ],
+      displayRows: [textRow(0, 0, 0, 1, "a"), textRow(1, 1, 2, 3, "b"), textRow(2, 2, 4, 5, "c")],
       foldMap: null,
       blockRows: [],
       wrapEnabled: false,
@@ -225,6 +222,45 @@ describe("virtualized text view layout", () => {
     expect(bufferLineStartOffset(view, 2)).toBe(6);
     expect(rowForOffset(view, 6)).toBe(2);
   });
+
+  it("creates and clears line-start suffix shifts lazily", () => {
+    const view = layoutView({
+      text: "a\nb\nc",
+      lineStarts: [0, 2, 4],
+      displayRows: [textRow(0, 0, 0, 1, "a"), textRow(1, 1, 2, 3, "b"), textRow(2, 2, 4, 5, "c")],
+      foldMap: null,
+      blockRows: [],
+      wrapEnabled: false,
+    });
+
+    expect(view.lineStartOffsetIndex).toBeNull();
+
+    applySameLineTextLayout(
+      view,
+      { rowIndex: 0, localFrom: 1, deleteLength: 0, text: "X" },
+      createStringTextSnapshot("aX\nb\nc"),
+    );
+
+    expect(view.lineStartOffsetIndex?.dirty).toBe(true);
+    expect(materializeLineStarts(view)).toEqual([0, 3, 5]);
+    expect(view.lineStartOffsetIndex).toBeNull();
+  });
+});
+
+describe("line start offset index", () => {
+  it("tracks suffix shifts and materializes them in row order", () => {
+    const index = createLineStartOffsetIndex(4);
+
+    index.addSuffix(1, 2);
+    index.addSuffix(3, -1);
+    index.addSuffix(1, 3);
+
+    expect(index.dirty).toBe(true);
+    expect(index.offsetAt(0)).toBe(0);
+    expect(index.offsetAt(1)).toBe(5);
+    expect(index.offsetAt(3)).toBe(4);
+    expect(index.materialize([0, 2, 4, 6])).toEqual([0, 7, 9, 10]);
+  });
 });
 
 type LayoutFields = Pick<
@@ -237,7 +273,8 @@ function layoutView(fields: LayoutFields): VirtualizedTextViewInternal {
     ...fields,
     scrollElement: { scrollTop: 0 } as HTMLDivElement,
     textLength: fields.text.length,
-    lineStartOffsetIndex: createLineStartOffsetIndex(fields.lineStarts.length),
+    lineStartOffsetIndex: null,
+    injectedTextRows: [],
     virtualizer: throwingVirtualizer(),
     metrics: { rowHeight: 20, characterWidth: 8 },
     rowGap: 0,

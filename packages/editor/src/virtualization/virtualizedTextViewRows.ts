@@ -1373,7 +1373,9 @@ function rowDecorationForVirtualRow(
   return view.rowDecorations.get(bufferRowForVirtualRow(view, virtualRow));
 }
 
-function injectedRowDecoration(row: DisplayInjectedTextRow): VirtualizedTextRowDecoration | undefined {
+function injectedRowDecoration(
+  row: DisplayInjectedTextRow,
+): VirtualizedTextRowDecoration | undefined {
   if (!row.className && !row.gutterClassName) return undefined;
 
   return {

@@ -291,9 +291,7 @@ function reconcileTokenHighlightsAfterSameLineEdit(view: VirtualizedTextViewInte
   if (styleRulesDirty) rebuildStyleRules(view);
 }
 
-function takeSameLineTokenEditRebuildStartRow(
-  view: VirtualizedTextViewInternal,
-): number | null {
+function takeSameLineTokenEditRebuildStartRow(view: VirtualizedTextViewInternal): number | null {
   const edit = view.sameLineTokenEdit;
   view.sameLineTokenEdit = null;
   if (!edit) return null;
