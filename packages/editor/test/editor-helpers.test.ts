@@ -27,9 +27,16 @@ import {
   projectTokensThroughEdit,
   tokenProjectionLiveRangeStatus,
 } from "../src/editor/tokenProjection";
+import {
+  appendEditorTokenIndexEntry,
+  createEditorTokenIndexBuilder,
+  finishEditorTokenIndex,
+  getEditorTokenIndex,
+} from "../src/editor/tokenIndex";
 import type { TextSnapshot } from "../src/documentTextSnapshot";
 import { createPieceTableSnapshot } from "../src/pieceTable/pieceTable";
 import type { FoldRange } from "../src/syntax";
+import type { EditorToken } from "../src/tokens";
 
 describe("editor DOM boundary helpers", () => {
   it("maps element boundaries and child nodes to text positions", () => {
@@ -278,10 +285,10 @@ describe("token projection", () => {
 
   it("records whether projected tokens can keep live ranges", () => {
     const style = { color: "red" };
-    const tokens = [
+    const tokens = indexedTokens([
       { start: 0, end: 5, style },
       { start: 6, end: 10, style },
-    ];
+    ]);
 
     const shifted = projectTokensThroughEdit(tokens, { from: 5, to: 5, text: "X" }, "alpha beta");
     const dropped = projectTokensThroughEdit(tokens, { from: 7, to: 9, text: "\n" }, "alpha beta");
@@ -289,6 +296,107 @@ describe("token projection", () => {
     expect(tokenProjectionLiveRangeStatus(tokens, shifted)).toBe(true);
     expect(tokenProjectionLiveRangeStatus(tokens, dropped)).toBe(false);
     expect(tokenProjectionLiveRangeStatus([], shifted)).toBe(false);
+  });
+
+  it("bulk-projects monotonic indexed token insertions, deletions, and replacements", () => {
+    const style = { color: "red" };
+    const base = [
+      { start: 0, end: 5, style },
+      { start: 6, end: 10, style },
+      { start: 11, end: 16, style },
+    ];
+
+    const inserted = projectTokensThroughEdit(
+      indexedTokens(base),
+      { from: 5, to: 5, text: "Name" },
+      "alpha beta gamma",
+    );
+    expect(inserted).toEqual([
+      { start: 0, end: 9, style },
+      { start: 10, end: 14, style },
+      { start: 15, end: 20, style },
+    ]);
+    expect(getEditorTokenIndex(inserted)).toMatchObject({
+      maxEnds: [9, 14, 20],
+      monotonicEnd: true,
+      nonOverlapping: true,
+      sortedByStart: true,
+    });
+
+    const deleted = projectTokensThroughEdit(
+      indexedTokens(base),
+      { from: 7, to: 9, text: "" },
+      "alpha beta gamma",
+    );
+    expect(deleted).toEqual([
+      { start: 0, end: 5, style },
+      { start: 6, end: 8, style },
+      { start: 9, end: 14, style },
+    ]);
+    expect(getEditorTokenIndex(deleted)?.maxEnds).toEqual([5, 8, 14]);
+
+    const replaced = projectTokensThroughEdit(
+      indexedTokens(base),
+      { from: 7, to: 9, text: "ZZ" },
+      "alpha beta gamma",
+    );
+    expect(replaced).toEqual(base);
+    expect(getEditorTokenIndex(replaced)?.maxEnds).toEqual([5, 10, 16]);
+  });
+
+  it("uses the indexed bulk path for large unchanged suffixes", () => {
+    const style = { color: "red" };
+    const text = "a ".repeat(1_000);
+    const tokens = indexedTokens(
+      Array.from({ length: 1_000 }, (_, index) => ({
+        start: index * 2,
+        end: index * 2 + 1,
+        style,
+      })),
+    );
+
+    const diagnostics = collectPerformanceDiagnostics(() => {
+      const projected = projectTokensThroughEdit(tokens, { from: 1, to: 1, text: "X" }, text);
+      expect(projected).toHaveLength(1_000);
+    });
+
+    expect(diagnostics.find(tokenProjectionPath)?.detail).toMatchObject({
+      path: "indexed.bulk",
+      suffixCount: 999,
+      tokenCount: 1_000,
+    });
+  });
+
+  it("falls back for overlapping indexed tokens and preserves exact maxEnds", () => {
+    const style = { color: "red" };
+    const tokens = indexedTokens([
+      { start: 0, end: 10, style },
+      { start: 2, end: 5, style },
+      { start: 11, end: 15, style },
+    ]);
+
+    const diagnostics = collectPerformanceDiagnostics(() => {
+      const projected = projectTokensThroughEdit(
+        tokens,
+        { from: 10, to: 10, text: "." },
+        "abcdefghij klmn",
+      );
+      expect(projected).toEqual([
+        { start: 0, end: 10, style },
+        { start: 2, end: 5, style },
+        { start: 12, end: 16, style },
+      ]);
+      expect(getEditorTokenIndex(projected)).toMatchObject({
+        maxEnds: [10, 10, 16],
+        monotonicEnd: false,
+        nonOverlapping: false,
+        sortedByStart: true,
+      });
+    });
+
+    expect(diagnostics.find(tokenProjectionPath)?.detail).toMatchObject({
+      path: "indexed.fallback",
+    });
   });
 
   it("uses snapshot ranges for token word-boundary checks", () => {
@@ -301,6 +409,19 @@ describe("token projection", () => {
     );
 
     expect(projected).toEqual([{ start: 0, end: 9, style }]);
+  });
+
+  it("reads only tiny snapshot ranges for token word-boundary checks", () => {
+    const style = { color: "red" };
+    const reads: Array<readonly [number, number]> = [];
+    const projected = projectTokensThroughEdit(
+      indexedTokens([{ start: 0, end: 5, style }]),
+      { from: 5, to: 5, text: "Name" },
+      recordingTextSnapshot("alpha beta", reads),
+    );
+
+    expect(projected).toEqual([{ start: 0, end: 9, style }]);
+    expect(reads.every(([start, end]) => end - start <= 2)).toBe(true);
   });
 
   it("handles snapshot-backed surrogate-pair word-boundary checks", () => {
@@ -328,6 +449,61 @@ function lazyTextSnapshot(text: string): TextSnapshot {
       if (text.length > 0) visit(text, 0, text.length);
     },
   };
+}
+
+function recordingTextSnapshot(
+  text: string,
+  reads: Array<readonly [number, number]>,
+): TextSnapshot {
+  return {
+    length: text.length,
+    getText: () => {
+      throw new Error("unexpected full text materialization");
+    },
+    getTextInRange: (start, end = text.length) => {
+      reads.push([start, end]);
+      return text.slice(start, end);
+    },
+    forEachTextChunk: (visit) => {
+      if (text.length > 0) visit(text, 0, text.length);
+    },
+  };
+}
+
+function indexedTokens(tokens: readonly EditorToken[]): readonly EditorToken[] {
+  const indexed = [...tokens];
+  const builder = createEditorTokenIndexBuilder();
+  for (const token of indexed) appendEditorTokenIndexEntry(builder, token);
+  finishEditorTokenIndex(indexed, builder);
+  return indexed;
+}
+
+type TestPerformanceDiagnostic = {
+  readonly name: string;
+  readonly detail?: Readonly<Record<string, unknown>>;
+};
+
+function collectPerformanceDiagnostics(run: () => void): readonly TestPerformanceDiagnostic[] {
+  const global = globalThis as typeof globalThis & {
+    __EDITOR_PERFORMANCE_DIAGNOSTICS__?: unknown;
+  };
+  const previous = global.__EDITOR_PERFORMANCE_DIAGNOSTICS__;
+  const diagnostics: TestPerformanceDiagnostic[] = [];
+  global.__EDITOR_PERFORMANCE_DIAGNOSTICS__ = {
+    record: (diagnostic: TestPerformanceDiagnostic) => diagnostics.push(diagnostic),
+  };
+
+  try {
+    run();
+  } finally {
+    global.__EDITOR_PERFORMANCE_DIAGNOSTICS__ = previous;
+  }
+
+  return diagnostics;
+}
+
+function tokenProjectionPath(diagnostic: TestPerformanceDiagnostic): boolean {
+  return diagnostic.name === "editor.tokenProjection.path";
 }
 
 describe("editor public helper types", () => {

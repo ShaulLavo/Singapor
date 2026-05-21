@@ -18,9 +18,14 @@ type TokenProjectionBuilder = {
   maxEnds: number[];
   tokens: EditorToken[];
   maxEnd: number;
+  monotonicEnd: boolean;
+  nonOverlapping: boolean;
+  previousEnd: number;
   previousStart: number;
   sortedByStart: boolean;
 };
+
+type TokenProjectionPath = "indexed.bulk" | "indexed.fallback" | "scan";
 
 type TokenProjectionText = string | TextSnapshot;
 
@@ -96,8 +101,81 @@ function projectIndexedTokensThroughEdit(
   const suffixStart = shiftedSuffixStart(tokens, edit);
   if (prefixEnd > suffixStart) return null;
 
-  recordTokenProjectionPath("indexed", tokens, prefixEnd, suffixStart);
+  const projected = projectSortedTokenRangesBulk(
+    tokens,
+    edit,
+    previousText,
+    delta,
+    prefixEnd,
+    suffixStart,
+    index,
+  );
+  if (projected) {
+    recordTokenProjectionPath("indexed.bulk", tokens, prefixEnd, suffixStart, index, {
+      resultCount: projected.length,
+    });
+    return projected;
+  }
+
+  recordTokenProjectionPath("indexed.fallback", tokens, prefixEnd, suffixStart, index);
   return projectSortedTokenRanges(tokens, edit, previousText, delta, prefixEnd, suffixStart, index);
+}
+
+function projectSortedTokenRangesBulk(
+  tokens: readonly EditorToken[],
+  edit: TextEdit,
+  previousText: TokenProjectionText,
+  delta: number,
+  prefixEnd: number,
+  suffixStart: number,
+  index: EditorTokenIndex,
+): readonly EditorToken[] | null {
+  if (!canBulkProjectIndex(index)) return null;
+
+  const prefixTokens = tokens.slice(0, prefixEnd);
+  const prefixMaxEnds = index.maxEnds.slice(0, prefixEnd) as number[];
+  const builder = createContinuationTokenProjectionBuilder(tokens[prefixEnd - 1], prefixMaxEnds);
+  const keepsLiveRanges = appendProjectedTokens(
+    builder,
+    tokens,
+    edit,
+    previousText,
+    delta,
+    prefixEnd,
+    suffixStart,
+  );
+  const suffixTokens = shiftedTokenRange(tokens, suffixStart, delta);
+  if (!canKeepBulkIndex(builder, suffixTokens)) return null;
+
+  const maxEnds = projectedBulkMaxEnds(prefixMaxEnds, builder.maxEnds, index, suffixStart, delta);
+  const projectedTokens = prefixTokens.concat(builder.tokens, suffixTokens);
+
+  setEditorTokenIndex(projectedTokens, {
+    maxEnds,
+    monotonicEnd: true,
+    nonOverlapping: true,
+    sortedByStart: true,
+  });
+  tokenProjectionMetadata.set(projectedTokens, { keepsLiveRanges, sourceTokens: tokens });
+  return projectedTokens;
+}
+
+function canBulkProjectIndex(index: EditorTokenIndex): boolean {
+  if (!index.sortedByStart) return false;
+  if (!index.monotonicEnd) return false;
+  return index.nonOverlapping;
+}
+
+function canKeepBulkIndex(
+  builder: TokenProjectionBuilder,
+  suffixTokens: readonly EditorToken[],
+): boolean {
+  if (!builder.sortedByStart) return false;
+  if (!builder.monotonicEnd) return false;
+  if (!builder.nonOverlapping) return false;
+  if (!suffixKeepsSortedStart(builder, suffixTokens)) return false;
+  if (!suffixKeepsMonotonicEnd(builder, suffixTokens)) return false;
+  return suffixKeepsNonOverlapping(builder, suffixTokens);
 }
 
 function projectSortedTokenRanges(
@@ -177,6 +255,71 @@ function appendShiftedTokens(
   }
 }
 
+function shiftedTokenRange(
+  tokens: readonly EditorToken[],
+  start: number,
+  delta: number,
+): EditorToken[] {
+  if (start >= tokens.length) return [];
+  if (delta === 0) return tokens.slice(start) as EditorToken[];
+
+  return Array.from({ length: tokens.length - start }, (_, index) =>
+    shiftToken(tokens[start + index]!, delta),
+  );
+}
+
+function projectedBulkMaxEnds(
+  prefixMaxEnds: number[],
+  affectedMaxEnds: readonly number[],
+  index: EditorTokenIndex,
+  suffixStart: number,
+  delta: number,
+): number[] {
+  const maxEnds = prefixMaxEnds;
+  appendNumberRange(maxEnds, affectedMaxEnds, 0, affectedMaxEnds.length, 0);
+  appendNumberRange(maxEnds, index.maxEnds, suffixStart, index.maxEnds.length, delta);
+  return maxEnds;
+}
+
+function appendNumberRange(
+  target: number[],
+  source: readonly number[],
+  start: number,
+  end: number,
+  delta: number,
+): void {
+  for (let index = start; index < end; index += 1) {
+    target.push(source[index]! + delta);
+  }
+}
+
+function suffixKeepsSortedStart(
+  builder: TokenProjectionBuilder,
+  suffixTokens: readonly EditorToken[],
+): boolean {
+  const first = suffixTokens[0];
+  if (!first) return true;
+  return first.start >= builder.previousStart;
+}
+
+function suffixKeepsMonotonicEnd(
+  builder: TokenProjectionBuilder,
+  suffixTokens: readonly EditorToken[],
+): boolean {
+  const first = suffixTokens[0];
+  if (!first) return true;
+  return first.end >= builder.maxEnd;
+}
+
+function suffixKeepsNonOverlapping(
+  builder: TokenProjectionBuilder,
+  suffixTokens: readonly EditorToken[],
+): boolean {
+  const first = suffixTokens[0];
+  if (!first) return true;
+  return first.start >= builder.previousEnd;
+}
+
 function finishTokenProjection(
   sourceTokens: readonly EditorToken[],
   builder: TokenProjectionBuilder,
@@ -185,6 +328,8 @@ function finishTokenProjection(
   const projectedTokens = builder.tokens;
   setEditorTokenIndex(projectedTokens, {
     maxEnds: builder.maxEnds,
+    monotonicEnd: builder.monotonicEnd,
+    nonOverlapping: builder.nonOverlapping,
     sortedByStart: builder.sortedByStart,
   });
   tokenProjectionMetadata.set(projectedTokens, { keepsLiveRanges, sourceTokens });
@@ -201,7 +346,26 @@ function createTokenProjectionBuilder(
   return {
     maxEnd: 0,
     maxEnds: [],
+    monotonicEnd: true,
+    nonOverlapping: true,
+    previousEnd: -Infinity,
     previousStart: -Infinity,
+    sortedByStart: true,
+    tokens: [],
+  };
+}
+
+function createContinuationTokenProjectionBuilder(
+  previousToken: EditorToken | undefined,
+  prefixMaxEnds: readonly number[],
+): TokenProjectionBuilder {
+  return {
+    maxEnd: prefixMaxEnds[prefixMaxEnds.length - 1] ?? 0,
+    maxEnds: [],
+    monotonicEnd: true,
+    nonOverlapping: true,
+    previousEnd: previousToken?.end ?? -Infinity,
+    previousStart: previousToken?.start ?? -Infinity,
     sortedByStart: true,
     tokens: [],
   };
@@ -219,6 +383,9 @@ function createPrefixedTokenProjectionBuilder(
   return {
     maxEnd,
     maxEnds: prefixMaxEnds,
+    monotonicEnd: index.monotonicEnd,
+    nonOverlapping: index.nonOverlapping,
+    previousEnd: prefixTokens[prefixEnd - 1]?.end ?? -Infinity,
     previousStart: prefixTokens[prefixEnd - 1]?.start ?? -Infinity,
     sortedByStart: true,
     tokens: prefixTokens,
@@ -429,15 +596,20 @@ function getProjectionTextInRange(text: TokenProjectionText, start: number, end:
 }
 
 function recordTokenProjectionPath(
-  path: "indexed" | "scan",
+  path: TokenProjectionPath,
   tokens: readonly EditorToken[],
   prefixEnd: number,
   suffixStart: number,
+  index?: EditorTokenIndex,
+  extra?: Readonly<Record<string, unknown>>,
 ): void {
   recordEditorPerformanceDiagnostic("editor.tokenProjection.path", () => ({
     affectedCount: Math.max(0, suffixStart - prefixEnd),
+    monotonicEnd: index?.monotonicEnd ?? null,
+    nonOverlapping: index?.nonOverlapping ?? null,
     path,
     prefixCount: prefixEnd,
+    resultCount: extra?.resultCount,
     suffixCount: Math.max(0, tokens.length - suffixStart),
     tokenCount: tokens.length,
   }));

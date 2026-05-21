@@ -2,12 +2,17 @@ import type { EditorToken } from "../tokens";
 
 export type EditorTokenIndex = {
   readonly maxEnds: readonly number[];
+  readonly monotonicEnd: boolean;
+  readonly nonOverlapping: boolean;
   readonly sortedByStart: boolean;
 };
 
 export type EditorTokenIndexBuilder = {
   readonly maxEnds: number[];
   maxEnd: number;
+  monotonicEnd: boolean;
+  nonOverlapping: boolean;
+  previousEnd: number;
   previousStart: number;
   sortedByStart: boolean;
 };
@@ -30,6 +35,9 @@ export function createEditorTokenIndexBuilder(): EditorTokenIndexBuilder {
   return {
     maxEnd: 0,
     maxEnds: [],
+    monotonicEnd: true,
+    nonOverlapping: true,
+    previousEnd: -Infinity,
     previousStart: -Infinity,
     sortedByStart: true,
   };
@@ -40,9 +48,12 @@ export function appendEditorTokenIndexEntry(
   token: EditorToken,
 ): void {
   if (token.start < builder.previousStart) builder.sortedByStart = false;
+  if (token.start < builder.previousEnd) builder.nonOverlapping = false;
+  if (token.end < builder.maxEnd) builder.monotonicEnd = false;
 
   builder.maxEnd = Math.max(builder.maxEnd, token.end);
   builder.maxEnds.push(builder.maxEnd);
+  builder.previousEnd = token.end;
   builder.previousStart = token.start;
 }
 
@@ -56,6 +67,8 @@ export function finishEditorTokenIndex(
 ): void {
   setEditorTokenIndex(tokens, {
     maxEnds: builder.maxEnds,
+    monotonicEnd: builder.monotonicEnd,
+    nonOverlapping: builder.nonOverlapping,
     sortedByStart: builder.sortedByStart,
   });
 }
