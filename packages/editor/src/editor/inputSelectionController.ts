@@ -77,11 +77,224 @@ type PendingKeyboardTextFallback = {
   text: string;
 };
 
+type NativeTextInputState = "unknown" | "observed" | "missing";
+
+type InputProbeExtra = Record<string, unknown>;
+
+const INPUT_PROBE_GLOBAL_EVENT_TYPES = [
+  "beforeinput",
+  "input",
+  "textInput",
+  "compositionstart",
+  "compositionupdate",
+  "compositionend",
+  "focusin",
+  "focusout",
+] as const;
+
+function inputProbeElementLabel(target: EventTarget | null): string | null {
+  if (!target) return null;
+  if (!(target instanceof Element)) return inputProbeNodeLabel(target);
+
+  const id = target.id ? `#${target.id}` : "";
+  const className = typeof target.className === "string" ? target.className.trim() : "";
+  const classes = className ? `.${className.replace(/\s+/g, ".")}` : "";
+  return `${target.tagName}${id}${classes}`;
+}
+
+function inputProbeNodeLabel(target: EventTarget): string {
+  if (target instanceof Node) return target.nodeName;
+  return String(target);
+}
+
+function inputProbeEventState(event?: Event): InputProbeExtra {
+  if (!event) return {};
+
+  return {
+    altKey: inputProbeModifier(event, "altKey"),
+    ctrlKey: inputProbeModifier(event, "ctrlKey"),
+    eventCancelable: event.cancelable,
+    eventDefaultPrevented: event.defaultPrevented,
+    eventIsTrusted: event.isTrusted,
+    eventTarget: inputProbeElementLabel(event.target),
+    eventTimeStamp: event.timeStamp,
+    eventType: event.type,
+    metaKey: inputProbeModifier(event, "metaKey"),
+    inputData: inputProbeInputData(event),
+    inputType: inputProbeInputType(event),
+    key: inputProbeKey(event),
+    code: inputProbeCode(event),
+    isComposing: inputProbeIsComposing(event),
+    repeat: inputProbeRepeat(event),
+    shiftKey: inputProbeModifier(event, "shiftKey"),
+    modifierState: inputProbeModifierState(event),
+  };
+}
+
+function inputProbeModifier(
+  event: Event,
+  key: "altKey" | "ctrlKey" | "metaKey" | "shiftKey",
+): boolean | null {
+  if (!(key in event)) return null;
+  const value = (event as Partial<Record<typeof key, unknown>>)[key];
+  return typeof value === "boolean" ? value : null;
+}
+
+function inputProbeInputData(event: Event): string | null {
+  if (!("data" in event)) return null;
+  return typeof event.data === "string" ? event.data : null;
+}
+
+function inputProbeInputType(event: Event): string | null {
+  if (!("inputType" in event)) return null;
+  return typeof event.inputType === "string" ? event.inputType : null;
+}
+
+function inputProbeKey(event: Event): string | null {
+  if (!("key" in event)) return null;
+  return typeof event.key === "string" ? event.key : null;
+}
+
+function inputProbeCode(event: Event): string | null {
+  if (!("code" in event)) return null;
+  return typeof event.code === "string" ? event.code : null;
+}
+
+function inputProbeIsComposing(event: Event): boolean | null {
+  if (!("isComposing" in event)) return null;
+  return typeof event.isComposing === "boolean" ? event.isComposing : null;
+}
+
+function inputProbeRepeat(event: Event): boolean | null {
+  if (!("repeat" in event)) return null;
+  return typeof event.repeat === "boolean" ? event.repeat : null;
+}
+
+function inputProbeModifierState(event: Event): InputProbeExtra | null {
+  if (!("getModifierState" in event)) return null;
+  if (typeof event.getModifierState !== "function") return null;
+
+  return {
+    AltGraph: event.getModifierState("AltGraph"),
+    CapsLock: event.getModifierState("CapsLock"),
+    Fn: event.getModifierState("Fn"),
+    NumLock: event.getModifierState("NumLock"),
+    Symbol: event.getModifierState("Symbol"),
+  };
+}
+
+function inputProbeRect(rect: DOMRect): InputProbeExtra {
+  return {
+    bottom: Math.round(rect.bottom),
+    height: Math.round(rect.height),
+    left: Math.round(rect.left),
+    right: Math.round(rect.right),
+    top: Math.round(rect.top),
+    width: Math.round(rect.width),
+  };
+}
+
+function inputProbeMatches(element: Element, selector: string): boolean | null {
+  try {
+    return element.matches(selector);
+  } catch {
+    return null;
+  }
+}
+
+function inputProbeStringify(payload: InputProbeExtra): string {
+  const seen = new WeakSet<object>();
+  return JSON.stringify(payload, (_key, value: unknown) => {
+    if (typeof value === "bigint") return value.toString();
+    if (typeof value === "function") return `[Function ${value.name || "anonymous"}]`;
+    if (!value || typeof value !== "object") return value;
+
+    const timerLabel = inputProbeTimerObjectLabel(value);
+    if (timerLabel) return timerLabel;
+    if (seen.has(value)) return "[Circular]";
+    seen.add(value);
+    return value;
+  });
+}
+
+function inputProbeTimerObjectLabel(value: object): string | null {
+  if (value.constructor?.name !== "Timeout") return null;
+  return "[Timeout]";
+}
+
+function inputProbeSelectionState(document: Document): InputProbeExtra | null {
+  const selection = document.getSelection();
+  if (!selection) return null;
+
+  return {
+    anchorNode: inputProbeElementLabel(selection.anchorNode),
+    anchorOffset: selection.anchorOffset,
+    focusNode: inputProbeElementLabel(selection.focusNode),
+    focusOffset: selection.focusOffset,
+    isCollapsed: selection.isCollapsed,
+    rangeCount: selection.rangeCount,
+    type: selection.type,
+  };
+}
+
+function inputProbeAncestorChain(
+  element: HTMLElement,
+  root: HTMLElement,
+): readonly InputProbeExtra[] {
+  const chain: InputProbeExtra[] = [];
+  let current: HTMLElement | null = element;
+  while (current && chain.length < 32) {
+    chain.push(inputProbeAncestorEntry(current, root));
+    if (current === current.ownerDocument.documentElement) break;
+    current = current.parentElement;
+  }
+  return chain;
+}
+
+function inputProbeAncestorEntry(element: HTMLElement, root: HTMLElement): InputProbeExtra {
+  const style = element.ownerDocument.defaultView?.getComputedStyle(element);
+  return {
+    label: inputProbeElementLabel(element),
+    ariaHidden: element.getAttribute("aria-hidden"),
+    contentEditable: element.contentEditable,
+    hidden: element.hidden,
+    inert: element.inert,
+    isRoot: element === root,
+    rect: inputProbeRect(element.getBoundingClientRect()),
+    styleContain: style?.contain,
+    styleContentVisibility: style?.contentVisibility,
+    styleDisplay: style?.display,
+    styleOpacity: style?.opacity,
+    styleOverflow: style?.overflow,
+    stylePointerEvents: style?.pointerEvents,
+    stylePosition: style?.position,
+    styleTransform: style?.transform,
+    styleUserSelect: style?.userSelect,
+    styleVisibility: style?.visibility,
+    tabIndex: element.tabIndex,
+  };
+}
+
+function inputProbePendingFallback(
+  pending: PendingKeyboardTextFallback | null,
+): InputProbeExtra | null {
+  if (!pending) return null;
+
+  return {
+    nativeInputGeneration: pending.nativeInputGeneration,
+    startMs: pending.startMs,
+    text: pending.text,
+    textLength: pending.text.length,
+    timerId: pending.timerId,
+  };
+}
+
 export class InputSelectionController {
   private mouseSelectionDrag: MouseSelectionDrag | null = null;
   private mouseSelectionAutoScrollFrame = 0;
   private useSessionSelectionForNextInput = false;
   private nativeInputGeneration = 0;
+  private nativeTextInputState: NativeTextInputState = "unknown";
   private nativeInputHandlersInstalled = false;
   private pendingKeyboardTextFallback: PendingKeyboardTextFallback | null = null;
 
@@ -94,21 +307,27 @@ export class InputSelectionController {
     el.addEventListener("copy", this.handleCopy);
     el.addEventListener("drop", this.handleDrop);
     el.addEventListener("paste", this.handlePaste);
+    el.addEventListener("keypress", this.handleKeyPressCaptureProbe, { capture: true });
+    el.addEventListener("keypress", this.handleKeyPressBubbleProbe);
     el.addEventListener("keydown", this.handleKeyDown);
     el.addEventListener("keyup", this.syncSessionSelectionFromDom);
     el.addEventListener("mouseup", this.syncSessionSelectionFromDom);
     el.ownerDocument.addEventListener("selectionchange", this.syncCustomSelectionFromDom);
+    this.installGlobalInputProbes();
   }
 
   dispose(): void {
     const { el } = this.options;
-    this.cancelPendingKeyboardTextFallback();
+    this.cancelPendingKeyboardTextFallback("dispose");
+    this.removeGlobalInputProbes();
     this.uninstallNativeInputHandlers();
     el.removeEventListener("mousedown", this.handleMouseDown);
     el.removeEventListener("beforeinput", this.handleBeforeInput);
     el.removeEventListener("copy", this.handleCopy);
     el.removeEventListener("drop", this.handleDrop);
     el.removeEventListener("paste", this.handlePaste);
+    el.removeEventListener("keypress", this.handleKeyPressCaptureProbe, { capture: true });
+    el.removeEventListener("keypress", this.handleKeyPressBubbleProbe);
     el.removeEventListener("keydown", this.handleKeyDown);
     el.removeEventListener("keyup", this.syncSessionSelectionFromDom);
     el.removeEventListener("mouseup", this.syncSessionSelectionFromDom);
@@ -546,6 +765,28 @@ export class InputSelectionController {
     return this.options.getText();
   }
 
+  private installGlobalInputProbes(): void {
+    const document = this.options.el.ownerDocument;
+    const window = document.defaultView;
+    for (const type of INPUT_PROBE_GLOBAL_EVENT_TYPES) {
+      document.addEventListener(type, this.handleDocumentInputProbeCapture, { capture: true });
+      document.addEventListener(type, this.handleDocumentInputProbeBubble);
+      window?.addEventListener(type, this.handleWindowInputProbeCapture, { capture: true });
+      window?.addEventListener(type, this.handleWindowInputProbeBubble);
+    }
+  }
+
+  private removeGlobalInputProbes(): void {
+    const document = this.options.el.ownerDocument;
+    const window = document.defaultView;
+    for (const type of INPUT_PROBE_GLOBAL_EVENT_TYPES) {
+      document.removeEventListener(type, this.handleDocumentInputProbeCapture, { capture: true });
+      document.removeEventListener(type, this.handleDocumentInputProbeBubble);
+      window?.removeEventListener(type, this.handleWindowInputProbeCapture, { capture: true });
+      window?.removeEventListener(type, this.handleWindowInputProbeBubble);
+    }
+  }
+
   private installNativeInputHandlers(): void {
     if (this.nativeInputHandlersInstalled) return;
 
@@ -581,13 +822,37 @@ export class InputSelectionController {
   }
 
   private handleNativeInputBeforeInputCapture = (_event: InputEvent): void => {
+    this.logInputProbe("native.beforeinput.capture", _event, {
+      nextNativeInputGeneration: this.nativeInputGeneration + 1,
+    });
     this.nativeInputGeneration += 1;
-    this.cancelPendingKeyboardTextFallback();
+    this.nativeTextInputState = "observed";
+    this.cancelPendingKeyboardTextFallback("native.beforeinput.capture");
   };
 
-  private handleNativeInputInputCapture = (): void => {
+  private handleNativeInputInputCapture = (event: Event): void => {
+    this.logInputProbe("native.input.capture", event, {
+      nextNativeInputGeneration: this.nativeInputGeneration + 1,
+    });
     this.nativeInputGeneration += 1;
-    this.cancelPendingKeyboardTextFallback();
+    this.nativeTextInputState = "observed";
+    this.cancelPendingKeyboardTextFallback("native.input.capture");
+  };
+
+  private handleDocumentInputProbeCapture = (event: Event): void => {
+    this.logGlobalInputProbe("document", "capture", event);
+  };
+
+  private handleDocumentInputProbeBubble = (event: Event): void => {
+    this.logGlobalInputProbe("document", "bubble", event);
+  };
+
+  private handleWindowInputProbeCapture = (event: Event): void => {
+    this.logGlobalInputProbe("window", "capture", event);
+  };
+
+  private handleWindowInputProbeBubble = (event: Event): void => {
+    this.logGlobalInputProbe("window", "bubble", event);
   };
 
   private handleMouseDown = (event: MouseEvent): void => {
@@ -818,21 +1083,37 @@ export class InputSelectionController {
 
   private handleBeforeInput = (event: InputEvent): void => {
     const session = this.session;
-    if (!session) return;
+    this.logInputProbe("beforeinput.root.enter", event, {
+      hasSession: session !== null,
+    });
+    if (!session) {
+      this.logInputProbe("beforeinput.root.skip.noSession", event);
+      return;
+    }
     if (!this.options.canEditDocument()) {
-      this.cancelPendingKeyboardTextFallback();
+      this.logInputProbe("beforeinput.root.skip.readonly", event);
+      this.cancelPendingKeyboardTextFallback("beforeinput.readonly");
       event.preventDefault();
       return;
     }
 
     const text = event.data ?? "";
-    if (event.inputType !== "insertText" && event.inputType !== "insertLineBreak") return;
+    if (event.inputType !== "insertText" && event.inputType !== "insertLineBreak") {
+      this.logInputProbe("beforeinput.root.skip.inputType", event, {
+        inputType: event.inputType,
+      });
+      return;
+    }
 
-    this.cancelPendingKeyboardTextFallback();
+    this.cancelPendingKeyboardTextFallback("beforeinput.apply");
     const start = eventStartMs(event);
     const selectionChange = this.selectionChangeBeforeEdit();
     event.preventDefault();
     const inserted = event.inputType === "insertLineBreak" ? "\n" : text;
+    this.logInputProbe("beforeinput.root.apply", event, {
+      inserted,
+      selectionChangeKind: selectionChange?.kind ?? null,
+    });
     this.options.applySessionChange(
       mergeChangeTimings(session.applyText(inserted), selectionChange),
       "input.beforeinput",
@@ -877,25 +1158,60 @@ export class InputSelectionController {
   };
 
   private handleKeyDown = (event: KeyboardEvent): void => {
-    if (!this.session) return;
-    if (!this.options.canEditDocument()) return;
-
-    const fallbackText = keyboardFallbackText(event);
-    if (fallbackText === null) return;
-
-    if (this.canWaitForNativeTextInput(event, fallbackText)) {
-      this.scheduleKeyboardTextFallback(event, fallbackText);
+    const session = this.session;
+    const canEditDocument = this.options.canEditDocument();
+    this.logInputProbe("keydown.enter", event, {
+      canEditDocument,
+      hasSession: session !== null,
+    });
+    if (!session) {
+      this.logKeyDownAfterDispatch(event, "noSession");
+      return;
+    }
+    if (!canEditDocument) {
+      this.logKeyDownAfterDispatch(event, "readonly");
       return;
     }
 
+    const fallbackText = keyboardFallbackText(event);
+    if (fallbackText === null) {
+      this.logInputProbe("keydown.skip.noFallbackText", event);
+      this.logKeyDownAfterDispatch(event, "noFallbackText");
+      return;
+    }
+
+    if (this.canWaitForNativeTextInput(event, fallbackText)) {
+      this.logInputProbe("keydown.waitForNative", event, { fallbackText });
+      this.scheduleKeyboardTextFallback(event, fallbackText);
+      this.logKeyDownAfterDispatch(event, "waitForNative");
+      return;
+    }
+
+    this.logInputProbe("keydown.applySyncFallback", event, { fallbackText });
     event.preventDefault();
     this.flushPendingKeyboardTextFallback();
     this.applyKeyboardTextFallback(fallbackText, eventStartMs(event));
     if (event.target !== this.options.view.inputElement) this.options.view.focusInput();
+    this.logKeyDownAfterDispatch(event, "syncFallback");
+  };
+
+  private handleKeyPressCaptureProbe = (event: KeyboardEvent): void => {
+    this.logInputProbe("keypress.capture", event, {
+      eventPhase: event.eventPhase,
+    });
+    this.logKeyPressAfterDispatch(event, "capture");
+  };
+
+  private handleKeyPressBubbleProbe = (event: KeyboardEvent): void => {
+    this.logInputProbe("keypress.bubble", event, {
+      eventPhase: event.eventPhase,
+    });
+    this.logKeyPressAfterDispatch(event, "bubble");
   };
 
   private canWaitForNativeTextInput(event: KeyboardEvent, text: string): boolean {
     if (text === " ") return false;
+    if (this.nativeTextInputState === "missing") return false;
     return event.target === this.options.view.inputElement;
   }
 
@@ -907,38 +1223,83 @@ export class InputSelectionController {
     if (pending && pending.nativeInputGeneration === nativeInputGeneration) {
       pending.text += text;
       pending.startMs = Math.min(pending.startMs, start);
+      this.logInputProbe("fallback.coalesce", event, {
+        nativeInputGeneration,
+        pendingText: pending.text,
+        text,
+      });
       return;
     }
 
     const view = this.options.el.ownerDocument.defaultView;
-    if (!view) return;
+    if (!view) {
+      this.logInputProbe("fallback.schedule.skip.noWindow", event, { text });
+      return;
+    }
 
-    this.cancelPendingKeyboardTextFallback();
+    this.cancelPendingKeyboardTextFallback("fallback.schedule.replace");
     const next: PendingKeyboardTextFallback = {
       timerId: 0,
       nativeInputGeneration,
       startMs: start,
       text,
     };
-    next.timerId = view.setTimeout(() => this.flushPendingKeyboardTextFallback(next), 0);
+    next.timerId = view.setTimeout(() => {
+      this.logInputProbe("fallback.timer.fire", undefined, {
+        expectedTimerId: next.timerId,
+        expectedText: next.text,
+        expectedNativeInputGeneration: next.nativeInputGeneration,
+      });
+      this.flushPendingKeyboardTextFallback(next);
+    }, 0);
     this.pendingKeyboardTextFallback = next;
+    this.logInputProbe("fallback.schedule", event, {
+      nativeInputGeneration,
+      text,
+      timerId: next.timerId,
+    });
   }
 
-  private cancelPendingKeyboardTextFallback(): void {
+  private cancelPendingKeyboardTextFallback(reason = "cancel"): void {
     const pending = this.pendingKeyboardTextFallback;
-    if (!pending) return;
+    if (!pending) {
+      this.logInputProbe("fallback.cancel.none", undefined, { reason });
+      return;
+    }
 
     this.pendingKeyboardTextFallback = null;
     this.options.el.ownerDocument.defaultView?.clearTimeout(pending.timerId);
+    this.logInputProbe("fallback.cancel", undefined, {
+      pendingNativeInputGeneration: pending.nativeInputGeneration,
+      pendingText: pending.text,
+      reason,
+      timerId: pending.timerId,
+    });
   }
 
   private flushPendingKeyboardTextFallback(expected?: PendingKeyboardTextFallback): void {
     const pending = this.pendingKeyboardTextFallback;
-    if (!pending) return;
-    if (expected && pending !== expected) return;
+    if (!pending) {
+      this.logInputProbe("fallback.flush.skip.none", undefined, {
+        expectedTimerId: expected?.timerId,
+      });
+      return;
+    }
+    if (expected && pending !== expected) {
+      this.logInputProbe("fallback.flush.skip.stale", undefined, {
+        expectedTimerId: expected.timerId,
+        pendingTimerId: pending.timerId,
+      });
+      return;
+    }
 
     this.pendingKeyboardTextFallback = null;
     this.options.el.ownerDocument.defaultView?.clearTimeout(pending.timerId);
+    this.logInputProbe("fallback.flush.apply", undefined, {
+      pendingNativeInputGeneration: pending.nativeInputGeneration,
+      pendingText: pending.text,
+      timerId: pending.timerId,
+    });
     this.applyKeyboardTextFallback(pending.text, pending.startMs, pending.nativeInputGeneration);
   }
 
@@ -948,17 +1309,37 @@ export class InputSelectionController {
     nativeInputGeneration?: number,
   ): void {
     const session = this.session;
-    if (!session) return;
-    if (!this.options.canEditDocument()) return;
+    this.logInputProbe("fallback.apply.enter", undefined, {
+      expectedNativeInputGeneration: nativeInputGeneration,
+      text,
+    });
+    if (!session) {
+      this.logInputProbe("fallback.apply.skip.noSession", undefined, { text });
+      return;
+    }
+    if (!this.options.canEditDocument()) {
+      this.logInputProbe("fallback.apply.skip.readonly", undefined, { text });
+      return;
+    }
     if (
       nativeInputGeneration !== undefined &&
       this.nativeInputGeneration !== nativeInputGeneration
     ) {
+      this.logInputProbe("fallback.apply.skip.nativeGenerationChanged", undefined, {
+        currentNativeInputGeneration: this.nativeInputGeneration,
+        expectedNativeInputGeneration: nativeInputGeneration,
+        text,
+      });
       return;
     }
 
+    if (nativeInputGeneration !== undefined) this.nativeTextInputState = "missing";
     const selectionChange = this.selectionChangeBeforeEdit();
     this.options.view.inputElement.value = "";
+    this.logInputProbe("fallback.apply.commit", undefined, {
+      selectionChangeKind: selectionChange?.kind ?? null,
+      text,
+    });
     this.options.applySessionChange(
       mergeChangeTimings(session.applyText(text), selectionChange),
       "input.keydownFallback",
@@ -1160,6 +1541,94 @@ export class InputSelectionController {
 
   private isInputFocused(): boolean {
     return this.options.el.ownerDocument.activeElement === this.options.view.inputElement;
+  }
+
+  private logKeyDownAfterDispatch(event: KeyboardEvent, path: string): void {
+    const view = this.options.el.ownerDocument.defaultView;
+    view?.queueMicrotask(() => {
+      this.logInputProbe("keydown.afterDispatch", event, { path });
+    });
+  }
+
+  private logKeyPressAfterDispatch(event: KeyboardEvent, phase: string): void {
+    const view = this.options.el.ownerDocument.defaultView;
+    view?.queueMicrotask(() => {
+      this.logInputProbe("keypress.afterDispatch", event, { phase });
+    });
+  }
+
+  private logGlobalInputProbe(scope: "document" | "window", phase: string, event: Event): void {
+    this.logInputProbe(`${scope}.${event.type}.${phase}`, event, {
+      eventPhase: event.eventPhase,
+      probePhase: phase,
+      probeScope: scope,
+    });
+  }
+
+  private logInputProbe(label: string, event?: Event, extra: InputProbeExtra = {}): void {
+    const input = this.options.view.inputElement;
+    const activeElement = this.options.el.ownerDocument.activeElement;
+    const rootRect = this.options.el.getBoundingClientRect();
+    const rootStyle = this.options.el.ownerDocument.defaultView?.getComputedStyle(this.options.el);
+    const inputRect = input.getBoundingClientRect();
+    const inputStyle = this.options.el.ownerDocument.defaultView?.getComputedStyle(input);
+    console.log("[editor-input-probe]", inputProbeStringify({
+      label,
+      ...inputProbeEventState(event),
+      activeElement: inputProbeElementLabel(activeElement),
+      activeElementIsEventTarget: event?.target === activeElement,
+      canEditDocument: this.options.canEditDocument(),
+      documentHasFocus: this.options.el.ownerDocument.hasFocus(),
+      eventTargetIsInput: event?.target === input,
+      hasSession: this.session !== null,
+      inputClientHeight: input.clientHeight,
+      inputClientWidth: input.clientWidth,
+      inputDisabled: input.disabled,
+      inputFocused: activeElement === input,
+      inputHandlersInstalled: this.nativeInputHandlersInstalled,
+      inputInputMode: input.inputMode,
+      inputIsConnected: input.isConnected,
+      inputMatchesReadWrite: inputProbeMatches(input, ":read-write"),
+      inputMaxLength: input.maxLength,
+      inputOffsetParent: inputProbeElementLabel(input.offsetParent),
+      inputReadOnly: input.readOnly,
+      inputRect: inputProbeRect(inputRect),
+      inputScrollHeight: input.scrollHeight,
+      inputScrollWidth: input.scrollWidth,
+      inputSelectionEnd: input.selectionEnd,
+      inputSelectionStart: input.selectionStart,
+      inputStyleContain: inputStyle?.contain,
+      inputStyleContentVisibility: inputStyle?.contentVisibility,
+      inputStyleDisplay: inputStyle?.display,
+      inputStyleLeft: inputStyle?.left,
+      inputStyleOpacity: inputStyle?.opacity,
+      inputStylePointerEvents: inputStyle?.pointerEvents,
+      inputStylePosition: inputStyle?.position,
+      inputStyleTop: inputStyle?.top,
+      inputStyleTransform: inputStyle?.transform,
+      inputStyleUserSelect: inputStyle?.userSelect,
+      inputStyleVisibility: inputStyle?.visibility,
+      inputTabIndex: input.tabIndex,
+      inputValue: input.value,
+      nativeInputGeneration: this.nativeInputGeneration,
+      nativeTextInputState: this.nativeTextInputState,
+      pendingKeyboardTextFallback: inputProbePendingFallback(this.pendingKeyboardTextFallback),
+      selectionState: inputProbeSelectionState(this.options.el.ownerDocument),
+      inputAncestorChain: inputProbeAncestorChain(input, this.options.el),
+      rootClientHeight: this.options.el.clientHeight,
+      rootClientWidth: this.options.el.clientWidth,
+      rootRect: inputProbeRect(rootRect),
+      rootScrollHeight: this.options.el.scrollHeight,
+      rootScrollLeft: this.options.el.scrollLeft,
+      rootScrollTop: this.options.el.scrollTop,
+      rootStyleContain: rootStyle?.contain,
+      rootStyleContentVisibility: rootStyle?.contentVisibility,
+      rootStyleOverflow: rootStyle?.overflow,
+      rootStyleTransform: rootStyle?.transform,
+      rootStyleUserSelect: rootStyle?.userSelect,
+      nowMs: nowMs(),
+      ...extra,
+    }));
   }
 
   private hasFocusedExternalElement(): boolean {

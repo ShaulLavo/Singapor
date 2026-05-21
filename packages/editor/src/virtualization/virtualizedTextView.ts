@@ -451,7 +451,6 @@ export class VirtualizedTextView {
     this.inputElement.value = "";
     this.inputElement.focus({ preventScroll: true });
     this.inputElement.setSelectionRange(0, 0);
-    this.inputElement.ownerDocument.getSelection()?.removeAllRanges();
     restoreScrollPosition(view, scrollTop, scrollLeft);
   }
 

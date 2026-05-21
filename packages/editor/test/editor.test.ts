@@ -2137,6 +2137,24 @@ describe("Editor", () => {
       expect(editor.getText()).toBe("abcX");
     });
 
+    it("applies focused keydown text synchronously after native input is missing", async () => {
+      const session = createDocumentSession("abc");
+      editor.attachSession(session);
+      editor.focus();
+
+      dispatchInputKey("X");
+      await flushTimers();
+
+      const event = dispatchInputKey("Y");
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(session.getText()).toBe("abcXY");
+      expect(editor.getText()).toBe("abcXY");
+      await flushTimers();
+      expect(session.getText()).toBe("abcXY");
+      expect(editor.getText()).toBe("abcXY");
+    });
+
     it("coalesces rapid focused keydown fallback text into one change", async () => {
       const changes: DocumentSessionChange[] = [];
       editor.dispose();
