@@ -754,17 +754,23 @@ function applyTextEditsToMinimapDocument(
 
   for (const edit of edits) {
     tokens = projectMinimapTokensThroughEdit(tokens, edit, text);
-    lineStarts = applyLineStartsEdit(lineStarts, edit);
-    text = applyTextEdit(text, edit);
+    const nextText = applyTextEdit(text, edit);
+    lineStarts = applyLineStartsEdit(lineStarts, edit, nextText);
+    text = nextText;
   }
 
   return { text, lineStarts, tokens };
 }
 
-function applyLineStartsEdit(lineStarts: readonly number[], edit: TextEdit): readonly number[] {
+function applyLineStartsEdit(
+  lineStarts: readonly number[],
+  edit: TextEdit,
+  nextText: string,
+): readonly number[] {
+  if (editChangesLineStructure(lineStarts, edit)) return lineStartsForText(nextText);
+
   const delta = edit.text.length - (edit.to - edit.from);
   if (delta === 0) return lineStarts;
-  if (edit.text.includes("\n")) return lineStarts;
 
   const next = [...lineStarts];
   const lineIndex = lineIndexForOffset(next, edit.from);
@@ -772,6 +778,21 @@ function applyLineStartsEdit(lineStarts: readonly number[], edit: TextEdit): rea
     next[index] = (next[index] ?? 0) + delta;
   }
   return next;
+}
+
+function editChangesLineStructure(lineStarts: readonly number[], edit: TextEdit): boolean {
+  if (edit.text.includes("\n")) return true;
+  return lineIndexForOffset(lineStarts, edit.from) !== lineIndexForOffset(lineStarts, edit.to);
+}
+
+function lineStartsForText(text: string): readonly number[] {
+  const starts = [0];
+  let index = text.indexOf("\n");
+  while (index !== -1) {
+    starts.push(index + 1);
+    index = text.indexOf("\n", index + 1);
+  }
+  return starts;
 }
 
 function lineIndexForOffset(lineStarts: readonly number[], offset: number): number {

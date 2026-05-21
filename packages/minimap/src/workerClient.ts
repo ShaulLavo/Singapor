@@ -554,16 +554,13 @@ function selections(snapshot: EditorViewSnapshot): readonly MinimapSelection[] {
   }));
 }
 
-function singleLineEdit(
+function incrementalTextEdits(
   change: DocumentSessionChange | null | undefined,
-  previousSnapshot: EditorViewSnapshot,
-): change is DocumentSessionChange & {
-  readonly edits: readonly [TextEdit];
-} {
-  if (!change || change.edits.length !== 1) return false;
-  const edit = change.edits[0]!;
-  if (edit.text.includes("\n")) return false;
-  return editRangeIsSingleLine(previousSnapshot.lineStarts, edit);
+): readonly TextEdit[] | null {
+  if (!change || change.edits.length === 0) return null;
+
+  const sorted = [...change.edits].sort(compareTextEdits);
+  return sequentialTextEdits(sorted);
 }
 
 function immediateSlider(
@@ -706,16 +703,17 @@ function contentPendingUpdate(
   change: DocumentSessionChange | null | undefined,
   previousSnapshot: EditorViewSnapshot,
 ): PendingMinimapUpdate {
-  if (!singleLineEdit(change, previousSnapshot)) {
+  const edits = incrementalTextEdits(change);
+  if (!edits) {
     return { ...base, replaceDocument: true, reason: "content.replaceDocument" };
   }
 
   return {
     ...base,
-    edits: [change.edits[0]!],
+    edits,
     syncSelection: true,
-    tokenSourceAfterEdits: base.snapshot.tokens,
-    reason: "content.singleLineEdit",
+    tokenSourceAfterEdits: tokenSourceAfterEdits(change, previousSnapshot, base.snapshot),
+    reason: edits.length === 1 ? "content.edit" : "content.edits",
   };
 }
 
@@ -725,6 +723,42 @@ function shouldSyncViewport(kind: string): boolean {
   if (kind === "clear") return true;
   if (kind === "viewport") return true;
   return kind === "layout";
+}
+
+function sequentialTextEdits(edits: readonly TextEdit[]): readonly TextEdit[] {
+  let delta = 0;
+  return edits.map((edit) => {
+    const from = edit.from + delta;
+    const to = edit.to + delta;
+    delta += edit.text.length - (edit.to - edit.from);
+    return { from, to, text: edit.text };
+  });
+}
+
+function compareTextEdits(left: TextEdit, right: TextEdit): number {
+  return left.from - right.from || left.to - right.to;
+}
+
+function tokenSourceAfterEdits(
+  change: DocumentSessionChange | null | undefined,
+  previousSnapshot: EditorViewSnapshot,
+  nextSnapshot: EditorViewSnapshot,
+): readonly EditorToken[] | null {
+  if (!change) return null;
+  if (!editsPreserveLineStructure(change.edits, previousSnapshot.lineStarts)) return null;
+  return nextSnapshot.tokens;
+}
+
+function editsPreserveLineStructure(
+  edits: readonly TextEdit[],
+  lineStarts: readonly number[],
+): boolean {
+  for (const edit of edits) {
+    if (edit.text.includes("\n")) return false;
+    if (!editRangeIsSingleLine(lineStarts, edit)) return false;
+  }
+
+  return true;
 }
 
 function editRangeIsSingleLine(lineStarts: readonly number[], edit: TextEdit): boolean {

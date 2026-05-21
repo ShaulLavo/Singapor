@@ -156,7 +156,7 @@ describe("MinimapWorkerClient", () => {
     }
   });
 
-  it("falls back to replaceDocument for multi-line deletions", () => {
+  it("uses incremental updates for multi-line deletions", () => {
     const runtime = installMinimapRuntime();
     try {
       const host = createHost();
@@ -182,7 +182,7 @@ describe("MinimapWorkerClient", () => {
       const requests = worker.postMessage.mock.calls.map((call) => call[0] as { type: string });
 
       expect(requests.map((request) => request.type)).toEqual([
-        "replaceDocument",
+        "applyEdit",
         "updateLayout",
         "render",
       ]);
@@ -247,6 +247,54 @@ describe("MinimapWorkerClient", () => {
         "render",
       ]);
       expect(applyEdits.edits).toEqual([secondEdit, thirdEdit]);
+      expect("lineStarts" in applyEdits.document).toBe(false);
+
+      client.dispose();
+      host.root.remove();
+      host.colorScope.remove();
+    } finally {
+      runtime.restore();
+    }
+  });
+
+  it("uses incremental updates for batched same-line edits", () => {
+    const runtime = installMinimapRuntime();
+    try {
+      const host = createHost();
+      const client = new MinimapWorkerClient({
+        host,
+        options: resolveMinimapOptions(),
+        snapshot: snapshot({}, { text: "abc def ghi" }),
+        decorations: [],
+        onLayoutWidth: vi.fn(),
+      });
+      const worker = runtime.workers[0]!;
+      worker.send(renderedResponse(1));
+      worker.postMessage.mockClear();
+
+      const edits: readonly TextEdit[] = [
+        { from: 0, to: 0, text: "x" },
+        { from: 4, to: 4, text: "y" },
+      ];
+      client.update(
+        snapshot({}, { text: "xabc ydef ghi" }),
+        "content",
+        documentEdits(edits, "xabc ydef ghi"),
+      );
+      runtime.flushAnimationFrames();
+
+      const requests = worker.postMessage.mock.calls.map((call) => call[0] as MinimapWorkerRequest);
+      const applyEdits = requests[0] as Extract<MinimapWorkerRequest, { type: "applyEdits" }>;
+
+      expect(requests.map((request) => request.type)).toEqual([
+        "applyEdits",
+        "updateViewport",
+        "render",
+      ]);
+      expect(applyEdits.edits).toEqual([
+        { from: 0, to: 0, text: "x" },
+        { from: 5, to: 5, text: "y" },
+      ]);
       expect("lineStarts" in applyEdits.document).toBe(false);
 
       client.dispose();
@@ -430,7 +478,11 @@ function snapshot(
 }
 
 function documentEdit(edit: TextEdit, text: string): DocumentSessionChange {
-  return { kind: "edit", edits: [edit], text } as unknown as DocumentSessionChange;
+  return documentEdits([edit], text);
+}
+
+function documentEdits(edits: readonly TextEdit[], text: string): DocumentSessionChange {
+  return { kind: "edit", edits, text } as unknown as DocumentSessionChange;
 }
 
 function lineStarts(text: string): readonly number[] {
