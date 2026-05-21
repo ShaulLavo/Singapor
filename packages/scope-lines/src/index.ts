@@ -83,6 +83,8 @@ function createScopeLinesContribution(
 class ScopeLinesContribution implements EditorViewContribution {
   private readonly root: HTMLDivElement;
   private readonly options: ResolvedScopeLinesOptions;
+  private pendingContentSnapshot: EditorViewSnapshot | null = null;
+  private pendingContentFrame: number | null = null;
   private signature = "";
 
   public constructor(context: EditorViewContributionContext, options: ResolvedScopeLinesOptions) {
@@ -93,18 +95,60 @@ class ScopeLinesContribution implements EditorViewContribution {
 
   public update(
     snapshot: EditorViewSnapshot,
-    _kind: EditorViewContributionUpdateKind,
+    kind: EditorViewContributionUpdateKind,
     _change?: DocumentSessionChange | null,
   ): void {
+    if (kind === "content") {
+      this.scheduleContentUpdate(snapshot);
+      return;
+    }
+
+    this.cancelContentUpdate();
+    this.renderSnapshot(snapshot);
+  }
+
+  public dispose(): void {
+    this.cancelContentUpdate();
+    this.root.remove();
+  }
+
+  private scheduleContentUpdate(snapshot: EditorViewSnapshot): void {
+    this.pendingContentSnapshot = snapshot;
+    if (this.pendingContentFrame !== null) return;
+
+    const view = this.root.ownerDocument.defaultView;
+    if (!view?.requestAnimationFrame) {
+      this.flushContentUpdate();
+      return;
+    }
+
+    this.pendingContentFrame = view.requestAnimationFrame(this.flushContentUpdate);
+  }
+
+  private flushContentUpdate = (): void => {
+    const snapshot = this.pendingContentSnapshot;
+    this.pendingContentFrame = null;
+    this.pendingContentSnapshot = null;
+    if (!snapshot) return;
+
+    this.renderSnapshot(snapshot);
+  };
+
+  private cancelContentUpdate(): void {
+    const frame = this.pendingContentFrame;
+    this.pendingContentFrame = null;
+    this.pendingContentSnapshot = null;
+    if (frame === null) return;
+
+    this.root.ownerDocument.defaultView?.cancelAnimationFrame(frame);
+  }
+
+  private renderSnapshot(snapshot: EditorViewSnapshot): void {
     const signature = snapshotSignature(snapshot, this.options);
     if (signature === this.signature) return;
 
     this.signature = signature;
     renderScopeLines(this.root, snapshot, this.options);
-  }
-
-  public dispose(): void {
-    this.root.remove();
   }
 }
 

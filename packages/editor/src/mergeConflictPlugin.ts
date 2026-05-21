@@ -54,6 +54,7 @@ const MERGE_CONFLICT_OUTER_STYLE = { backgroundColor: "rgba(245, 158, 11, 0.16)"
 const MERGE_CONFLICT_OURS_STYLE = { backgroundColor: "rgba(34, 197, 94, 0.18)" };
 const MERGE_CONFLICT_BASE_STYLE = { backgroundColor: "rgba(161, 161, 170, 0.18)" };
 const MERGE_CONFLICT_THEIRS_STYLE = { backgroundColor: "rgba(59, 130, 246, 0.18)" };
+const MERGE_CONFLICT_MARKER_CHAR_PATTERN = /[<=>|\r\n]/;
 
 export function createMergeConflictPlugin(
   options: EditorMergeConflictPluginOptions = {},
@@ -119,6 +120,8 @@ class EditorMergeConflictController {
 
   public handleEditorChange(change: DocumentSessionChange | null): void {
     if (change?.kind === "selection" || change?.kind === "none") return;
+    if (this.canSkipRefreshForChange(change)) return;
+
     this.refresh();
   }
 
@@ -166,6 +169,13 @@ class EditorMergeConflictController {
     }
 
     this.setConflicts(parseMergeConflicts(this.host.getText()));
+  }
+
+  private canSkipRefreshForChange(change: DocumentSessionChange | null): boolean {
+    if (!change) return false;
+    if (this.conflicts.length > 0) return false;
+
+    return change.edits.every(isMergeConflictNeutralInsertion);
   }
 
   private setConflicts(conflicts: readonly MergeConflictRegion[]): void {
@@ -413,6 +423,11 @@ function conflictSignature(conflicts: readonly MergeConflictRegion[]): string {
       ].join(":"),
     )
     .join("|");
+}
+
+function isMergeConflictNeutralInsertion(edit: TextEdit): boolean {
+  if (edit.from !== edit.to) return false;
+  return !MERGE_CONFLICT_MARKER_CHAR_PATTERN.test(edit.text);
 }
 
 function shortConflictSideLabel(label: string, fallback: string): string {
