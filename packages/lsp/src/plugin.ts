@@ -5,7 +5,9 @@ import type {
   EditorViewContributionContext,
   EditorViewContributionUpdateKind,
   EditorViewSnapshot,
+  TextSnapshot,
 } from "@editor/core";
+import { createStringTextSnapshot, defineLazyTextProperty } from "@editor/core";
 import type * as lsp from "vscode-languageserver-protocol";
 import { LspClient, type LspClientConfig } from "./client";
 import type { LspTextEdit } from "./types";
@@ -51,6 +53,8 @@ type ActiveConnection = {
 type ActiveDocument = {
   readonly uri: lsp.DocumentUri;
   readonly languageId: string;
+  readonly textSnapshot: TextSnapshot;
+  readonly lineStarts: readonly number[];
   readonly text: string;
   readonly textVersion: number;
 };
@@ -58,6 +62,8 @@ type ActiveDocument = {
 type DocumentDescriptor = {
   readonly uri: lsp.DocumentUri;
   readonly languageId: string;
+  readonly textSnapshot: TextSnapshot;
+  readonly lineStarts: readonly number[];
   readonly text: string;
   readonly textVersion: number;
 };
@@ -189,9 +195,11 @@ class LspPluginContribution implements EditorViewContribution {
       return;
     }
 
-    if (active.textVersion === descriptor.textVersion && active.text === descriptor.text) return;
+    if (active.textVersion === descriptor.textVersion) return;
 
-    workspace.updateDocument(descriptor.uri, descriptor.text, {
+    workspace.updateDocumentSnapshot(descriptor.uri, {
+      textSnapshot: descriptor.textSnapshot,
+      lineStarts: descriptor.lineStarts,
       edits: editsForChange(change),
     });
     this.activeDocument = descriptor;
@@ -220,12 +228,13 @@ class LspPluginContribution implements EditorViewContribution {
     const uri = this.resolveDocumentUri(snapshot);
     if (!uri) return null;
 
-    return {
+    return defineLazyTextProperty({
       uri,
       languageId: this.resolveLanguageId(snapshot),
-      text: snapshot.text,
+      textSnapshot: snapshot.textSnapshot ?? createStringTextSnapshot(snapshot.text),
+      lineStarts: snapshot.lineStarts,
       textVersion: snapshot.textVersion,
-    };
+    });
   }
 
   private resolveRoute(snapshot: EditorViewSnapshot): URL | null {

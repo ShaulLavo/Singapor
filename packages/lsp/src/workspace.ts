@@ -3,15 +3,20 @@ import type { LspClient } from "./client";
 import type {
   LspDocument,
   LspDocumentOpenOptions,
+  LspTextDocumentSnapshot,
+  LspTextSnapshot,
   LspTextEdit,
   LspWorkspaceEditOptions,
+  LspWorkspaceSnapshotEditOptions,
 } from "./types";
 
 type MutableLspDocument = {
   uri: lsp.DocumentUri;
   languageId: string;
   version: number;
-  text: string;
+  textCache?: string;
+  textSnapshot: LspTextSnapshot;
+  lineStarts: readonly number[];
 };
 
 export class LspWorkspace {
@@ -35,11 +40,13 @@ export class LspWorkspace {
     const document = {
       uri: options.uri,
       languageId: options.languageId,
-      text: options.text,
+      textCache: options.text,
+      textSnapshot: createStringTextSnapshot(options.text),
+      lineStarts: computeLineStarts(options.text),
       version: this.nextVersion(options.uri),
     };
     this.documentsByUri.set(options.uri, document);
-    this.client?.didOpenDocument(document);
+    this.client?.didOpenDocument(cloneDocument(document));
     return cloneDocument(document);
   }
 
@@ -49,12 +56,40 @@ export class LspWorkspace {
     options: LspWorkspaceEditOptions = {},
   ): LspDocument {
     const document = this.requireDocument(uri);
-    const previousText = document.text;
+    const previousText = materializeDocumentText(document);
     if (previousText === text && !hasEffectiveEdits(options.edits)) return cloneDocument(document);
 
-    document.text = text;
+    const previousSnapshot = documentSnapshot(document);
+    document.textCache = text;
+    document.textSnapshot = createStringTextSnapshot(text);
+    document.lineStarts = computeLineStarts(text);
     document.version = this.nextVersion(uri);
-    this.client?.didChangeDocument(document, previousText, options.edits ?? []);
+    this.client?.didChangeDocument(cloneDocument(document), {
+      edits: options.edits ?? [],
+      previousSnapshot,
+      previousText,
+    });
+    return cloneDocument(document);
+  }
+
+  public updateDocumentSnapshot(
+    uri: lsp.DocumentUri,
+    options: LspWorkspaceSnapshotEditOptions,
+  ): LspDocument {
+    const document = this.requireDocument(uri);
+    const previousSnapshot = documentSnapshot(document);
+    if (sameSnapshotDocument(previousSnapshot, options) && !hasEffectiveEdits(options.edits)) {
+      return cloneDocument(document);
+    }
+
+    document.textCache = undefined;
+    document.textSnapshot = options.textSnapshot;
+    document.lineStarts = options.lineStarts;
+    document.version = this.nextVersion(uri);
+    this.client?.didChangeDocument(cloneDocument(document), {
+      edits: options.edits ?? [],
+      previousSnapshot,
+    });
     return cloneDocument(document);
   }
 
@@ -63,7 +98,7 @@ export class LspWorkspace {
     if (!document) return;
 
     this.documentsByUri.delete(uri);
-    this.client?.didCloseDocument(document);
+    this.client?.didCloseDocument(cloneDocument(document));
   }
 
   public getDocument(uri: lsp.DocumentUri): LspDocument | null {
@@ -73,7 +108,7 @@ export class LspWorkspace {
 
   public connected(): void {
     for (const document of this.documentsByUri.values()) {
-      this.client?.didOpenDocument(document);
+      this.client?.didOpenDocument(cloneDocument(document));
     }
   }
 
@@ -94,7 +129,64 @@ export class LspWorkspace {
   }
 }
 
-const cloneDocument = (document: MutableLspDocument): LspDocument => ({ ...document });
+function cloneDocument(document: MutableLspDocument): LspDocument {
+  return defineLazyDocumentText({
+    uri: document.uri,
+    languageId: document.languageId,
+    version: document.version,
+    textSnapshot: document.textSnapshot,
+    lineStarts: document.lineStarts,
+  });
+}
+
+function defineLazyDocumentText<TDocument extends Omit<LspDocument, "text">>(
+  document: TDocument,
+): TDocument & { readonly text: string } {
+  Object.defineProperty(document, "text", {
+    configurable: true,
+    enumerable: true,
+    get: () => document.textSnapshot.getText(),
+  });
+  return document as TDocument & { readonly text: string };
+}
+
+function documentSnapshot(document: MutableLspDocument): LspTextDocumentSnapshot {
+  return {
+    textSnapshot: document.textSnapshot,
+    lineStarts: document.lineStarts,
+  };
+}
+
+function materializeDocumentText(document: MutableLspDocument): string {
+  return document.textCache ?? document.textSnapshot.getText();
+}
+
+function createStringTextSnapshot(text: string): LspTextSnapshot {
+  return {
+    length: text.length,
+    getText: () => text,
+    getTextInRange: (start, end) => text.slice(start, end),
+  };
+}
+
+function computeLineStarts(text: string): number[] {
+  const starts = [0];
+  let index = text.indexOf("\n");
+
+  while (index !== -1) {
+    starts.push(index + 1);
+    index = text.indexOf("\n", index + 1);
+  }
+
+  return starts;
+}
+
+function sameSnapshotDocument(
+  left: LspTextDocumentSnapshot,
+  right: LspTextDocumentSnapshot,
+): boolean {
+  return left.textSnapshot === right.textSnapshot && left.lineStarts === right.lineStarts;
+}
 
 const hasEffectiveEdits = (edits: readonly LspTextEdit[] | undefined): boolean => {
   if (!edits) return false;

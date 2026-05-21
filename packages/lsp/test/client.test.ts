@@ -5,6 +5,7 @@ import {
   LspResponseError,
   LspWorkspace,
   METHOD_NOT_FOUND,
+  type LspTextSnapshot,
   type LspTransport,
   type LspTransportHandler,
 } from "../src/index.ts";
@@ -270,6 +271,52 @@ describe("LspClient", () => {
     ]);
   });
 
+  it("sends snapshot incremental changes without materializing the next full text", async () => {
+    const { client, transport } = await initializedClient({ textDocumentSync: 2 });
+
+    client.workspace.openDocument({
+      uri: "file:///repo/a.ts",
+      languageId: "typescript",
+      text: "ab\ncd",
+    });
+    client.workspace.updateDocumentSnapshot("file:///repo/a.ts", {
+      textSnapshot: throwingFullTextSnapshot("aXb\ncd"),
+      lineStarts: [0, 4],
+      edits: [{ from: 1, to: 1, text: "X" }],
+    });
+
+    const didChange = transport.lastMessage();
+    expect(didChangeTextDocument(didChange)).toEqual({ uri: "file:///repo/a.ts", version: 1 });
+    expect(didChangeContentChanges(didChange)).toEqual([
+      {
+        range: {
+          start: { line: 0, character: 1 },
+          end: { line: 0, character: 1 },
+        },
+        text: "X",
+      },
+    ]);
+  });
+
+  it("materializes snapshot text when the server requests full sync", async () => {
+    const { client, transport } = await initializedClient({ textDocumentSync: 1 });
+
+    client.workspace.openDocument({
+      uri: "file:///repo/a.ts",
+      languageId: "typescript",
+      text: "abc",
+    });
+    client.workspace.updateDocumentSnapshot("file:///repo/a.ts", {
+      textSnapshot: stringTextSnapshot("abcX"),
+      lineStarts: [0],
+      edits: [{ from: 3, to: 3, text: "X" }],
+    });
+
+    const didChange = transport.lastMessage();
+    expect(didChangeTextDocument(didChange)).toEqual({ uri: "file:///repo/a.ts", version: 1 });
+    expect(didChangeContentChanges(didChange)).toEqual([{ text: "abcX" }]);
+  });
+
   it("skips document sync notifications when the server does not opt in", async () => {
     const { client, transport } = await initializedClient({});
 
@@ -348,4 +395,22 @@ function didChangeTextDocument(message: JsonMessage): Record<string, unknown> {
 function didChangeContentChanges(message: JsonMessage): readonly unknown[] {
   const params = message.params as { readonly contentChanges: readonly unknown[] };
   return params.contentChanges;
+}
+
+function throwingFullTextSnapshot(text: string): LspTextSnapshot {
+  return {
+    length: text.length,
+    getText: () => {
+      throw new Error("unexpected full text materialization");
+    },
+    getTextInRange: (start, end) => text.slice(start, end),
+  };
+}
+
+function stringTextSnapshot(text: string): LspTextSnapshot {
+  return {
+    length: text.length,
+    getText: () => text,
+    getTextInRange: (start, end) => text.slice(start, end),
+  };
 }

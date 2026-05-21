@@ -3,10 +3,11 @@ import type {
   EditorViewContributionUpdateKind,
   EditorViewSnapshot,
 } from "@editor/core";
+import { createStringTextSnapshot, defineLazyTextProperty } from "@editor/core";
 import type { LspWorkspace } from "@editor/lsp";
 import type * as lsp from "vscode-languageserver-protocol";
 
-import { editsForChange, projectDiagnostics } from "./diagnosticProjection";
+import { editsForChange, projectDiagnosticsInSnapshot } from "./diagnosticProjection";
 import type { DiagnosticsPresenter } from "./diagnosticsPresenter";
 import { pathOrUriToDocumentUri } from "./paths";
 import type { ActiveDocument, DocumentDescriptor } from "./pluginTypes";
@@ -85,13 +86,17 @@ export class DocumentSync {
       return;
     }
 
-    if (active.textVersion === descriptor.textVersion && active.text === descriptor.text) return;
+    if (active.textVersion === descriptor.textVersion) return;
     this.updateDocument(descriptor, change);
   }
 
   private openDocument(descriptor: DocumentDescriptor): void {
     this.close();
-    const document = this.workspace.openDocument(descriptor);
+    const document = this.workspace.openDocument({
+      uri: descriptor.uri,
+      languageId: descriptor.languageId,
+      text: descriptor.text,
+    });
     this.document = { ...descriptor, lspVersion: document.version };
   }
 
@@ -100,12 +105,14 @@ export class DocumentSync {
     change: DocumentSessionChange | null,
   ): void {
     const active = this.document;
-    const diagnostics = projectDiagnostics(this.diagnosticItems, {
-      previousText: active?.text ?? "",
-      nextText: descriptor.text,
+    const diagnostics = projectDiagnosticsInSnapshot(this.diagnosticItems, {
+      previousDocument: active ?? descriptor,
+      nextDocument: descriptor,
       change,
     });
-    const document = this.workspace.updateDocument(descriptor.uri, descriptor.text, {
+    const document = this.workspace.updateDocumentSnapshot(descriptor.uri, {
+      textSnapshot: descriptor.textSnapshot,
+      lineStarts: descriptor.lineStarts,
       edits: editsForChange(change),
     });
     this.document = { ...descriptor, lspVersion: document.version };
@@ -121,12 +128,13 @@ function documentDescriptor(snapshot: EditorViewSnapshot): DocumentDescriptor | 
   if (!snapshot.languageId) return null;
 
   const uri = pathOrUriToDocumentUri(snapshot.documentId);
-  return {
+  return defineLazyTextProperty({
     uri,
     languageId: snapshot.languageId,
-    text: snapshot.text,
+    textSnapshot: snapshot.textSnapshot ?? createStringTextSnapshot(snapshot.text),
+    lineStarts: snapshot.lineStarts,
     textVersion: snapshot.textVersion,
-  };
+  });
 }
 
 function publishDiagnosticsParams(params: unknown): {

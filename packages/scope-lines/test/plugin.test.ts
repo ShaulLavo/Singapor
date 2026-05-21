@@ -103,6 +103,46 @@ describe("createScopeLinesPlugin", () => {
     expect(readRows.filter((row) => row === 1)).toHaveLength(1);
   });
 
+  it("skips text reads for fold markers outside the mounted rows", () => {
+    const registration = registeredProvider(createScopeLinesPlugin());
+    const text = "root\n  one\n  two\nend\n\nfar\n  child\n  next\nend\n";
+    const starts = lineStarts(text);
+    const readRows: number[] = [];
+    const testContext = context(
+      snapshot({
+        text,
+        textSnapshot: countingTextSnapshot(text, starts, readRows),
+        lineStarts: starts,
+        lineCount: starts.length,
+        foldMarkers: [
+          {
+            key: "visible",
+            startOffset: starts[0]!,
+            endOffset: starts[3]!,
+            startRow: 0,
+            endRow: 3,
+            collapsed: false,
+          },
+          {
+            key: "offscreen",
+            startOffset: starts[5]!,
+            endOffset: starts[8]!,
+            startRow: 5,
+            endRow: 8,
+            collapsed: false,
+          },
+        ],
+        visibleRows: visibleRows(text).slice(0, 4),
+      }),
+    );
+
+    registration?.createContribution(testContext);
+
+    expect(readRows).toContain(1);
+    expect(readRows).not.toContain(5);
+    expect(readRows).not.toContain(6);
+  });
+
   it("skips collapsed scopes", () => {
     const registration = registeredProvider(createScopeLinesPlugin());
     const marker = foldMarkers()[0]!;

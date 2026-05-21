@@ -1,5 +1,11 @@
 import type { DocumentSessionChange, TextEdit } from "@editor/core";
-import { lspPositionToOffset, offsetToLspPosition } from "@editor/lsp";
+import {
+  lspPositionToOffset,
+  lspPositionToOffsetInSnapshot,
+  offsetToLspPosition,
+  offsetToLspPositionInSnapshot,
+  type LspTextDocumentSnapshot,
+} from "@editor/lsp";
 import type * as lsp from "vscode-languageserver-protocol";
 
 /**
@@ -11,6 +17,12 @@ import type * as lsp from "vscode-languageserver-protocol";
 export type DocumentSession = {
   readonly previousText: string;
   readonly nextText: string;
+  readonly change: DocumentSessionChange | null;
+};
+
+export type SnapshotDocumentSession = {
+  readonly previousDocument: LspTextDocumentSnapshot;
+  readonly nextDocument: LspTextDocumentSnapshot;
   readonly change: DocumentSessionChange | null;
 };
 
@@ -44,6 +56,18 @@ export function projectDiagnostics(
   return projectDiagnosticsThroughChange(
     documentSession.previousText,
     documentSession.nextText,
+    diagnostics,
+    documentSession.change,
+  );
+}
+
+export function projectDiagnosticsInSnapshot(
+  diagnostics: readonly lsp.Diagnostic[],
+  documentSession: SnapshotDocumentSession,
+): readonly ProjectedDiagnostic[] {
+  return projectDiagnosticsThroughSnapshotChange(
+    documentSession.previousDocument,
+    documentSession.nextDocument,
     diagnostics,
     documentSession.change,
   );
@@ -92,6 +116,31 @@ function projectDiagnosticsThroughChange(
   return projected;
 }
 
+function projectDiagnosticsThroughSnapshotChange(
+  previousDocument: LspTextDocumentSnapshot,
+  nextDocument: LspTextDocumentSnapshot,
+  diagnostics: readonly lsp.Diagnostic[],
+  change: DocumentSessionChange | null,
+): readonly lsp.Diagnostic[] {
+  if (diagnostics.length === 0) return diagnostics;
+
+  const edits = editsForChange(change);
+  if (edits.length === 0) return [];
+
+  const projected: lsp.Diagnostic[] = [];
+  for (const diagnostic of diagnostics) {
+    const next = projectDiagnosticThroughSnapshotEdits(
+      previousDocument,
+      nextDocument,
+      diagnostic,
+      edits,
+    );
+    if (next) projected.push(next);
+  }
+
+  return projected;
+}
+
 function projectDiagnosticThroughEdits(
   previousText: string,
   nextText: string,
@@ -109,6 +158,27 @@ function projectDiagnosticThroughEdits(
     range: {
       start: offsetToLspPosition(nextText, range.start),
       end: offsetToLspPosition(nextText, range.end),
+    },
+  };
+}
+
+function projectDiagnosticThroughSnapshotEdits(
+  previousDocument: LspTextDocumentSnapshot,
+  nextDocument: LspTextDocumentSnapshot,
+  diagnostic: lsp.Diagnostic,
+  edits: readonly TextEdit[],
+): lsp.Diagnostic | null {
+  const start = lspPositionToOffsetInSnapshot(previousDocument, diagnostic.range.start);
+  const end = lspPositionToOffsetInSnapshot(previousDocument, diagnostic.range.end);
+  const range = projectOffsetRangeThroughEdits({ start, end }, edits);
+  if (!range) return null;
+  if (range.start === range.end && start !== end) return null;
+
+  return {
+    ...diagnostic,
+    range: {
+      start: offsetToLspPositionInSnapshot(nextDocument, range.start),
+      end: offsetToLspPositionInSnapshot(nextDocument, range.end),
     },
   };
 }

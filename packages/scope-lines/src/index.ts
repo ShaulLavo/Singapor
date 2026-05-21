@@ -62,6 +62,16 @@ type ScopeLinesRenderContext = {
   readonly indentColumnCache: Map<number, number>;
 };
 
+type ScopeLinesRenderModel = {
+  readonly signature: string;
+  readonly segments: readonly ScopeLineSegment[];
+};
+
+type VisibleTextRowBounds = {
+  readonly startRow: number;
+  readonly endRow: number;
+};
+
 const DEFAULT_MIN_LINE_SPAN = 1;
 const BODY_INDENT_PROBE_LINES = 24;
 const SCOPE_LINE_COLOR_COUNT = 6;
@@ -153,11 +163,18 @@ class ScopeLinesContribution implements EditorViewContribution {
 
   private renderSnapshot(snapshot: EditorViewSnapshot): void {
     const renderContext = createScopeLinesRenderContext(snapshot);
-    const signature = snapshotSignature(renderContext, this.options);
-    if (signature === this.signature) return;
+    const model = measureScopeLinesPerformance(
+      "scopeLines.renderModel",
+      () => createScopeLinesRenderModel(renderContext, this.options),
+      () => ({
+        markerCount: snapshot.foldMarkers.length,
+        visibleRows: snapshot.visibleRows.length,
+      }),
+    );
+    if (model.signature === this.signature) return;
 
-    this.signature = signature;
-    renderScopeLines(this.root, renderContext, this.options);
+    this.signature = model.signature;
+    renderScopeLines(this.root, snapshot, model);
   }
 }
 
@@ -200,21 +217,19 @@ function createRoot(
 
 function renderScopeLines(
   root: HTMLDivElement,
-  context: ScopeLinesRenderContext,
-  options: ResolvedScopeLinesOptions,
+  snapshot: EditorViewSnapshot,
+  model: ScopeLinesRenderModel,
 ): void {
-  const snapshot = context.snapshot;
   root.style.setProperty("--editor-scope-lines-content-width", `${snapshot.contentWidth}px`);
-  root.replaceChildren(...createSegmentElements(root.ownerDocument, context, options));
+  root.replaceChildren(...createSegmentElements(root.ownerDocument, model.segments, snapshot));
 }
 
 function createSegmentElements(
   document: Document,
-  context: ScopeLinesRenderContext,
-  options: ResolvedScopeLinesOptions,
+  segments: readonly ScopeLineSegment[],
+  snapshot: EditorViewSnapshot,
 ): HTMLDivElement[] {
-  const segments = scopeLineSegments(context, options);
-  return segments.map((segment) => createSegmentElement(document, segment, context.snapshot));
+  return segments.map((segment) => createSegmentElement(document, segment, snapshot));
 }
 
 function createSegmentElement(
@@ -232,14 +247,18 @@ function createSegmentElement(
   return element;
 }
 
-function scopeLineSegments(
+function createScopeLinesRenderModel(
   context: ScopeLinesRenderContext,
   options: ResolvedScopeLinesOptions,
-): ScopeLineSegment[] {
+): ScopeLinesRenderModel {
   const guides = createScopeGuides(context, options);
   const segments: ScopeLineSegment[] = [];
   for (const guide of guides) appendGuideSegments(segments, guide, context.snapshot.visibleRows);
-  return segments;
+
+  return {
+    signature: snapshotSignature(context, options, guides),
+    segments,
+  };
 }
 
 function createScopeGuides(
@@ -247,12 +266,56 @@ function createScopeGuides(
   options: ResolvedScopeLinesOptions,
 ): ScopeGuide[] {
   const guides: ScopeGuide[] = [];
-  for (const marker of context.snapshot.foldMarkers) {
+  for (const marker of candidateFoldMarkers(context, options)) {
     const guide = createScopeGuide(marker, context, options);
     if (guide) guides.push(guide);
   }
   if (options.mode === "all") return guides;
   return nearestCursorScopeGuides(guides);
+}
+
+function candidateFoldMarkers(
+  context: ScopeLinesRenderContext,
+  options: ResolvedScopeLinesOptions,
+): readonly VirtualizedFoldMarker[] {
+  const snapshot = context.snapshot;
+  const bounds = visibleTextRowBounds(snapshot.visibleRows);
+  if (!bounds) return [];
+
+  const cursor = options.mode === "current" ? snapshot.selections[0]?.headOffset : undefined;
+  if (options.mode === "current" && cursor === undefined) return [];
+
+  const markers: VirtualizedFoldMarker[] = [];
+  for (const marker of snapshot.foldMarkers) {
+    if (!markerIntersectsVisibleRows(marker, bounds)) continue;
+    if (cursor !== undefined && !markerContainsOffset(marker, cursor)) continue;
+    markers.push(marker);
+  }
+  return markers;
+}
+
+function visibleTextRowBounds(
+  rows: readonly EditorVisibleRowSnapshot[],
+): VisibleTextRowBounds | null {
+  let startRow = Number.POSITIVE_INFINITY;
+  let endRow = Number.NEGATIVE_INFINITY;
+
+  for (const row of rows) {
+    if (row.kind !== "text") continue;
+    startRow = Math.min(startRow, row.bufferRow);
+    endRow = Math.max(endRow, row.bufferRow);
+  }
+
+  if (!Number.isFinite(startRow) || !Number.isFinite(endRow)) return null;
+  return { startRow, endRow };
+}
+
+function markerIntersectsVisibleRows(
+  marker: VirtualizedFoldMarker,
+  bounds: VisibleTextRowBounds,
+): boolean {
+  if (marker.startRow >= bounds.endRow) return false;
+  return marker.endRow > bounds.startRow;
 }
 
 function createScopeGuide(
@@ -469,6 +532,7 @@ function canMergeSegments(left: ScopeLineSegment, right: ScopeLineSegment): bool
 function snapshotSignature(
   context: ScopeLinesRenderContext,
   options: ResolvedScopeLinesOptions,
+  guides: readonly ScopeGuide[],
 ): string {
   const snapshot = context.snapshot;
   return [
@@ -478,103 +542,109 @@ function snapshotSignature(
     options.minLineSpan,
     options.mode,
     options.showActive,
-    scopeGuideSignature(context, options),
+    scopeGuideSignature(guides),
     visibleRowSignature(snapshot.visibleRows),
   ].join("|");
 }
 
-function scopeGuideSignature(
-  context: ScopeLinesRenderContext,
-  options: ResolvedScopeLinesOptions,
-): string {
-  if (options.mode === "current") return currentScopeGuideSignature(context, options);
-
-  const geometry = scopeGuideGeometrySignature(context, options);
-  if (!options.showActive) return geometry;
-
-  return `${geometry}/${activeScopeGuideSignature(context, options)}`;
+function scopeGuideSignature(guides: readonly ScopeGuide[]): string {
+  return guides.map(scopeGuideKey).join(",");
 }
 
-function scopeGuideGeometrySignature(
-  context: ScopeLinesRenderContext,
-  options: ResolvedScopeLinesOptions,
-): string {
-  return scopeGuideGeometries(context, options).map(scopeGuideGeometryKey).join(",");
-}
-
-function currentScopeGuideSignature(
-  context: ScopeLinesRenderContext,
-  options: ResolvedScopeLinesOptions,
-): string {
-  const current = nearestCursorScopeGuideGeometry(context, options);
-  return current ? scopeGuideGeometryKey(current) : "";
-}
-
-function activeScopeGuideSignature(
-  context: ScopeLinesRenderContext,
-  options: ResolvedScopeLinesOptions,
-): string {
-  return cursorScopeGuideGeometries(context, options).map(scopeGuideGeometryKey).join(",");
-}
-
-function scopeGuideGeometries(
-  context: ScopeLinesRenderContext,
-  options: ResolvedScopeLinesOptions,
-): ScopeGuideGeometry[] {
-  const guides: ScopeGuideGeometry[] = [];
-  for (const marker of context.snapshot.foldMarkers) {
-    const guide = scopeGuideGeometry(marker, context, options);
-    if (guide) guides.push(guide);
-  }
-  return guides;
-}
-
-function cursorScopeGuideGeometries(
-  context: ScopeLinesRenderContext,
-  options: ResolvedScopeLinesOptions,
-): ScopeGuideGeometry[] {
-  const snapshot = context.snapshot;
-  const cursor = snapshot.selections[0]?.headOffset;
-  if (cursor === undefined) return [];
-
-  const guides: ScopeGuideGeometry[] = [];
-  for (const marker of snapshot.foldMarkers) {
-    if (!markerContainsOffset(marker, cursor)) continue;
-
-    const guide = scopeGuideGeometry(marker, context, options);
-    if (guide) guides.push(guide);
-  }
-  return guides;
-}
-
-function nearestCursorScopeGuideGeometry(
-  context: ScopeLinesRenderContext,
-  options: ResolvedScopeLinesOptions,
-): ScopeGuideGeometry | null {
-  return cursorScopeGuideGeometries(context, options).reduce<ScopeGuideGeometry | null>(
-    nearestScopeGuideGeometry,
-    null,
-  );
-}
-
-function nearestScopeGuideGeometry(
-  current: ScopeGuideGeometry | null,
-  candidate: ScopeGuideGeometry,
-): ScopeGuideGeometry | null {
-  if (!current) return candidate;
-
-  const currentSpan = current.marker.endOffset - current.marker.startOffset;
-  const candidateSpan = candidate.marker.endOffset - candidate.marker.startOffset;
-  if (candidateSpan >= currentSpan) return current;
-  return candidate;
-}
-
-function scopeGuideGeometryKey(guide: ScopeGuideGeometry): string {
-  return [guide.marker.startRow, guide.marker.endRow, guide.column, guide.indentLevel].join(":");
+function scopeGuideKey(guide: ScopeGuide): string {
+  return [
+    guide.marker.startRow,
+    guide.marker.endRow,
+    guide.column,
+    guide.indentLevel,
+    guide.active ? 1 : 0,
+  ].join(":");
 }
 
 function visibleRowSignature(rows: readonly EditorVisibleRowSnapshot[]): string {
   return rows
     .map((row) => [row.index, row.bufferRow, row.top, row.height, row.kind].join(":"))
     .join(",");
+}
+
+type ScopeLinesDiagnostic = {
+  readonly name: string;
+  readonly durationMs?: number;
+  readonly detail?: Readonly<Record<string, unknown>>;
+};
+
+type ScopeLinesDiagnosticSink =
+  | ((diagnostic: ScopeLinesDiagnostic) => void)
+  | {
+      readonly enabled?: boolean;
+      readonly record?: (diagnostic: ScopeLinesDiagnostic) => void;
+    };
+
+type ScopeLinesDiagnosticGlobal = typeof globalThis & {
+  __EDITOR_PERFORMANCE_DIAGNOSTICS__?: ScopeLinesDiagnosticSink | null;
+};
+
+type DiagnosticDetail =
+  | Readonly<Record<string, unknown>>
+  | (() => Readonly<Record<string, unknown>> | undefined)
+  | undefined;
+
+function measureScopeLinesPerformance<T>(name: string, run: () => T, detail?: DiagnosticDetail): T {
+  const sink = scopeLinesDiagnosticSink();
+  if (!sink) return run();
+
+  const start = nowMs();
+  try {
+    return run();
+  } finally {
+    recordScopeLinesDiagnostic(sink, name, detail, nowMs() - start);
+  }
+}
+
+function recordScopeLinesDiagnostic(
+  sink: ScopeLinesDiagnosticSink,
+  name: string,
+  detail: DiagnosticDetail,
+  durationMs: number,
+): void {
+  const diagnostic = createDiagnostic(name, detail, durationMs);
+  if (typeof sink === "function") {
+    sink(diagnostic);
+    return;
+  }
+
+  sink.record?.(diagnostic);
+}
+
+function scopeLinesDiagnosticSink(): ScopeLinesDiagnosticSink | null {
+  const sink = scopeLinesDiagnosticGlobal().__EDITOR_PERFORMANCE_DIAGNOSTICS__;
+  if (!sink) return null;
+  if (typeof sink === "function") return sink;
+  if (sink.enabled !== true && typeof sink.record !== "function") return null;
+  return sink;
+}
+
+function createDiagnostic(
+  name: string,
+  detail: DiagnosticDetail,
+  durationMs: number,
+): ScopeLinesDiagnostic {
+  const resolvedDetail = resolveDiagnosticDetail(detail);
+  if (resolvedDetail === undefined) return { name, durationMs };
+  return { name, durationMs, detail: resolvedDetail };
+}
+
+function resolveDiagnosticDetail(
+  detail: DiagnosticDetail,
+): Readonly<Record<string, unknown>> | undefined {
+  if (typeof detail === "function") return detail();
+  return detail;
+}
+
+function scopeLinesDiagnosticGlobal(): ScopeLinesDiagnosticGlobal {
+  return globalThis as ScopeLinesDiagnosticGlobal;
+}
+
+function nowMs(): number {
+  return globalThis.performance?.now() ?? Date.now();
 }

@@ -9,6 +9,7 @@ import type {
   EditorViewContributionProvider,
   EditorViewSnapshot,
   TextEdit,
+  TextSnapshot,
 } from "@editor/core";
 import { EDITOR_MINIMAP_FEATURE_ID } from "@editor/core";
 import type { LspWebSocketLike, LspWorkerLike } from "@editor/lsp";
@@ -420,6 +421,37 @@ describe("createTypeScriptLspPlugin", () => {
     });
 
     expect(context.setRangeHighlight).not.toHaveBeenCalled();
+  });
+
+  it("syncs content updates from text snapshots without reading snapshot.text", async () => {
+    const worker = new FakeWorker();
+    const context = viewContributionContext(editorSnapshot());
+    const plugin = createTypeScriptLspPlugin({ workerFactory: () => worker });
+    const provider = activatePlugin(plugin);
+    const contribution = provider.createContribution(context);
+    if (!contribution) throw new Error("missing contribution");
+
+    worker.receive(initializeResponse(message(worker.sent[0])));
+    await flushPromises();
+    contribution.update(
+      snapshotWithThrowingText("const value: string = 2;", {
+        textVersion: 2,
+        selections: [collapsedSelection(23)],
+      }),
+      "content",
+      documentChange([{ from: 22, to: 23, text: "2" }]),
+    );
+
+    const didChange = message(worker.sent.toReversed().find(hasMethod("textDocument/didChange")));
+    expect(contentChangesFor(didChange)).toEqual([
+      {
+        range: {
+          start: { line: 0, character: 22 },
+          end: { line: 0, character: 23 },
+        },
+        text: "2",
+      },
+    ]);
   });
 
   it("optimistically shortens diagnostic highlights through local deletion", async () => {
@@ -1315,6 +1347,47 @@ function editorSnapshot(options: Partial<EditorViewSnapshot> = {}): EditorViewSn
   };
 }
 
+function snapshotWithThrowingText(
+  text: string,
+  options: Partial<EditorViewSnapshot> = {},
+): EditorViewSnapshot {
+  const snapshot = editorSnapshot({
+    ...options,
+    text,
+    textSnapshot: stringTextSnapshot(text),
+    lineStarts: lineStarts(text),
+  });
+  Object.defineProperty(snapshot, "text", {
+    configurable: true,
+    enumerable: true,
+    get: () => {
+      throw new Error("unexpected snapshot.text materialization");
+    },
+  });
+  return snapshot;
+}
+
+function stringTextSnapshot(text: string): TextSnapshot {
+  return {
+    length: text.length,
+    getText: () => text,
+    getTextInRange: (start, end) => text.slice(start, end),
+    forEachTextChunk: (visit) => visit(text, 0, text.length),
+  };
+}
+
+function lineStarts(text: string): number[] {
+  const starts = [0];
+  let index = text.indexOf("\n");
+
+  while (index !== -1) {
+    starts.push(index + 1);
+    index = text.indexOf("\n", index + 1);
+  }
+
+  return starts;
+}
+
 function collapsedSelection(offset: number): EditorViewSnapshot["selections"][number] {
   return {
     anchorOffset: offset,
@@ -1395,6 +1468,11 @@ function sentSocketMethods(socket: FakeWebSocket): readonly unknown[] {
 function textDocumentFor(item: unknown): unknown {
   const params = message(item).params as { readonly textDocument: unknown };
   return params.textDocument;
+}
+
+function contentChangesFor(item: JsonMessage): unknown {
+  const params = item.params as { readonly contentChanges: unknown };
+  return params.contentChanges;
 }
 
 function latestRangeHighlightRanges(

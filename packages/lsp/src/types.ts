@@ -14,6 +14,17 @@ export type LspTextEdit = {
   readonly text: string;
 };
 
+export type LspTextSnapshot = {
+  readonly length: number;
+  getText(): string;
+  getTextInRange(start: number, end?: number): string;
+};
+
+export type LspTextDocumentSnapshot = {
+  readonly textSnapshot: LspTextSnapshot;
+  readonly lineStarts: readonly number[];
+};
+
 export type LspDocumentSyncMode = "none" | "full" | "incremental";
 
 export type LspDocumentOpenOptions = {
@@ -24,9 +35,15 @@ export type LspDocumentOpenOptions = {
 
 export type LspDocument = LspDocumentOpenOptions & {
   readonly version: number;
+  readonly textSnapshot: LspTextSnapshot;
+  readonly lineStarts: readonly number[];
 };
 
 export type LspWorkspaceEditOptions = {
+  readonly edits?: readonly LspTextEdit[];
+};
+
+export type LspWorkspaceSnapshotEditOptions = LspTextDocumentSnapshot & {
   readonly edits?: readonly LspTextEdit[];
 };
 

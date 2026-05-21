@@ -15,11 +15,13 @@ import {
   responseResult,
   type LspRequestId,
 } from "./protocol";
-import { createLspContentChanges } from "./positions";
+import { createLspContentChanges, createLspContentChangesInSnapshot } from "./positions";
+import { measureLspPerformance } from "./performanceDiagnostics";
 import type {
   LspDocument,
   LspDocumentSyncMode,
   LspNotificationHandler,
+  LspTextDocumentSnapshot,
   LspTextEdit,
   LspTransport,
   LspUnhandledNotificationHandler,
@@ -55,6 +57,12 @@ type PendingRequest = {
 type RequestOptions = {
   readonly timeoutMs?: number;
   readonly signal?: AbortSignal;
+};
+
+type LspDocumentChange = {
+  readonly edits: readonly LspTextEdit[];
+  readonly previousSnapshot?: LspTextDocumentSnapshot;
+  readonly previousText?: string;
 };
 
 export class LspClient {
@@ -175,21 +183,14 @@ export class LspClient {
     });
   }
 
-  public didChangeDocument(
-    document: LspDocument,
-    previousText: string,
-    edits: readonly LspTextEdit[],
-  ): void {
+  public didChangeDocument(document: LspDocument, change: LspDocumentChange): void {
     if (this.state !== "ready") return;
     if (this.syncMode === "none") return;
     if (!this.syncedDocuments.has(document.uri)) return;
 
     this.trySendNotification("textDocument/didChange", {
       textDocument: { uri: document.uri, version: document.version },
-      contentChanges: createLspContentChanges(previousText, document.text, {
-        incremental: this.syncMode === "incremental",
-        edits,
-      }),
+      contentChanges: this.contentChangesForDocumentChange(document, change),
     });
   }
 
@@ -234,6 +235,39 @@ export class LspClient {
     this.serverCapabilities = result.capabilities;
     this.syncMode = documentSyncModeFromCapabilities(result.capabilities);
     this.state = "ready";
+  }
+
+  private contentChangesForDocumentChange(
+    document: LspDocument,
+    change: LspDocumentChange,
+  ): readonly lsp.TextDocumentContentChangeEvent[] {
+    return measureLspPerformance(
+      "lsp.createContentChanges",
+      () => this.createContentChanges(document, change),
+      () => ({
+        syncMode: this.syncMode,
+        editCount: change.edits.length,
+        snapshot: Boolean(change.previousSnapshot),
+        length: document.textSnapshot.length,
+      }),
+    );
+  }
+
+  private createContentChanges(
+    document: LspDocument,
+    change: LspDocumentChange,
+  ): readonly lsp.TextDocumentContentChangeEvent[] {
+    if (this.syncMode === "incremental" && change.previousSnapshot) {
+      return createLspContentChangesInSnapshot(change.previousSnapshot, document, {
+        incremental: true,
+        edits: change.edits,
+      });
+    }
+
+    return createLspContentChanges(change.previousText ?? "", document.text, {
+      incremental: this.syncMode === "incremental",
+      edits: change.edits,
+    });
   }
 
   private requestInner<TResult>(

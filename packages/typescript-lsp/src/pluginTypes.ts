@@ -1,3 +1,4 @@
+import type { TextSnapshot } from "@editor/core";
 import type { LspWebSocketTransportOptions, LspWorkerLike } from "@editor/lsp";
 import type * as lsp from "vscode-languageserver-protocol";
 
@@ -42,6 +43,8 @@ export type DiagnosticMarkerDirection = "next" | "previous";
 export type ActiveDocument = {
   readonly uri: lsp.DocumentUri;
   readonly languageId: string;
+  readonly textSnapshot: TextSnapshot;
+  readonly lineStarts: readonly number[];
   readonly text: string;
   readonly textVersion: number;
   readonly lspVersion: number;
@@ -50,6 +53,8 @@ export type ActiveDocument = {
 export type DocumentDescriptor = {
   readonly uri: lsp.DocumentUri;
   readonly languageId: string;
+  readonly textSnapshot: TextSnapshot;
+  readonly lineStarts: readonly number[];
   readonly text: string;
   readonly textVersion: number;
 };

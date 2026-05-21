@@ -2,9 +2,15 @@ import { describe, expect, it } from "vitest";
 
 import {
   createLspContentChanges,
+  createLspContentChangesInSnapshot,
   lspPositionToOffset,
+  lspPositionToOffsetInSnapshot,
   offsetToLspPosition,
+  offsetToLspPositionInSnapshot,
   textEditsToLspContentChanges,
+  textEditsToLspContentChangesInSnapshot,
+  type LspTextDocumentSnapshot,
+  type LspTextSnapshot,
 } from "../src/index.ts";
 
 describe("LSP position helpers", () => {
@@ -50,6 +56,35 @@ describe("LSP position helpers", () => {
     expect(offsetToLspPosition(text, 3)).toEqual({ line: 1, character: 0 });
     expect(lspPositionToOffset(text, { line: 0, character: 99 })).toBe(2);
     expect(lspPositionToOffset(text, { line: 1, character: 1 })).toBe(4);
+  });
+
+  it("converts offsets and positions from snapshots without materializing text", () => {
+    const document = snapshotDocument("ab\ncde\n");
+
+    expect(offsetToLspPositionInSnapshot(document, 0)).toEqual({ line: 0, character: 0 });
+    expect(offsetToLspPositionInSnapshot(document, 2)).toEqual({ line: 0, character: 2 });
+    expect(offsetToLspPositionInSnapshot(document, 3)).toEqual({ line: 1, character: 0 });
+    expect(offsetToLspPositionInSnapshot(document, 7)).toEqual({ line: 2, character: 0 });
+    expect(lspPositionToOffsetInSnapshot(document, { line: 0, character: 99 })).toBe(2);
+    expect(lspPositionToOffsetInSnapshot(document, { line: 1, character: 2 })).toBe(5);
+    expect(lspPositionToOffsetInSnapshot(document, { line: 99, character: 1 })).toBe(7);
+  });
+
+  it("treats CRLF as one snapshot line break and clamps offsets inside the break", () => {
+    const document = snapshotDocument("ab\r\nc");
+
+    expect(offsetToLspPositionInSnapshot(document, 2)).toEqual({ line: 0, character: 2 });
+    expect(offsetToLspPositionInSnapshot(document, 3)).toEqual({ line: 0, character: 2 });
+    expect(offsetToLspPositionInSnapshot(document, 4)).toEqual({ line: 1, character: 0 });
+    expect(lspPositionToOffsetInSnapshot(document, { line: 0, character: 99 })).toBe(2);
+    expect(lspPositionToOffsetInSnapshot(document, { line: 1, character: 1 })).toBe(5);
+  });
+
+  it("counts UTF-16 code units in snapshot positions", () => {
+    const document = snapshotDocument("😀a");
+
+    expect(offsetToLspPositionInSnapshot(document, 2)).toEqual({ line: 0, character: 2 });
+    expect(lspPositionToOffsetInSnapshot(document, { line: 0, character: 2 })).toBe(2);
   });
 });
 
@@ -118,4 +153,94 @@ describe("LSP content change helpers", () => {
       }),
     ).toEqual([{ text: "abcd" }]);
   });
+
+  it("creates snapshot incremental ranges without materializing full text", () => {
+    const changes = textEditsToLspContentChangesInSnapshot(snapshotDocument("first\nsecond"), [
+      { from: 6, to: 12, text: "SECOND" },
+    ]);
+
+    expect(changes).toEqual([
+      {
+        range: {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 6 },
+        },
+        text: "SECOND",
+      },
+    ]);
+  });
+
+  it("uses snapshot incremental changes when edit lengths match the next snapshot", () => {
+    const changes = createLspContentChangesInSnapshot(
+      snapshotDocument("ab\ncd"),
+      snapshotDocument("aXb\ncd"),
+      {
+        incremental: true,
+        edits: [{ from: 1, to: 1, text: "X" }],
+      },
+    );
+
+    expect(changes).toEqual([
+      {
+        range: {
+          start: { line: 0, character: 1 },
+          end: { line: 0, character: 1 },
+        },
+        text: "X",
+      },
+    ]);
+  });
+
+  it("falls back to full snapshot content for invalid incremental edits", () => {
+    const changes = createLspContentChangesInSnapshot(
+      snapshotDocument("abc"),
+      materializingSnapshotDocument("abcd"),
+      {
+        incremental: true,
+        edits: [{ from: 5, to: 5, text: "d" }],
+      },
+    );
+
+    expect(changes).toEqual([{ text: "abcd" }]);
+  });
 });
+
+function snapshotDocument(text: string): LspTextDocumentSnapshot {
+  return {
+    textSnapshot: throwingFullTextSnapshot(text),
+    lineStarts: lineStarts(text),
+  };
+}
+
+function materializingSnapshotDocument(text: string): LspTextDocumentSnapshot {
+  return {
+    textSnapshot: {
+      length: text.length,
+      getText: () => text,
+      getTextInRange: (start, end) => text.slice(start, end),
+    },
+    lineStarts: lineStarts(text),
+  };
+}
+
+function throwingFullTextSnapshot(text: string): LspTextSnapshot {
+  return {
+    length: text.length,
+    getText: () => {
+      throw new Error("unexpected full text materialization");
+    },
+    getTextInRange: (start, end) => text.slice(start, end),
+  };
+}
+
+function lineStarts(text: string): number[] {
+  const starts = [0];
+  let index = text.indexOf("\n");
+
+  while (index !== -1) {
+    starts.push(index + 1);
+    index = text.indexOf("\n", index + 1);
+  }
+
+  return starts;
+}

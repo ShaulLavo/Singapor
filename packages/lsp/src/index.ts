@@ -2,10 +2,15 @@ export { defaultClientCapabilities, documentSyncModeFromCapabilities } from "./c
 export { LspClient, type LspClientConfig, type LspClientState } from "./client";
 export {
   createLspContentChanges,
+  createLspContentChangesInSnapshot,
   lspPositionToOffset,
+  lspPositionToOffsetInSnapshot,
   offsetToLspPosition,
+  offsetToLspPositionInSnapshot,
   textEditsToLspContentChanges,
+  textEditsToLspContentChangesInSnapshot,
   textEditToLspContentChange,
+  textEditToLspContentChangeInSnapshot,
   type LspContentChangeOptions,
 } from "./positions";
 export {
@@ -38,11 +43,14 @@ export type {
   LspDocumentOpenOptions,
   LspDocumentSyncMode,
   LspNotificationHandler,
+  LspTextDocumentSnapshot,
   LspTextEdit,
+  LspTextSnapshot,
   LspTransport,
   LspTransportHandler,
   LspUnhandledNotificationHandler,
   LspWorkspaceEditOptions,
+  LspWorkspaceSnapshotEditOptions,
 } from "./types";
 export { LspWorkspace } from "./workspace";
 export type * as lsp from "vscode-languageserver-protocol";
