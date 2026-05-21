@@ -183,6 +183,7 @@ export type EditorFeatureContributionContext = {
   readonly highlightPrefix: string;
   hasDocument(): boolean;
   getText(): string;
+  getTextSnapshot?(): TextSnapshot | null;
   getSelections(): readonly EditorResolvedSelection[];
   focusEditor(): void;
   setSelection(anchor: number, head: number, timingName: string, revealOffset?: number): void;

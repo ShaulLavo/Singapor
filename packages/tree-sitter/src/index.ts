@@ -212,10 +212,7 @@ const releaseSyntaxProvider = (
   registration.contextReferences.delete(context);
 };
 
-const releaseLanguage = (
-  registration: TreeSitterProviderRegistration,
-  key: string,
-): void => {
+const releaseLanguage = (registration: TreeSitterProviderRegistration, key: string): void => {
   const reference = registration.languageReferences.get(key);
   if (!reference) return;
 

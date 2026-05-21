@@ -23,6 +23,14 @@ type ActEnvironment = typeof globalThis & {
   IS_REACT_ACT_ENVIRONMENT?: boolean;
 };
 
+type Diagnostic = {
+  readonly name: string;
+};
+
+type DiagnosticGlobal = typeof globalThis & {
+  __EDITOR_PERFORMANCE_DIAGNOSTICS__?: ((diagnostic: Diagnostic) => void) | null;
+};
+
 const EMPTY_SELECTIONS: readonly EditorResolvedSelection[] = [];
 
 beforeEach(() => {
@@ -34,6 +42,7 @@ beforeEach(() => {
 afterEach(() => {
   Reflect.deleteProperty(globalThis, "Highlight");
   Reflect.deleteProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT");
+  Reflect.deleteProperty(globalThis, "__EDITOR_PERFORMANCE_DIAGNOSTICS__");
   document.body.replaceChildren();
 });
 
@@ -67,6 +76,24 @@ describe("useEditor", () => {
     expect(mounted.controller.getState()?.length).toBe(6);
     expect(mounted.controller.getLastChange()?.kind).toBe("edit");
     expect(mounted.controller.getSnapshot()?.text).toBe("alpha!");
+
+    mounted.dispose();
+  });
+
+  it("does not materialize full text during store sync until text is read", () => {
+    const diagnostics = collectDiagnostics();
+    const mounted = mountReactEditor({
+      document: { text: "alpha", documentId: "a.ts", revision: 1 },
+    });
+    diagnostics.length = 0;
+
+    act(() => mounted.controller.commands.edit({ from: 5, to: 5, text: "!" }));
+
+    expect(textSnapshotReads(diagnostics)).toHaveLength(0);
+    expect(mounted.controller.getTextSnapshot()?.length).toBe(6);
+    expect(textSnapshotReads(diagnostics)).toHaveLength(0);
+    expect(mounted.controller.getText()).toBe("alpha!");
+    expect(textSnapshotReads(diagnostics)).toHaveLength(1);
 
     mounted.dispose();
   });
@@ -550,4 +577,16 @@ function selectionsEqual(
       selection.endOffset === nextSelection.endOffset
     );
   });
+}
+
+function collectDiagnostics(): Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+  (globalThis as DiagnosticGlobal).__EDITOR_PERFORMANCE_DIAGNOSTICS__ = (diagnostic) => {
+    diagnostics.push(diagnostic);
+  };
+  return diagnostics;
+}
+
+function textSnapshotReads(diagnostics: readonly Diagnostic[]): readonly Diagnostic[] {
+  return diagnostics.filter((diagnostic) => diagnostic.name === "textSnapshot.getText");
 }

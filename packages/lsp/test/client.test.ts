@@ -99,9 +99,7 @@ describe("LspClient", () => {
     const { client, transport } = await initializedClient();
     transport.failSend = true;
 
-    await expect(client.request("test/sendFailure", {})).rejects.toThrow(
-      "transport send failed",
-    );
+    await expect(client.request("test/sendFailure", {})).rejects.toThrow("transport send failed");
 
     expect(client.connected).toBe(false);
   });

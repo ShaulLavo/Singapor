@@ -5,6 +5,7 @@ import type {
   EditorViewContributionUpdateKind,
   EditorViewSnapshot,
   EditorVisibleRowSnapshot,
+  TextSnapshot,
   VirtualizedFoldMarker,
 } from "@editor/core";
 import { createStringTextSnapshot } from "@editor/core";
@@ -52,6 +53,13 @@ type ScopeGuidePlacement = {
 
 type ScopeGuideGeometry = ScopeGuidePlacement & {
   readonly marker: VirtualizedFoldMarker;
+};
+
+type ScopeLinesRenderContext = {
+  readonly snapshot: EditorViewSnapshot;
+  readonly textSnapshot: TextSnapshot;
+  readonly lineTextCache: Map<number, string>;
+  readonly indentColumnCache: Map<number, number>;
 };
 
 const DEFAULT_MIN_LINE_SPAN = 1;
@@ -144,12 +152,22 @@ class ScopeLinesContribution implements EditorViewContribution {
   }
 
   private renderSnapshot(snapshot: EditorViewSnapshot): void {
-    const signature = snapshotSignature(snapshot, this.options);
+    const renderContext = createScopeLinesRenderContext(snapshot);
+    const signature = snapshotSignature(renderContext, this.options);
     if (signature === this.signature) return;
 
     this.signature = signature;
-    renderScopeLines(this.root, snapshot, this.options);
+    renderScopeLines(this.root, renderContext, this.options);
   }
+}
+
+function createScopeLinesRenderContext(snapshot: EditorViewSnapshot): ScopeLinesRenderContext {
+  return {
+    snapshot,
+    textSnapshot: snapshot.textSnapshot ?? createStringTextSnapshot(snapshot.text),
+    lineTextCache: new Map(),
+    indentColumnCache: new Map(),
+  };
 }
 
 function resolveScopeLinesOptions(options: ScopeLinesPluginOptions): ResolvedScopeLinesOptions {
@@ -182,20 +200,21 @@ function createRoot(
 
 function renderScopeLines(
   root: HTMLDivElement,
-  snapshot: EditorViewSnapshot,
+  context: ScopeLinesRenderContext,
   options: ResolvedScopeLinesOptions,
 ): void {
+  const snapshot = context.snapshot;
   root.style.setProperty("--editor-scope-lines-content-width", `${snapshot.contentWidth}px`);
-  root.replaceChildren(...createSegmentElements(root.ownerDocument, snapshot, options));
+  root.replaceChildren(...createSegmentElements(root.ownerDocument, context, options));
 }
 
 function createSegmentElements(
   document: Document,
-  snapshot: EditorViewSnapshot,
+  context: ScopeLinesRenderContext,
   options: ResolvedScopeLinesOptions,
 ): HTMLDivElement[] {
-  const segments = scopeLineSegments(snapshot, options);
-  return segments.map((segment) => createSegmentElement(document, segment, snapshot));
+  const segments = scopeLineSegments(context, options);
+  return segments.map((segment) => createSegmentElement(document, segment, context.snapshot));
 }
 
 function createSegmentElement(
@@ -214,22 +233,22 @@ function createSegmentElement(
 }
 
 function scopeLineSegments(
-  snapshot: EditorViewSnapshot,
+  context: ScopeLinesRenderContext,
   options: ResolvedScopeLinesOptions,
 ): ScopeLineSegment[] {
-  const guides = createScopeGuides(snapshot, options);
+  const guides = createScopeGuides(context, options);
   const segments: ScopeLineSegment[] = [];
-  for (const guide of guides) appendGuideSegments(segments, guide, snapshot.visibleRows);
+  for (const guide of guides) appendGuideSegments(segments, guide, context.snapshot.visibleRows);
   return segments;
 }
 
 function createScopeGuides(
-  snapshot: EditorViewSnapshot,
+  context: ScopeLinesRenderContext,
   options: ResolvedScopeLinesOptions,
 ): ScopeGuide[] {
   const guides: ScopeGuide[] = [];
-  for (const marker of snapshot.foldMarkers) {
-    const guide = createScopeGuide(marker, snapshot, options);
+  for (const marker of context.snapshot.foldMarkers) {
+    const guide = createScopeGuide(marker, context, options);
     if (guide) guides.push(guide);
   }
   if (options.mode === "all") return guides;
@@ -238,13 +257,13 @@ function createScopeGuides(
 
 function createScopeGuide(
   marker: VirtualizedFoldMarker,
-  snapshot: EditorViewSnapshot,
+  context: ScopeLinesRenderContext,
   options: ResolvedScopeLinesOptions,
 ): ScopeGuide | null {
-  const geometry = scopeGuideGeometry(marker, snapshot, options);
+  const geometry = scopeGuideGeometry(marker, context, options);
   if (!geometry) return null;
 
-  const containsCursor = markerContainsCursor(marker, snapshot);
+  const containsCursor = markerContainsCursor(marker, context.snapshot);
 
   return {
     marker,
@@ -257,13 +276,13 @@ function createScopeGuide(
 
 function scopeGuideGeometry(
   marker: VirtualizedFoldMarker,
-  snapshot: EditorViewSnapshot,
+  context: ScopeLinesRenderContext,
   options: ResolvedScopeLinesOptions,
 ): ScopeGuideGeometry | null {
   if (marker.collapsed) return null;
   if (marker.endRow - marker.startRow < options.minLineSpan) return null;
 
-  const placement = scopeGuidePlacement(marker, snapshot);
+  const placement = scopeGuidePlacement(marker, context);
   if (placement.column < 0) return null;
 
   return {
@@ -275,10 +294,11 @@ function scopeGuideGeometry(
 
 function scopeGuidePlacement(
   marker: VirtualizedFoldMarker,
-  snapshot: EditorViewSnapshot,
+  context: ScopeLinesRenderContext,
 ): ScopeGuidePlacement {
-  const startIndent = lineIndentColumn(snapshot, marker.startRow);
-  const bodyIndent = firstBodyIndentColumn(snapshot, marker);
+  const snapshot = context.snapshot;
+  const startIndent = lineIndentColumn(context, marker.startRow);
+  const bodyIndent = firstBodyIndentColumn(context, marker);
   if (bodyIndent === null) return placementFromIndent(startIndent, startIndent, snapshot.tabSize);
   if (bodyIndent <= startIndent) {
     return placementFromIndent(startIndent, startIndent, snapshot.tabSize);
@@ -303,30 +323,49 @@ function indentLevelForColumn(column: number, tabSize: number): number {
 }
 
 function firstBodyIndentColumn(
-  snapshot: EditorViewSnapshot,
+  context: ScopeLinesRenderContext,
   marker: VirtualizedFoldMarker,
 ): number | null {
   const probeEnd = Math.min(marker.endRow, marker.startRow + BODY_INDENT_PROBE_LINES);
   for (let row = marker.startRow + 1; row <= probeEnd; row += 1) {
-    const text = lineText(snapshot, row);
+    const text = lineText(context, row);
     if (isBlankLine(text)) continue;
-    return indentColumn(text, snapshot.tabSize);
+    return indentColumnForRow(context, row);
   }
   return null;
 }
 
-function lineIndentColumn(snapshot: EditorViewSnapshot, row: number): number {
-  return indentColumn(lineText(snapshot, row), snapshot.tabSize);
+function lineIndentColumn(context: ScopeLinesRenderContext, row: number): number {
+  return indentColumnForRow(context, row);
 }
 
-function lineText(snapshot: EditorViewSnapshot, row: number): string {
+function lineText(context: ScopeLinesRenderContext, row: number): string {
+  const cached = context.lineTextCache.get(row);
+  if (cached !== undefined) return cached;
+
+  const text = uncachedLineText(context, row);
+  context.lineTextCache.set(row, text);
+  return text;
+}
+
+function uncachedLineText(context: ScopeLinesRenderContext, row: number): string {
+  const snapshot = context.snapshot;
   const start = snapshot.lineStarts[row];
   if (start === undefined) return "";
 
-  const textSnapshot = snapshot.textSnapshot ?? createStringTextSnapshot(snapshot.text);
+  const textSnapshot = context.textSnapshot;
   const nextStart = snapshot.lineStarts[row + 1] ?? textSnapshot.length + 1;
   const end = Math.max(start, Math.min(textSnapshot.length, nextStart - 1));
   return textSnapshot.getTextInRange(start, end);
+}
+
+function indentColumnForRow(context: ScopeLinesRenderContext, row: number): number {
+  const cached = context.indentColumnCache.get(row);
+  if (cached !== undefined) return cached;
+
+  const column = indentColumn(lineText(context, row), context.snapshot.tabSize);
+  context.indentColumnCache.set(row, column);
+  return column;
 }
 
 function isBlankLine(text: string): boolean {
@@ -428,9 +467,10 @@ function canMergeSegments(left: ScopeLineSegment, right: ScopeLineSegment): bool
 }
 
 function snapshotSignature(
-  snapshot: EditorViewSnapshot,
+  context: ScopeLinesRenderContext,
   options: ResolvedScopeLinesOptions,
 ): string {
+  const snapshot = context.snapshot;
   return [
     snapshot.contentWidth,
     snapshot.metrics.characterWidth,
@@ -438,61 +478,62 @@ function snapshotSignature(
     options.minLineSpan,
     options.mode,
     options.showActive,
-    scopeGuideSignature(snapshot, options),
+    scopeGuideSignature(context, options),
     visibleRowSignature(snapshot.visibleRows),
   ].join("|");
 }
 
 function scopeGuideSignature(
-  snapshot: EditorViewSnapshot,
+  context: ScopeLinesRenderContext,
   options: ResolvedScopeLinesOptions,
 ): string {
-  if (options.mode === "current") return currentScopeGuideSignature(snapshot, options);
+  if (options.mode === "current") return currentScopeGuideSignature(context, options);
 
-  const geometry = scopeGuideGeometrySignature(snapshot, options);
+  const geometry = scopeGuideGeometrySignature(context, options);
   if (!options.showActive) return geometry;
 
-  return `${geometry}/${activeScopeGuideSignature(snapshot, options)}`;
+  return `${geometry}/${activeScopeGuideSignature(context, options)}`;
 }
 
 function scopeGuideGeometrySignature(
-  snapshot: EditorViewSnapshot,
+  context: ScopeLinesRenderContext,
   options: ResolvedScopeLinesOptions,
 ): string {
-  return scopeGuideGeometries(snapshot, options).map(scopeGuideGeometryKey).join(",");
+  return scopeGuideGeometries(context, options).map(scopeGuideGeometryKey).join(",");
 }
 
 function currentScopeGuideSignature(
-  snapshot: EditorViewSnapshot,
+  context: ScopeLinesRenderContext,
   options: ResolvedScopeLinesOptions,
 ): string {
-  const current = nearestCursorScopeGuideGeometry(snapshot, options);
+  const current = nearestCursorScopeGuideGeometry(context, options);
   return current ? scopeGuideGeometryKey(current) : "";
 }
 
 function activeScopeGuideSignature(
-  snapshot: EditorViewSnapshot,
+  context: ScopeLinesRenderContext,
   options: ResolvedScopeLinesOptions,
 ): string {
-  return cursorScopeGuideGeometries(snapshot, options).map(scopeGuideGeometryKey).join(",");
+  return cursorScopeGuideGeometries(context, options).map(scopeGuideGeometryKey).join(",");
 }
 
 function scopeGuideGeometries(
-  snapshot: EditorViewSnapshot,
+  context: ScopeLinesRenderContext,
   options: ResolvedScopeLinesOptions,
 ): ScopeGuideGeometry[] {
   const guides: ScopeGuideGeometry[] = [];
-  for (const marker of snapshot.foldMarkers) {
-    const guide = scopeGuideGeometry(marker, snapshot, options);
+  for (const marker of context.snapshot.foldMarkers) {
+    const guide = scopeGuideGeometry(marker, context, options);
     if (guide) guides.push(guide);
   }
   return guides;
 }
 
 function cursorScopeGuideGeometries(
-  snapshot: EditorViewSnapshot,
+  context: ScopeLinesRenderContext,
   options: ResolvedScopeLinesOptions,
 ): ScopeGuideGeometry[] {
+  const snapshot = context.snapshot;
   const cursor = snapshot.selections[0]?.headOffset;
   if (cursor === undefined) return [];
 
@@ -500,17 +541,17 @@ function cursorScopeGuideGeometries(
   for (const marker of snapshot.foldMarkers) {
     if (!markerContainsOffset(marker, cursor)) continue;
 
-    const guide = scopeGuideGeometry(marker, snapshot, options);
+    const guide = scopeGuideGeometry(marker, context, options);
     if (guide) guides.push(guide);
   }
   return guides;
 }
 
 function nearestCursorScopeGuideGeometry(
-  snapshot: EditorViewSnapshot,
+  context: ScopeLinesRenderContext,
   options: ResolvedScopeLinesOptions,
 ): ScopeGuideGeometry | null {
-  return cursorScopeGuideGeometries(snapshot, options).reduce<ScopeGuideGeometry | null>(
+  return cursorScopeGuideGeometries(context, options).reduce<ScopeGuideGeometry | null>(
     nearestScopeGuideGeometry,
     null,
   );

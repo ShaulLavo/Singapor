@@ -499,6 +499,10 @@ export class Editor {
     return this.session?.getText() ?? this.text;
   }
 
+  getTextSnapshot(): TextSnapshot {
+    return this.textSnapshot;
+  }
+
   getMergeConflicts(): readonly MergeConflictRegion[] {
     return parseMergeConflicts(this.getText());
   }
@@ -957,6 +961,7 @@ export class Editor {
       highlightPrefix: this.highlightPrefix,
       hasDocument: () => this.session !== null,
       getText: () => this.getText(),
+      getTextSnapshot: () => this.session?.getTextSnapshot() ?? null,
       getSelections: () => this.inputSelection.resolveViewSelections(),
       focusEditor: () => this.focus(),
       setSelection: (anchor, head, timingName, revealOffset) =>

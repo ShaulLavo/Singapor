@@ -28,20 +28,20 @@ describe("tooltip Markdown rendering", () => {
     expect(code?.style.getPropertyValue("white-space")).toBe("pre-wrap");
     expect(code?.style.overflowWrap).toBe("break-word");
     expect(code?.textContent).toContain("veryLongValueName");
-    expect(element.style.getPropertyValue("--editor-typescript-lsp-hover-code-block-background")).toBe(
-      "",
-    );
+    expect(
+      element.style.getPropertyValue("--editor-typescript-lsp-hover-code-block-background"),
+    ).toBe("");
   });
 
   it("does not render code backgrounds by default", () => {
     const element = renderTooltipMarkdown(document, "`value`\n\n```ts\nconst value = 1\n```");
 
-    expect(element.style.getPropertyValue("--editor-typescript-lsp-hover-inline-code-background")).toBe(
-      "",
-    );
-    expect(element.style.getPropertyValue("--editor-typescript-lsp-hover-code-block-background")).toBe(
-      "",
-    );
+    expect(
+      element.style.getPropertyValue("--editor-typescript-lsp-hover-inline-code-background"),
+    ).toBe("");
+    expect(
+      element.style.getPropertyValue("--editor-typescript-lsp-hover-code-block-background"),
+    ).toBe("");
   });
 
   it("can render code backgrounds when requested", () => {

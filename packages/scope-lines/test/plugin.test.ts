@@ -4,6 +4,7 @@ import type {
   EditorViewContributionContext,
   EditorViewContributionProvider,
   EditorViewSnapshot,
+  TextSnapshot,
   VirtualizedFoldMarker,
 } from "@editor/core";
 import { createScopeLinesPlugin } from "../src/index";
@@ -80,6 +81,26 @@ describe("createScopeLinesPlugin", () => {
     expect(lines).toHaveLength(2);
     expect(lines[0]?.style.left).toBe("0px");
     expect(lines[1]?.style.left).toBe("32px");
+  });
+
+  it("caches row text within a render pass", () => {
+    const registration = registeredProvider(createScopeLinesPlugin());
+    const text = "function f() {\n  if (x) {\n    y()\n  }\n}\n";
+    const starts = lineStarts(text);
+    const readRows: number[] = [];
+    const testContext = context(
+      snapshot({
+        text,
+        textSnapshot: countingTextSnapshot(text, starts, readRows),
+        lineStarts: starts,
+        foldMarkers: foldMarkers(),
+        visibleRows: visibleRows(text),
+      }),
+    );
+
+    registration?.createContribution(testContext);
+
+    expect(readRows.filter((row) => row === 1)).toHaveLength(1);
   });
 
   it("skips collapsed scopes", () => {
@@ -345,4 +366,22 @@ function lineStarts(text: string): number[] {
     if (text[index] === "\n") starts.push(index + 1);
   }
   return starts;
+}
+
+function countingTextSnapshot(
+  text: string,
+  starts: readonly number[],
+  readRows: number[],
+): TextSnapshot {
+  return {
+    length: text.length,
+    getText: () => {
+      throw new Error("unexpected full text materialization");
+    },
+    getTextInRange: (start, end) => {
+      readRows.push(starts.indexOf(start));
+      return text.slice(start, end);
+    },
+    forEachTextChunk: (visit) => visit(text, 0, text.length),
+  };
 }

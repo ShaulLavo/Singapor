@@ -20,6 +20,7 @@ import {
   type EditorViewSnapshot,
   type HiddenCharactersMode,
   type EditorTheme,
+  type TextSnapshot,
 } from "@editor/core";
 import { batch, createEffect, createSignal, onCleanup, untrack, type Accessor } from "solid-js";
 
@@ -73,6 +74,7 @@ export type SolidEditorController = {
   editor: Accessor<Editor | null>;
   state: Accessor<EditorState | null>;
   snapshot: Accessor<EditorViewSnapshot | null>;
+  textSnapshot: Accessor<TextSnapshot | null>;
   text: Accessor<string>;
   lastChange: Accessor<DocumentSessionChange | null>;
   updateKind: Accessor<EditorViewContributionUpdateKind | null>;
@@ -85,7 +87,7 @@ type SolidEditorRuntime = {
   readonly setEditor: (editor: Editor | null) => void;
   readonly setState: (state: EditorState | null) => void;
   readonly setSnapshot: (snapshot: EditorViewSnapshot | null) => void;
-  readonly setText: (text: string) => void;
+  readonly setTextSnapshot: (snapshot: TextSnapshot | null) => void;
   readonly setLastChange: (change: DocumentSessionChange | null) => void;
   readonly setUpdateKind: (kind: EditorViewContributionUpdateKind | null) => void;
 };
@@ -96,7 +98,8 @@ export function createEditor(options: SolidEditorOptions = {}): SolidEditorContr
   const [editor, setEditor] = createSignal<Editor | null>(null);
   const [state, setState] = createSignal<EditorState | null>(null);
   const [snapshot, setSnapshot] = createSignal<EditorViewSnapshot | null>(null);
-  const [text, setText] = createSignal("");
+  const [textSnapshot, setTextSnapshot] = createSignal<TextSnapshot | null>(null);
+  const text = createLazyTextAccessor(textSnapshot);
   const [lastChange, setLastChange] = createSignal<DocumentSessionChange | null>(null);
   const [updateKind, setUpdateKind] = createSignal<EditorViewContributionUpdateKind | null>(null);
   const runtime = {
@@ -104,7 +107,7 @@ export function createEditor(options: SolidEditorOptions = {}): SolidEditorContr
     setEditor,
     setState,
     setSnapshot,
-    setText,
+    setTextSnapshot,
     setLastChange,
     setUpdateKind,
   } satisfies SolidEditorRuntime;
@@ -128,11 +131,32 @@ export function createEditor(options: SolidEditorOptions = {}): SolidEditorContr
     editor,
     state,
     snapshot,
+    textSnapshot,
     text,
     lastChange,
     updateKind,
     dispose,
     commands: createCommands(editor, documentState),
+  };
+}
+
+function createLazyTextAccessor(textSnapshot: Accessor<TextSnapshot | null>): Accessor<string> {
+  let cachedSnapshot: TextSnapshot | null = null;
+  let cachedText: string | undefined;
+
+  return () => {
+    const snapshot = textSnapshot();
+    if (!snapshot) {
+      cachedSnapshot = null;
+      cachedText = "";
+      return cachedText;
+    }
+
+    if (snapshot === cachedSnapshot && cachedText !== undefined) return cachedText;
+
+    cachedSnapshot = snapshot;
+    cachedText = snapshot.getText();
+    return cachedText;
   };
 }
 
@@ -147,7 +171,7 @@ function mountEditor(
   batch(() => {
     runtime.setEditor(instance);
     runtime.setState(instance.getState());
-    runtime.setText(instance.getText());
+    runtime.setTextSnapshot(instance.getTextSnapshot());
   });
 
   untrack(() => {
@@ -227,7 +251,7 @@ function syncSnapshot(
 ): void {
   batch(() => {
     runtime.setSnapshot(snapshot);
-    runtime.setText(snapshot.text);
+    runtime.setTextSnapshot(snapshot.textSnapshot ?? null);
     runtime.setLastChange(change);
     runtime.setUpdateKind(kind);
   });
@@ -242,7 +266,7 @@ function syncChange(
 
   batch(() => {
     runtime.setState(state);
-    runtime.setText(editor?.getText() ?? "");
+    runtime.setTextSnapshot(editor?.getTextSnapshot() ?? null);
     runtime.setLastChange(change);
   });
 }
@@ -340,7 +364,7 @@ function disposeEditor(runtime: SolidEditorRuntime): void {
     runtime.setEditor(null);
     runtime.setState(null);
     runtime.setSnapshot(null);
-    runtime.setText("");
+    runtime.setTextSnapshot(null);
     runtime.setLastChange(null);
     runtime.setUpdateKind(null);
   });

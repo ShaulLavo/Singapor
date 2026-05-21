@@ -21,6 +21,7 @@ import {
   type EditorViewContributionUpdateKind,
   type EditorViewSnapshot,
   type HiddenCharactersMode,
+  type TextSnapshot,
 } from "@editor/core";
 import {
   createElement,
@@ -97,6 +98,7 @@ export type ReactEditorStoreSnapshot = {
   readonly editor: Editor | null;
   readonly state: EditorState | null;
   readonly snapshot: EditorViewSnapshot | null;
+  readonly textSnapshot: TextSnapshot | null;
   readonly text: string;
   readonly lastChange: DocumentSessionChange | null;
   readonly updateKind: EditorViewContributionUpdateKind | null;
@@ -111,12 +113,14 @@ export type ReactEditorController = {
   getEditor(): Editor | null;
   getState(): EditorState | null;
   getSnapshot(): EditorViewSnapshot | null;
+  getTextSnapshot(): TextSnapshot | null;
   getText(): string;
   getLastChange(): DocumentSessionChange | null;
   getUpdateKind(): EditorViewContributionUpdateKind | null;
   useEditorInstance(): Editor | null;
   useState(): EditorState | null;
   useSnapshot(): EditorViewSnapshot | null;
+  useTextSnapshot(): TextSnapshot | null;
   useText(): string;
   useLastChange(): DocumentSessionChange | null;
   useUpdateKind(): EditorViewContributionUpdateKind | null;
@@ -129,7 +133,9 @@ export type EditorHostProps = {
   readonly style?: CSSProperties;
 };
 
-type ReactEditorStorePatch = Partial<ReactEditorStoreSnapshot>;
+type ReactEditorStoreSnapshotFields = Omit<ReactEditorStoreSnapshot, "text">;
+
+type ReactEditorStorePatch = Partial<ReactEditorStoreSnapshotFields>;
 
 type ReactEditorSelectorSubscription<T> = {
   selector: ReactEditorSelector<T>;
@@ -159,6 +165,8 @@ const selectEditor = (snapshot: ReactEditorStoreSnapshot): Editor | null => snap
 const selectState = (snapshot: ReactEditorStoreSnapshot): EditorState | null => snapshot.state;
 const selectSnapshot = (snapshot: ReactEditorStoreSnapshot): EditorViewSnapshot | null =>
   snapshot.snapshot;
+const selectTextSnapshot = (snapshot: ReactEditorStoreSnapshot): TextSnapshot | null =>
+  snapshot.textSnapshot;
 const selectText = (snapshot: ReactEditorStoreSnapshot): string => snapshot.text;
 const selectLastChange = (snapshot: ReactEditorStoreSnapshot): DocumentSessionChange | null =>
   snapshot.lastChange;
@@ -259,6 +267,10 @@ class ReactEditorControllerImplementation implements ReactEditorController {
     return this.store.read().snapshot;
   }
 
+  public getTextSnapshot(): TextSnapshot | null {
+    return this.store.read().textSnapshot ?? this.getEditor()?.getTextSnapshot() ?? null;
+  }
+
   public getText(): string {
     return this.getEditor()?.getText() ?? "";
   }
@@ -275,6 +287,8 @@ class ReactEditorControllerImplementation implements ReactEditorController {
   public readonly useState = (): EditorState | null => useEditorSelector(this, selectState);
   public readonly useSnapshot = (): EditorViewSnapshot | null =>
     useEditorSelector(this, selectSnapshot);
+  public readonly useTextSnapshot = (): TextSnapshot | null =>
+    useEditorSelector(this, selectTextSnapshot);
   public readonly useText = (): string => useEditorSelector(this, selectText);
   public readonly useLastChange = (): DocumentSessionChange | null =>
     useEditorSelector(this, selectLastChange);
@@ -330,7 +344,7 @@ class ReactEditorControllerImplementation implements ReactEditorController {
 
     this.store.update({
       snapshot,
-      text: snapshot.text,
+      textSnapshot: snapshot.textSnapshot ?? null,
       lastChange: change,
       updateKind: kind,
     });
@@ -341,7 +355,7 @@ class ReactEditorControllerImplementation implements ReactEditorController {
 
     this.store.update({
       state,
-      text: this.getEditor()?.getText() ?? "",
+      textSnapshot: this.getEditor()?.getTextSnapshot() ?? null,
       lastChange: change,
     });
   }
@@ -352,7 +366,7 @@ class ReactEditorControllerImplementation implements ReactEditorController {
     this.store.update({
       editor: instance,
       state: instance.getState(),
-      text: instance.getText(),
+      textSnapshot: instance.getTextSnapshot(),
     });
     this.syncMountedOptions(instance);
   }
@@ -410,7 +424,7 @@ class ReactEditorStore {
   public update(patch: ReactEditorStorePatch): void {
     if (!hasStorePatchChange(this.snapshot, patch)) return;
 
-    this.snapshot = { ...this.snapshot, ...patch };
+    this.snapshot = createStoreSnapshot(mergeStorePatch(this.snapshot, patch));
     this.version += 1;
     this.notify();
   }
@@ -678,7 +692,7 @@ function reactEditorStoreSyncMode(options: ReactEditorOptions): ReactEditorStore
 function disposeEditor(store: ReactEditorStore): void {
   const editor = store.read().editor;
   editor?.dispose();
-  store.update(createEmptyStoreSnapshot());
+  store.update(createEmptyStoreSnapshotFields());
 }
 
 function createCommands(
@@ -794,21 +808,66 @@ function documentHasLiveSession(
 }
 
 function createEmptyStoreSnapshot(): ReactEditorStoreSnapshot {
+  return createStoreSnapshot(createEmptyStoreSnapshotFields());
+}
+
+function createEmptyStoreSnapshotFields(): ReactEditorStoreSnapshotFields {
   return {
     editor: null,
     state: null,
     snapshot: null,
-    text: "",
+    textSnapshot: null,
     lastChange: null,
     updateKind: null,
   };
+}
+
+function createStoreSnapshot(fields: ReactEditorStoreSnapshotFields): ReactEditorStoreSnapshot {
+  let textCache: string | undefined;
+  const snapshot: ReactEditorStoreSnapshotFields = { ...fields };
+
+  Object.defineProperty(snapshot, "text", {
+    configurable: true,
+    enumerable: true,
+    get: () => {
+      textCache ??= snapshot.textSnapshot?.getText() ?? "";
+      return textCache;
+    },
+  });
+
+  return snapshot as ReactEditorStoreSnapshot;
+}
+
+function mergeStorePatch(
+  snapshot: ReactEditorStoreSnapshot,
+  patch: ReactEditorStorePatch,
+): ReactEditorStoreSnapshotFields {
+  return {
+    editor: patchValue(snapshot, patch, "editor"),
+    state: patchValue(snapshot, patch, "state"),
+    snapshot: patchValue(snapshot, patch, "snapshot"),
+    textSnapshot: patchValue(snapshot, patch, "textSnapshot"),
+    lastChange: patchValue(snapshot, patch, "lastChange"),
+    updateKind: patchValue(snapshot, patch, "updateKind"),
+  };
+}
+
+function patchValue<K extends keyof ReactEditorStoreSnapshotFields>(
+  snapshot: ReactEditorStoreSnapshot,
+  patch: ReactEditorStorePatch,
+  key: K,
+): ReactEditorStoreSnapshotFields[K] {
+  if (Object.prototype.hasOwnProperty.call(patch, key)) {
+    return patch[key] as ReactEditorStoreSnapshotFields[K];
+  }
+  return snapshot[key];
 }
 
 function hasStorePatchChange(
   snapshot: ReactEditorStoreSnapshot,
   patch: ReactEditorStorePatch,
 ): boolean {
-  for (const key of Object.keys(patch) as (keyof ReactEditorStoreSnapshot)[]) {
+  for (const key of Object.keys(patch) as (keyof ReactEditorStoreSnapshotFields)[]) {
     if (!Object.is(snapshot[key], patch[key])) return true;
   }
 

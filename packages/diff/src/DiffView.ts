@@ -761,9 +761,7 @@ export class DiffView {
     generation: number,
     backend: Extract<DiffSyntaxBackend, { readonly kind: "shiki" }>,
   ): Promise<void> {
-    const { canUseShikiWorker, createShikiHighlighterSession } = await import(
-      "@editor/core/shiki"
-    );
+    const { canUseShikiWorker, createShikiHighlighterSession } = await import("@editor/core/shiki");
     if (pane.syntaxGeneration !== generation) return;
     if (!canUseShikiWorker()) return;
 

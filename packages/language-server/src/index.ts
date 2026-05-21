@@ -1,17 +1,17 @@
-export { type LanguageServerResolvedOptions } from "./plugin"
-export { createLanguageServerPlugin } from "./plugin"
+export { type LanguageServerResolvedOptions } from "./plugin";
+export { createLanguageServerPlugin } from "./plugin";
 export {
   diagnosticHighlightGroups,
   summarizeDiagnostics,
   type LanguageServerDiagnosticHighlightGroups,
   type LanguageServerDiagnosticSeverity,
-} from "./diagnostics"
+} from "./diagnostics";
 export {
   documentUriToFileName,
   fileNameToDocumentUri,
   pathOrUriToDocumentUri,
   sourcePathToFileName,
-} from "./paths"
+} from "./paths";
 export type {
   LanguageServerDiagnosticCounts,
   LanguageServerDefinitionTarget,
@@ -23,4 +23,4 @@ export type {
   LanguageServerPluginOptions,
   LanguageServerReferencesResult,
   LanguageServerStatus,
-} from "./types"
+} from "./types";

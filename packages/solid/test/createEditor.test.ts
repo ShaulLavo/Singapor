@@ -11,6 +11,14 @@ type MountedEditor = {
   dispose(): void;
 };
 
+type Diagnostic = {
+  readonly name: string;
+};
+
+type DiagnosticGlobal = typeof globalThis & {
+  __EDITOR_PERFORMANCE_DIAGNOSTICS__?: ((diagnostic: Diagnostic) => void) | null;
+};
+
 beforeEach(() => {
   // @ts-expect-error happy-dom does not provide Highlight.
   globalThis.Highlight = MockHighlight;
@@ -18,6 +26,7 @@ beforeEach(() => {
 
 afterEach(() => {
   Reflect.deleteProperty(globalThis, "Highlight");
+  Reflect.deleteProperty(globalThis, "__EDITOR_PERFORMANCE_DIAGNOSTICS__");
 });
 
 describe("createEditor", () => {
@@ -50,6 +59,24 @@ describe("createEditor", () => {
     expect(mounted.controller.state()?.length).toBe(6);
     expect(mounted.controller.lastChange()?.kind).toBe("edit");
     expect(mounted.controller.snapshot()?.text).toBe("alpha!");
+
+    mounted.dispose();
+  });
+
+  it("does not materialize full text during signal sync until text is read", () => {
+    const diagnostics = collectDiagnostics();
+    const mounted = mountInRoot({
+      document: () => ({ text: "alpha", documentId: "a.ts", revision: 1 }),
+    });
+    diagnostics.length = 0;
+
+    mounted.controller.commands.edit({ from: 5, to: 5, text: "!" });
+
+    expect(textSnapshotReads(diagnostics)).toHaveLength(0);
+    expect(mounted.controller.textSnapshot()?.length).toBe(6);
+    expect(textSnapshotReads(diagnostics)).toHaveLength(0);
+    expect(mounted.controller.text()).toBe("alpha!");
+    expect(textSnapshotReads(diagnostics)).toHaveLength(1);
 
     mounted.dispose();
   });
@@ -187,4 +214,16 @@ function editorElement(host: HTMLElement): HTMLElement | null {
 
 function flushEffects(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function collectDiagnostics(): Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+  (globalThis as DiagnosticGlobal).__EDITOR_PERFORMANCE_DIAGNOSTICS__ = (diagnostic) => {
+    diagnostics.push(diagnostic);
+  };
+  return diagnostics;
+}
+
+function textSnapshotReads(diagnostics: readonly Diagnostic[]): readonly Diagnostic[] {
+  return diagnostics.filter((diagnostic) => diagnostic.name === "textSnapshot.getText");
 }

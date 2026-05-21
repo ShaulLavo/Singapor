@@ -98,11 +98,7 @@ export class MinimapWorkerRenderer {
       ...findSectionHeaderDecorations(lines, this.state.options),
       ...document.externalDecorations,
     ];
-    const tokens = projectMinimapTokensThroughEdit(
-      this.state.document.tokens,
-      edit,
-      previousText,
-    );
+    const tokens = projectMinimapTokensThroughEdit(this.state.document.tokens, edit, previousText);
     this.state.document = {
       text,
       lineStarts: document.lineStarts,

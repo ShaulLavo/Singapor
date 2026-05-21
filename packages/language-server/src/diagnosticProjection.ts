@@ -1,6 +1,6 @@
-import type { DocumentSessionChange, TextEdit } from "@editor/core"
-import { lspPositionToOffset, offsetToLspPosition } from "@editor/lsp"
-import type * as lsp from "vscode-languageserver-protocol"
+import type { DocumentSessionChange, TextEdit } from "@editor/core";
+import { lspPositionToOffset, offsetToLspPosition } from "@editor/lsp";
+import type * as lsp from "vscode-languageserver-protocol";
 
 /**
  * Snapshot of a document transition used to project previously-computed
@@ -9,22 +9,22 @@ import type * as lsp from "vscode-languageserver-protocol"
  * translated into offsets valid for the new text.
  */
 export type DocumentSession = {
-  readonly previousText: string
-  readonly nextText: string
-  readonly change: DocumentSessionChange | null
-}
+  readonly previousText: string;
+  readonly nextText: string;
+  readonly change: DocumentSessionChange | null;
+};
 
 /**
  * A diagnostic whose range has been projected onto the post-edit text.
  * Structurally identical to {@link lsp.Diagnostic}; the alias exists to
  * document intent at call sites that consume already-projected results.
  */
-export type ProjectedDiagnostic = lsp.Diagnostic
+export type ProjectedDiagnostic = lsp.Diagnostic;
 
 type OffsetRange = {
-  readonly start: number
-  readonly end: number
-}
+  readonly start: number;
+  readonly end: number;
+};
 
 /**
  * Project a set of diagnostics through a document edit.
@@ -39,14 +39,14 @@ type OffsetRange = {
  */
 export function projectDiagnostics(
   diagnostics: readonly lsp.Diagnostic[],
-  documentSession: DocumentSession
+  documentSession: DocumentSession,
 ): readonly ProjectedDiagnostic[] {
   return projectDiagnosticsThroughChange(
     documentSession.previousText,
     documentSession.nextText,
     diagnostics,
-    documentSession.change
-  )
+    documentSession.change,
+  );
 }
 
 /**
@@ -55,11 +55,9 @@ export function projectDiagnostics(
  * hands these edits to `LspWorkspace.updateDocument` to keep the LSP
  * workspace in sync.
  */
-export function editsForChange(
-  change: DocumentSessionChange | null
-): readonly TextEdit[] {
-  if (!change) return []
-  return change.edits
+export function editsForChange(change: DocumentSessionChange | null): readonly TextEdit[] {
+  if (!change) return [];
+  return change.edits;
 }
 
 /**
@@ -69,49 +67,42 @@ export function editsForChange(
 export function diagnosticsAtOffset(
   text: string,
   offset: number,
-  diagnostics: readonly lsp.Diagnostic[]
+  diagnostics: readonly lsp.Diagnostic[],
 ): readonly lsp.Diagnostic[] {
-  return diagnostics.filter((diagnostic) =>
-    diagnosticContainsOffset(text, diagnostic, offset)
-  )
+  return diagnostics.filter((diagnostic) => diagnosticContainsOffset(text, diagnostic, offset));
 }
 
 function projectDiagnosticsThroughChange(
   previousText: string,
   nextText: string,
   diagnostics: readonly lsp.Diagnostic[],
-  change: DocumentSessionChange | null
+  change: DocumentSessionChange | null,
 ): readonly lsp.Diagnostic[] {
-  if (diagnostics.length === 0) return diagnostics
+  if (diagnostics.length === 0) return diagnostics;
 
-  const edits = editsForChange(change)
-  if (edits.length === 0) return []
+  const edits = editsForChange(change);
+  if (edits.length === 0) return [];
 
-  const projected: lsp.Diagnostic[] = []
+  const projected: lsp.Diagnostic[] = [];
   for (const diagnostic of diagnostics) {
-    const next = projectDiagnosticThroughEdits(
-      previousText,
-      nextText,
-      diagnostic,
-      edits
-    )
-    if (next) projected.push(next)
+    const next = projectDiagnosticThroughEdits(previousText, nextText, diagnostic, edits);
+    if (next) projected.push(next);
   }
 
-  return projected
+  return projected;
 }
 
 function projectDiagnosticThroughEdits(
   previousText: string,
   nextText: string,
   diagnostic: lsp.Diagnostic,
-  edits: readonly TextEdit[]
+  edits: readonly TextEdit[],
 ): lsp.Diagnostic | null {
-  const start = lspPositionToOffset(previousText, diagnostic.range.start)
-  const end = lspPositionToOffset(previousText, diagnostic.range.end)
-  const range = projectOffsetRangeThroughEdits({ start, end }, edits)
-  if (!range) return null
-  if (range.start === range.end && start !== end) return null
+  const start = lspPositionToOffset(previousText, diagnostic.range.start);
+  const end = lspPositionToOffset(previousText, diagnostic.range.end);
+  const range = projectOffsetRangeThroughEdits({ start, end }, edits);
+  if (!range) return null;
+  if (range.start === range.end && start !== end) return null;
 
   return {
     ...diagnostic,
@@ -119,78 +110,72 @@ function projectDiagnosticThroughEdits(
       start: offsetToLspPosition(nextText, range.start),
       end: offsetToLspPosition(nextText, range.end),
     },
-  }
+  };
 }
 
 function projectOffsetRangeThroughEdits(
   range: OffsetRange,
-  edits: readonly TextEdit[]
+  edits: readonly TextEdit[],
 ): OffsetRange | null {
-  let projected: OffsetRange | null = range
-  let delta = 0
-  const sorted = edits.toSorted(
-    (left, right) => left.from - right.from || left.to - right.to
-  )
+  let projected: OffsetRange | null = range;
+  let delta = 0;
+  const sorted = edits.toSorted((left, right) => left.from - right.from || left.to - right.to);
 
   for (const edit of sorted) {
-    if (!projected) return null
+    if (!projected) return null;
 
     const adjusted = {
       from: edit.from + delta,
       to: edit.to + delta,
       text: edit.text,
-    }
-    projected = projectOffsetRangeThroughEdit(projected, adjusted)
-    delta += edit.text.length - (edit.to - edit.from)
+    };
+    projected = projectOffsetRangeThroughEdit(projected, adjusted);
+    delta += edit.text.length - (edit.to - edit.from);
   }
 
-  return projected
+  return projected;
 }
 
-function projectOffsetRangeThroughEdit(
-  range: OffsetRange,
-  edit: TextEdit
-): OffsetRange | null {
-  const start = projectOffsetThroughEdit(range.start, edit, "after")
-  const end = projectOffsetThroughEdit(range.end, edit, "before")
-  if (start === null || end === null) return null
-  if (end < start) return null
+function projectOffsetRangeThroughEdit(range: OffsetRange, edit: TextEdit): OffsetRange | null {
+  const start = projectOffsetThroughEdit(range.start, edit, "after");
+  const end = projectOffsetThroughEdit(range.end, edit, "before");
+  if (start === null || end === null) return null;
+  if (end < start) return null;
 
-  return { start, end }
+  return { start, end };
 }
 
 function projectOffsetThroughEdit(
   offset: number,
   edit: TextEdit,
-  insertionBias: "before" | "after"
+  insertionBias: "before" | "after",
 ): number | null {
-  if (edit.from === edit.to)
-    return projectOffsetThroughInsertion(offset, edit, insertionBias)
-  if (offset < edit.from) return offset
-  if (offset > edit.to) return offset + edit.text.length - (edit.to - edit.from)
-  if (offset === edit.to) return edit.from + edit.text.length
-  if (offset === edit.from) return edit.from
-  return null
+  if (edit.from === edit.to) return projectOffsetThroughInsertion(offset, edit, insertionBias);
+  if (offset < edit.from) return offset;
+  if (offset > edit.to) return offset + edit.text.length - (edit.to - edit.from);
+  if (offset === edit.to) return edit.from + edit.text.length;
+  if (offset === edit.from) return edit.from;
+  return null;
 }
 
 function projectOffsetThroughInsertion(
   offset: number,
   edit: TextEdit,
-  insertionBias: "before" | "after"
+  insertionBias: "before" | "after",
 ): number {
-  if (offset < edit.from) return offset
-  if (offset > edit.from) return offset + edit.text.length
-  if (insertionBias === "after") return offset + edit.text.length
-  return offset
+  if (offset < edit.from) return offset;
+  if (offset > edit.from) return offset + edit.text.length;
+  if (insertionBias === "after") return offset + edit.text.length;
+  return offset;
 }
 
 function diagnosticContainsOffset(
   text: string,
   diagnostic: lsp.Diagnostic,
-  offset: number
+  offset: number,
 ): boolean {
-  const start = lspPositionToOffset(text, diagnostic.range.start)
-  const end = lspPositionToOffset(text, diagnostic.range.end)
-  if (end > start) return offset >= start && offset <= end
-  return offset === start
+  const start = lspPositionToOffset(text, diagnostic.range.start);
+  const end = lspPositionToOffset(text, diagnostic.range.end);
+  if (end > start) return offset >= start && offset <= end;
+  return offset === start;
 }

@@ -472,9 +472,10 @@ export class InputSelectionController {
     const selection = session.getSelections().selections[0];
     if (!selection) return;
 
-    const resolved = resolveSelection(session.getSnapshot(), selection);
-    const start = clamp(resolved.startOffset, 0, this.text.length);
-    const end = clamp(resolved.endOffset, start, this.text.length);
+    const snapshot = session.getSnapshot();
+    const resolved = resolveSelection(snapshot, selection);
+    const start = clamp(resolved.startOffset, 0, snapshot.length);
+    const end = clamp(resolved.endOffset, start, snapshot.length);
 
     if (this.hasFocusedExternalElement()) {
       this.syncSessionSelectionHighlight();
