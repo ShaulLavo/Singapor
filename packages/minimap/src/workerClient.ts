@@ -6,7 +6,6 @@ import type {
   TextEdit,
 } from "@editor/core";
 import { parseCssColor, RGBA_BLACK, RGBA_WHITE, transparent } from "./color";
-import { findSectionHeaderDecorations } from "./sectionHeaders";
 import type {
   MinimapBaseStyles,
   MinimapDocumentEditPayload,
@@ -14,6 +13,7 @@ import type {
   MinimapMetrics,
   MinimapSelection,
   MinimapToken,
+  MinimapTokenPatch,
   MinimapViewport,
   MinimapWorkerRequest,
   MinimapWorkerResponse,
@@ -57,6 +57,9 @@ export class MinimapWorkerClient {
   private latestBaseStylesSignature = "";
   private latestLayoutSignature = "";
   private latestThemeSignature = "";
+  private latestSnapshot: EditorViewSnapshot;
+  private latestFullDocumentSnapshot: EditorViewSnapshot | null = null;
+  private latestTokenSource: readonly EditorToken[] | null;
   private disposed = false;
 
   public constructor(options: MinimapWorkerClientOptions) {
@@ -64,6 +67,8 @@ export class MinimapWorkerClient {
     this.options = options.options;
     this.onLayoutWidth = options.onLayoutWidth;
     this.externalDecorations = options.decorations;
+    this.latestSnapshot = options.snapshot;
+    this.latestTokenSource = options.snapshot.tokens;
     this.colorResolver = new ColorResolver(options.host.colorScope);
     this.worker = new Worker(new URL("./minimap.worker.ts", import.meta.url), { type: "module" });
     this.worker.onmessage = this.handleWorkerMessage;
@@ -77,9 +82,20 @@ export class MinimapWorkerClient {
     change?: DocumentSessionChange | null,
   ): void {
     if (this.disposed) return;
+    if (this.shouldSkipDocumentUpdate(snapshot, kind)) {
+      this.latestSnapshot = snapshot;
+      return;
+    }
+
+    const previousSnapshot = this.latestSnapshot;
+    const update = createPendingUpdate(snapshot, kind, change, previousSnapshot);
+    this.latestSnapshot = snapshot;
     this.applyImmediateViewport(snapshot, snapshot.viewport.scrollTop);
-    this.pendingUpdate = mergePendingUpdate(this.pendingUpdate, { snapshot, kind, change });
-    this.scheduleFlush();
+    this.pendingUpdate = mergePendingUpdate(this.pendingUpdate, update);
+    recordMinimapPerformanceDiagnostic("minimap.updateClassification", () =>
+      pendingUpdateDiagnostics(update),
+    );
+    if (!this.renderInFlight) this.scheduleFlush();
   }
 
   public previewScrollTop(snapshot: EditorViewSnapshot, scrollTop: number): void {
@@ -123,8 +139,9 @@ export class MinimapWorkerClient {
       decorationsCanvas,
     };
 
-    this.worker.postMessage(request, [mainCanvas, decorationsCanvas]);
+    this.post(request, [mainCanvas, decorationsCanvas]);
     this.post({ type: "openDocument", document: this.documentPayload(snapshot) });
+    this.latestFullDocumentSnapshot = snapshot;
     this.post({
       type: "updateLayout",
       metrics: this.metrics(snapshot),
@@ -150,10 +167,22 @@ export class MinimapWorkerClient {
     const pending = this.pendingUpdate;
     if (!pending) return;
 
+    measureMinimapPerformance(
+      "minimap.flushPendingUpdate",
+      () => this.flushPendingUpdateNow(pending),
+      () => pendingUpdateDiagnostics(pending),
+    );
+  }
+
+  private flushPendingUpdateNow(pending: PendingMinimapUpdate): void {
     this.pendingUpdate = null;
-    this.postUpdate(pending.snapshot, pending.kind, pending.change);
+    measureMinimapPerformance(
+      "minimap.postUpdate",
+      () => this.postUpdate(pending),
+      () => pendingUpdateDiagnostics(pending),
+    );
     const layoutUpdated = this.postLayoutIfNeeded(pending.snapshot);
-    this.postViewportIfNeeded(pending.snapshot, pending.kind, layoutUpdated);
+    this.postViewportIfNeeded(pending.snapshot, pending.syncViewport, layoutUpdated);
     this.postRender(pending.snapshot);
   }
 
@@ -172,70 +201,116 @@ export class MinimapWorkerClient {
 
   private postViewportIfNeeded(
     snapshot: EditorViewSnapshot,
-    kind: string,
+    syncViewport: boolean,
     layoutUpdated: boolean,
   ): void {
     if (layoutUpdated) return;
-    if (!shouldSyncViewportAfterUpdate(kind)) return;
+    if (!syncViewport) return;
 
     this.post({ type: "updateViewport", viewport: this.viewport(snapshot) });
   }
 
-  private postUpdate(
-    snapshot: EditorViewSnapshot,
-    kind: string,
-    change: DocumentSessionChange | null | undefined,
-  ): void {
-    if (shouldSyncBaseStyles(kind)) {
-      this.refreshThemeColorCache(snapshot);
-      this.syncBaseStyles();
+  private postUpdate(update: PendingMinimapUpdate): void {
+    const snapshot = update.snapshot;
+    let tokenColorsInvalidated = false;
+    if (update.syncBaseStyles) {
+      tokenColorsInvalidated = this.refreshThemeColorCache(snapshot);
+      tokenColorsInvalidated = this.syncBaseStyles() || tokenColorsInvalidated;
     }
 
-    if (kind === "tokens") {
-      this.post({ type: "updateTokens", tokens: this.tokens(snapshot.tokens) });
+    if (update.replaceDocument) {
+      this.post({ type: "replaceDocument", document: this.documentPayload(snapshot) });
+      this.latestFullDocumentSnapshot = snapshot;
+      this.latestTokenSource = snapshot.tokens;
       return;
     }
-    if (kind === "selection") {
+
+    if (update.edits.length > 0) {
+      this.latestFullDocumentSnapshot = null;
+      this.postEditUpdate(update);
+      this.latestTokenSource = update.tokenSourceAfterEdits;
+    }
+    if (update.syncTokens) {
+      this.postTokenUpdate(snapshot, tokenColorsInvalidated);
+    }
+    if (update.syncSelection && update.edits.length === 0) {
       this.post({ type: "updateSelection", selections: selections(snapshot) });
-      return;
     }
-    if (kind === "decorations") {
-      this.post({ type: "updateDecorations", decorations: this.decorations(snapshot) });
-      return;
-    }
-    if (kind === "viewport" || kind === "layout") {
-      this.post({ type: "updateViewport", viewport: this.viewport(snapshot) });
-      return;
-    }
-    if (singleLineEdit(change)) {
+    if (update.syncExternalDecorations) {
       this.post({
-        type: "applyEdit",
-        edit: change.edits[0]!,
-        document: this.documentEditPayload(snapshot),
+        type: "updateExternalDecorations",
+        decorations: this.externalDecorations,
       });
-      return;
     }
-
-    this.post({ type: "replaceDocument", document: this.documentPayload(snapshot) });
   }
 
-  private syncBaseStyles(): void {
+  private postEditUpdate(update: PendingMinimapUpdate): void {
+    const document = this.documentEditPayload(update.snapshot);
+    if (update.edits.length === 1) {
+      this.post({ type: "applyEdit", edit: update.edits[0]!, document });
+      return;
+    }
+
+    this.post({ type: "applyEdits", edits: update.edits, document });
+  }
+
+  private postTokenUpdate(snapshot: EditorViewSnapshot, forceFullUpdate: boolean): void {
+    const sourceTokens = this.latestTokenSource;
+    if (forceFullUpdate || !sourceTokens) {
+      this.postFullTokenUpdate(snapshot);
+      return;
+    }
+
+    const patch = this.tokenPatch(sourceTokens, snapshot.tokens);
+    this.latestTokenSource = snapshot.tokens;
+    if (patch.deleteCount === 0 && patch.tokens.length === 0) return;
+
+    this.post({ type: "updateTokenRange", patch });
+  }
+
+  private postFullTokenUpdate(snapshot: EditorViewSnapshot): void {
+    this.post({ type: "updateTokens", tokens: this.tokens(snapshot.tokens) });
+    this.latestTokenSource = snapshot.tokens;
+  }
+
+  private tokenPatch(
+    previous: readonly EditorToken[],
+    next: readonly EditorToken[],
+  ): MinimapTokenPatch {
+    const range = changedTokenRange(previous, next);
+    return {
+      start: range.start,
+      deleteCount: range.deleteCount,
+      tokens: this.tokens(next.slice(range.start, range.insertEnd)),
+    };
+  }
+
+  private syncBaseStyles(): boolean {
     const styles = this.baseStyles();
     const signature = baseStylesSignature(styles);
-    if (signature === this.latestBaseStylesSignature) return;
+    if (signature === this.latestBaseStylesSignature) return false;
 
     this.latestBaseStyles = styles;
     this.latestBaseStylesSignature = signature;
     this.colorResolver.clear();
     this.post({ type: "updateBaseStyles", baseStyles: styles });
+    return true;
   }
 
-  private refreshThemeColorCache(snapshot: EditorViewSnapshot): void {
+  private refreshThemeColorCache(snapshot: EditorViewSnapshot): boolean {
     const signature = themeSignature(snapshot);
-    if (signature === this.latestThemeSignature) return;
+    if (signature === this.latestThemeSignature) return false;
 
     this.latestThemeSignature = signature;
     this.colorResolver.clear();
+    return true;
+  }
+
+  private shouldSkipDocumentUpdate(snapshot: EditorViewSnapshot, kind: string): boolean {
+    if (kind !== "document") return false;
+    const latest = this.latestFullDocumentSnapshot;
+    if (!latest) return false;
+    return latest === snapshot;
   }
 
   private postRender(snapshot: EditorViewSnapshot): void {
@@ -265,36 +340,51 @@ export class MinimapWorkerClient {
   }
 
   private documentPayload(snapshot: EditorViewSnapshot): MinimapDocumentPayload {
-    return {
-      text: snapshot.text,
-      lineStarts: snapshot.lineStarts,
-      tokens: this.tokens(snapshot.tokens),
-      selections: selections(snapshot),
-      decorations: this.decorations(snapshot),
-    };
+    let payload: MinimapDocumentPayload | null = null;
+    return measureMinimapPerformance(
+      "minimap.documentPayload",
+      () => {
+        payload = {
+          text: snapshot.text,
+          lineStarts: snapshot.lineStarts,
+          tokens: this.tokens(snapshot.tokens),
+          selections: selections(snapshot),
+          decorations: this.externalDecorations,
+          externalDecorations: this.externalDecorations,
+        };
+        return payload;
+      },
+      () => documentPayloadDiagnostics(payload),
+    );
   }
 
   private documentEditPayload(snapshot: EditorViewSnapshot): MinimapDocumentEditPayload {
-    return {
-      lineStarts: snapshot.lineStarts,
-      selections: selections(snapshot),
-      externalDecorations: this.externalDecorations,
-    };
-  }
-
-  private decorations(snapshot: EditorViewSnapshot): readonly EditorMinimapDecoration[] {
-    const lines = splitLines(snapshot.text);
-    const sectionHeaders = findSectionHeaderDecorations(lines, this.options);
-    return [...sectionHeaders, ...this.externalDecorations];
+    let payload: MinimapDocumentEditPayload | null = null;
+    return measureMinimapPerformance(
+      "minimap.documentEditPayload",
+      () => {
+        payload = { selections: selections(snapshot) };
+        return payload;
+      },
+      () => documentEditPayloadDiagnostics(payload),
+    );
   }
 
   private tokens(tokens: readonly EditorToken[]): readonly MinimapToken[] {
-    const foreground = this.latestBaseStyles?.foreground ?? this.baseStyles().foreground;
-    return tokens.map((token) => ({
-      start: token.start,
-      end: token.end,
-      color: this.colorResolver.resolve(token.style.color, foreground),
-    }));
+    let projected: readonly MinimapToken[] | null = null;
+    return measureMinimapPerformance(
+      "minimap.tokens",
+      () => {
+        const foreground = this.latestBaseStyles?.foreground ?? this.baseStyles().foreground;
+        projected = tokens.map((token) => ({
+          start: token.start,
+          end: token.end,
+          color: this.colorResolver.resolve(token.style.color, foreground),
+        }));
+        return projected;
+      },
+      () => ({ inputTokens: tokens.length, outputTokens: projected?.length ?? 0 }),
+    );
   }
 
   private metrics(snapshot: EditorViewSnapshot): MinimapMetrics {
@@ -367,9 +457,13 @@ export class MinimapWorkerClient {
       return;
     }
     if (response.type === "rendered") {
-      this.applyRenderedResponse(response);
       this.renderInFlight = false;
-      if (this.pendingUpdate) this.scheduleFlush();
+      if (this.pendingUpdate) {
+        this.scheduleFlush();
+        return;
+      }
+
+      this.applyRenderedResponse(response);
       return;
     }
     if (response.type === "error") console.warn(response.message);
@@ -408,8 +502,19 @@ export class MinimapWorkerClient {
     console.warn(event.message || "Minimap worker failed");
   };
 
-  private post(request: MinimapWorkerRequest): void {
-    this.worker.postMessage(request);
+  private post(request: MinimapWorkerRequest, transfer?: readonly Transferable[]): void {
+    measureMinimapPerformance(
+      "minimap.post",
+      () => {
+        if (transfer) {
+          this.worker.postMessage(request, [...transfer]);
+          return;
+        }
+
+        this.worker.postMessage(request);
+      },
+      () => requestDiagnostics(request),
+    );
   }
 
   private cancelScheduledFlush(): void {
@@ -422,8 +527,15 @@ export class MinimapWorkerClient {
 
 type PendingMinimapUpdate = {
   readonly snapshot: EditorViewSnapshot;
-  readonly kind: string;
-  readonly change?: DocumentSessionChange | null;
+  readonly replaceDocument: boolean;
+  readonly edits: readonly TextEdit[];
+  readonly syncTokens: boolean;
+  readonly syncSelection: boolean;
+  readonly syncExternalDecorations: boolean;
+  readonly syncViewport: boolean;
+  readonly syncBaseStyles: boolean;
+  readonly tokenSourceAfterEdits: readonly EditorToken[] | null;
+  readonly reason: string;
 };
 
 export function canUseMinimapWorker(): boolean {
@@ -444,17 +556,14 @@ function selections(snapshot: EditorViewSnapshot): readonly MinimapSelection[] {
 
 function singleLineEdit(
   change: DocumentSessionChange | null | undefined,
+  previousSnapshot: EditorViewSnapshot,
 ): change is DocumentSessionChange & {
   readonly edits: readonly [TextEdit];
 } {
-  if (!change || change.kind !== "edit" || change.edits.length !== 1) return false;
+  if (!change || change.edits.length !== 1) return false;
   const edit = change.edits[0]!;
   if (edit.text.includes("\n")) return false;
-  return edit.from === edit.to;
-}
-
-function splitLines(text: string): readonly string[] {
-  return text.split("\n");
+  return editRangeIsSingleLine(previousSnapshot.lineStarts, edit);
 }
 
 function immediateSlider(
@@ -501,10 +610,24 @@ function layoutSignature(snapshot: EditorViewSnapshot): string {
   ].join(":");
 }
 
-function shouldSyncViewportAfterUpdate(kind: string): boolean {
-  if (kind === "content") return true;
-  if (kind === "document") return true;
-  return kind === "clear";
+function createPendingUpdate(
+  snapshot: EditorViewSnapshot,
+  kind: string,
+  change: DocumentSessionChange | null | undefined,
+  previousSnapshot: EditorViewSnapshot,
+): PendingMinimapUpdate {
+  const base = basePendingUpdate(snapshot, kind);
+  if (kind === "content") return contentPendingUpdate(base, change, previousSnapshot);
+  if (kind === "document" || kind === "clear") {
+    return { ...base, replaceDocument: true, reason: kind };
+  }
+  if (kind === "tokens") return { ...base, syncTokens: true, reason: "tokens" };
+  if (kind === "selection") return { ...base, syncSelection: true, reason: "selection" };
+  if (kind === "decorations") {
+    return { ...base, syncExternalDecorations: true, reason: "decorations" };
+  }
+
+  return { ...base, reason: kind };
 }
 
 function mergePendingUpdate(
@@ -512,29 +635,350 @@ function mergePendingUpdate(
   next: PendingMinimapUpdate,
 ): PendingMinimapUpdate {
   if (!current) return next;
-  if (canUseLatestKind(current.kind, next.kind)) return next;
+  if (current.replaceDocument || next.replaceDocument) return mergeReplacementUpdate(current, next);
 
+  const edits = [...current.edits, ...next.edits];
+  const contentChangedAfterTokens = next.edits.length > 0;
   return {
     snapshot: next.snapshot,
-    kind: "content",
-    change: next.change ?? null,
+    replaceDocument: false,
+    edits,
+    syncTokens: contentChangedAfterTokens ? next.syncTokens : current.syncTokens || next.syncTokens,
+    syncSelection: current.syncSelection || next.syncSelection,
+    syncExternalDecorations: current.syncExternalDecorations || next.syncExternalDecorations,
+    syncViewport: current.syncViewport || next.syncViewport,
+    syncBaseStyles: current.syncBaseStyles || next.syncBaseStyles,
+    tokenSourceAfterEdits: mergedTokenSourceAfterEdits(current, next),
+    reason: mergeReasons(current.reason, next.reason),
   };
 }
 
-function canUseLatestKind(currentKind: string, nextKind: string): boolean {
-  if (currentKind === nextKind) return true;
-  if (isViewportOnly(currentKind) && isViewportOnly(nextKind)) return true;
-  return false;
+function mergeReplacementUpdate(
+  current: PendingMinimapUpdate,
+  next: PendingMinimapUpdate,
+): PendingMinimapUpdate {
+  return {
+    snapshot: next.snapshot,
+    replaceDocument: true,
+    edits: [],
+    syncTokens: false,
+    syncSelection: false,
+    syncExternalDecorations: false,
+    syncViewport: current.syncViewport || next.syncViewport,
+    syncBaseStyles: current.syncBaseStyles || next.syncBaseStyles,
+    tokenSourceAfterEdits: null,
+    reason: mergeReasons(current.reason, next.reason),
+  };
 }
 
-function isViewportOnly(kind: string): boolean {
-  return kind === "viewport" || kind === "layout";
+function mergedTokenSourceAfterEdits(
+  current: PendingMinimapUpdate,
+  next: PendingMinimapUpdate,
+): readonly EditorToken[] | null {
+  if (next.edits.length === 0) return current.tokenSourceAfterEdits;
+  if (current.syncTokens) return null;
+  return next.tokenSourceAfterEdits;
 }
 
 function shouldSyncBaseStyles(kind: string): boolean {
   if (kind === "tokens") return true;
   if (kind === "document") return true;
   return kind === "clear";
+}
+
+function basePendingUpdate(snapshot: EditorViewSnapshot, kind: string): PendingMinimapUpdate {
+  return {
+    snapshot,
+    replaceDocument: false,
+    edits: [],
+    syncTokens: false,
+    syncSelection: false,
+    syncExternalDecorations: false,
+    syncViewport: shouldSyncViewport(kind),
+    syncBaseStyles: shouldSyncBaseStyles(kind),
+    tokenSourceAfterEdits: null,
+    reason: "metadata",
+  };
+}
+
+function contentPendingUpdate(
+  base: PendingMinimapUpdate,
+  change: DocumentSessionChange | null | undefined,
+  previousSnapshot: EditorViewSnapshot,
+): PendingMinimapUpdate {
+  if (!singleLineEdit(change, previousSnapshot)) {
+    return { ...base, replaceDocument: true, reason: "content.replaceDocument" };
+  }
+
+  return {
+    ...base,
+    edits: [change.edits[0]!],
+    syncSelection: true,
+    tokenSourceAfterEdits: base.snapshot.tokens,
+    reason: "content.singleLineEdit",
+  };
+}
+
+function shouldSyncViewport(kind: string): boolean {
+  if (kind === "content") return true;
+  if (kind === "document") return true;
+  if (kind === "clear") return true;
+  if (kind === "viewport") return true;
+  return kind === "layout";
+}
+
+function editRangeIsSingleLine(lineStarts: readonly number[], edit: TextEdit): boolean {
+  return lineIndexForOffset(lineStarts, edit.from) === lineIndexForOffset(lineStarts, edit.to);
+}
+
+function lineIndexForOffset(lineStarts: readonly number[], offset: number): number {
+  let low = 0;
+  let high = lineStarts.length - 1;
+  const clamped = Math.max(0, offset);
+
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const start = lineStarts[middle] ?? 0;
+    const next = lineStarts[middle + 1] ?? Number.POSITIVE_INFINITY;
+    if (clamped < start) {
+      high = middle - 1;
+      continue;
+    }
+    if (clamped >= next) {
+      low = middle + 1;
+      continue;
+    }
+    return middle;
+  }
+
+  return Math.max(0, lineStarts.length - 1);
+}
+
+function changedTokenRange(
+  previous: readonly EditorToken[],
+  next: readonly EditorToken[],
+): {
+  readonly start: number;
+  readonly deleteCount: number;
+  readonly insertEnd: number;
+} {
+  let start = 0;
+  while (
+    start < previous.length &&
+    start < next.length &&
+    editorTokensEqual(previous[start]!, next[start]!)
+  ) {
+    start += 1;
+  }
+
+  let previousEnd = previous.length;
+  let nextEnd = next.length;
+  while (
+    previousEnd > start &&
+    nextEnd > start &&
+    editorTokensEqual(previous[previousEnd - 1]!, next[nextEnd - 1]!)
+  ) {
+    previousEnd -= 1;
+    nextEnd -= 1;
+  }
+
+  return {
+    start,
+    deleteCount: previousEnd - start,
+    insertEnd: nextEnd,
+  };
+}
+
+function editorTokensEqual(left: EditorToken, right: EditorToken): boolean {
+  return (
+    left.start === right.start &&
+    left.end === right.end &&
+    tokenStylesEqual(left.style, right.style)
+  );
+}
+
+function tokenStylesEqual(left: EditorToken["style"], right: EditorToken["style"]): boolean {
+  return (
+    left.color === right.color &&
+    left.backgroundColor === right.backgroundColor &&
+    left.fontStyle === right.fontStyle &&
+    left.fontWeight === right.fontWeight &&
+    left.textDecoration === right.textDecoration
+  );
+}
+
+function mergeReasons(left: string, right: string): string {
+  if (left === right) return left;
+  return `${left}+${right}`;
+}
+
+type MinimapPerformanceDiagnostic = {
+  readonly name: string;
+  readonly durationMs?: number;
+  readonly detail?: Readonly<Record<string, unknown>>;
+};
+
+type MinimapPerformanceDiagnosticSink =
+  | ((diagnostic: MinimapPerformanceDiagnostic) => void)
+  | {
+      readonly enabled?: boolean;
+      readonly record?: (diagnostic: MinimapPerformanceDiagnostic) => void;
+    };
+
+type MinimapPerformanceDiagnosticGlobal = typeof globalThis & {
+  __EDITOR_PERFORMANCE_DIAGNOSTICS__?: MinimapPerformanceDiagnosticSink | null;
+};
+
+type DiagnosticDetail =
+  | Readonly<Record<string, unknown>>
+  | (() => Readonly<Record<string, unknown>> | undefined)
+  | undefined;
+
+function measureMinimapPerformance<T>(name: string, run: () => T, detail?: DiagnosticDetail): T {
+  if (!minimapPerformanceDiagnosticsEnabled()) return run();
+
+  const start = nowMs();
+  try {
+    return run();
+  } finally {
+    recordMinimapPerformanceDiagnostic(name, detail, nowMs() - start);
+  }
+}
+
+function recordMinimapPerformanceDiagnostic(
+  name: string,
+  detail?: DiagnosticDetail,
+  durationMs?: number,
+): void {
+  const sink = minimapPerformanceDiagnosticSink();
+  if (!sink) return;
+
+  const diagnostic = createDiagnostic(name, detail, durationMs);
+  if (typeof sink === "function") {
+    sink(diagnostic);
+    return;
+  }
+
+  sink.record?.(diagnostic);
+}
+
+function minimapPerformanceDiagnosticsEnabled(): boolean {
+  const sink = minimapPerformanceDiagnosticGlobal().__EDITOR_PERFORMANCE_DIAGNOSTICS__;
+  if (!sink) return false;
+  if (typeof sink === "function") return true;
+  return sink.enabled === true || typeof sink.record === "function";
+}
+
+function minimapPerformanceDiagnosticSink(): MinimapPerformanceDiagnosticSink | null {
+  const sink = minimapPerformanceDiagnosticGlobal().__EDITOR_PERFORMANCE_DIAGNOSTICS__;
+  if (!sink) return null;
+  if (typeof sink === "function") return sink;
+  if (sink.enabled !== true && typeof sink.record !== "function") return null;
+  return sink;
+}
+
+function createDiagnostic(
+  name: string,
+  detail: DiagnosticDetail,
+  durationMs: number | undefined,
+): MinimapPerformanceDiagnostic {
+  const resolvedDetail = resolveDiagnosticDetail(detail);
+  if (durationMs === undefined && resolvedDetail === undefined) return { name };
+  if (durationMs === undefined) return { name, detail: resolvedDetail };
+  if (resolvedDetail === undefined) return { name, durationMs };
+  return { name, durationMs, detail: resolvedDetail };
+}
+
+function resolveDiagnosticDetail(
+  detail: DiagnosticDetail,
+): Readonly<Record<string, unknown>> | undefined {
+  if (typeof detail === "function") return detail();
+  return detail;
+}
+
+function minimapPerformanceDiagnosticGlobal(): MinimapPerformanceDiagnosticGlobal {
+  return globalThis as MinimapPerformanceDiagnosticGlobal;
+}
+
+function pendingUpdateDiagnostics(update: PendingMinimapUpdate): Readonly<Record<string, unknown>> {
+  return {
+    editCount: update.edits.length,
+    incremental: !update.replaceDocument,
+    reason: update.reason,
+    syncBaseStyles: update.syncBaseStyles,
+    syncExternalDecorations: update.syncExternalDecorations,
+    syncSelection: update.syncSelection,
+    syncTokens: update.syncTokens,
+    syncViewport: update.syncViewport,
+    tokenSourceKnown: update.tokenSourceAfterEdits !== null || update.edits.length === 0,
+    type: update.replaceDocument ? "replaceDocument" : "incremental",
+  };
+}
+
+function requestDiagnostics(request: MinimapWorkerRequest): Readonly<Record<string, unknown>> {
+  switch (request.type) {
+    case "openDocument":
+    case "replaceDocument":
+      return { request: request.type, ...documentPayloadDiagnostics(request.document) };
+    case "applyEdit":
+      return {
+        request: request.type,
+        editTextLength: request.edit.text.length,
+        ...documentEditPayloadDiagnostics(request.document),
+      };
+    case "applyEdits":
+      return {
+        request: request.type,
+        editCount: request.edits.length,
+        editTextLength: textLengthForEdits(request.edits),
+        ...documentEditPayloadDiagnostics(request.document),
+      };
+    case "updateTokens":
+      return { request: request.type, tokens: request.tokens.length };
+    case "updateTokenRange":
+      return {
+        request: request.type,
+        deleteCount: request.patch.deleteCount,
+        start: request.patch.start,
+        tokens: request.patch.tokens.length,
+      };
+    case "updateSelection":
+      return { request: request.type, selections: request.selections.length };
+    case "updateDecorations":
+    case "updateExternalDecorations":
+      return { request: request.type, decorations: request.decorations.length };
+    default:
+      return { request: "control" };
+  }
+}
+
+function documentPayloadDiagnostics(
+  payload: MinimapDocumentPayload | null,
+): Readonly<Record<string, unknown>> {
+  return {
+    decorations: payload?.decorations.length ?? 0,
+    externalDecorations: payload?.externalDecorations?.length ?? 0,
+    lineStarts: payload?.lineStarts.length ?? 0,
+    selections: payload?.selections.length ?? 0,
+    textLength: payload?.text.length ?? 0,
+    tokens: payload?.tokens.length ?? 0,
+    type: "document",
+  };
+}
+
+function documentEditPayloadDiagnostics(
+  payload: MinimapDocumentEditPayload | null,
+): Readonly<Record<string, unknown>> {
+  return {
+    selections: payload?.selections.length ?? 0,
+    type: "edit",
+  };
+}
+
+function textLengthForEdits(edits: readonly TextEdit[]): number {
+  let length = 0;
+  for (const edit of edits) length += edit.text.length;
+  return length;
 }
 
 function setStyleValue(
@@ -576,6 +1020,10 @@ function minimapBackgroundOpacity(style: CSSStyleDeclaration): number {
 
 function themeSignature(snapshot: EditorViewSnapshot): string {
   return JSON.stringify(snapshot.theme ?? null);
+}
+
+function nowMs(): number {
+  return globalThis.performance?.now() ?? Date.now();
 }
 
 class ColorResolver {

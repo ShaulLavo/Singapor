@@ -1,10 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-  createDocumentSession,
-  type DocumentSessionChange,
-  type EditorViewSnapshot,
-  type TextEdit,
-} from "@editor/core";
+import { type DocumentSessionChange, type EditorViewSnapshot, type TextEdit } from "@editor/core";
 import { resolveMinimapOptions } from "../src/options";
 import { MinimapWorkerClient, type MinimapHost } from "../src/workerClient";
 import type { MinimapWorkerRequest, MinimapWorkerResponse } from "../src/types";
@@ -116,6 +111,7 @@ describe("MinimapWorkerClient", () => {
 
       expect(applyEdit.type).toBe("applyEdit");
       expect("tokens" in applyEdit.document).toBe(false);
+      expect("lineStarts" in applyEdit.document).toBe(false);
 
       client.dispose();
       host.root.remove();
@@ -125,7 +121,7 @@ describe("MinimapWorkerClient", () => {
     }
   });
 
-  it("falls back to replaceDocument for deletions", () => {
+  it("uses incremental updates for same-line deletions", () => {
     const runtime = installMinimapRuntime();
     try {
       const host = createHost();
@@ -140,18 +136,236 @@ describe("MinimapWorkerClient", () => {
       worker.send(renderedResponse(1));
       worker.postMessage.mockClear();
 
-      const session = createDocumentSession("abc");
-      const change = session.backspace();
-      client.update(snapshot({}, { text: "ab" }), "content", change);
+      const edit: TextEdit = { from: 2, to: 3, text: "" };
+      client.update(snapshot({}, { text: "ab" }), "content", documentEdit(edit, "ab"));
+      runtime.flushAnimationFrames();
+
+      const requests = worker.postMessage.mock.calls.map((call) => call[0] as { type: string });
+
+      expect(requests.map((request) => request.type)).toEqual([
+        "applyEdit",
+        "updateViewport",
+        "render",
+      ]);
+
+      client.dispose();
+      host.root.remove();
+      host.colorScope.remove();
+    } finally {
+      runtime.restore();
+    }
+  });
+
+  it("falls back to replaceDocument for multi-line deletions", () => {
+    const runtime = installMinimapRuntime();
+    try {
+      const host = createHost();
+      const client = new MinimapWorkerClient({
+        host,
+        options: resolveMinimapOptions(),
+        snapshot: snapshot({}, { text: "line 1\nline 2\nline 3" }),
+        decorations: [],
+        onLayoutWidth: vi.fn(),
+      });
+      const worker = runtime.workers[0]!;
+      worker.send(renderedResponse(1));
+      worker.postMessage.mockClear();
+
+      const edit: TextEdit = { from: 6, to: 7, text: "" };
+      client.update(
+        snapshot({}, { text: "line 1line 2\nline 3" }),
+        "content",
+        documentEdit(edit, "line 1line 2\nline 3"),
+      );
       runtime.flushAnimationFrames();
 
       const requests = worker.postMessage.mock.calls.map((call) => call[0] as { type: string });
 
       expect(requests.map((request) => request.type)).toEqual([
         "replaceDocument",
+        "updateLayout",
+        "render",
+      ]);
+
+      client.dispose();
+      host.root.remove();
+      host.colorScope.remove();
+    } finally {
+      runtime.restore();
+    }
+  });
+
+  it("queues incremental edits while a render is in flight", () => {
+    const runtime = installMinimapRuntime();
+    try {
+      const host = createHost();
+      const client = new MinimapWorkerClient({
+        host,
+        options: resolveMinimapOptions(),
+        snapshot: snapshot(),
+        decorations: [],
+        onLayoutWidth: vi.fn(),
+      });
+      const worker = runtime.workers[0]!;
+      worker.send(renderedResponse(1));
+      worker.postMessage.mockClear();
+
+      const firstEdit: TextEdit = { from: 6, to: 6, text: "x" };
+      client.update(
+        snapshot({}, { text: "line 1x\nline 2\nline 3" }),
+        "content",
+        documentEdit(firstEdit, "line 1x\nline 2\nline 3"),
+      );
+      runtime.flushAnimationFrames();
+      worker.postMessage.mockClear();
+
+      const secondEdit: TextEdit = { from: 7, to: 7, text: "y" };
+      const thirdEdit: TextEdit = { from: 8, to: 8, text: "z" };
+      client.update(
+        snapshot({}, { text: "line 1xy\nline 2\nline 3" }),
+        "content",
+        documentEdit(secondEdit, "line 1xy\nline 2\nline 3"),
+      );
+      client.update(
+        snapshot({}, { text: "line 1xyz\nline 2\nline 3" }),
+        "content",
+        documentEdit(thirdEdit, "line 1xyz\nline 2\nline 3"),
+      );
+      runtime.flushAnimationFrames();
+
+      expect(worker.postMessage).not.toHaveBeenCalled();
+
+      worker.send(renderedResponse(2));
+      runtime.flushAnimationFrames();
+
+      const requests = worker.postMessage.mock.calls.map((call) => call[0] as MinimapWorkerRequest);
+      const applyEdits = requests[0] as Extract<MinimapWorkerRequest, { type: "applyEdits" }>;
+
+      expect(requests.map((request) => request.type)).toEqual([
+        "applyEdits",
         "updateViewport",
         "render",
       ]);
+      expect(applyEdits.edits).toEqual([secondEdit, thirdEdit]);
+      expect("lineStarts" in applyEdits.document).toBe(false);
+
+      client.dispose();
+      host.root.remove();
+      host.colorScope.remove();
+    } finally {
+      runtime.restore();
+    }
+  });
+
+  it("sends external decoration updates without a full decoration payload", () => {
+    const runtime = installMinimapRuntime();
+    try {
+      const host = createHost();
+      const client = new MinimapWorkerClient({
+        host,
+        options: resolveMinimapOptions(),
+        snapshot: snapshot(),
+        decorations: [],
+        onLayoutWidth: vi.fn(),
+      });
+      const worker = runtime.workers[0]!;
+      worker.send(renderedResponse(1));
+      worker.postMessage.mockClear();
+
+      const decoration = {
+        startLineNumber: 1,
+        startColumn: 1,
+        endLineNumber: 1,
+        endColumn: 2,
+        color: "#ff0000",
+        position: "inline" as const,
+      };
+      client.setExternalDecorations(snapshot(), [decoration]);
+      runtime.flushAnimationFrames();
+
+      const requests = worker.postMessage.mock.calls.map((call) => call[0] as MinimapWorkerRequest);
+
+      expect(requests.map((request) => request.type)).toEqual([
+        "updateExternalDecorations",
+        "render",
+      ]);
+      expect(requests[0]).toMatchObject({
+        type: "updateExternalDecorations",
+        decorations: [decoration],
+      });
+
+      client.dispose();
+      host.root.remove();
+      host.colorScope.remove();
+    } finally {
+      runtime.restore();
+    }
+  });
+
+  it("sends token range patches after incremental edit token refreshes", () => {
+    const runtime = installMinimapRuntime();
+    try {
+      const host = createHost();
+      const client = new MinimapWorkerClient({
+        host,
+        options: resolveMinimapOptions(),
+        snapshot: snapshot(
+          {},
+          {
+            tokens: [
+              { start: 0, end: 6, style: { color: "#ff0000" } },
+              { start: 7, end: 11, style: { color: "#00ff00" } },
+              { start: 12, end: 18, style: { color: "#0000ff" } },
+            ],
+          },
+        ),
+        decorations: [],
+        onLayoutWidth: vi.fn(),
+      });
+      const worker = runtime.workers[0]!;
+      worker.send(renderedResponse(1));
+      worker.postMessage.mockClear();
+
+      const edit: TextEdit = { from: 6, to: 6, text: "x" };
+      const projectedTokens = [
+        { start: 0, end: 7, style: { color: "#ff0000" } },
+        { start: 8, end: 12, style: { color: "#00ff00" } },
+        { start: 13, end: 19, style: { color: "#0000ff" } },
+      ];
+      client.update(
+        snapshot({}, { text: "line 1x\nline 2\nline 3", tokens: projectedTokens }),
+        "content",
+        documentEdit(edit, "line 1x\nline 2\nline 3"),
+      );
+      runtime.flushAnimationFrames();
+      worker.send(renderedResponse(2));
+      worker.postMessage.mockClear();
+
+      client.update(
+        snapshot(
+          {},
+          {
+            text: "line 1x\nline 2\nline 3",
+            tokens: [
+              projectedTokens[0]!,
+              { start: 8, end: 12, style: { color: "#ffffff" } },
+              projectedTokens[2]!,
+            ],
+          },
+        ),
+        "tokens",
+      );
+      runtime.flushAnimationFrames();
+
+      const requests = worker.postMessage.mock.calls.map((call) => call[0] as MinimapWorkerRequest);
+      const tokenPatch = requests[0] as Extract<MinimapWorkerRequest, { type: "updateTokenRange" }>;
+
+      expect(requests.map((request) => request.type)).toEqual(["updateTokenRange", "render"]);
+      expect(tokenPatch.patch).toMatchObject({
+        start: 1,
+        deleteCount: 1,
+        tokens: [{ start: 8, end: 12 }],
+      });
 
       client.dispose();
       host.root.remove();

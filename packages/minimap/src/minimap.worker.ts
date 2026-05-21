@@ -32,14 +32,23 @@ function handleRequest(request: MinimapWorkerRequest): void {
     case "applyEdit":
       renderer.applyEdit(request.edit, request.document);
       return;
+    case "applyEdits":
+      renderer.applyEdits(request.edits, request.document);
+      return;
     case "updateTokens":
       renderer.setTokens(request.tokens);
+      return;
+    case "updateTokenRange":
+      renderer.updateTokenRange(request.patch);
       return;
     case "updateSelection":
       renderer.setSelections(request.selections);
       return;
     case "updateDecorations":
       renderer.setDecorations(request.decorations);
+      return;
+    case "updateExternalDecorations":
+      renderer.setExternalDecorations(request.decorations);
       return;
     case "updateLayout": {
       const layout = renderer.updateLayout(request.metrics, request.viewport);

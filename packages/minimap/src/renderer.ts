@@ -20,6 +20,7 @@ import type {
   MinimapRenderLayout,
   MinimapSelection,
   MinimapToken,
+  MinimapTokenPatch,
   MinimapViewport,
   ResolvedMinimapOptions,
   RGBA8,
@@ -34,6 +35,7 @@ type RendererState = {
   options: ResolvedMinimapOptions;
   styles: MinimapBaseStyles;
   document: MinimapDocumentPayload;
+  externalDecorations: readonly EditorMinimapDecoration[];
   metrics: MinimapMetrics;
   viewport: MinimapViewport;
   layout: MinimapRenderLayout | null;
@@ -48,6 +50,7 @@ const EMPTY_DOCUMENT: MinimapDocumentPayload = {
   tokens: [],
   selections: [],
   decorations: [],
+  externalDecorations: [],
 };
 
 export class MinimapWorkerRenderer {
@@ -72,6 +75,7 @@ export class MinimapWorkerRenderer {
       options: options.options,
       styles: options.styles,
       document: EMPTY_DOCUMENT,
+      externalDecorations: [],
       metrics: defaultMetrics(),
       viewport: defaultViewport(),
       layout: null,
@@ -83,31 +87,74 @@ export class MinimapWorkerRenderer {
 
   public setDocument(document: MinimapDocumentPayload): void {
     if (!this.state) return;
-    this.state.document = document;
+    const externalDecorations =
+      document.externalDecorations ?? externalDecorationsFrom(document.decorations);
+    const sectionHeaders = findSectionHeaderDecorations(
+      document.text.split("\n"),
+      this.state.options,
+    );
+    this.state.externalDecorations = externalDecorations;
+    this.state.document = {
+      ...document,
+      decorations: [...sectionHeaders, ...externalDecorations],
+      externalDecorations,
+    };
     this.state.previousFrame = null;
     this.state.linesDirty = true;
     this.state.decorationsDirty = true;
   }
 
   public applyEdit(edit: TextEdit, document: MinimapDocumentEditPayload): void {
+    this.applyEdits([edit], document);
+  }
+
+  public applyEdits(edits: readonly TextEdit[], document: MinimapDocumentEditPayload): void {
     if (!this.state) return;
-    const previousText = this.state.document.text;
-    const text = applyTextEdit(previousText, edit);
+    if (edits.length === 0) {
+      this.setSelections(document.selections);
+      return;
+    }
+
+    const next = applyTextEditsToMinimapDocument(this.state.document, edits);
+    this.setEditedDocument(next, document.selections);
+  }
+
+  public setExternalDecorations(decorations: readonly EditorMinimapDecoration[]): void {
+    if (!this.state) return;
+
+    this.state.externalDecorations = decorations;
+    this.state.document = {
+      ...this.state.document,
+      externalDecorations: decorations,
+      decorations: [
+        ...sectionHeaderDecorationsFrom(this.state.document.decorations),
+        ...decorations,
+      ],
+    };
+    this.state.decorationsDirty = true;
+  }
+
+  private setEditedDocument(
+    document: Pick<MinimapDocumentPayload, "lineStarts" | "text" | "tokens">,
+    selections: readonly MinimapSelection[],
+  ): void {
+    const state = this.requireState();
+    const text = document.text;
     const lines = text.split("\n");
     const decorations = [
-      ...findSectionHeaderDecorations(lines, this.state.options),
-      ...document.externalDecorations,
+      ...findSectionHeaderDecorations(lines, state.options),
+      ...state.externalDecorations,
     ];
-    const tokens = projectMinimapTokensThroughEdit(this.state.document.tokens, edit, previousText);
-    this.state.document = {
+    state.document = {
       text,
       lineStarts: document.lineStarts,
-      tokens,
-      selections: document.selections,
+      tokens: document.tokens,
+      selections,
       decorations,
+      externalDecorations: state.externalDecorations,
     };
-    this.state.linesDirty = true;
-    this.state.decorationsDirty = true;
+    state.linesDirty = true;
+    state.decorationsDirty = true;
   }
 
   public setBaseStyles(styles: MinimapBaseStyles): void {
@@ -123,6 +170,14 @@ export class MinimapWorkerRenderer {
     this.state.linesDirty = true;
   }
 
+  public updateTokenRange(patch: MinimapTokenPatch): void {
+    if (!this.state) return;
+
+    const tokens = replaceTokenRange(this.state.document.tokens, patch);
+    this.state.document = { ...this.state.document, tokens };
+    this.state.linesDirty = true;
+  }
+
   public setSelections(selections: readonly MinimapSelection[]): void {
     if (!this.state) return;
     this.state.document = { ...this.state.document, selections };
@@ -131,6 +186,7 @@ export class MinimapWorkerRenderer {
 
   public setDecorations(decorations: readonly EditorMinimapDecoration[]): void {
     if (!this.state) return;
+    this.state.externalDecorations = externalDecorationsFrom(decorations);
     this.state.document = { ...this.state.document, decorations };
     this.state.decorationsDirty = true;
   }
@@ -686,6 +742,84 @@ function emptyRenderResult(): RenderResult {
 
 function applyTextEdit(text: string, edit: TextEdit): string {
   return `${text.slice(0, edit.from)}${edit.text}${text.slice(edit.to)}`;
+}
+
+function applyTextEditsToMinimapDocument(
+  document: Pick<MinimapDocumentPayload, "lineStarts" | "text" | "tokens">,
+  edits: readonly TextEdit[],
+): Pick<MinimapDocumentPayload, "lineStarts" | "text" | "tokens"> {
+  let text = document.text;
+  let lineStarts = document.lineStarts;
+  let tokens = document.tokens;
+
+  for (const edit of edits) {
+    tokens = projectMinimapTokensThroughEdit(tokens, edit, text);
+    lineStarts = applyLineStartsEdit(lineStarts, edit);
+    text = applyTextEdit(text, edit);
+  }
+
+  return { text, lineStarts, tokens };
+}
+
+function applyLineStartsEdit(lineStarts: readonly number[], edit: TextEdit): readonly number[] {
+  const delta = edit.text.length - (edit.to - edit.from);
+  if (delta === 0) return lineStarts;
+  if (edit.text.includes("\n")) return lineStarts;
+
+  const next = [...lineStarts];
+  const lineIndex = lineIndexForOffset(next, edit.from);
+  for (let index = lineIndex + 1; index < next.length; index += 1) {
+    next[index] = (next[index] ?? 0) + delta;
+  }
+  return next;
+}
+
+function lineIndexForOffset(lineStarts: readonly number[], offset: number): number {
+  let low = 0;
+  let high = lineStarts.length - 1;
+  const clamped = Math.max(0, offset);
+
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const start = lineStarts[middle] ?? 0;
+    const next = lineStarts[middle + 1] ?? Number.POSITIVE_INFINITY;
+    if (clamped < start) {
+      high = middle - 1;
+      continue;
+    }
+    if (clamped >= next) {
+      low = middle + 1;
+      continue;
+    }
+    return middle;
+  }
+
+  return Math.max(0, lineStarts.length - 1);
+}
+
+function externalDecorationsFrom(
+  decorations: readonly EditorMinimapDecoration[],
+): readonly EditorMinimapDecoration[] {
+  return decorations.filter((decoration) => !decoration.sectionHeaderStyle);
+}
+
+function sectionHeaderDecorationsFrom(
+  decorations: readonly EditorMinimapDecoration[],
+): readonly EditorMinimapDecoration[] {
+  return decorations.filter((decoration) => decoration.sectionHeaderStyle);
+}
+
+function replaceTokenRange(
+  tokens: readonly MinimapToken[],
+  patch: MinimapTokenPatch,
+): readonly MinimapToken[] {
+  const start = clampTokenIndex(patch.start, tokens.length);
+  const deleteEnd = clampTokenIndex(start + patch.deleteCount, tokens.length);
+  return [...tokens.slice(0, start), ...patch.tokens, ...tokens.slice(deleteEnd)];
+}
+
+function clampTokenIndex(index: number, length: number): number {
+  return Math.min(length, Math.max(0, index));
 }
 
 export function projectMinimapTokensThroughEdit(

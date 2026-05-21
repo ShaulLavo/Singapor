@@ -66,6 +66,12 @@ export type MinimapToken = {
   readonly color: RGBA8;
 };
 
+export type MinimapTokenPatch = {
+  readonly start: number;
+  readonly deleteCount: number;
+  readonly tokens: readonly MinimapToken[];
+};
+
 export type MinimapSelection = {
   readonly startOffset: number;
   readonly endOffset: number;
@@ -94,12 +100,11 @@ export type MinimapDocumentPayload = {
   readonly tokens: readonly MinimapToken[];
   readonly selections: readonly MinimapSelection[];
   readonly decorations: readonly EditorMinimapDecoration[];
+  readonly externalDecorations?: readonly EditorMinimapDecoration[];
 };
 
 export type MinimapDocumentEditPayload = {
-  readonly lineStarts: readonly number[];
   readonly selections: readonly MinimapSelection[];
-  readonly externalDecorations: readonly EditorMinimapDecoration[];
 };
 
 export type MinimapRenderLayout = {
@@ -147,9 +152,19 @@ export type MinimapWorkerRequest =
       readonly edit: TextEdit;
       readonly document: MinimapDocumentEditPayload;
     }
+  | {
+      readonly type: "applyEdits";
+      readonly edits: readonly TextEdit[];
+      readonly document: MinimapDocumentEditPayload;
+    }
   | { readonly type: "updateTokens"; readonly tokens: readonly MinimapToken[] }
+  | { readonly type: "updateTokenRange"; readonly patch: MinimapTokenPatch }
   | { readonly type: "updateSelection"; readonly selections: readonly MinimapSelection[] }
   | { readonly type: "updateDecorations"; readonly decorations: readonly EditorMinimapDecoration[] }
+  | {
+      readonly type: "updateExternalDecorations";
+      readonly decorations: readonly EditorMinimapDecoration[];
+    }
   | {
       readonly type: "updateLayout";
       readonly metrics: MinimapMetrics;
