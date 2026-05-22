@@ -438,6 +438,8 @@ describe("Tree-sitter syntax capture conversion", () => {
       snapshot: document.getSnapshot(),
       text,
     });
+    await session.refresh(document.getSnapshot(), document.getText());
+
     const change = document.applyEdits([
       { from: text.length, text: "\nconst b = 2;", to: text.length },
     ]);
@@ -458,6 +460,8 @@ describe("Tree-sitter syntax capture conversion", () => {
       snapshot: createPieceTableSnapshot("abc"),
       text: "abc",
     });
+    await session.refresh(createPieceTableSnapshot("abc"), "abc");
+
     const staleDocument = createDocumentSession("abc!");
     const change = staleDocument.applyEdits([{ from: 4, text: "?", to: 4 }]);
 
@@ -515,6 +519,42 @@ describe("Tree-sitter syntax capture conversion", () => {
     const thirdEdit = edits[2]!;
     thirdEdit.result.resolve(createParseResult(thirdEdit.payload));
     await thirdPromise;
+  });
+
+  it("refreshes instead of editing before the first parse succeeds", async () => {
+    const parseVersions: number[] = [];
+    let editCount = 0;
+    const backend = {
+      disposeDocument: () => undefined,
+      edit: async () => {
+        editCount += 1;
+        throw new Error("unexpected edit before parse");
+      },
+      parse: async (payload) => {
+        parseVersions.push(payload.snapshotVersion);
+        return createParseResult(payload);
+      },
+      registerLanguages: async () => undefined,
+      select: async () => undefined,
+    } satisfies TreeSitterBackend;
+    const initialText = "const a = 1;";
+    const document = createDocumentSession(initialText);
+    const session = new TreeSitterSyntaxSession({
+      backend,
+      documentId: "file.ts",
+      languageId: "typescript",
+      snapshot: document.getSnapshot(),
+      text: initialText,
+    });
+
+    const change = document.applyEdits([
+      { from: initialText.length, text: "\nconst b = 2;", to: initialText.length },
+    ]);
+    await session.applyChange(change);
+
+    expect(editCount).toBe(0);
+    expect(parseVersions).toEqual([1]);
+    expect(session.getSnapshotVersion()).toBe(1);
   });
 
   it("falls back to a full refresh when incremental parsing fails", async () => {
@@ -664,7 +704,7 @@ function createCapturingTreeSitterBackend() {
         timings: [],
       };
     },
-    parse: async () => undefined,
+    parse: async (payload) => createParseResult(payload),
     registerLanguages: async () => undefined,
     select: async () => undefined,
   } satisfies TreeSitterBackend & { latestEdit: TreeSitterEditPayload | null };

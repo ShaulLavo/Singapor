@@ -18,6 +18,7 @@ type PendingRequest = {
   readonly documentId: string | null;
   readonly cancellationFlag: Int32Array | null;
   readonly payload: TreeSitterWorkerRequestPayload;
+  readonly sourceEpoch: number | null;
   readonly resolve: (result: TreeSitterWorkerResult) => void;
   readonly reject: (error: Error) => void;
 };
@@ -71,6 +72,7 @@ let nextGeneration = 1;
 let initPromise: Promise<void> | null = null;
 const pendingRequests = new Map<number, PendingRequest>();
 const sentSourceChunkIds = new Map<string, Set<string>>();
+const sourceDocumentEpochs = new Map<string, number>();
 const registeredLanguageSignatures = new Map<TreeSitterLanguageId, string>();
 
 const getWorker = (): Worker | null => {
@@ -164,7 +166,7 @@ export const selectWithTreeSitter = async (
 
 export const disposeTreeSitterDocument = (documentId: string): void => {
   logTreeSitterWorkerDebug("dispose document", { documentId });
-  sentSourceChunkIds.delete(documentId);
+  invalidateDocumentSourceState(documentId);
   void postRequest({ type: "disposeDocument", documentId }).catch(() => undefined);
 };
 
@@ -183,6 +185,7 @@ export const disposeTreeSitterWorker = async (): Promise<void> => {
     initPromise = null;
     registeredLanguageSignatures.clear();
     sentSourceChunkIds.clear();
+    sourceDocumentEpochs.clear();
     rejectPendingRequests(new Error("Tree-sitter worker disposed"));
   }
 };
@@ -209,6 +212,7 @@ const postRequest = (payload: TreeSitterWorkerRequestPayload): Promise<TreeSitte
       documentId: documentIdForPayload(payload),
       cancellationFlag: cancellationFlagForPayload(payload),
       payload,
+      sourceEpoch: sourceEpochForPayload(payload),
       resolve,
       reject,
     });
@@ -273,11 +277,14 @@ const handleWorkerMessage = (event: MessageEvent<TreeSitterWorkerResponse>): voi
       id: response.id,
       result: workerResultDebugInfo(response.result),
     });
-    markSourceChunksAsSent(pending.payload);
+    markSourceChunksAsSent(pending);
     pending.resolve(response.result);
     return;
   }
 
+  if (pending.documentId && shouldInvalidateDocumentSourceState(response.error)) {
+    invalidateDocumentSourceState(pending.documentId);
+  }
   warnTreeSitterWorker(`request rejected: ${response.error}`, {
     ...workerPayloadDebugInfo(pending.payload),
     error: response.error,
@@ -300,6 +307,7 @@ const handleWorkerError = (failedWorker: Worker, event: ErrorEvent): void => {
   initPromise = null;
   registeredLanguageSignatures.clear();
   sentSourceChunkIds.clear();
+  sourceDocumentEpochs.clear();
 };
 
 const rejectPendingRequests = (error: Error): void => {
@@ -381,8 +389,19 @@ const sourceChunkIdsForDocument = (documentId: string): Set<string> => {
   return sent;
 };
 
-const markSourceChunksAsSent = (payload: TreeSitterWorkerRequestPayload): void => {
+const markSourceChunksAsSent = (pending: PendingRequest): void => {
+  const { payload } = pending;
   if (!("source" in payload)) return;
+  if (!canMarkSourceChunksAsSent(pending)) {
+    logTreeSitterWorkerDebug("skip stale source chunk mark", {
+      documentId: payload.documentId,
+      requestEpoch: pending.sourceEpoch,
+      sourceEpoch: currentSourceEpoch(payload.documentId),
+      sourceChunks: payload.source.chunks.length,
+      type: payload.type,
+    });
+    return;
+  }
 
   const sent = sourceChunkIdsForDocument(payload.documentId);
   for (const chunk of payload.source.chunks) sent.add(chunk.chunkId);
@@ -392,6 +411,29 @@ const markSourceChunksAsSent = (payload: TreeSitterWorkerRequestPayload): void =
     sourceChunks: payload.source.chunks.length,
     type: payload.type,
   });
+};
+
+const canMarkSourceChunksAsSent = (pending: PendingRequest): boolean => {
+  if (!("source" in pending.payload)) return false;
+  return pending.sourceEpoch === currentSourceEpoch(pending.payload.documentId);
+};
+
+const sourceEpochForPayload = (payload: TreeSitterWorkerRequestPayload): number | null => {
+  if (!("source" in payload)) return null;
+  return currentSourceEpoch(payload.documentId);
+};
+
+const currentSourceEpoch = (documentId: string): number => sourceDocumentEpochs.get(documentId) ?? 0;
+
+const invalidateDocumentSourceState = (documentId: string): void => {
+  sentSourceChunkIds.delete(documentId);
+  sourceDocumentEpochs.set(documentId, currentSourceEpoch(documentId) + 1);
+};
+
+const shouldInvalidateDocumentSourceState = (error: string): boolean => {
+  if (error.includes("Tree-sitter source chunk")) return true;
+  if (error.includes("Tree-sitter resolve source failed")) return true;
+  return error.includes("Tree-sitter cache miss");
 };
 
 const isTreeSitterParseResult = (result: TreeSitterWorkerResult): result is TreeSitterParseResult =>

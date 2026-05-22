@@ -114,6 +114,13 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
       return this.result;
     }
 
+    if (this.parsedSnapshotVersion === 0) {
+      this.debug("edit falling back to refresh without parsed snapshot", {
+        snapshotVersion: this.snapshotVersion,
+      });
+      return this.refresh(change.snapshot);
+    }
+
     if (!(await this.ensureLanguageRegistered())) {
       this.snapshotVersion += 1;
       this.debug("edit language unavailable", {
@@ -235,6 +242,7 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
   private reparseAfterIncrementalFailure(
     snapshot: PieceTableSnapshot,
   ): Promise<EditorSyntaxResult> {
+    this.parsedSnapshotVersion = 0;
     this.warn("dispose worker document before recovery reparse", {
       snapshotLength: snapshot.length,
       snapshotVersion: this.snapshotVersion,

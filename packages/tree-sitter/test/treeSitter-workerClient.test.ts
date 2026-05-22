@@ -145,6 +145,61 @@ describe("tree-sitter worker client language registration cache", () => {
     await expect(retryParse).resolves.toMatchObject({ snapshotVersion: 2 });
   });
 
+  it("does not mark source chunks as sent from responses after document disposal", async () => {
+    FakeWorker.autoResolve = false;
+    const client = await loadWorkerClient();
+    const snapshot = createPieceTableSnapshot("const answer = 1;");
+    const parse = client.parseWithTreeSitter(parsePayload(snapshot, 1));
+    const worker = fakeWorkerAt(0);
+
+    worker.resolveRequest(requestOfType(worker, "init"));
+    await flushMicrotasks();
+    const staleRequest = parseRequests(worker)[0]!;
+    expect(staleRequest.payload.source.chunks.length).toBeGreaterThan(0);
+
+    client.disposeTreeSitterDocument("doc.ts");
+    worker.resolveRequest(staleRequest, parseResult(1));
+    await expect(parse).resolves.toMatchObject({ snapshotVersion: 1 });
+
+    const retryParse = client.parseWithTreeSitter(parsePayload(snapshot, 2));
+    await flushMicrotasks();
+    const retryRequest = parseRequests(worker)[1]!;
+
+    expect(retryRequest.payload.source.chunks.length).toBeGreaterThan(0);
+    worker.resolveRequest(retryRequest, parseResult(2));
+    await expect(retryParse).resolves.toMatchObject({ snapshotVersion: 2 });
+  });
+
+  it("resends source chunks after source cache errors", async () => {
+    FakeWorker.autoResolve = false;
+    const client = await loadWorkerClient();
+    const snapshot = createPieceTableSnapshot("const answer = 1;");
+    const firstParse = client.parseWithTreeSitter(parsePayload(snapshot, 1));
+    const worker = fakeWorkerAt(0);
+
+    worker.resolveRequest(requestOfType(worker, "init"));
+    await flushMicrotasks();
+    const firstRequest = parseRequests(worker)[0]!;
+    expect(firstRequest.payload.source.chunks.length).toBeGreaterThan(0);
+    worker.resolveRequest(firstRequest, parseResult(1));
+    await expect(firstParse).resolves.toMatchObject({ snapshotVersion: 1 });
+
+    const failedParse = client.parseWithTreeSitter(parsePayload(snapshot, 2));
+    await flushMicrotasks();
+    const failedRequest = parseRequests(worker)[1]!;
+    expect(failedRequest.payload.source.chunks).toHaveLength(0);
+    worker.rejectRequest(failedRequest, 'Tree-sitter source chunk "buffer:2:0" is missing');
+    await expect(failedParse).rejects.toThrow("Tree-sitter source chunk");
+
+    const retryParse = client.parseWithTreeSitter(parsePayload(snapshot, 3));
+    await flushMicrotasks();
+    const retryRequest = parseRequests(worker)[2]!;
+
+    expect(retryRequest.payload.source.chunks.length).toBeGreaterThan(0);
+    worker.resolveRequest(retryRequest, parseResult(3));
+    await expect(retryParse).resolves.toMatchObject({ snapshotVersion: 3 });
+  });
+
   it("requests captures by default and allows compact parse requests", async () => {
     FakeWorker.autoResolve = false;
     const client = await loadWorkerClient();
