@@ -2,10 +2,14 @@ import type { TreeSitterLanguageDescriptor } from "./registry";
 import type {
   TreeSitterEditRequest,
   TreeSitterLanguageId,
+  TreeSitterParseAckResult,
   TreeSitterParseRequest,
   TreeSitterParseResult,
+  TreeSitterRangeRequest,
+  TreeSitterRangeResult,
   TreeSitterSelectionRequest,
   TreeSitterSelectionResult,
+  TreeSitterSyntaxRange,
   TreeSitterWorkerRequest,
   TreeSitterWorkerRequestPayload,
   TreeSitterWorkerResponse,
@@ -31,6 +35,10 @@ type TreeSitterEditDocumentRequest = Omit<
   TreeSitterEditRequest,
   "generation" | "cancellationBuffer"
 >;
+type TreeSitterRangeDocumentRequest = Omit<
+  TreeSitterRangeRequest,
+  "generation" | "cancellationBuffer"
+>;
 
 export type TreeSitterParsePayload = {
   readonly documentId: string;
@@ -38,8 +46,13 @@ export type TreeSitterParsePayload = {
   readonly languageId: TreeSitterLanguageId;
   readonly includeHighlights?: boolean;
   readonly includeCaptures?: boolean;
+  readonly resultMode?: "full";
   readonly snapshot: PieceTableSnapshot;
 };
+export type TreeSitterParseOnlyPayload = Omit<TreeSitterParsePayload, "resultMode"> & {
+  readonly resultMode: "parseOnly";
+};
+export type TreeSitterBackendParsePayload = TreeSitterParsePayload | TreeSitterParseOnlyPayload;
 
 export type TreeSitterEditPayload = {
   readonly documentId: string;
@@ -48,16 +61,34 @@ export type TreeSitterEditPayload = {
   readonly languageId: TreeSitterLanguageId;
   readonly includeHighlights: boolean;
   readonly includeCaptures?: boolean;
+  readonly resultMode?: "full";
   readonly snapshot: PieceTableSnapshot;
   readonly edits: readonly TreeSitterEditRequest["edits"][number][];
   readonly inputEdits: readonly TreeSitterEditRequest["inputEdits"][number][];
+};
+export type TreeSitterEditOnlyPayload = Omit<TreeSitterEditPayload, "resultMode"> & {
+  readonly resultMode: "parseOnly";
+};
+export type TreeSitterBackendEditPayload = TreeSitterEditPayload | TreeSitterEditOnlyPayload;
+export type TreeSitterRangePayload = {
+  readonly documentId: string;
+  readonly snapshotVersion: number;
+  readonly languageId: TreeSitterLanguageId;
+  readonly includeHighlights?: boolean;
+  readonly includeCaptures?: boolean;
+  readonly range: TreeSitterSyntaxRange;
 };
 export type TreeSitterSelectionPayload = Omit<TreeSitterSelectionRequest, "type">;
 
 export type TreeSitterBackend = {
   registerLanguages(languages: readonly TreeSitterLanguageDescriptor[]): Promise<void>;
-  parse(payload: TreeSitterParsePayload): Promise<TreeSitterParseResult | undefined>;
-  edit(payload: TreeSitterEditPayload): Promise<TreeSitterParseResult | undefined>;
+  parse(
+    payload: TreeSitterBackendParsePayload,
+  ): Promise<TreeSitterParseResult | TreeSitterParseAckResult | undefined>;
+  edit(
+    payload: TreeSitterBackendEditPayload,
+  ): Promise<TreeSitterParseResult | TreeSitterParseAckResult | undefined>;
+  queryRange?(payload: TreeSitterRangePayload): Promise<TreeSitterRangeResult | undefined>;
   select(payload: TreeSitterSelectionPayload): Promise<TreeSitterSelectionResult | undefined>;
   disposeDocument(documentId: string): void;
   dispose?(): Promise<void>;
@@ -115,9 +146,18 @@ export const registerTreeSitterLanguagesWithWorker = async (
   }
 };
 
-export const parseWithTreeSitter = async (
+export function parseWithTreeSitter(
+  payload: TreeSitterParseOnlyPayload,
+): Promise<TreeSitterParseResult | TreeSitterParseAckResult | undefined>;
+export function parseWithTreeSitter(
   payload: TreeSitterParsePayload,
-): Promise<TreeSitterParseResult | undefined> => {
+): Promise<TreeSitterParseResult | undefined>;
+export function parseWithTreeSitter(
+  payload: TreeSitterBackendParsePayload,
+): Promise<TreeSitterParseResult | TreeSitterParseAckResult | undefined>;
+export async function parseWithTreeSitter(
+  payload: TreeSitterBackendParsePayload,
+): Promise<TreeSitterParseResult | TreeSitterParseAckResult | undefined> {
   const handle = await ensureWorkerReady();
   if (!handle) return undefined;
   const source = createSourceDescriptor(payload.documentId, payload.snapshot);
@@ -128,15 +168,27 @@ export const parseWithTreeSitter = async (
     languageId: payload.languageId,
     includeHighlights: payload.includeHighlights ?? true,
     includeCaptures: payload.includeCaptures,
+    resultMode: payload.resultMode,
     source,
   };
   const result = await postDocumentRequest(request);
-  return isTreeSitterParseResult(result) ? result : undefined;
-};
+  if (isTreeSitterParseResult(result)) return result;
+  if (isTreeSitterParseAckResult(result)) return result;
+  return undefined;
+}
 
-export const editWithTreeSitter = async (
+export function editWithTreeSitter(
+  payload: TreeSitterEditOnlyPayload,
+): Promise<TreeSitterParseResult | TreeSitterParseAckResult | undefined>;
+export function editWithTreeSitter(
   payload: TreeSitterEditPayload,
-): Promise<TreeSitterParseResult | undefined> => {
+): Promise<TreeSitterParseResult | undefined>;
+export function editWithTreeSitter(
+  payload: TreeSitterBackendEditPayload,
+): Promise<TreeSitterParseResult | TreeSitterParseAckResult | undefined>;
+export async function editWithTreeSitter(
+  payload: TreeSitterBackendEditPayload,
+): Promise<TreeSitterParseResult | TreeSitterParseAckResult | undefined> {
   const handle = await ensureWorkerReady();
   if (!handle) return undefined;
   const source = createSourceDescriptor(payload.documentId, payload.snapshot);
@@ -148,11 +200,31 @@ export const editWithTreeSitter = async (
     languageId: payload.languageId,
     includeHighlights: payload.includeHighlights,
     includeCaptures: payload.includeCaptures,
+    resultMode: payload.resultMode,
     source,
     edits: payload.edits,
     inputEdits: payload.inputEdits,
   });
-  return isTreeSitterParseResult(result) ? result : undefined;
+  if (isTreeSitterParseResult(result)) return result;
+  if (isTreeSitterParseAckResult(result)) return result;
+  return undefined;
+}
+
+export const queryRangeWithTreeSitter = async (
+  payload: TreeSitterRangePayload,
+): Promise<TreeSitterRangeResult | undefined> => {
+  const handle = await ensureWorkerReady();
+  if (!handle) return undefined;
+  const result = await postRangeRequest({
+    type: "queryRange",
+    documentId: payload.documentId,
+    snapshotVersion: payload.snapshotVersion,
+    languageId: payload.languageId,
+    includeHighlights: payload.includeHighlights ?? true,
+    includeCaptures: payload.includeCaptures,
+    range: payload.range,
+  });
+  return isTreeSitterRangeResult(result) ? result : undefined;
 };
 
 export const selectWithTreeSitter = async (
@@ -194,6 +266,7 @@ export const createTreeSitterWorkerBackend = (): TreeSitterBackend => ({
   registerLanguages: registerTreeSitterLanguagesWithWorker,
   parse: parseWithTreeSitter,
   edit: editWithTreeSitter,
+  queryRange: queryRangeWithTreeSitter,
   select: selectWithTreeSitter,
   disposeDocument: disposeTreeSitterDocument,
   dispose: disposeTreeSitterWorker,
@@ -226,6 +299,10 @@ function postDocumentRequest(
   return postRequest(withCancellation(cancelPreviousDocumentRequests(payload.documentId), payload));
 }
 
+function postRangeRequest(payload: TreeSitterRangeDocumentRequest): Promise<TreeSitterWorkerResult> {
+  return postRequest(withCancellation(cancelPreviousRangeRequests(payload.documentId), payload));
+}
+
 const cancelPreviousDocumentRequests = (documentId: string): Int32Array | null => {
   let cancellationFlag: Int32Array | null = null;
   let cancelledRequests = 0;
@@ -250,8 +327,36 @@ const cancelPreviousDocumentRequests = (documentId: string): Int32Array | null =
   return cancellationFlag;
 };
 
+const cancelPreviousRangeRequests = (documentId: string): Int32Array | null => {
+  let cancellationFlag: Int32Array | null = null;
+  let cancelledRequests = 0;
+
+  for (const pending of pendingRequests.values()) {
+    if (pending.documentId !== documentId) continue;
+    if (pending.payload.type !== "queryRange") continue;
+    cancelledRequests += 1;
+    if (pending.cancellationFlag) Atomics.store(pending.cancellationFlag, 0, 1);
+  }
+
+  if (cancelledRequests > 0) {
+    logTreeSitterWorkerDebug("cancel previous range requests", {
+      cancelledRequests,
+      documentId,
+    });
+  }
+
+  if (supportsSharedCancellation()) {
+    cancellationFlag = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT));
+  }
+
+  return cancellationFlag;
+};
+
 const withCancellation = <
-  TPayload extends TreeSitterParseDocumentRequest | TreeSitterEditDocumentRequest,
+  TPayload extends
+    | TreeSitterParseDocumentRequest
+    | TreeSitterEditDocumentRequest
+    | TreeSitterRangeDocumentRequest,
 >(
   cancellationFlag: Int32Array | null,
   payload: TPayload,
@@ -358,7 +463,7 @@ function languageDescriptorSignature(language: TreeSitterLanguageDescriptor): st
 }
 
 function sortedItems(items: readonly string[]): readonly string[] {
-  return [...items].sort();
+  return items.toSorted();
 }
 
 const documentIdForPayload = (payload: TreeSitterWorkerRequestPayload): string | null => {
@@ -439,6 +544,15 @@ const shouldInvalidateDocumentSourceState = (error: string): boolean => {
 const isTreeSitterParseResult = (result: TreeSitterWorkerResult): result is TreeSitterParseResult =>
   Boolean(result && "captures" in result && "folds" in result);
 
+const isTreeSitterParseAckResult = (
+  result: TreeSitterWorkerResult,
+): result is TreeSitterParseAckResult =>
+  Boolean(result && "status" in result && result.status === "parsed");
+
+const isTreeSitterRangeResult = (
+  result: TreeSitterWorkerResult,
+): result is TreeSitterRangeResult => Boolean(result && "range" in result && "tokens" in result);
+
 const isTreeSitterSelectionResult = (
   result: TreeSitterWorkerResult,
 ): result is TreeSitterSelectionResult =>
@@ -492,6 +606,15 @@ const workerPayloadDebugInfo = (
     documentId: documentIdForPayload(payload),
     type: payload.type,
   };
+  if (payload.type === "queryRange") {
+    return {
+      ...base,
+      generation: payload.generation,
+      rangeEnd: payload.range.endIndex,
+      rangeStart: payload.range.startIndex,
+      snapshotVersion: payload.snapshotVersion,
+    };
+  }
   if (!("source" in payload)) return base;
 
   return {
@@ -513,6 +636,15 @@ const workerResultDebugInfo = (
       ranges: result.ranges.length,
       snapshotVersion: result.snapshotVersion,
       status: result.status,
+    };
+  }
+  if (isTreeSitterParseAckResult(result)) {
+    return {
+      changedRanges: result.changedRanges.length,
+      languageId: result.languageId,
+      snapshotVersion: result.snapshotVersion,
+      status: result.status,
+      timings: result.timings,
     };
   }
 

@@ -9,18 +9,22 @@ import {
   type DocumentTextSnapshot,
   type EditorSyntaxResult,
   type EditorSyntaxSession,
+  type EditorSyntaxRange,
   type PieceTableSnapshot,
   type TextEdit,
 } from "@editor/core";
 import type {
   TreeSitterInputEdit,
   TreeSitterLanguageId,
+  TreeSitterParseAckResult,
   TreeSitterParseResult,
+  TreeSitterRangeResult,
 } from "./treeSitter/types";
 import type { TreeSitterLanguageResolver } from "./treeSitter/registry";
 import {
   createTreeSitterWorkerBackend,
   type TreeSitterBackend,
+  type TreeSitterBackendEditPayload,
   type TreeSitterEditPayload,
 } from "./treeSitter/workerClient";
 
@@ -30,6 +34,7 @@ export type TreeSitterSyntaxSessionOptions = {
   readonly languageResolver?: TreeSitterLanguageResolver;
   readonly includeHighlights?: boolean;
   readonly includeCaptures?: boolean;
+  readonly syntaxMode?: "full" | "range";
   readonly text?: string;
   readonly textSnapshot?: DocumentTextSnapshot;
   readonly snapshot: PieceTableSnapshot;
@@ -42,6 +47,7 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
   private readonly languageResolver: TreeSitterLanguageResolver | undefined;
   private readonly includeHighlights: boolean;
   private readonly includeCaptures: boolean;
+  private readonly syntaxMode: "full" | "range";
   private readonly backend: TreeSitterBackend;
   private snapshotVersion = 0;
   private parsedSnapshotVersion = 0;
@@ -56,6 +62,7 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
     this.languageResolver = options.languageResolver;
     this.includeHighlights = options.includeHighlights ?? true;
     this.includeCaptures = options.includeCaptures ?? true;
+    this.syntaxMode = options.syntaxMode ?? "full";
     this.textSnapshot =
       options.textSnapshot ?? createDocumentTextSnapshot(options.snapshot, options.text);
     this.snapshot = options.snapshot;
@@ -77,14 +84,19 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
         return this.updateFromUnavailableLanguage(textSnapshot, snapshot);
       }
 
-      const result = await this.backend.parse({
+      const parsePayload = {
         documentId: this.documentId,
         snapshotVersion,
         languageId: this.languageId,
         includeHighlights: this.includeHighlights,
         includeCaptures: this.includeCaptures,
         snapshot,
-      });
+      };
+      const result = await this.backend.parse(
+        this.syntaxMode === "range"
+          ? { ...parsePayload, resultMode: "parseOnly" }
+          : { ...parsePayload, resultMode: "full" },
+      );
       this.debug("refresh result", {
         resultVersion: result?.snapshotVersion ?? null,
         snapshotVersion,
@@ -143,7 +155,7 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
       return this.result;
     }
 
-    const payload = createTreeSitterEditPayload({
+    const editPayloadOptions = {
       documentId: this.documentId,
       languageId: this.languageId,
       previousSnapshotVersion: this.parsedSnapshotVersion,
@@ -153,7 +165,11 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
       edits,
       includeHighlights: this.includeHighlights,
       includeCaptures: this.includeCaptures,
-    });
+    };
+    const payload =
+      this.syntaxMode === "range"
+        ? createTreeSitterEditPayload({ ...editPayloadOptions, resultMode: "parseOnly" })
+        : createTreeSitterEditPayload({ ...editPayloadOptions, resultMode: "full" });
 
     this.debug("edit payload", {
       editCount: edits.length,
@@ -169,6 +185,31 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
     }
 
     return this.applyIncrementalEdit(payload, documentSessionChangeTextSnapshot(change));
+  }
+
+  public async queryRange(range: EditorSyntaxRange): Promise<EditorSyntaxResult> {
+    if (!this.backend.queryRange) return this.result;
+    if (!this.canQueryRange()) return createEmptySyntaxResult();
+
+    const result = await this.backend.queryRange({
+      documentId: this.documentId,
+      snapshotVersion: this.parsedSnapshotVersion,
+      languageId: this.languageId,
+      includeHighlights: this.includeHighlights,
+      includeCaptures: this.includeCaptures,
+      range,
+    });
+    this.debug("range result", {
+      range,
+      resultVersion: result?.snapshotVersion ?? null,
+      ...treeSitterResultDebugInfo(result),
+    });
+
+    return this.updateFromTreeSitterRangeResult(result, range);
+  }
+
+  public canQueryRange(): boolean {
+    return this.parsedSnapshotVersion !== 0 && this.parsedSnapshotVersion === this.snapshotVersion;
   }
 
   public getResult(): EditorSyntaxResult {
@@ -188,7 +229,7 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
   }
 
   private async applyIncrementalEdit(
-    payload: TreeSitterEditPayload,
+    payload: TreeSitterBackendEditPayload,
     nextTextSnapshot: DocumentTextSnapshot,
   ): Promise<EditorSyntaxResult> {
     try {
@@ -202,7 +243,15 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
         return this.result;
       }
 
-      if (!result || result.snapshotVersion !== payload.snapshotVersion) {
+      if (!result) {
+        this.debug("edit result unavailable; reparsing", {
+          snapshotVersion: payload.snapshotVersion,
+          ...treeSitterResultDebugInfo(result),
+        });
+        return this.reparseAfterIncrementalFailure(payload.snapshot, { warn: false });
+      }
+
+      if (result.snapshotVersion !== payload.snapshotVersion) {
         this.warn("edit result requires full reparse", {
           resultVersion: result?.snapshotVersion ?? null,
           snapshotVersion: payload.snapshotVersion,
@@ -241,9 +290,11 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
 
   private reparseAfterIncrementalFailure(
     snapshot: PieceTableSnapshot,
+    options: { readonly warn?: boolean } = {},
   ): Promise<EditorSyntaxResult> {
     this.parsedSnapshotVersion = 0;
-    this.warn("dispose worker document before recovery reparse", {
+    const log = options.warn === false ? this.debug.bind(this) : this.warn.bind(this);
+    log("dispose worker document before recovery reparse", {
       snapshotLength: snapshot.length,
       snapshotVersion: this.snapshotVersion,
     });
@@ -305,7 +356,7 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
   }
 
   private updateFromTreeSitterResult(
-    result: TreeSitterParseResult | undefined,
+    result: TreeSitterParseResult | TreeSitterParseAckResult | undefined,
     snapshotVersion: number,
     textSnapshot: DocumentTextSnapshot,
     snapshot: PieceTableSnapshot,
@@ -317,12 +368,26 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
     this.textSnapshot = textSnapshot;
     this.snapshot = snapshot;
     this.parsedSnapshotVersion = result.snapshotVersion;
+    if (isTreeSitterParseAckResult(result)) return this.result;
+
+    this.result = treeSitterParseResultToEditorSyntaxResult(result);
+    return this.result;
+  }
+
+  private updateFromTreeSitterRangeResult(
+    result: TreeSitterRangeResult | undefined,
+    range: EditorSyntaxRange,
+  ): EditorSyntaxResult {
+    if (!result) return this.result;
+    if (result.snapshotVersion !== this.parsedSnapshotVersion) return this.result;
+    if (!sameSyntaxRange(result.range, range)) return this.result;
+
     this.result = treeSitterParseResultToEditorSyntaxResult(result);
     return this.result;
   }
 }
 
-type TreeSitterEditPayloadOptions = {
+type TreeSitterBaseEditPayloadOptions = {
   readonly documentId: string;
   readonly languageId: TreeSitterLanguageId;
   readonly previousSnapshotVersion: number;
@@ -334,9 +399,23 @@ type TreeSitterEditPayloadOptions = {
   readonly includeCaptures?: boolean;
 };
 
-export const createTreeSitterEditPayload = (
+type TreeSitterEditPayloadOptions = TreeSitterBaseEditPayloadOptions & {
+  readonly resultMode?: "full";
+};
+
+type TreeSitterParseOnlyEditPayloadOptions = TreeSitterBaseEditPayloadOptions & {
+  readonly resultMode: "parseOnly";
+};
+
+export function createTreeSitterEditPayload(
+  options: TreeSitterParseOnlyEditPayloadOptions,
+): TreeSitterBackendEditPayload | null;
+export function createTreeSitterEditPayload(
   options: TreeSitterEditPayloadOptions,
-): TreeSitterEditPayload | null => {
+): TreeSitterEditPayload | null;
+export function createTreeSitterEditPayload(
+  options: TreeSitterEditPayloadOptions | TreeSitterParseOnlyEditPayloadOptions,
+): TreeSitterBackendEditPayload | null {
   if (options.edits.length === 0) return null;
 
   return {
@@ -346,11 +425,12 @@ export const createTreeSitterEditPayload = (
     languageId: options.languageId,
     includeHighlights: options.includeHighlights ?? true,
     includeCaptures: options.includeCaptures,
+    resultMode: options.resultMode,
     snapshot: options.nextSnapshot,
     edits: options.edits,
     inputEdits: createTreeSitterInputEdits(options.previousSnapshot, options.edits),
   };
-};
+}
 
 export const createTextDiffEdit = (previousText: string, nextText: string): TextEdit | null => {
   if (previousText === nextText) return null;
@@ -425,6 +505,13 @@ const createEmptySyntaxResult = (): EditorSyntaxResult => ({
   tokens: [],
 });
 
+const isTreeSitterParseAckResult = (
+  result: TreeSitterParseResult | TreeSitterParseAckResult,
+): result is TreeSitterParseAckResult => "status" in result && result.status === "parsed";
+
+const sameSyntaxRange = (left: EditorSyntaxRange, right: EditorSyntaxRange): boolean =>
+  left.startIndex === right.startIndex && left.endIndex === right.endIndex;
+
 const createTreeSitterInputEdits = (
   snapshot: PieceTableSnapshot,
   edits: readonly TextEdit[],
@@ -493,9 +580,16 @@ const isTreeSitterSessionDebugEnabled = (): boolean => {
 };
 
 const treeSitterResultDebugInfo = (
-  result: TreeSitterParseResult | undefined,
+  result: TreeSitterParseResult | TreeSitterParseAckResult | TreeSitterRangeResult | undefined,
 ): TreeSitterSessionDebugPayload => {
   if (!result) return { result: null };
+  if (isTreeSitterParseAckResult(result)) {
+    return {
+      changedRanges: result.changedRanges.length,
+      status: result.status,
+      timings: result.timings,
+    };
+  }
 
   return {
     brackets: result.brackets.length,

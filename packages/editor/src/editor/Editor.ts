@@ -80,6 +80,7 @@ import {
 } from "../plugins";
 import { resolveSelection } from "../selections";
 import { type EditorSyntaxLanguageId } from "../syntax/session";
+import type { EditorSyntaxRange } from "../syntax/session";
 import {
   parseMergeConflicts,
   resolveMergeConflict as resolveMergeConflictText,
@@ -110,12 +111,23 @@ const RAPID_INPUT_TIMING_NAMES = new Set([
   "input.backspace",
   "input.delete",
 ]);
+const VISIBLE_SYNTAX_OVERSCAN_CHARS = 20_000;
+const VISIBLE_SYNTAX_TRAILING_CHARS = 50_000;
+const VISIBLE_SYNTAX_LEAD_CHARS = 250_000;
+const VISIBLE_SYNTAX_MAX_LEAD_CHARS = 750_000;
+const VISIBLE_SYNTAX_SCROLL_DELAY_MS = 16;
+const BACKGROUND_SYNTAX_WARM_DELAY_MS = 80;
+
+type SyntaxScrollDirection = -1 | 0 | 1;
 
 export class Editor {
   private readonly container: HTMLElement;
   private readonly view: VirtualizedTextView;
   private readonly foldState: EditorFoldState;
   private readonly el: HTMLDivElement;
+  private lastSyntaxScrollTop: number | null = null;
+  private syntaxScrollDeltaPx = 0;
+  private syntaxScrollDirection: SyntaxScrollDirection = 0;
   private readonly options: EditorOptions;
   private readonly pluginHost: EditorPluginHost;
   private readonly commandRouter: EditorCommandRouter;
@@ -243,6 +255,7 @@ export class Editor {
       getCurrentSessionDocumentId: () => this.currentSessionDocumentId(),
       getLanguageId: () => this.languageId,
       getSession: () => this.session,
+      getVisibleSyntaxRange: () => this.visibleSyntaxRange(),
       adoptTokens: (tokens) => {
         this.view.adoptTokens(tokens);
         this.notifyViewContributions("tokens", null);
@@ -1132,13 +1145,89 @@ export class Editor {
   }
 
   private setScrollTop(scrollTop: number): void {
-    const maxScrollTop = Math.max(0, this.el.scrollHeight - this.el.clientHeight);
-    this.el.scrollTop = clamp(scrollTop, 0, maxScrollTop);
+    this.applyScrollPosition({
+      top: scrollTop,
+      left: this.view.getState().scrollLeft,
+    });
   }
 
   private readonly handleViewportChange = (): void => {
+    this.updateSyntaxScrollTracking();
+    const visibleRange = this.visibleSyntaxRange();
+    this.syntax.refreshVisibleRange(this.documentVersion, {
+      delayMs: 0,
+      range: visibleRange,
+    });
+    this.syntax.prefetchVisibleRange(this.documentVersion, this.visibleSyntaxPrefetchRange(), {
+      delayMs: VISIBLE_SYNTAX_SCROLL_DELAY_MS,
+    });
+    this.syntax.warmSyntaxAroundRange(this.documentVersion, visibleRange, {
+      delayMs: BACKGROUND_SYNTAX_WARM_DELAY_MS,
+    });
     this.notifyViewContributions("viewport", null);
   };
+
+  private visibleSyntaxRange(): EditorSyntaxRange | null {
+    return this.syntaxRangeAroundMountedRows(
+      VISIBLE_SYNTAX_OVERSCAN_CHARS,
+      VISIBLE_SYNTAX_OVERSCAN_CHARS,
+    );
+  }
+
+  private visibleSyntaxPrefetchRange(): EditorSyntaxRange | null {
+    const viewState = this.view.getState();
+    const rows = viewState.mountedRows;
+    const first = rows[0];
+    const last = rows.at(-1);
+    if (!first || !last) return null;
+
+    const lead = this.visibleSyntaxLeadChars(first, last);
+    const before = this.syntaxScrollDirection <= 0 ? lead : VISIBLE_SYNTAX_TRAILING_CHARS;
+    const after = this.syntaxScrollDirection >= 0 ? lead : VISIBLE_SYNTAX_TRAILING_CHARS;
+
+    return this.syntaxRangeAroundMountedRows(before, after);
+  }
+
+  private syntaxRangeAroundMountedRows(before: number, after: number): EditorSyntaxRange | null {
+    const rows = this.view.getState().mountedRows;
+    const first = rows[0];
+    const last = rows.at(-1);
+    if (!first || !last) return null;
+
+    return {
+      startIndex: Math.max(0, first.startOffset - before),
+      endIndex: Math.min(this.textSnapshot.length, last.endOffset + after),
+    };
+  }
+
+  private updateSyntaxScrollTracking(): void {
+    const scrollTop = this.view.getState().scrollTop;
+    const previousScrollTop = this.lastSyntaxScrollTop;
+    this.lastSyntaxScrollTop = scrollTop;
+    if (previousScrollTop === null) {
+      this.syntaxScrollDeltaPx = 0;
+      this.syntaxScrollDirection = 0;
+      return;
+    }
+
+    const delta = scrollTop - previousScrollTop;
+    this.syntaxScrollDeltaPx = Math.abs(delta);
+    this.syntaxScrollDirection = syntaxScrollDirection(delta);
+  }
+
+  private visibleSyntaxLeadChars(
+    first: { readonly startOffset: number; readonly top: number },
+    last: { readonly endOffset: number; readonly top: number; readonly height: number },
+  ): number {
+    const textSpan = Math.max(1, last.endOffset - first.startOffset);
+    const pixelSpan = Math.max(1, last.top + last.height - first.top);
+    const velocityLead = Math.ceil(this.syntaxScrollDeltaPx * (textSpan / pixelSpan) * 2);
+    return clamp(
+      Math.max(VISIBLE_SYNTAX_LEAD_CHARS, velocityLead),
+      VISIBLE_SYNTAX_LEAD_CHARS,
+      Math.min(VISIBLE_SYNTAX_MAX_LEAD_CHARS, this.textSnapshot.length),
+    );
+  }
 
   private applySessionChange(
     change: DocumentSessionChange,
@@ -1352,6 +1441,12 @@ function mergeRowDecorationMap(
   for (const [row, decoration] of source) {
     target.set(row, mergeRowDecoration(target.get(row), decoration));
   }
+}
+
+function syntaxScrollDirection(delta: number): SyntaxScrollDirection {
+  if (delta > 0) return 1;
+  if (delta < 0) return -1;
+  return 0;
 }
 
 function sameInjectedTextRows(

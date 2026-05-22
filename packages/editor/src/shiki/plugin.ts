@@ -161,7 +161,7 @@ const sortedEntries = (
     .sort(([left], [right]) => left.localeCompare(right));
 
 const sortedItems = (items: readonly string[] | undefined): readonly string[] =>
-  [...(items ?? [])].sort();
+  (items ?? []).toSorted();
 
 const shikiLanguageForDocumentExtension = (
   documentId: string,

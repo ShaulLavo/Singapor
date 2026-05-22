@@ -20,6 +20,7 @@ import {
   disposeTreeSitterWorker,
   editWithTreeSitter,
   parseWithTreeSitter,
+  queryRangeWithTreeSitter,
   registerTreeSitterLanguagesWithWorker,
 } from "../src/treeSitter/workerClient.ts";
 
@@ -95,6 +96,66 @@ describe.skipIf(typeof Worker === "undefined")("tree-sitter worker client", () =
       captureName: "constructor",
       languageId: "typescript",
     });
+  });
+
+  it("returns highlights for a lower document range after a parse-only editor parse", async () => {
+    const documentId = "large-lower-range.ts";
+    const text = Array.from(
+      { length: 12_000 },
+      (_value, index) => `export const value${index} = ${index};`,
+    ).join("\n");
+    const snapshot = createPieceTableSnapshot(text);
+    await parseWithTreeSitter({
+      documentId,
+      snapshotVersion: 1,
+      languageId: "typescript",
+      resultMode: "parseOnly",
+      snapshot,
+    });
+
+    const topResult = await queryRangeWithTreeSitter({
+      documentId,
+      snapshotVersion: 1,
+      languageId: "typescript",
+      includeHighlights: true,
+      includeCaptures: false,
+      range: { startIndex: 0, endIndex: 1_000 },
+    });
+    const target = text.indexOf("value10000");
+    const result = await queryRangeWithTreeSitter({
+      documentId,
+      snapshotVersion: 1,
+      languageId: "typescript",
+      includeHighlights: true,
+      includeCaptures: false,
+      range: { startIndex: target - 100, endIndex: target + 1_000 },
+    });
+
+    expect(topResult?.tokens?.length ?? 0).toBeGreaterThan(0);
+    expect(
+      result?.tokens?.some((token) => token.start <= target && token.end >= target + 10) ?? false,
+    ).toBe(true);
+  });
+
+  it("returns an unavailable edit result when the incremental base was evicted", async () => {
+    const documentId = "missing-incremental-base.ts";
+    const snapshot = createPieceTableSnapshot("const answer = 1;\n");
+    const edit = { from: 6, to: 12, text: "value" };
+    const nextSnapshot = applyBatchToPieceTable(snapshot, [edit]);
+    const payload = createTreeSitterEditPayload({
+      documentId,
+      previousSnapshotVersion: 99,
+      snapshotVersion: 100,
+      languageId: "typescript",
+      previousSnapshot: snapshot,
+      nextSnapshot,
+      edits: [edit],
+      resultMode: "parseOnly",
+    });
+
+    const result = payload ? await editWithTreeSitter(payload) : "missing-payload";
+
+    expect(result).toBeUndefined();
   });
 
   it("matches a full parse after same-line inserts before later rows", async () => {
@@ -313,9 +374,9 @@ describe.skipIf(typeof Worker === "undefined")("tree-sitter worker client", () =
       languageId: "typescript",
       snapshot,
     });
-    const languages = [
-      ...new Set(parsed?.injections.map((injection) => injection.languageId)),
-    ].sort();
+    const languages = Array.from(
+      new Set(parsed?.injections.map((injection) => injection.languageId)),
+    ).toSorted();
 
     expect(languages).toEqual(["css", "html", "json"]);
     expect(parsed?.captures.some((capture) => capture.languageId === "html")).toBe(true);

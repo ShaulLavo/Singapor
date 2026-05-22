@@ -301,6 +301,6 @@ async function requestShikiTheme(
 function shikiThemeRequestKey(options: ShikiThemeOptions): string {
   return JSON.stringify({
     theme: options.theme,
-    themes: [...(options.themes ?? [])].sort(),
+    themes: (options.themes ?? []).toSorted(),
   });
 }

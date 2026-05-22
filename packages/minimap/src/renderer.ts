@@ -10,7 +10,10 @@ import {
 } from "./layout";
 import { MinimapCharRendererFactory } from "./minimapCharRendererFactory";
 import { Constants } from "./minimapCharSheet";
-import { findSectionHeaderDecorations } from "./sectionHeaders";
+import {
+  findSectionHeaderDecorations,
+  findSectionHeaderDecorationsInRange,
+} from "./sectionHeaders";
 import type {
   EditorMinimapDecoration,
   MinimapBaseStyles,
@@ -115,8 +118,9 @@ export class MinimapWorkerRenderer {
       return;
     }
 
-    const next = applyTextEditsToMinimapDocument(this.state.document, edits);
-    this.setEditedDocument(next, document.selections);
+    const previous = this.state.document;
+    const next = applyTextEditsToMinimapDocument(previous, edits);
+    this.setEditedDocument(previous, next, edits, document.selections);
   }
 
   public setExternalDecorations(decorations: readonly EditorMinimapDecoration[]): void {
@@ -135,18 +139,18 @@ export class MinimapWorkerRenderer {
   }
 
   private setEditedDocument(
+    previous: Pick<MinimapDocumentPayload, "decorations" | "lineStarts" | "text">,
     document: Pick<MinimapDocumentPayload, "lineStarts" | "text" | "tokens">,
+    edits: readonly TextEdit[],
     selections: readonly MinimapSelection[],
   ): void {
     const state = this.requireState();
-    const text = document.text;
-    const lines = text.split("\n");
     const decorations = [
-      ...findSectionHeaderDecorations(lines, state.options),
+      ...updateSectionHeaderDecorations(previous, document, edits, state.options),
       ...state.externalDecorations,
     ];
     state.document = {
-      text,
+      text: document.text,
       lineStarts: document.lineStarts,
       tokens: document.tokens,
       selections,
@@ -293,7 +297,9 @@ export class MinimapWorkerRenderer {
         line,
         text,
         lineStart,
-        tokens: lineTokens.tokens,
+        tokens: state.document.tokens,
+        tokenEnd: lineTokens.end,
+        tokenStart: lineTokens.start,
         charRenderer,
         useLighterFont,
         renderBackground,
@@ -310,15 +316,19 @@ export class MinimapWorkerRenderer {
     const maxDx = maxTextX(options.layout);
     let dx = MINIMAP_GUTTER_WIDTH;
 
-    for (const segment of tokenSegments(
+    visitTokenSegments(
       options.text,
       options.lineStart,
       options.tokens,
+      options.tokenStart,
+      options.tokenEnd,
       state.styles.foreground,
-    )) {
-      dx = renderSegment({ ...options, text: segment.text, color: segment.color, dx, y, maxDx });
-      if (dx > maxDx) return;
-    }
+      (text, color) => {
+        if (dx > maxDx) return false;
+        dx = renderSegment({ ...options, text, color, dx, y, maxDx });
+        return dx <= maxDx;
+      },
+    );
   }
 
   private renderDecorations(layout: MinimapRenderLayout, frame: FrameLike): void {
@@ -450,15 +460,18 @@ type RenderLineOptions = {
   readonly text: string;
   readonly lineStart: number;
   readonly tokens: readonly MinimapToken[];
+  readonly tokenEnd: number;
+  readonly tokenStart: number;
   readonly charRenderer: ReturnType<typeof MinimapCharRendererFactory.create>;
   readonly useLighterFont: boolean;
   readonly renderBackground: RGBA8;
   readonly renderBackgroundAlpha: number;
 };
 
-type Segment = {
-  readonly text: string;
-  readonly color: RGBA8;
+type TokenRange = {
+  readonly start: number;
+  readonly end: number;
+  readonly cursor: number;
 };
 
 function renderSegment(
@@ -522,23 +535,25 @@ function maxTextX(layout: MinimapRenderLayout): number {
   return layout.canvasInnerWidth - rightGutterWidth - layout.charWidth;
 }
 
-function tokenSegments(
+function visitTokenSegments(
   text: string,
   lineStart: number,
   tokens: readonly MinimapToken[],
+  tokenStart: number,
+  tokenEnd: number,
   fallback: RGBA8,
-): Segment[] {
-  const segments: Segment[] = [];
+  visit: (text: string, color: RGBA8) => boolean,
+): void {
   let cursor = 0;
-  for (const token of tokens) {
+  for (let index = tokenStart; index < tokenEnd; index += 1) {
+    const token = tokens[index]!;
     const start = Math.max(0, token.start - lineStart);
     const end = Math.min(text.length, token.end - lineStart);
-    if (start > cursor) segments.push({ text: text.slice(cursor, start), color: fallback });
-    if (end > start) segments.push({ text: text.slice(start, end), color: token.color });
+    if (start > cursor && !visit(text.slice(cursor, start), fallback)) return;
+    if (end > start && !visit(text.slice(start, end), token.color)) return;
     cursor = Math.max(cursor, end);
   }
-  if (cursor < text.length) segments.push({ text: text.slice(cursor), color: fallback });
-  return segments;
+  if (cursor < text.length) visit(text.slice(cursor), fallback);
 }
 
 function tokensForLineFromCursor(
@@ -546,14 +561,14 @@ function tokensForLineFromCursor(
   lineStart: number,
   lineEnd: number,
   cursor: number,
-): { readonly tokens: readonly MinimapToken[]; readonly cursor: number } {
+): TokenRange {
   let index = cursor;
   while (index < tokens.length && tokens[index]!.end <= lineStart) index += 1;
 
   const start = index;
   while (index < tokens.length && tokens[index]!.start < lineEnd) index += 1;
 
-  return { tokens: tokens.slice(start, index), cursor: start };
+  return { start, end: index, cursor: start };
 }
 
 function createBackgroundImageData(
@@ -767,7 +782,9 @@ function applyLineStartsEdit(
   edit: TextEdit,
   nextText: string,
 ): readonly number[] {
-  if (editChangesLineStructure(lineStarts, edit)) return lineStartsForText(nextText);
+  if (editChangesLineStructure(lineStarts, edit)) {
+    return spliceLineStartsThroughEdit(lineStarts, edit, nextText.length);
+  }
 
   const delta = edit.text.length - (edit.to - edit.from);
   if (delta === 0) return lineStarts;
@@ -780,19 +797,45 @@ function applyLineStartsEdit(
   return next;
 }
 
+function spliceLineStartsThroughEdit(
+  lineStarts: readonly number[],
+  edit: TextEdit,
+  nextTextLength: number,
+): readonly number[] {
+  const startLine = lineIndexForOffset(lineStarts, edit.from);
+  const endLine = lineIndexForOffset(lineStarts, edit.to);
+  const delta = edit.text.length - (edit.to - edit.from);
+  const next = lineStarts.slice(0, startLine + 1);
+
+  appendInsertedLineStarts(next, edit);
+  appendShiftedLineStarts(next, lineStarts, endLine + 1, delta, nextTextLength);
+  return next;
+}
+
+function appendInsertedLineStarts(target: number[], edit: TextEdit): void {
+  let index = edit.text.indexOf("\n");
+  while (index !== -1) {
+    target.push(edit.from + index + 1);
+    index = edit.text.indexOf("\n", index + 1);
+  }
+}
+
+function appendShiftedLineStarts(
+  target: number[],
+  lineStarts: readonly number[],
+  startIndex: number,
+  delta: number,
+  nextTextLength: number,
+): void {
+  for (let index = startIndex; index < lineStarts.length; index += 1) {
+    const nextStart = (lineStarts[index] ?? 0) + delta;
+    if (nextStart <= nextTextLength) target.push(nextStart);
+  }
+}
+
 function editChangesLineStructure(lineStarts: readonly number[], edit: TextEdit): boolean {
   if (edit.text.includes("\n")) return true;
   return lineIndexForOffset(lineStarts, edit.from) !== lineIndexForOffset(lineStarts, edit.to);
-}
-
-function lineStartsForText(text: string): readonly number[] {
-  const starts = [0];
-  let index = text.indexOf("\n");
-  while (index !== -1) {
-    starts.push(index + 1);
-    index = text.indexOf("\n", index + 1);
-  }
-  return starts;
 }
 
 function lineIndexForOffset(lineStarts: readonly number[], offset: number): number {
@@ -816,6 +859,154 @@ function lineIndexForOffset(lineStarts: readonly number[], offset: number): numb
   }
 
   return Math.max(0, lineStarts.length - 1);
+}
+
+const SECTION_HEADER_EDIT_CONTEXT_LINES = 10;
+
+type SectionHeaderDocument = Pick<MinimapDocumentPayload, "decorations" | "lineStarts" | "text">;
+type SectionHeaderTextDocument = Pick<MinimapDocumentPayload, "lineStarts" | "text">;
+type LineNumberRange = {
+  readonly start: number;
+  readonly end: number;
+};
+
+function updateSectionHeaderDecorations(
+  previous: SectionHeaderDocument,
+  next: SectionHeaderTextDocument,
+  edits: readonly TextEdit[],
+  options: ResolvedMinimapOptions,
+): readonly EditorMinimapDecoration[] {
+  if (!options.showMarkSectionHeaders) return [];
+  if (edits.length === 0) return sectionHeaderDecorationsFrom(previous.decorations);
+
+  const oldRange = affectedOldLineRange(previous.lineStarts, edits);
+  const nextRange = affectedNextLineRange(next.lineStarts, edits);
+  const lineDelta = next.lineStarts.length - previous.lineStarts.length;
+  const shifted = shiftedSectionHeaders(previous.decorations, oldRange, nextRange, lineDelta);
+  const rescanned = rescanSectionHeaders(next, nextRange, options);
+  return [...shifted, ...rescanned].toSorted(compareDecorationsByLine);
+}
+
+function affectedOldLineRange(
+  lineStarts: readonly number[],
+  edits: readonly TextEdit[],
+): LineNumberRange {
+  let start = Number.POSITIVE_INFINITY;
+  let end = 1;
+
+  for (const edit of edits) {
+    start = Math.min(start, lineIndexForOffset(lineStarts, edit.from) + 1);
+    end = Math.max(end, lineIndexForOffset(lineStarts, edit.to) + 1);
+  }
+
+  return expandLineRange({ start, end }, lineStarts.length);
+}
+
+function affectedNextLineRange(
+  lineStarts: readonly number[],
+  edits: readonly TextEdit[],
+): LineNumberRange {
+  let start = Number.POSITIVE_INFINITY;
+  let end = 1;
+
+  for (const edit of edits) {
+    start = Math.min(start, lineIndexForOffset(lineStarts, edit.from) + 1);
+    end = Math.max(end, lineIndexForOffset(lineStarts, edit.from + edit.text.length) + 1);
+  }
+
+  return expandLineRange({ start, end }, lineStarts.length);
+}
+
+function expandLineRange(range: LineNumberRange, lineCount: number): LineNumberRange {
+  return {
+    start: Math.max(1, range.start - SECTION_HEADER_EDIT_CONTEXT_LINES),
+    end: Math.min(lineCount, range.end + SECTION_HEADER_EDIT_CONTEXT_LINES),
+  };
+}
+
+function shiftedSectionHeaders(
+  decorations: readonly EditorMinimapDecoration[],
+  oldRange: LineNumberRange,
+  nextRange: LineNumberRange,
+  lineDelta: number,
+): readonly EditorMinimapDecoration[] {
+  const headers = sectionHeaderDecorationsFrom(decorations);
+  return headers.flatMap((decoration) =>
+    shiftSectionHeaderDecoration(decoration, oldRange, nextRange, lineDelta),
+  );
+}
+
+function shiftSectionHeaderDecoration(
+  decoration: EditorMinimapDecoration,
+  oldRange: LineNumberRange,
+  nextRange: LineNumberRange,
+  lineDelta: number,
+): readonly EditorMinimapDecoration[] {
+  if (lineRangesIntersect(decoration, oldRange)) return [];
+
+  if (decoration.startLineNumber <= oldRange.end) {
+    return lineRangesIntersect(decoration, nextRange) ? [] : [decoration];
+  }
+
+  const shifted = shiftDecoration(decoration, lineDelta);
+  return lineRangesIntersect(shifted, nextRange) ? [] : [shifted];
+}
+
+function shiftDecoration(
+  decoration: EditorMinimapDecoration,
+  lineDelta: number,
+): EditorMinimapDecoration {
+  if (lineDelta === 0) return decoration;
+
+  return {
+    ...decoration,
+    startLineNumber: decoration.startLineNumber + lineDelta,
+    endLineNumber: decoration.endLineNumber + lineDelta,
+  };
+}
+
+function rescanSectionHeaders(
+  document: SectionHeaderTextDocument,
+  range: LineNumberRange,
+  options: ResolvedMinimapOptions,
+): readonly EditorMinimapDecoration[] {
+  const lines = linesForRange(document.text, document.lineStarts, range);
+  return findSectionHeaderDecorationsInRange(lines, range.start, options);
+}
+
+function linesForRange(
+  text: string,
+  lineStarts: readonly number[],
+  range: LineNumberRange,
+): readonly string[] {
+  const lines: string[] = [];
+  for (let lineNumber = range.start; lineNumber <= range.end; lineNumber += 1) {
+    lines.push(lineTextByNumber(text, lineStarts, lineNumber));
+  }
+
+  return lines;
+}
+
+function lineTextByNumber(text: string, lineStarts: readonly number[], lineNumber: number): string {
+  const index = lineNumber - 1;
+  const start = lineStarts[index] ?? 0;
+  const rawEnd = lineStarts[index + 1] ?? text.length;
+  const end = rawEnd > start && text[rawEnd - 1] === "\n" ? rawEnd - 1 : rawEnd;
+  return text.slice(start, end);
+}
+
+function lineRangesIntersect(
+  decoration: EditorMinimapDecoration,
+  range: LineNumberRange,
+): boolean {
+  return decoration.startLineNumber <= range.end && decoration.endLineNumber >= range.start;
+}
+
+function compareDecorationsByLine(
+  left: EditorMinimapDecoration,
+  right: EditorMinimapDecoration,
+): number {
+  return left.startLineNumber - right.startLineNumber || left.endLineNumber - right.endLineNumber;
 }
 
 function externalDecorationsFrom(

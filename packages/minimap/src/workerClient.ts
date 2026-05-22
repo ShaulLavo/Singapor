@@ -635,7 +635,7 @@ function incrementalTextEdits(
 ): readonly TextEdit[] | null {
   if (!change || change.edits.length === 0) return null;
 
-  const sorted = [...change.edits].sort(compareTextEdits);
+  const sorted = change.edits.toSorted(compareTextEdits);
   return sequentialTextEdits(sorted);
 }
 

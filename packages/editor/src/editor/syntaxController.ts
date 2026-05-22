@@ -2,11 +2,17 @@ import type { DocumentSession, DocumentSessionChange } from "../documentSession"
 import { defineLazyTextProperty, type DocumentTextSnapshot } from "../documentTextSnapshot";
 import type { PieceTableSnapshot } from "../pieceTable/pieceTableTypes";
 import type { EditorHighlightResult, EditorHighlighterSession, EditorPluginHost } from "../plugins";
-import type { EditorSyntaxResult, EditorSyntaxSession } from "../syntax/session";
+import { createEmptySyntaxResult } from "../syntax/session";
+import type { EditorSyntaxRange, EditorSyntaxResult, EditorSyntaxSession } from "../syntax/session";
 import type { EditorSyntaxLanguageId, FoldRange } from "../syntax/session";
 import type { EditorTheme } from "../theme";
 import { editorThemesEqual } from "../theme";
 import type { EditorToken } from "../tokens";
+import {
+  appendEditorTokenIndexEntry,
+  createEditorTokenIndexBuilder,
+  finishEditorTokenIndex,
+} from "./tokenIndex";
 import { LatestAsyncRequest } from "./latestAsyncRequest";
 import { getEditorSyntaxSessionFactory } from "./runtime";
 import { syntaxRefreshDelay } from "./editorUtils";
@@ -25,6 +31,7 @@ export type EditorSyntaxControllerOptions = {
   getCurrentSessionDocumentId(): string;
   getLanguageId(): EditorSyntaxLanguageId | null;
   getSession(): DocumentSession | null;
+  getVisibleSyntaxRange(): EditorSyntaxRange | null;
   adoptTokens(tokens: readonly EditorToken[]): void;
   clearSyntaxFolds(): void;
   setSyntaxFolds(folds: readonly FoldRange[]): void;
@@ -34,7 +41,29 @@ export type EditorSyntaxControllerOptions = {
 
 export type EditorSyntaxRefreshOptions = {
   readonly delayMs?: number;
+  readonly range?: EditorSyntaxRange | null;
 };
+
+type EditorSyntaxLoadResult = {
+  readonly range: EditorSyntaxRange | null;
+  readonly result: EditorSyntaxResult;
+  readonly skipApply?: boolean;
+};
+
+type PendingSyntaxPrefetch = {
+  readonly documentVersion: number;
+  readonly options: EditorSyntaxRefreshOptions;
+  readonly range: EditorSyntaxRange;
+};
+
+type PendingSyntaxWarm = {
+  readonly delayMs: number;
+  readonly documentVersion: number;
+  readonly generation: number;
+  readonly seedRange: EditorSyntaxRange;
+};
+
+const BACKGROUND_SYNTAX_TILE_CHARS = 120_000;
 
 export class EditorSyntaxController {
   private syntaxStatus: "plain" | "loading" | "ready" | "error" = "plain";
@@ -42,12 +71,19 @@ export class EditorSyntaxController {
   private highlighterSession: EditorHighlighterSession | null = null;
   private providerHighlighterTheme: EditorTheme | null = null;
   private highlighterTheme: EditorTheme | null = null;
-  private readonly syntaxRequests = new LatestAsyncRequest<EditorSyntaxResult>();
+  private cachedSyntaxRanges: readonly EditorSyntaxRange[] = [];
+  private readonly syntaxRequests = new LatestAsyncRequest<EditorSyntaxLoadResult>();
+  private readonly rangeRequests = new LatestAsyncRequest<EditorSyntaxLoadResult>();
+  private readonly prefetchRangeRequests = new LatestAsyncRequest<EditorSyntaxLoadResult>();
+  private readonly warmRangeRequests = new LatestAsyncRequest<EditorSyntaxLoadResult>();
   private readonly highlightRequests = new LatestAsyncRequest<EditorHighlightResult>();
   private readonly highlighterThemeRequests = new LatestAsyncRequest<
     EditorTheme | null | undefined
   >();
   private currentTokens: readonly EditorToken[] = [];
+  private pendingPrefetch: PendingSyntaxPrefetch | null = null;
+  private pendingWarm: PendingSyntaxWarm | null = null;
+  private warmGeneration = 0;
 
   constructor(private readonly options: EditorSyntaxControllerOptions) {}
 
@@ -75,6 +111,7 @@ export class EditorSyntaxController {
   startDocument(document: EditorSyntaxDocumentStartOptions): void {
     this.disposeSyntaxSession();
     this.disposeHighlighterSession();
+    this.clearSyntaxRangeCache();
     this.highlighterSession = this.createHighlighterSession(
       document.documentId,
       document.languageId,
@@ -87,6 +124,7 @@ export class EditorSyntaxController {
 
   clearDocument(): void {
     this.syntaxStatus = "plain";
+    this.clearSyntaxRangeCache();
     this.disposeSyntaxSession();
     this.disposeHighlighterSession();
   }
@@ -104,6 +142,7 @@ export class EditorSyntaxController {
 
   reloadSyntaxSession(): void {
     this.disposeSyntaxSession();
+    this.clearSyntaxRangeCache();
     this.options.clearSyntaxFolds();
 
     const session = this.options.getSession();
@@ -140,9 +179,67 @@ export class EditorSyntaxController {
   ): void {
     if (!this.options.getSession()) return;
     if (change && (change.kind === "none" || change.kind === "selection")) return;
+    if (change) this.clearSyntaxRangeCache();
 
     this.refreshStructuralSyntax(documentVersion, change, options);
     this.refreshHighlightTokens(documentVersion, change, options);
+  }
+
+  refreshVisibleRange(documentVersion: number, options: EditorSyntaxRefreshOptions = {}): void {
+    if (!this.syntaxSession?.queryRange) return;
+    if (!this.options.getSession()) return;
+    if (!this.canQuerySyntaxRange()) return;
+
+    const range = options.range ?? this.options.getVisibleSyntaxRange();
+    if (!range) return;
+    if (this.repaintCachedVisibleSyntaxRange(range)) return;
+
+    this.scheduleSyntaxRangeRequest(this.rangeRequests, documentVersion, range, options, "visible");
+  }
+
+  prefetchVisibleRange(
+    documentVersion: number,
+    range: EditorSyntaxRange | null,
+    options: EditorSyntaxRefreshOptions = {},
+  ): boolean {
+    if (!this.syntaxSession?.queryRange) return false;
+    if (!this.options.getSession()) return false;
+    if (!this.canQuerySyntaxRange()) return false;
+    if (!range || syntaxRangeCoverage(range, this.cachedSyntaxRanges) === "full") return false;
+    if (this.rangeRequests.isActive()) {
+      this.pendingPrefetch = { documentVersion, range, options };
+      return true;
+    }
+
+    this.scheduleSyntaxRangeRequest(
+      this.prefetchRangeRequests,
+      documentVersion,
+      range,
+      options,
+      "prefetch",
+    );
+    return true;
+  }
+
+  warmSyntaxAroundRange(
+    documentVersion: number,
+    seedRange: EditorSyntaxRange | null,
+    options: EditorSyntaxRefreshOptions = {},
+  ): void {
+    if (!this.syntaxSession?.queryRange) return;
+    if (!this.options.getSession()) return;
+    if (!this.canQuerySyntaxRange()) return;
+    if (!seedRange) return;
+
+    const pendingWarm = {
+      delayMs: options.delayMs ?? 120,
+      documentVersion,
+      generation: this.nextWarmGeneration(),
+      seedRange,
+    };
+    this.pendingWarm = pendingWarm;
+    this.warmRangeRequests.cancel();
+    this.scheduleNextWarmRange(pendingWarm);
   }
 
   private reloadHighlighterSession(): void {
@@ -171,6 +268,7 @@ export class EditorSyntaxController {
       languageId: document.languageId,
       includeHighlights: !this.highlighterSession,
       includeCaptures: false,
+      syntaxMode: "range" as const,
       textSnapshot: document.textSnapshot,
       snapshot: document.snapshot,
     };
@@ -200,8 +298,51 @@ export class EditorSyntaxController {
 
   private disposeSyntaxSession(): void {
     this.syntaxRequests.cancel();
+    this.rangeRequests.cancel();
+    this.prefetchRangeRequests.cancel();
+    this.warmRangeRequests.cancel();
+    this.pendingPrefetch = null;
+    this.pendingWarm = null;
+    this.clearSyntaxRangeCache();
     this.syntaxSession?.dispose();
     this.syntaxSession = null;
+  }
+
+  private scheduleSyntaxRangeRequest(
+    request: LatestAsyncRequest<EditorSyntaxLoadResult>,
+    documentVersion: number,
+    range: EditorSyntaxRange,
+    options: EditorSyntaxRefreshOptions,
+    kind: "visible" | "prefetch",
+  ): void {
+    request.schedule({
+      delayMs: options.delayMs ?? 50,
+      run: () => this.loadSyntaxRangeResult(range),
+      apply: (result, startedAt) => {
+        const applied = this.applySyntaxResult(result, documentVersion, startedAt);
+        if (applied && kind === "visible" && !this.flushPendingPrefetch()) {
+          this.flushPendingWarm();
+        }
+        if (applied && kind === "prefetch") this.flushPendingWarm();
+      },
+      fail: (error, startedAt) =>
+        this.recoverSyntaxError(documentVersion, null, error, startedAt),
+    });
+  }
+
+  private repaintCachedVisibleSyntaxRange(range: EditorSyntaxRange): boolean {
+    const coverage = syntaxRangeCoverage(range, this.cachedSyntaxRanges);
+    if (coverage === "none") return false;
+
+    this.options.adoptTokens(this.currentTokens);
+    if (coverage === "partial") return false;
+
+    this.rangeRequests.cancel();
+    logEditorSyntaxDebug("repaint cached visible syntax range", {
+      range,
+      cachedRanges: this.cachedSyntaxRanges.length,
+    });
+    return true;
   }
 
   private disposeHighlighterSession(): void {
@@ -259,15 +400,51 @@ export class EditorSyntaxController {
     });
   }
 
-  private loadSyntaxResult(change: DocumentSessionChange | null): Promise<EditorSyntaxResult> {
+  private loadSyntaxResult(change: DocumentSessionChange | null): Promise<EditorSyntaxLoadResult> {
     if (!this.syntaxSession) return Promise.reject(new Error("No syntax session"));
-    if (!change) {
-      const snapshot = this.options.getSession()?.getSnapshot();
-      if (!snapshot) return Promise.reject(new Error("No document snapshot"));
-      return this.syntaxSession.refresh(snapshot);
+    return this.loadSyntaxBaseResult(change).then((result) =>
+      this.syntaxSession?.queryRange && this.canQuerySyntaxRange()
+        ? this.loadCurrentSyntaxRangeResult()
+        : { range: null, result },
+    );
+  }
+
+  private loadSyntaxBaseResult(change: DocumentSessionChange | null): Promise<EditorSyntaxResult> {
+    if (!this.syntaxSession) return Promise.reject(new Error("No syntax session"));
+    if (change) return this.syntaxSession.applyChange(change);
+
+    const snapshot = this.options.getSession()?.getSnapshot();
+    if (!snapshot) return Promise.reject(new Error("No document snapshot"));
+    return this.syntaxSession.refresh(snapshot);
+  }
+
+  private loadCurrentSyntaxRangeResult(): Promise<EditorSyntaxLoadResult> {
+    const range = this.options.getVisibleSyntaxRange();
+    if (!range) {
+      return Promise.resolve({
+        range: null,
+        result: this.syntaxSession?.getResult() ?? createEmptySyntaxResult(),
+      });
+    }
+    return this.loadSyntaxRangeResult(range);
+  }
+
+  private loadSyntaxRangeResult(range: EditorSyntaxRange): Promise<EditorSyntaxLoadResult> {
+    if (!this.syntaxSession?.queryRange) {
+      return Promise.resolve({
+        range: null,
+        result: this.syntaxSession?.getResult() ?? createEmptySyntaxResult(),
+      });
+    }
+    if (!this.canQuerySyntaxRange()) {
+      return Promise.resolve({
+        range: null,
+        result: createEmptySyntaxResult(),
+        skipApply: true,
+      });
     }
 
-    return this.syntaxSession.applyChange(change);
+    return this.syntaxSession.queryRange(range).then((result) => ({ range, result }));
   }
 
   private loadHighlightResult(
@@ -284,13 +461,15 @@ export class EditorSyntaxController {
   }
 
   private applySyntaxResult(
-    result: EditorSyntaxResult,
+    loadResult: EditorSyntaxLoadResult,
     documentVersion: number,
     startedAt: number,
-  ): void {
+  ): boolean {
     const session = this.options.getSession();
-    if (!session || documentVersion !== this.options.getDocumentVersion()) return;
+    if (loadResult.skipApply) return false;
+    if (!session || documentVersion !== this.options.getDocumentVersion()) return false;
 
+    const result = loadResult.result;
     this.syntaxStatus = "ready";
     logEditorSyntaxDebug("apply structural syntax", {
       ...this.debugContext(documentVersion),
@@ -301,12 +480,104 @@ export class EditorSyntaxController {
       injections: result.injections.length,
       tokens: result.tokens.length,
     });
-    const nextTokens = this.highlighterSession ? this.currentTokens : result.tokens;
+    const nextTokens = this.highlighterSession
+      ? this.currentTokens
+      : this.syntaxTokensForResult(result.tokens, loadResult.range);
     const tokenChange = session.adoptTokens(nextTokens);
     const timedChange = appendTiming(tokenChange, "editor.syntax", startedAt);
-    if (!this.highlighterSession) this.setTokens(result.tokens);
+    if (!this.highlighterSession) this.setTokens(nextTokens);
+    if (!this.highlighterSession && loadResult.range) this.rememberSyntaxRange(loadResult.range);
+    if (!this.highlighterSession && loadResult.range && !this.pendingWarm) {
+      this.warmSyntaxAroundRange(documentVersion, loadResult.range);
+    }
     this.options.setSyntaxFolds(result.folds);
     this.options.notifyChange(timedChange);
+    return true;
+  }
+
+  private canQuerySyntaxRange(): boolean {
+    return this.syntaxSession?.canQueryRange?.() ?? true;
+  }
+
+  private flushPendingPrefetch(): boolean {
+    const pending = this.pendingPrefetch;
+    this.pendingPrefetch = null;
+    if (!pending) return false;
+    if (pending.documentVersion !== this.options.getDocumentVersion()) return false;
+
+    const scheduled = this.prefetchVisibleRange(
+      pending.documentVersion,
+      pending.range,
+      pending.options,
+    );
+    if (!scheduled) this.flushPendingWarm();
+    return scheduled;
+  }
+
+  private flushPendingWarm(): void {
+    const pending = this.pendingWarm;
+    if (!pending) return;
+    if (pending.documentVersion !== this.options.getDocumentVersion()) return;
+
+    this.scheduleNextWarmRange(pending);
+  }
+
+  private scheduleNextWarmRange(pending: PendingSyntaxWarm): void {
+    if (pending.generation !== this.warmGeneration) return;
+    if (!this.canRunWarmRangeRequest()) return;
+
+    const range = this.nextWarmRange(pending.seedRange);
+    if (!range) {
+      this.pendingWarm = null;
+      return;
+    }
+
+    this.warmRangeRequests.schedule({
+      delayMs: pending.delayMs,
+      run: () => this.loadSyntaxRangeResult(range),
+      apply: (result, startedAt) => {
+        if (pending.generation !== this.warmGeneration) return;
+        const applied = this.applySyntaxResult(result, pending.documentVersion, startedAt);
+        if (applied) this.scheduleNextWarmRange(pending);
+      },
+      fail: (error, startedAt) =>
+        this.recoverSyntaxError(pending.documentVersion, null, error, startedAt),
+    });
+  }
+
+  private canRunWarmRangeRequest(): boolean {
+    if (!this.syntaxSession?.queryRange) return false;
+    if (!this.options.getSession()) return false;
+    if (!this.canQuerySyntaxRange()) return false;
+    if (this.rangeRequests.isActive()) return false;
+    return !this.prefetchRangeRequests.isActive();
+  }
+
+  private nextWarmRange(seedRange: EditorSyntaxRange): EditorSyntaxRange | null {
+    const session = this.options.getSession();
+    const documentLength = session?.getSnapshot().length ?? 0;
+    return nextUncachedSyntaxWarmRange(documentLength, seedRange, this.cachedSyntaxRanges);
+  }
+
+  private nextWarmGeneration(): number {
+    this.warmGeneration += 1;
+    return this.warmGeneration;
+  }
+
+  private syntaxTokensForResult(
+    tokens: readonly EditorToken[],
+    range: EditorSyntaxRange | null,
+  ): readonly EditorToken[] {
+    if (!range) return tokens;
+    return mergeSyntaxRangeTokens(this.currentTokens, tokens, range);
+  }
+
+  private rememberSyntaxRange(range: EditorSyntaxRange): void {
+    this.cachedSyntaxRanges = appendCachedSyntaxRange(this.cachedSyntaxRanges, range);
+  }
+
+  private clearSyntaxRangeCache(): void {
+    this.cachedSyntaxRanges = [];
   }
 
   private applyHighlightResult(
@@ -484,3 +755,141 @@ const syntaxErrorMessage = (error: unknown): string => {
   if (error instanceof Error) return error.message;
   return String(error);
 };
+
+const mergeSyntaxRangeTokens = (
+  currentTokens: readonly EditorToken[],
+  rangeTokens: readonly EditorToken[],
+  range: EditorSyntaxRange,
+): readonly EditorToken[] => {
+  const merged: EditorToken[] = [];
+  appendTokensOutsideRange(merged, currentTokens, range);
+  appendTokens(merged, rangeTokens);
+  merged.sort(compareEditorTokens);
+
+  const indexBuilder = createEditorTokenIndexBuilder();
+  for (const token of merged) appendEditorTokenIndexEntry(indexBuilder, token);
+  finishEditorTokenIndex(merged, indexBuilder);
+  return merged;
+};
+
+const appendTokensOutsideRange = (
+  target: EditorToken[],
+  tokens: readonly EditorToken[],
+  range: EditorSyntaxRange,
+): void => {
+  for (const token of tokens) {
+    if (token.end <= range.startIndex || token.start >= range.endIndex) target.push(token);
+  }
+};
+
+const appendTokens = (target: EditorToken[], tokens: readonly EditorToken[]): void => {
+  for (const token of tokens) target.push(token);
+};
+
+const compareEditorTokens = (left: EditorToken, right: EditorToken): number =>
+  left.start - right.start || left.end - right.end;
+
+const appendCachedSyntaxRange = (
+  ranges: readonly EditorSyntaxRange[],
+  range: EditorSyntaxRange,
+): readonly EditorSyntaxRange[] => {
+  if (range.endIndex <= range.startIndex) return ranges;
+
+  const merged: EditorSyntaxRange[] = [];
+  const sorted = [...ranges, range].sort(compareSyntaxRanges);
+  for (const current of sorted) mergeCachedSyntaxRange(merged, current);
+  return merged;
+};
+
+const mergeCachedSyntaxRange = (
+  ranges: EditorSyntaxRange[],
+  range: EditorSyntaxRange,
+): void => {
+  const previous = ranges.at(-1);
+  if (!previous || range.startIndex > previous.endIndex) {
+    ranges.push(range);
+    return;
+  }
+
+  ranges[ranges.length - 1] = {
+    startIndex: previous.startIndex,
+    endIndex: Math.max(previous.endIndex, range.endIndex),
+  };
+};
+
+type SyntaxRangeCoverage = "none" | "partial" | "full";
+
+const syntaxRangeCoverage = (
+  range: EditorSyntaxRange,
+  cachedRanges: readonly EditorSyntaxRange[],
+): SyntaxRangeCoverage => {
+  let cursor = range.startIndex;
+  let overlaps = false;
+  for (const cachedRange of cachedRanges) {
+    if (cachedRange.endIndex <= range.startIndex) continue;
+    if (cachedRange.startIndex >= range.endIndex) break;
+
+    overlaps = true;
+    if (cachedRange.endIndex <= cursor) continue;
+    if (cachedRange.startIndex > cursor) return "partial";
+
+    cursor = Math.max(cursor, cachedRange.endIndex);
+    if (cursor >= range.endIndex) return "full";
+  }
+
+  return overlaps ? "partial" : "none";
+};
+
+const compareSyntaxRanges = (left: EditorSyntaxRange, right: EditorSyntaxRange): number =>
+  left.startIndex - right.startIndex || left.endIndex - right.endIndex;
+
+const nextUncachedSyntaxWarmRange = (
+  documentLength: number,
+  seedRange: EditorSyntaxRange,
+  cachedRanges: readonly EditorSyntaxRange[],
+): EditorSyntaxRange | null => {
+  if (documentLength <= 0) return null;
+
+  const tileCount = Math.ceil(documentLength / BACKGROUND_SYNTAX_TILE_CHARS);
+  const seedCenter = boundedIndex(
+    Math.floor((seedRange.startIndex + seedRange.endIndex) / 2),
+    documentLength,
+  );
+  const seedTile = Math.min(tileCount - 1, Math.floor(seedCenter / BACKGROUND_SYNTAX_TILE_CHARS));
+  for (let distance = 0; distance < tileCount; distance += 1) {
+    const forward = syntaxWarmTileRange(seedTile + distance, documentLength);
+    if (isUncachedSyntaxWarmRange(forward, cachedRanges)) return forward;
+    if (distance === 0) continue;
+
+    const backward = syntaxWarmTileRange(seedTile - distance, documentLength);
+    if (isUncachedSyntaxWarmRange(backward, cachedRanges)) return backward;
+  }
+
+  return null;
+};
+
+const syntaxWarmTileRange = (
+  tileIndex: number,
+  documentLength: number,
+): EditorSyntaxRange | null => {
+  if (tileIndex < 0) return null;
+
+  const startIndex = tileIndex * BACKGROUND_SYNTAX_TILE_CHARS;
+  if (startIndex >= documentLength) return null;
+
+  return {
+    startIndex,
+    endIndex: Math.min(documentLength, startIndex + BACKGROUND_SYNTAX_TILE_CHARS),
+  };
+};
+
+const isUncachedSyntaxWarmRange = (
+  range: EditorSyntaxRange | null,
+  cachedRanges: readonly EditorSyntaxRange[],
+): range is EditorSyntaxRange => {
+  if (!range) return false;
+  return syntaxRangeCoverage(range, cachedRanges) !== "full";
+};
+
+const boundedIndex = (index: number, documentLength: number): number =>
+  Math.max(0, Math.min(index, Math.max(0, documentLength - 1)));

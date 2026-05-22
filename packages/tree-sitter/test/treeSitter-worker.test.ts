@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Node, Range as TreeSitterRange, Tree } from "web-tree-sitter";
+import type { Node, Query, Range as TreeSitterRange, Tree } from "web-tree-sitter";
 
 import {
   applyBatchToPieceTable,
@@ -20,6 +20,7 @@ const {
   applyTextEdits,
   appendItems,
   collectBracket,
+  collectCaptures,
   collectError,
   collectTreeData,
   rangeSpan,
@@ -49,8 +50,20 @@ describe("tree-sitter worker internals", () => {
 
     expect(input.chunks.length).toBeGreaterThan(1);
     expect(readTreeSitterPieceTableInput(input, 0)).toBe("a😀\n");
+    expect(input.lastChunkIndex).toBe(0);
     expect(readTreeSitterPieceTableInput(input, 4)).toBe("tail");
+    expect(input.lastChunkIndex).toBe(1);
     expect(readTreeSitterPieceTableInput(input, snapshot.length)).toBeUndefined();
+  });
+
+  it("caps parser input reads to fit the web-tree-sitter UTF-16 callback buffer", () => {
+    const snapshot = createPieceTableSnapshot("a".repeat(10_000));
+    const descriptor = createTreeSitterSourceDescriptor(snapshot, { useSharedBuffers: false });
+    const input = resolveTreeSitterSourceDescriptor(new Map(), "doc", descriptor);
+
+    expect(readTreeSitterPieceTableInput(input, 0)).toHaveLength(4096);
+    expect(readTreeSitterPieceTableInput(input, 4096)).toHaveLength(4096);
+    expect(readTreeSitterPieceTableInput(input, 8192)).toHaveLength(1808);
   });
 
   it("builds full descriptors with only unsent chunk payloads", () => {
@@ -165,6 +178,51 @@ describe("tree-sitter worker internals", () => {
 
     expect(rangeSpan(ranges)).toEqual({ startIndex: 0, endIndex: 399_999 });
   });
+
+  it("collects range highlights from captures that intersect the visible range", () => {
+    const highlightedNode = node("identifier", 75, 82);
+    const query = {
+      matches: () => [],
+      captures: (_root: Node, options?: NonNullable<Parameters<Query["captures"]>[1]>) => {
+        expect(options?.startIndex).toBe(140);
+        expect(options?.endIndex).toBe(180);
+        return [{ name: "variable", node: highlightedNode }];
+      },
+    } as unknown as Query;
+    const runtime = {
+      descriptor: {
+        id: "typescript",
+        extensions: [],
+        aliases: [],
+        wasmUrl: "test.wasm",
+        highlightQuerySource: "(identifier) @variable",
+      },
+      language: {},
+      parser: {},
+      highlightQuery: query,
+      foldQuery: null,
+      injectionQuery: null,
+    } as unknown as Parameters<typeof collectCaptures>[1];
+    const context = {
+      startedAt: globalThis.performance?.now() ?? Date.now(),
+      budgetMs: 1_000,
+      flag: null,
+    } as Parameters<typeof collectCaptures>[2];
+
+    expect(
+      collectCaptures(fakeTree(node("program", 0, 100)), runtime, context, {
+        startIndex: 70,
+        endIndex: 90,
+      }),
+    ).toEqual([
+      {
+        startIndex: 75,
+        endIndex: 82,
+        captureName: "variable",
+        languageId: "typescript",
+      },
+    ]);
+  });
 });
 
 function cacheWith(
@@ -210,6 +268,7 @@ function nestedNode(depth: number): TestNode {
 
 function fakeTree(root: TestNode): Tree {
   return {
+    rootNode: root,
     walk: () => new FakeTreeCursor(root),
   } as unknown as Tree;
 }

@@ -9,6 +9,7 @@ export {
   type EditorSyntaxInjection,
   type EditorSyntaxLanguageId,
   type EditorSyntaxProvider,
+  type EditorSyntaxRange,
   type EditorSyntaxResult,
   type EditorSyntaxSession,
   type EditorSyntaxSessionOptions,

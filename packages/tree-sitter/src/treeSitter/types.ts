@@ -72,6 +72,24 @@ export type TreeSitterParseResult = {
   readonly timings: readonly TreeSitterTimingMeasurement[];
 };
 
+export type TreeSitterSyntaxRange = {
+  readonly startIndex: number;
+  readonly endIndex: number;
+};
+
+export type TreeSitterParseAckResult = {
+  readonly documentId: string;
+  readonly snapshotVersion: number;
+  readonly languageId: TreeSitterLanguageId;
+  readonly status: "parsed";
+  readonly changedRanges: readonly TreeSitterSyntaxRange[];
+  readonly timings: readonly TreeSitterTimingMeasurement[];
+};
+
+export type TreeSitterRangeResult = TreeSitterParseResult & {
+  readonly range: TreeSitterSyntaxRange;
+};
+
 export type TreeSitterInitRequest = {
   readonly type: "init";
 };
@@ -88,6 +106,7 @@ export type TreeSitterParseRequest = {
   readonly languageId: TreeSitterLanguageId;
   readonly includeHighlights: boolean;
   readonly includeCaptures?: boolean;
+  readonly resultMode?: "full" | "parseOnly";
   readonly source: TreeSitterSourceDescriptor;
   readonly generation: number;
   readonly cancellationBuffer?: SharedArrayBuffer;
@@ -101,9 +120,22 @@ export type TreeSitterEditRequest = {
   readonly languageId: TreeSitterLanguageId;
   readonly includeHighlights: boolean;
   readonly includeCaptures?: boolean;
+  readonly resultMode?: "full" | "parseOnly";
   readonly source: TreeSitterSourceDescriptor;
   readonly edits: readonly TextEdit[];
   readonly inputEdits: readonly TreeSitterInputEdit[];
+  readonly generation: number;
+  readonly cancellationBuffer?: SharedArrayBuffer;
+};
+
+export type TreeSitterRangeRequest = {
+  readonly type: "queryRange";
+  readonly documentId: string;
+  readonly snapshotVersion: number;
+  readonly languageId: TreeSitterLanguageId;
+  readonly includeHighlights: boolean;
+  readonly includeCaptures?: boolean;
+  readonly range: TreeSitterSyntaxRange;
   readonly generation: number;
   readonly cancellationBuffer?: SharedArrayBuffer;
 };
@@ -146,11 +178,17 @@ export type TreeSitterWorkerRequestPayload =
   | TreeSitterRegisterLanguagesRequest
   | TreeSitterParseRequest
   | TreeSitterEditRequest
+  | TreeSitterRangeRequest
   | TreeSitterSelectionRequest
   | TreeSitterDisposeDocumentRequest
   | TreeSitterDisposeRequest;
 
-export type TreeSitterWorkerResult = TreeSitterParseResult | TreeSitterSelectionResult | undefined;
+export type TreeSitterWorkerResult =
+  | TreeSitterParseResult
+  | TreeSitterParseAckResult
+  | TreeSitterRangeResult
+  | TreeSitterSelectionResult
+  | undefined;
 
 export type TreeSitterWorkerRequest = {
   readonly id: number;

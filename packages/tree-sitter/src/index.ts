@@ -252,4 +252,4 @@ const inlineAssetSignature = (
 };
 
 const sortedItems = (items: readonly string[] | undefined): readonly string[] =>
-  [...(items ?? [])].sort();
+  (items ?? []).toSorted();

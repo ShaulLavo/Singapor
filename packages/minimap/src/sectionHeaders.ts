@@ -30,6 +30,16 @@ export function findSectionHeaderDecorations(
   return collectMarkHeaders(lines, options.markSectionHeaderRegex).map(headerToDecoration);
 }
 
+export function findSectionHeaderDecorationsInRange(
+  lines: readonly string[],
+  startLineNumber: number,
+  options: ResolvedMinimapOptions,
+): EditorMinimapDecoration[] {
+  return findSectionHeaderDecorations(lines, options).map((decoration) =>
+    shiftDecorationLineNumbers(decoration, startLineNumber - 1),
+  );
+}
+
 export function collectMarkHeaders(
   lines: readonly string[],
   markSectionHeaderRegex: string,
@@ -112,6 +122,19 @@ function headerToDecoration(header: SectionHeader): EditorMinimapDecoration {
     position: "inline",
     sectionHeaderStyle: headerStyle(header.hasSeparatorLine),
     sectionHeaderText: header.text,
+  };
+}
+
+function shiftDecorationLineNumbers(
+  decoration: EditorMinimapDecoration,
+  lineDelta: number,
+): EditorMinimapDecoration {
+  if (lineDelta === 0) return decoration;
+
+  return {
+    ...decoration,
+    startLineNumber: decoration.startLineNumber + lineDelta,
+    endLineNumber: decoration.endLineNumber + lineDelta,
   };
 }
 

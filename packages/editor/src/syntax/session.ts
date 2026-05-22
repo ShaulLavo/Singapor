@@ -50,11 +50,17 @@ export type EditorSyntaxResult = {
   readonly tokens: readonly EditorToken[];
 };
 
+export type EditorSyntaxRange = {
+  readonly startIndex: number;
+  readonly endIndex: number;
+};
+
 export type EditorSyntaxSessionOptions = {
   readonly documentId: string;
   readonly languageId: EditorSyntaxLanguageId | null;
   readonly includeHighlights?: boolean;
   readonly includeCaptures?: boolean;
+  readonly syntaxMode?: "full" | "range";
   readonly text: string;
   readonly textSnapshot?: DocumentTextSnapshot;
   readonly snapshot: PieceTableSnapshot;
@@ -63,6 +69,8 @@ export type EditorSyntaxSessionOptions = {
 export type EditorSyntaxSession = {
   refresh(snapshot: PieceTableSnapshot, text?: string): Promise<EditorSyntaxResult>;
   applyChange(change: DocumentSessionChange): Promise<EditorSyntaxResult>;
+  canQueryRange?(): boolean;
+  queryRange?(range: EditorSyntaxRange): Promise<EditorSyntaxResult>;
   getResult(): EditorSyntaxResult;
   getTokens(): readonly EditorToken[];
   getSnapshotVersion(): number;

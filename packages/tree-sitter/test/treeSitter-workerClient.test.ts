@@ -3,7 +3,10 @@ import { createPieceTableSnapshot } from "@editor/core";
 import type { TreeSitterLanguageDescriptor } from "../src";
 import type {
   TreeSitterParseRequest,
+  TreeSitterParseAckResult,
   TreeSitterParseResult,
+  TreeSitterRangeRequest,
+  TreeSitterRangeResult,
   TreeSitterWorkerRequest,
   TreeSitterWorkerRequestPayload,
   TreeSitterWorkerResult,
@@ -226,6 +229,59 @@ describe("tree-sitter worker client language registration cache", () => {
     worker.resolveRequest(defaultRequest, parseResult(2));
     await expect(defaultParse).resolves.toMatchObject({ snapshotVersion: 2 });
   });
+
+  it("returns parse acknowledgements for parse-only requests", async () => {
+    FakeWorker.autoResolve = false;
+    const client = await loadWorkerClient();
+    const snapshot = createPieceTableSnapshot("const answer = 1;");
+    const parse = client.parseWithTreeSitter({
+      ...parsePayload(snapshot, 1),
+      resultMode: "parseOnly",
+    });
+    const worker = fakeWorkerAt(0);
+
+    worker.resolveRequest(requestOfType(worker, "init"));
+    await flushMicrotasks();
+    const request = parseRequests(worker)[0]!;
+
+    expect(request.payload.resultMode).toBe("parseOnly");
+    worker.resolveRequest(request, parseAckResult(1));
+    await expect(parse).resolves.toMatchObject({
+      changedRanges: [{ startIndex: 0, endIndex: 17 }],
+      snapshotVersion: 1,
+      status: "parsed",
+    });
+  });
+
+  it("cancels only older range queries while leaving parse work active", async () => {
+    FakeWorker.autoResolve = false;
+    const client = await loadWorkerClient();
+    const snapshot = createPieceTableSnapshot("const answer = 1;");
+    const parse = client.parseWithTreeSitter(parsePayload(snapshot, 1));
+    const worker = fakeWorkerAt(0);
+
+    worker.resolveRequest(requestOfType(worker, "init"));
+    await flushMicrotasks();
+    const parseRequest = parseRequests(worker)[0]!;
+    const firstRange = client.queryRangeWithTreeSitter(rangePayload(1, 0, 5));
+    await flushMicrotasks();
+    const firstRangeRequest = rangeRequests(worker)[0]!;
+    const secondRange = client.queryRangeWithTreeSitter(rangePayload(1, 5, 12));
+    await flushMicrotasks();
+    const secondRangeRequest = rangeRequests(worker)[1]!;
+
+    expect(cancellationValue(parseRequest)).toBe(0);
+    expect(cancellationValue(firstRangeRequest)).toBe(1);
+    expect(cancellationValue(secondRangeRequest)).toBe(0);
+
+    worker.resolveRequest(parseRequest, parseResult(1));
+    worker.resolveRequest(firstRangeRequest, rangeResult(1, 0, 5));
+    worker.resolveRequest(secondRangeRequest, rangeResult(1, 5, 12));
+
+    await expect(parse).resolves.toMatchObject({ snapshotVersion: 1 });
+    await expect(firstRange).resolves.toMatchObject({ range: { startIndex: 0, endIndex: 5 } });
+    await expect(secondRange).resolves.toMatchObject({ range: { startIndex: 5, endIndex: 12 } });
+  });
 });
 
 async function loadWorkerClient(): Promise<WorkerClientModule> {
@@ -272,10 +328,34 @@ type TreeSitterParseWorkerRequest = FakeWorkerRequest & {
   readonly payload: TreeSitterParseRequest;
 };
 
+function rangeRequests(worker: FakeWorker): TreeSitterRangeWorkerRequest[] {
+  return worker.messages.filter((message): message is TreeSitterRangeWorkerRequest =>
+    isRangeRequest(message.payload),
+  );
+}
+
+type TreeSitterRangeWorkerRequest = FakeWorkerRequest & {
+  readonly payload: TreeSitterRangeRequest;
+};
+
 function isParseRequest(
   payload: TreeSitterWorkerRequestPayload,
 ): payload is TreeSitterParseRequest {
   return payload.type === "parse";
+}
+
+function isRangeRequest(
+  payload: TreeSitterWorkerRequestPayload,
+): payload is TreeSitterRangeRequest {
+  return payload.type === "queryRange";
+}
+
+function cancellationValue(
+  request: TreeSitterParseWorkerRequest | TreeSitterRangeWorkerRequest,
+): number | null {
+  const buffer = request.payload.cancellationBuffer;
+  if (!buffer) return null;
+  return Atomics.load(new Int32Array(buffer), 0);
 }
 
 function languageDescriptor(
@@ -315,5 +395,50 @@ function parseResult(snapshotVersion: number): TreeSitterParseResult {
     languageId: "typescript",
     snapshotVersion,
     timings: [],
+  };
+}
+
+function parseAckResult(snapshotVersion: number): TreeSitterParseAckResult {
+  return {
+    changedRanges: [{ startIndex: 0, endIndex: 17 }],
+    documentId: "doc.ts",
+    languageId: "typescript",
+    snapshotVersion,
+    status: "parsed",
+    timings: [],
+  };
+}
+
+function rangePayload(
+  snapshotVersion: number,
+  startIndex: number,
+  endIndex: number,
+): Parameters<WorkerClientModule["queryRangeWithTreeSitter"]>[0] {
+  return {
+    documentId: "doc.ts",
+    includeHighlights: true,
+    languageId: "typescript",
+    range: { startIndex, endIndex },
+    snapshotVersion,
+  };
+}
+
+function rangeResult(
+  snapshotVersion: number,
+  startIndex: number,
+  endIndex: number,
+): TreeSitterRangeResult {
+  return {
+    brackets: [],
+    captures: [],
+    documentId: "doc.ts",
+    errors: [],
+    folds: [],
+    injections: [],
+    languageId: "typescript",
+    range: { startIndex, endIndex },
+    snapshotVersion,
+    timings: [],
+    tokens: [],
   };
 }

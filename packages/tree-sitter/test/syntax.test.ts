@@ -23,13 +23,16 @@ import {
 import { createTreeSitterSourceDescriptor } from "../src/treeSitter/source";
 import type {
   TreeSitterEditRequest,
+  TreeSitterParseAckResult,
   TreeSitterParseRequest,
   TreeSitterParseResult,
+  TreeSitterRangeResult,
 } from "../src/treeSitter/types";
 import type {
   TreeSitterBackend,
+  TreeSitterBackendParsePayload,
   TreeSitterEditPayload,
-  TreeSitterParsePayload,
+  TreeSitterRangePayload,
 } from "../src/treeSitter/workerClient";
 
 describe("Tree-sitter syntax capture conversion", () => {
@@ -320,7 +323,7 @@ describe("Tree-sitter syntax capture conversion", () => {
   });
 
   it("uses compact worker tokens without requiring returned captures", async () => {
-    const parsePayloads: TreeSitterParsePayload[] = [];
+    const parsePayloads: TreeSitterBackendParsePayload[] = [];
     const tokens = [{ start: 0, end: 5, style: { color: "#123456" } }];
     const backend = {
       disposeDocument: () => undefined,
@@ -350,7 +353,7 @@ describe("Tree-sitter syntax capture conversion", () => {
   });
 
   it("preserves capture-returning behavior by default", async () => {
-    const parsePayloads: TreeSitterParsePayload[] = [];
+    const parsePayloads: TreeSitterBackendParsePayload[] = [];
     const captures = [
       { startIndex: 0, endIndex: 5, captureName: "keyword.declaration" },
     ];
@@ -380,9 +383,157 @@ describe("Tree-sitter syntax capture conversion", () => {
     expect(result.tokens).toEqual(treeSitterCapturesToEditorTokens(captures));
   });
 
+  it("uses parse acknowledgements and explicit range queries in range syntax mode", async () => {
+    const parsePayloads: TreeSitterBackendParsePayload[] = [];
+    const rangePayloads: TreeSitterRangePayload[] = [];
+    const tokens = [{ start: 0, end: 5, style: { color: "#123456" } }];
+    const backend = {
+      disposeDocument: () => undefined,
+      edit: async () => undefined,
+      parse: async (payload) => {
+        parsePayloads.push(payload);
+        return createParseAck(payload.snapshotVersion);
+      },
+      queryRange: async (payload) => {
+        rangePayloads.push(payload);
+        return createRangeResult(payload, tokens);
+      },
+      registerLanguages: async () => undefined,
+      select: async () => undefined,
+    } satisfies TreeSitterBackend;
+    const text = "const a = 1;";
+    const session = new TreeSitterSyntaxSession({
+      backend,
+      documentId: "file.ts",
+      languageId: "typescript",
+      snapshot: createPieceTableSnapshot(text),
+      syntaxMode: "range",
+      text,
+    });
+
+    const refreshed = await session.refresh(createPieceTableSnapshot(text), text);
+    const ranged = await session.queryRange({ startIndex: 0, endIndex: 6 });
+
+    expect(parsePayloads[0]?.resultMode).toBe("parseOnly");
+    expect(refreshed.tokens).toEqual([]);
+    expect(rangePayloads[0]?.range).toEqual({ startIndex: 0, endIndex: 6 });
+    expect(ranged.tokens).toEqual(tokens);
+  });
+
+  it("keeps large editor-path syntax results range-only", async () => {
+    const parsePayloads: TreeSitterBackendParsePayload[] = [];
+    const rangePayloads: TreeSitterRangePayload[] = [];
+    const backend = {
+      disposeDocument: () => undefined,
+      edit: async () => undefined,
+      parse: async (payload) => {
+        parsePayloads.push(payload);
+        return createParseAck(payload.snapshotVersion);
+      },
+      queryRange: async (payload) => {
+        rangePayloads.push(payload);
+        return createRangeResult(payload, []);
+      },
+      registerLanguages: async () => undefined,
+      select: async () => undefined,
+    } satisfies TreeSitterBackend;
+    const text = Array.from(
+      { length: 20_000 },
+      (_value, index) => `export const value${index} = ${index};`,
+    ).join("\n");
+    const snapshot = createPieceTableSnapshot(text);
+    const session = new TreeSitterSyntaxSession({
+      backend,
+      documentId: "large.ts",
+      languageId: "typescript",
+      snapshot,
+      syntaxMode: "range",
+      text,
+    });
+
+    await session.refresh(snapshot, text);
+    await session.queryRange({ startIndex: 1_000, endIndex: 2_000 });
+
+    expect(parsePayloads[0]?.resultMode).toBe("parseOnly");
+    expect(rangePayloads).toMatchObject([
+      {
+        range: { startIndex: 1_000, endIndex: 2_000 },
+      },
+    ]);
+  });
+
+  it("does not dispatch range queries until the parsed snapshot is current", async () => {
+    const parseResult = createDeferred<TreeSitterParseAckResult>();
+    const rangePayloads: TreeSitterRangePayload[] = [];
+    const backend = {
+      disposeDocument: () => undefined,
+      edit: async () => undefined,
+      parse: async () => parseResult.promise,
+      queryRange: async (payload) => {
+        rangePayloads.push(payload);
+        return createRangeResult(payload, [{ start: 0, end: 5, style: { color: "#123456" } }]);
+      },
+      registerLanguages: async () => undefined,
+      select: async () => undefined,
+    } satisfies TreeSitterBackend;
+    const text = "const a = 1;";
+    const snapshot = createPieceTableSnapshot(text);
+    const session = new TreeSitterSyntaxSession({
+      backend,
+      documentId: "file.ts",
+      languageId: "typescript",
+      snapshot,
+      syntaxMode: "range",
+      text,
+    });
+
+    const refresh = session.refresh(snapshot, text);
+    const pendingRange = await session.queryRange({ startIndex: 0, endIndex: 6 });
+
+    expect(session.canQueryRange()).toBe(false);
+    expect(pendingRange.tokens).toEqual([]);
+    expect(rangePayloads).toHaveLength(0);
+
+    parseResult.resolve(createParseAck(1));
+    await refresh;
+    const readyRange = await session.queryRange({ startIndex: 0, endIndex: 6 });
+
+    expect(session.canQueryRange()).toBe(true);
+    expect(rangePayloads).toHaveLength(1);
+    expect(readyRange.tokens).toEqual([{ start: 0, end: 5, style: { color: "#123456" } }]);
+  });
+
+  it("suppresses stale range query results", async () => {
+    const backend = {
+      disposeDocument: () => undefined,
+      edit: async () => undefined,
+      parse: async (payload) => createParseAck(payload.snapshotVersion),
+      queryRange: async (payload) =>
+        createRangeResult({ ...payload, snapshotVersion: payload.snapshotVersion - 1 }, [
+          { start: 0, end: 5, style: { color: "#123456" } },
+        ]),
+      registerLanguages: async () => undefined,
+      select: async () => undefined,
+    } satisfies TreeSitterBackend;
+    const text = "const a = 1;";
+    const session = new TreeSitterSyntaxSession({
+      backend,
+      documentId: "file.ts",
+      languageId: "typescript",
+      snapshot: createPieceTableSnapshot(text),
+      syntaxMode: "range",
+      text,
+    });
+
+    await session.refresh(createPieceTableSnapshot(text), text);
+    const result = await session.queryRange({ startIndex: 0, endIndex: 6 });
+
+    expect(result.tokens).toEqual([]);
+  });
+
   it("suppresses stale parse results after a newer refresh starts", async () => {
     const parses: {
-      readonly payload: TreeSitterParsePayload;
+      readonly payload: TreeSitterBackendParsePayload;
       readonly result: Deferred<TreeSitterParseResult>;
     }[] = [];
     const backend = {
@@ -760,6 +911,36 @@ function createParseResult(payload: {
     languageId: payload.languageId,
     snapshotVersion: payload.snapshotVersion,
     timings: [],
+  };
+}
+
+function createParseAck(snapshotVersion: number): TreeSitterParseAckResult {
+  return {
+    changedRanges: [],
+    documentId: "file.ts",
+    languageId: "typescript",
+    snapshotVersion,
+    status: "parsed",
+    timings: [],
+  };
+}
+
+function createRangeResult(
+  payload: Pick<TreeSitterRangePayload, "documentId" | "languageId" | "range" | "snapshotVersion">,
+  tokens: TreeSitterRangeResult["tokens"],
+): TreeSitterRangeResult {
+  return {
+    brackets: [],
+    captures: [],
+    documentId: payload.documentId,
+    errors: [],
+    folds: [],
+    injections: [],
+    languageId: payload.languageId,
+    range: payload.range,
+    snapshotVersion: payload.snapshotVersion,
+    timings: [],
+    tokens,
   };
 }
 

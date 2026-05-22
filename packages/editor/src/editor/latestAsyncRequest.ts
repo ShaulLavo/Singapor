@@ -8,7 +8,12 @@ export type LatestAsyncRequestOptions<T> = {
 export class LatestAsyncRequest<T> {
   private requestId = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
+  private activeRequestId: number | null = null;
   private disposed = false;
+
+  public isActive(): boolean {
+    return this.timer !== null || this.activeRequestId !== null;
+  }
 
   public schedule(options: LatestAsyncRequestOptions<T>): void {
     if (this.disposed) return;
@@ -28,6 +33,7 @@ export class LatestAsyncRequest<T> {
 
   public cancel(): void {
     this.requestId += 1;
+    this.activeRequestId = null;
     this.clearTimer();
   }
 
@@ -45,6 +51,7 @@ export class LatestAsyncRequest<T> {
     if (!this.isCurrent(requestId)) return;
 
     const startedAt = nowMs();
+    this.activeRequestId = requestId;
     void options
       .run()
       .then((result) => this.apply(requestId, result, options, startedAt))
@@ -58,6 +65,7 @@ export class LatestAsyncRequest<T> {
     startedAt: number,
   ): void {
     if (!this.isCurrent(requestId)) return;
+    this.clearActiveRequest(requestId);
     options.apply(result, startedAt);
   }
 
@@ -68,7 +76,14 @@ export class LatestAsyncRequest<T> {
     startedAt: number,
   ): void {
     if (!this.isCurrent(requestId)) return;
+    this.clearActiveRequest(requestId);
     options.fail?.(error, startedAt);
+  }
+
+  private clearActiveRequest(requestId: number): void {
+    if (this.activeRequestId !== requestId) return;
+
+    this.activeRequestId = null;
   }
 
   private isCurrent(requestId: number): boolean {

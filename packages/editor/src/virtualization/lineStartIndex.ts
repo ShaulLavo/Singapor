@@ -57,7 +57,7 @@ export class LineStartOffsetIndex {
   }
 
   private sortedDeltas(): readonly (readonly [number, number])[] {
-    this.sortedSuffixDeltas ??= [...this.suffixDeltas.entries()].sort(
+    this.sortedSuffixDeltas ??= Array.from(this.suffixDeltas.entries()).toSorted(
       ([left], [right]) => left - right,
     );
     return this.sortedSuffixDeltas;

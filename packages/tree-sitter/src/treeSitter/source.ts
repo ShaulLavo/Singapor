@@ -54,9 +54,12 @@ export type TreeSitterInputChunk = {
 export type TreeSitterPieceTableInput = {
   readonly length: number;
   readonly chunks: readonly TreeSitterInputChunk[];
+  lastChunkIndex?: number;
 };
 
 const SOURCE_CHUNK_SIZE = 16 * 1024;
+// web-tree-sitter copies parser callback text into a fixed 10KB UTF-16 buffer.
+const PARSER_READ_BATCH_CODE_UNITS = 4096;
 const UTF16_READ_BATCH = 8192;
 
 export const createTreeSitterSourceDescriptor = (
@@ -115,12 +118,18 @@ export const readTreeSitterPieceTableInput = (
 ): string | undefined => {
   if (index < 0 || index >= input.length) return undefined;
 
-  const chunk = findChunkContaining(input.chunks, index);
+  const chunk = findChunkContainingWithCursor(input, index);
   if (!chunk) return undefined;
 
   const sourceStart = chunk.chunkStart + index - chunk.start;
   const sourceEnd = chunk.chunkStart + chunk.end - chunk.start;
-  return readResolvedChunkText(chunk.source, sourceStart, sourceEnd);
+  const readEnd = safeParserReadEnd(
+    chunk.source,
+    sourceStart,
+    Math.min(sourceEnd, sourceStart + PARSER_READ_BATCH_CODE_UNITS),
+    sourceEnd,
+  );
+  return readResolvedChunkText(chunk.source, sourceStart, readEnd);
 };
 
 export const readTreeSitterInputRange = (
@@ -291,6 +300,30 @@ const readResolvedChunkText = (
   return readUtf16Text(chunk.units, start, end);
 };
 
+const safeParserReadEnd = (
+  chunk: ResolvedTreeSitterSourceChunk,
+  start: number,
+  end: number,
+  maxEnd: number,
+): number => {
+  if (end >= maxEnd || end <= start) return end;
+
+  const lastCodeUnit = readResolvedChunkCodeUnit(chunk, end - 1);
+  if (!isHighSurrogate(lastCodeUnit)) return end;
+  return Math.max(start + 1, end - 1);
+};
+
+const readResolvedChunkCodeUnit = (
+  chunk: ResolvedTreeSitterSourceChunk,
+  index: number,
+): number => {
+  if (chunk.kind === "string") return chunk.text.charCodeAt(index);
+  return chunk.units[index] ?? Number.NaN;
+};
+
+const isHighSurrogate = (codeUnit: number): boolean =>
+  codeUnit >= 0xd800 && codeUnit <= 0xdbff;
+
 const readUtf16Text = (units: Uint16Array, start: number, end: number): string => {
   let text = "";
   for (let index = start; index < end; index += UTF16_READ_BATCH) {
@@ -326,4 +359,25 @@ const findChunkContaining = (
   }
 
   return null;
+};
+
+const findChunkContainingWithCursor = (
+  input: TreeSitterPieceTableInput,
+  index: number,
+): TreeSitterInputChunk | null => {
+  const cachedIndex = input.lastChunkIndex;
+  const cached = cachedIndex === undefined ? null : input.chunks[cachedIndex];
+  if (cached && index >= cached.start && index < cached.end) return cached;
+
+  if (cachedIndex !== undefined) {
+    const next = input.chunks[cachedIndex + 1];
+    if (next && index >= next.start && index < next.end) {
+      input.lastChunkIndex = cachedIndex + 1;
+      return next;
+    }
+  }
+
+  const chunk = findChunkContaining(input.chunks, index);
+  if (chunk) input.lastChunkIndex = input.chunks.indexOf(chunk);
+  return chunk;
 };

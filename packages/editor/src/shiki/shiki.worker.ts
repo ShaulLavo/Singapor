@@ -285,8 +285,8 @@ const postResponse = (response: ShikiWorkerResponse): void => {
 };
 
 const highlighterKey = (langs: readonly string[], themes: readonly string[]): string => {
-  const normalizedLangs = [...langs].sort();
-  const normalizedThemes = [...themes].sort();
+  const normalizedLangs = langs.toSorted();
+  const normalizedThemes = themes.toSorted();
   return JSON.stringify({ langs: normalizedLangs, themes: normalizedThemes });
 };
 

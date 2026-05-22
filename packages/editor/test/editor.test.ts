@@ -25,6 +25,7 @@ import {
   type EditorViewSnapshot,
   type EditorState,
   type EditorSyntaxResult,
+  type EditorSyntaxRange,
   type EditorSyntaxSession,
   type EditorSyntaxSessionOptions,
 } from "../src";
@@ -403,6 +404,18 @@ function tokenHighlights(): Highlight[] {
 
 function tokenHighlightRanges(): AbstractRange[] {
   return tokenHighlights().flatMap((highlight) => [...highlight]);
+}
+
+function tokenSnapshotFromLastEvent(events: readonly ViewContributionEvent[]) {
+  return events.findLast((event) => event.kind === "tokens")?.snapshot?.tokens ?? [];
+}
+
+function rangeLength(range: EditorSyntaxRange | undefined): number {
+  return range ? range.endIndex - range.startIndex : 0;
+}
+
+function hasLongSyntaxRange(ranges: readonly EditorSyntaxRange[]): boolean {
+  return ranges.some((range) => rangeLength(range) > 200_000);
 }
 
 function selectionRanges(): HTMLElement[] {
@@ -3894,11 +3907,411 @@ describe("Editor", () => {
           documentId: "main.ts",
           includeHighlights: true,
           languageId: "typescript",
+          syntaxMode: "range",
           text: "const a = 1;",
         }),
       ]);
       expect(editor.getState().syntaxStatus).toBe("ready");
       expect(highlightsMap.size).toBe(1);
+    });
+
+    it("queries visible syntax ranges after compact structural refresh", async () => {
+      const ranges: EditorSyntaxRange[] = [];
+      setEditorSyntaxSessionFactory(() =>
+        createMockSyntaxSession({
+          refresh: async () => createSyntaxResult([]),
+          queryRange: async (range) => {
+            ranges.push(range);
+            return createSyntaxResult([
+              {
+                start: range.startIndex,
+                end: range.startIndex + 5,
+                style: { color: "#00ff00" },
+              },
+            ]);
+          },
+        }),
+      );
+
+      editor.openDocument({
+        documentId: "main.ts",
+        languageId: "typescript",
+        text: "const a = 1;",
+      });
+      await flushSyntaxDebounce();
+
+      expect(ranges.length).toBeGreaterThan(0);
+      expect(ranges[0]?.startIndex).toBe(0);
+      expect(ranges[0]?.endIndex).toBeGreaterThan(0);
+      expect(editor.getState().syntaxStatus).toBe("ready");
+    });
+
+    it("requests visible syntax on scroll without reparsing the document", async () => {
+      const ranges: EditorSyntaxRange[] = [];
+      let refreshCount = 0;
+      setEditorSyntaxSessionFactory(() =>
+        createMockSyntaxSession({
+          refresh: async () => {
+            refreshCount += 1;
+            return createSyntaxResult([]);
+          },
+          queryRange: async (range) => {
+            ranges.push(range);
+            return createSyntaxResult([]);
+          },
+        }),
+      );
+      const text = Array.from(
+        { length: 20_000 },
+        (_value, index) => `const line${index} = ${index};`,
+      ).join("\n");
+
+      editor.openDocument({
+        documentId: "main.ts",
+        languageId: "typescript",
+        text,
+      });
+      await flushSyntaxDebounce();
+      const initialRangeCount = ranges.length;
+
+      editor.setScrollPosition({ top: 300_000, left: 0 });
+      await flushSyntaxDebounce();
+      const scrolledRanges = ranges.slice(initialRangeCount);
+
+      expect(refreshCount).toBe(1);
+      expect(scrolledRanges.length).toBeGreaterThan(0);
+      expect(scrolledRanges.some((range) => range.startIndex > 0)).toBe(true);
+    });
+
+    it("prefetches syntax ahead of fast scroll direction", async () => {
+      const ranges: EditorSyntaxRange[] = [];
+      setEditorSyntaxSessionFactory(() =>
+        createMockSyntaxSession({
+          refresh: async () => createSyntaxResult([]),
+          queryRange: async (range) => {
+            ranges.push(range);
+            return createSyntaxResult([]);
+          },
+        }),
+      );
+      const text = Array.from(
+        { length: 60_000 },
+        (_value, index) => `const line${index} = ${index};`,
+      ).join("\n");
+
+      editor.openDocument({
+        documentId: "main.ts",
+        languageId: "typescript",
+        text,
+      });
+      await flushSyntaxDebounce();
+      const rangeCountBeforeScroll = ranges.length;
+
+      editor.setScrollPosition({ top: 900_000, left: 0 });
+      await flushSyntaxDebounce();
+
+      expect(hasLongSyntaxRange(ranges.slice(rangeCountBeforeScroll))).toBe(true);
+    });
+
+    it("queries the teleported viewport before the larger syntax prefetch range", async () => {
+      const ranges: EditorSyntaxRange[] = [];
+      setEditorSyntaxSessionFactory(() =>
+        createMockSyntaxSession({
+          refresh: async () => createSyntaxResult([]),
+          queryRange: async (range) => {
+            ranges.push(range);
+            return createSyntaxResult([]);
+          },
+        }),
+      );
+      const text = Array.from(
+        { length: 60_000 },
+        (_value, index) => `const line${index} = ${index};`,
+      ).join("\n");
+
+      editor.openDocument({
+        documentId: "main.ts",
+        languageId: "typescript",
+        text,
+      });
+      await flushSyntaxDebounce();
+      const rangeCountBeforeTeleport = ranges.length;
+
+      editor.setScrollPosition({ top: 900_000, left: 0 });
+      const urgentRange = ranges[rangeCountBeforeTeleport];
+      await flushSyntaxDebounce();
+      const postTeleportRanges = ranges.slice(rangeCountBeforeTeleport);
+
+      expect(rangeLength(urgentRange)).toBeLessThan(120_000);
+      expect(hasLongSyntaxRange(postTeleportRanges)).toBe(true);
+    });
+
+    it("queries the teleported viewport synchronously from contribution scroll updates", async () => {
+      const ranges: EditorSyntaxRange[] = [];
+      let contributionContext: EditorViewContributionContext | null = null;
+      const plugin: EditorPlugin = {
+        activate: (context) =>
+          context.registerViewContribution({
+            createContribution: (context) => {
+              contributionContext = context;
+              return {
+                update: () => undefined,
+                dispose: () => undefined,
+              };
+            },
+          }),
+      };
+      setEditorSyntaxSessionFactory(() =>
+        createMockSyntaxSession({
+          refresh: async () => createSyntaxResult([]),
+          queryRange: async (range) => {
+            ranges.push(range);
+            return createSyntaxResult([]);
+          },
+        }),
+      );
+      editor.dispose();
+      editor = new Editor(container, {
+        plugins: withTestLanguagePlugins(plugin),
+      });
+      const text = Array.from(
+        { length: 60_000 },
+        (_value, index) => `const line${index} = ${index};`,
+      ).join("\n");
+
+      editor.openDocument({
+        documentId: "main.ts",
+        languageId: "typescript",
+        text,
+      });
+      await flushSyntaxDebounce();
+      const rangeCountBeforeTeleport = ranges.length;
+
+      requireViewContributionContext(contributionContext).setScrollTop(900_000);
+      const urgentRange = ranges[rangeCountBeforeTeleport];
+      await flushSyntaxDebounce();
+      const postTeleportRanges = ranges.slice(rangeCountBeforeTeleport);
+
+      expect(editor.getScrollPosition().top).toBe(900_000);
+      expect(rangeLength(urgentRange)).toBeLessThan(120_000);
+      expect(hasLongSyntaxRange(postTeleportRanges)).toBe(true);
+    });
+
+    it("does not cache visible syntax ranges while range queries are not ready", async () => {
+      const ranges: EditorSyntaxRange[] = [];
+      let canQueryRange = false;
+      setEditorSyntaxSessionFactory(() =>
+        createMockSyntaxSession({
+          canQueryRange: () => canQueryRange,
+          refresh: async () => createSyntaxResult([]),
+          queryRange: async (range) => {
+            ranges.push(range);
+            return createSyntaxResult([
+              {
+                start: range.startIndex + 10,
+                end: range.startIndex + 15,
+                style: { color: "#00ff00" },
+              },
+            ]);
+          },
+        }),
+      );
+      const text = Array.from(
+        { length: 60_000 },
+        (_value, index) => `const line${index} = ${index};`,
+      ).join("\n");
+
+      editor.openDocument({
+        documentId: "main.ts",
+        languageId: "typescript",
+        text,
+      });
+      await flushSyntaxDebounce();
+
+      editor.setScrollPosition({ top: 300_000, left: 0 });
+      await flushSyntaxDebounce();
+      expect(ranges).toHaveLength(0);
+
+      canQueryRange = true;
+      editor.setScrollPosition({ top: 250_000, left: 0 });
+
+      expect(ranges).toHaveLength(1);
+      expect(ranges[0]?.startIndex).toBeGreaterThan(0);
+    });
+
+    it("keeps syntax prefetch behind the visible range query", async () => {
+      const ranges: EditorSyntaxRange[] = [];
+      const pendingRanges: Deferred<EditorSyntaxResult>[] = [];
+      let deferRangeQueries = false;
+      setEditorSyntaxSessionFactory(() =>
+        createMockSyntaxSession({
+          refresh: async () => createSyntaxResult([]),
+          queryRange: (range) => {
+            ranges.push(range);
+            if (!deferRangeQueries) return Promise.resolve(createSyntaxResult([]));
+
+            const pending = createDeferred<EditorSyntaxResult>();
+            pendingRanges.push(pending);
+            return pending.promise;
+          },
+        }),
+      );
+      const text = Array.from(
+        { length: 60_000 },
+        (_value, index) => `const line${index} = ${index};`,
+      ).join("\n");
+
+      editor.openDocument({
+        documentId: "main.ts",
+        languageId: "typescript",
+        text,
+      });
+      await flushSyntaxDebounce();
+      const rangeCountBeforeTeleport = ranges.length;
+      deferRangeQueries = true;
+
+      editor.setScrollPosition({ top: 900_000, left: 0 });
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      await flushMicrotasks();
+
+      expect(ranges).toHaveLength(rangeCountBeforeTeleport + 1);
+      expect(rangeLength(ranges[rangeCountBeforeTeleport])).toBeLessThan(120_000);
+
+      pendingRanges[0]?.resolve(createSyntaxResult([]));
+      await flushMicrotasks();
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      await flushMicrotasks();
+
+      expect(ranges.length).toBeGreaterThan(rangeCountBeforeTeleport + 1);
+      expect(rangeLength(ranges.at(-1))).toBeGreaterThan(200_000);
+    });
+
+    it("warms non-visible syntax tiles in the background", async () => {
+      const ranges: EditorSyntaxRange[] = [];
+      setEditorSyntaxSessionFactory(() =>
+        createMockSyntaxSession({
+          refresh: async () => createSyntaxResult([]),
+          queryRange: async (range) => {
+            ranges.push(range);
+            return createSyntaxResult([]);
+          },
+        }),
+      );
+      const text = Array.from(
+        { length: 60_000 },
+        (_value, index) => `const line${index} = ${index};`,
+      ).join("\n");
+
+      editor.openDocument({
+        documentId: "main.ts",
+        languageId: "typescript",
+        text,
+      });
+      await flushSyntaxDebounce();
+      await flushSyntaxDebounce();
+
+      const warmedTile = ranges.find(
+        (range) => range.startIndex >= 120_000 && rangeLength(range) <= 120_000,
+      );
+      expect(warmedTile).toBeDefined();
+    });
+
+    it("keeps previously queried syntax tokens while scrolling to a new range", async () => {
+      const events: ViewContributionEvent[] = [];
+      const ranges: EditorSyntaxRange[] = [];
+      editor.dispose();
+      editor = new Editor(container, {
+        plugins: withTestLanguagePlugins(createViewContributionPlugin(events)),
+      });
+      setEditorSyntaxSessionFactory(() =>
+        createMockSyntaxSession({
+          refresh: async () => createSyntaxResult([]),
+          queryRange: async (range) => {
+            ranges.push(range);
+            return createSyntaxResult([
+              {
+                start: range.startIndex + 10,
+                end: range.startIndex + 15,
+                style: { color: "#00ff00" },
+              },
+            ]);
+          },
+        }),
+      );
+      const text = Array.from(
+        { length: 20_000 },
+        (_value, index) => `const line${index} = ${index};`,
+      ).join("\n");
+
+      editor.openDocument({
+        documentId: "main.ts",
+        languageId: "typescript",
+        text,
+      });
+      await flushSyntaxDebounce();
+      const initialToken = tokenSnapshotFromLastEvent(events)[0];
+      expect(initialToken).toMatchObject({ start: 10, end: 15 });
+
+      editor.setScrollPosition({ top: 300_000, left: 0 });
+      await flushSyntaxDebounce();
+      const scrolledRange = ranges.at(-1);
+      const tokens = tokenSnapshotFromLastEvent(events);
+
+      expect(scrolledRange?.startIndex).toBeGreaterThan(0);
+      expect(tokens).toContainEqual(initialToken);
+      expect(tokens).toContainEqual({
+        start: (scrolledRange?.startIndex ?? 0) + 10,
+        end: (scrolledRange?.startIndex ?? 0) + 15,
+        style: { color: "#00ff00" },
+      });
+    });
+
+    it("repaints cached syntax immediately when scrolling back to a previous range", async () => {
+      const events: ViewContributionEvent[] = [];
+      const ranges: EditorSyntaxRange[] = [];
+      editor.dispose();
+      editor = new Editor(container, {
+        plugins: withTestLanguagePlugins(createViewContributionPlugin(events)),
+      });
+      setEditorSyntaxSessionFactory(() =>
+        createMockSyntaxSession({
+          refresh: async () => createSyntaxResult([]),
+          queryRange: async (range) => {
+            ranges.push(range);
+            return createSyntaxResult([
+              {
+                start: range.startIndex + 10,
+                end: range.startIndex + 15,
+                style: { color: "#00ff00" },
+              },
+            ]);
+          },
+        }),
+      );
+      const text = Array.from(
+        { length: 20_000 },
+        (_value, index) => `const line${index} = ${index};`,
+      ).join("\n");
+
+      editor.openDocument({
+        documentId: "main.ts",
+        languageId: "typescript",
+        text,
+      });
+      await flushSyntaxDebounce();
+      const initialToken = tokenSnapshotFromLastEvent(events)[0];
+
+      editor.setScrollPosition({ top: 300_000, left: 0 });
+      await flushSyntaxDebounce();
+      const rangeCountAfterScrollAway = ranges.length;
+
+      editor.setScrollPosition({ top: 0, left: 0 });
+      await flushSyntaxDebounce();
+      const tokens = tokenSnapshotFromLastEvent(events);
+
+      expect(rangeCountAfterScrollAway).toBeGreaterThan(1);
+      expect(ranges).toHaveLength(rangeCountAfterScrollAway);
+      expect(tokens).toContainEqual(initialToken);
     });
 
     it("applies syncText changes through incremental syntax sessions", async () => {
