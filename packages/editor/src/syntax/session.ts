@@ -54,6 +54,7 @@ export type EditorSyntaxSessionOptions = {
   readonly documentId: string;
   readonly languageId: EditorSyntaxLanguageId | null;
   readonly includeHighlights?: boolean;
+  readonly includeCaptures?: boolean;
   readonly text: string;
   readonly textSnapshot?: DocumentTextSnapshot;
   readonly snapshot: PieceTableSnapshot;

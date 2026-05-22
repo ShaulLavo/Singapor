@@ -8,6 +8,7 @@ import {
   type Tree,
   type TreeCursor,
 } from "web-tree-sitter";
+import { treeSitterCapturesToEditorTokens } from "@editor/core";
 import parserWasmUrl from "web-tree-sitter/web-tree-sitter.wasm?url";
 import type { TreeSitterLanguageDescriptor } from "./registry";
 import {
@@ -84,7 +85,7 @@ type CancellationContext = {
 
 type FlattenedDocument = Pick<
   TreeSitterParseResult,
-  "captures" | "folds" | "brackets" | "errors" | "injections"
+  "captures" | "folds" | "brackets" | "errors" | "injections" | "tokens"
 >;
 
 type InjectionPlan = {
@@ -251,11 +252,18 @@ const parseDocument = async (
         inputEdits: [],
       }),
     );
+    assertNotCancelled(context);
     const parseMs = nowMs() - parseStart;
     const queryStart = nowMs();
     const result = await runAsyncWorkerPhase("flatten", () =>
-      flattenDocument(parsedDocument, context, request.includeHighlights),
+      flattenDocument(
+        parsedDocument,
+        context,
+        request.includeHighlights,
+        request.includeCaptures ?? true,
+      ),
     );
+    assertNotCancelled(context);
     const queryMs = nowMs() - queryStart;
 
     replaceCachedDocument(request.documentId, parsedDocument);
@@ -269,6 +277,7 @@ const parseDocument = async (
       brackets: result.brackets,
       errors: result.errors,
       injections: result.injections,
+      tokens: result.tokens,
       timings: [
         { name: "treeSitter.parse", durationMs: parseMs },
         { name: "treeSitter.query", durationMs: queryMs },
@@ -317,11 +326,18 @@ const editDocument = async (
     );
     const parseMs = nowMs() - parseStart;
     reusableTree.delete();
+    assertNotCancelled(context);
 
     const queryStart = nowMs();
     const result = await runAsyncWorkerPhase("flatten", () =>
-      flattenDocument(parsedDocument, context, request.includeHighlights),
+      flattenDocument(
+        parsedDocument,
+        context,
+        request.includeHighlights,
+        request.includeCaptures ?? true,
+      ),
     );
+    assertNotCancelled(context);
     const queryMs = nowMs() - queryStart;
     replaceCachedDocument(request.documentId, parsedDocument);
 
@@ -334,6 +350,7 @@ const editDocument = async (
       brackets: result.brackets,
       errors: result.errors,
       injections: result.injections,
+      tokens: result.tokens,
       timings: [
         { name: "treeSitter.edit", durationMs: editMs },
         { name: "treeSitter.parse", durationMs: parseMs },
@@ -860,6 +877,7 @@ const flattenDocument = async (
   document: ParsedDocument,
   context: CancellationContext,
   includeHighlights: boolean,
+  includeCaptures: boolean,
 ): Promise<FlattenedDocument> => {
   const result = createEmptyFlattenedDocument();
   const queryContext = { ...context, budgetMs: QUERY_BUDGET_MS };
@@ -868,12 +886,14 @@ const flattenDocument = async (
     await flattenLayer(layer, result, queryContext, includeHighlights);
   }
 
+  const captures = sortCaptures(result.captures);
   return {
-    captures: sortCaptures(result.captures),
+    captures: includeCaptures ? captures : [],
     folds: sortFolds(result.folds),
     brackets: sortBrackets(result.brackets),
     errors: sortErrors(result.errors),
     injections: sortInjections(result.injections),
+    tokens: treeSitterCapturesToEditorTokens(captures),
   };
 };
 
@@ -926,6 +946,7 @@ const createEmptyFlattenedDocument = (): Writable<FlattenedDocument> => ({
   brackets: [],
   errors: [],
   injections: [],
+  tokens: [],
 });
 
 const emptyTreeData = (): Pick<TreeSitterParseResult, "brackets" | "errors"> => ({

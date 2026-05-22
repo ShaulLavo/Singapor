@@ -58,10 +58,16 @@ export function adoptTokens(
   view: VirtualizedTextViewInternal,
   tokens: readonly EditorToken[],
 ): void {
-  if (canKeepLiveTokenRanges(view, tokens)) {
+  const projectionStatus = tokenProjectionLiveRangeStatus(view.tokens, tokens);
+  if (canKeepLiveTokenRanges(view, tokens, projectionStatus)) {
     view.tokens = tokens;
     view.tokenRenderIndexDirty = true;
     reconcileTokenHighlightsAfterSameLineEdit(view);
+    return;
+  }
+
+  if (projectionStatus !== null) {
+    adoptChangedTokens(view, tokens);
     return;
   }
 
@@ -71,6 +77,13 @@ export function adoptTokens(
     return;
   }
 
+  adoptChangedTokens(view, tokens);
+}
+
+function adoptChangedTokens(
+  view: VirtualizedTextViewInternal,
+  tokens: readonly EditorToken[],
+): void {
   view.tokens = tokens;
   view.tokenRenderIndexDirty = true;
   renderTokenHighlights(view);
@@ -663,9 +676,9 @@ function removeUnusedTokenGroups(
 function canKeepLiveTokenRanges(
   view: VirtualizedTextViewInternal,
   tokens: readonly EditorToken[],
+  projectionStatus: boolean | null,
 ): boolean {
   if (!view.sameLineTokenEdit) return false;
-  const projectionStatus = tokenProjectionLiveRangeStatus(view.tokens, tokens);
   if (projectionStatus !== null) return projectionStatus;
   if (view.tokens.length !== tokens.length) return false;
 

@@ -21,6 +21,9 @@ import type {
   RGBA8,
 } from "./types";
 
+const MINIMAP_UPDATE_QUIET_DELAY_MS = 120;
+const MINIMAP_UPDATE_MAX_DELAY_MS = 300;
+
 export type MinimapHost = {
   readonly root: HTMLDivElement;
   readonly colorScope: HTMLElement;
@@ -50,6 +53,9 @@ export class MinimapWorkerClient {
   private latestRenderedSequence = 0;
   private pendingUpdate: PendingMinimapUpdate | null = null;
   private flushHandle = 0;
+  private quietFlushTimer: ReturnType<typeof setTimeout> | null = null;
+  private maxFlushTimer: ReturnType<typeof setTimeout> | null = null;
+  private idleFlushHandle = 0;
   private renderInFlight = false;
   private latestSliderHeight = 0;
   private latestSliderNeeded = false;
@@ -152,6 +158,17 @@ export class MinimapWorkerClient {
   }
 
   private scheduleFlush(): void {
+    const pending = this.pendingUpdate;
+    if (!pending) return;
+    if (shouldDeferMinimapUpdate(pending)) {
+      this.scheduleDeferredFlush();
+      return;
+    }
+
+    this.scheduleFrameFlush();
+  }
+
+  private scheduleFrameFlush(): void {
     if (this.flushHandle !== 0) return;
 
     this.flushHandle = requestFrame(() => {
@@ -159,6 +176,34 @@ export class MinimapWorkerClient {
       this.flushPendingUpdate();
     });
   }
+
+  private scheduleDeferredFlush(): void {
+    this.cancelScheduledFrame();
+    this.cancelQuietFlush();
+    this.quietFlushTimer = setTimeout(this.flushDeferredUpdate, MINIMAP_UPDATE_QUIET_DELAY_MS);
+    if (this.maxFlushTimer === null) {
+      this.maxFlushTimer = setTimeout(this.flushDeferredUpdate, MINIMAP_UPDATE_MAX_DELAY_MS);
+    }
+    this.scheduleIdleFlush();
+  }
+
+  private scheduleIdleFlush(): void {
+    if (this.idleFlushHandle !== 0) return;
+    if (typeof requestIdleCallback !== "function") return;
+
+    this.idleFlushHandle = requestIdleCallback(
+      () => {
+        this.idleFlushHandle = 0;
+        this.flushDeferredUpdate();
+      },
+      { timeout: MINIMAP_UPDATE_MAX_DELAY_MS },
+    );
+  }
+
+  private flushDeferredUpdate = (): void => {
+    this.cancelDeferredFlush();
+    this.scheduleFrameFlush();
+  };
 
   private flushPendingUpdate(): void {
     if (this.disposed) return;
@@ -518,10 +563,41 @@ export class MinimapWorkerClient {
   }
 
   private cancelScheduledFlush(): void {
+    this.cancelScheduledFrame();
+    this.cancelDeferredFlush();
+  }
+
+  private cancelScheduledFrame(): void {
     if (this.flushHandle === 0) return;
 
     cancelFrame(this.flushHandle);
     this.flushHandle = 0;
+  }
+
+  private cancelDeferredFlush(): void {
+    this.cancelQuietFlush();
+    this.cancelMaxFlush();
+    this.cancelIdleFlush();
+  }
+
+  private cancelQuietFlush(): void {
+    if (this.quietFlushTimer === null) return;
+
+    clearTimeout(this.quietFlushTimer);
+    this.quietFlushTimer = null;
+  }
+
+  private cancelMaxFlush(): void {
+    if (this.maxFlushTimer === null) return;
+
+    clearTimeout(this.maxFlushTimer);
+    this.maxFlushTimer = null;
+  }
+
+  private cancelIdleFlush(): void {
+    if (this.idleFlushHandle === 0) return;
+    if (typeof cancelIdleCallback === "function") cancelIdleCallback(this.idleFlushHandle);
+    this.idleFlushHandle = 0;
   }
 }
 
@@ -723,6 +799,12 @@ function shouldSyncViewport(kind: string): boolean {
   if (kind === "clear") return true;
   if (kind === "viewport") return true;
   return kind === "layout";
+}
+
+function shouldDeferMinimapUpdate(update: PendingMinimapUpdate): boolean {
+  if (update.reason.includes("content")) return true;
+  if (update.syncTokens) return true;
+  return update.syncExternalDecorations;
 }
 
 function sequentialTextEdits(edits: readonly TextEdit[]): readonly TextEdit[] {

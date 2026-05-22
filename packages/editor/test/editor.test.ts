@@ -204,7 +204,7 @@ async function flushTimers(): Promise<void> {
 }
 
 async function flushSyntaxDebounce(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 80));
+  await new Promise((resolve) => setTimeout(resolve, 160));
   await flushMicrotasks();
 }
 
@@ -1925,6 +1925,80 @@ describe("Editor", () => {
 
       expect(commandCalls).toBe(1);
       expect(changes).toContain(null);
+    });
+
+    it("defers rapid text feature notifications while public changes stay immediate", () => {
+      vi.useFakeTimers();
+      const featureTexts: string[] = [];
+      const publicTexts: string[] = [];
+      const plugin: EditorPlugin = {
+        activate: (context) =>
+          context.registerEditorFeatureContribution({
+            createContribution: () => ({
+              handleEditorChange: (change) => {
+                if (change?.kind === "edit") featureTexts.push(change.text);
+              },
+              dispose: () => undefined,
+            }),
+          }),
+      };
+
+      try {
+        editor.dispose();
+        editor = new Editor(container, {
+          plugins: [plugin],
+          onChange: () => publicTexts.push(editor.getText()),
+        });
+        editor.setText("a");
+        featureTexts.length = 0;
+        publicTexts.length = 0;
+
+        editorRoot().dispatchEvent(createInsertEvent("!"));
+
+        expect(editor.getText()).toBe("a!");
+        expect(publicTexts).toEqual(["a!"]);
+        expect(featureTexts).toEqual([]);
+
+        vi.advanceTimersByTime(149);
+        expect(featureTexts).toEqual([]);
+
+        vi.advanceTimersByTime(1);
+        expect(featureTexts).toEqual(["a!"]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("coalesces rapid text feature notifications to the latest edit", () => {
+      vi.useFakeTimers();
+      const featureTexts: string[] = [];
+      const plugin: EditorPlugin = {
+        activate: (context) =>
+          context.registerEditorFeatureContribution({
+            createContribution: () => ({
+              handleEditorChange: (change) => {
+                if (change?.kind === "edit") featureTexts.push(change.text);
+              },
+              dispose: () => undefined,
+            }),
+          }),
+      };
+
+      try {
+        editor.dispose();
+        editor = new Editor(container, { plugins: [plugin] });
+        editor.setText("a");
+        featureTexts.length = 0;
+
+        editorRoot().dispatchEvent(createInsertEvent("!"));
+        editorRoot().dispatchEvent(createInsertEvent("?"));
+
+        expect(editor.getText()).toBe("a!?");
+        vi.advanceTimersByTime(150);
+        expect(featureTexts).toEqual(["a!?"]);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("composes source-keyed row decorations without clobbering other sources", () => {

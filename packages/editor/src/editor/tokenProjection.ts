@@ -25,10 +25,11 @@ type TokenProjectionBuilder = {
   sortedByStart: boolean;
 };
 
-type TokenProjectionPath = "indexed.bulk" | "indexed.fallback" | "scan";
+type TokenProjectionPath = "indexed.bulk" | "indexed.fallback" | "indexed.lazy" | "scan";
 
 type TokenProjectionText = string | TextSnapshot;
 
+const LAZY_PROJECTED_SUFFIX_THRESHOLD = 64;
 const tokenProjectionMetadata = new WeakMap<readonly EditorToken[], TokenProjectionMetadata>();
 
 export function projectTokensThroughEdit(
@@ -101,6 +102,22 @@ function projectIndexedTokensThroughEdit(
   const suffixStart = shiftedSuffixStart(tokens, edit);
   if (prefixEnd > suffixStart) return null;
 
+  const lazyProjected = projectSortedTokenRangesLazy(
+    tokens,
+    edit,
+    previousText,
+    delta,
+    prefixEnd,
+    suffixStart,
+    index,
+  );
+  if (lazyProjected) {
+    recordTokenProjectionPath("indexed.lazy", tokens, prefixEnd, suffixStart, index, {
+      resultCount: lazyProjected.length,
+    });
+    return lazyProjected;
+  }
+
   const projected = projectSortedTokenRangesBulk(
     tokens,
     edit,
@@ -121,6 +138,44 @@ function projectIndexedTokensThroughEdit(
   return projectSortedTokenRanges(tokens, edit, previousText, delta, prefixEnd, suffixStart, index);
 }
 
+function projectSortedTokenRangesLazy(
+  tokens: readonly EditorToken[],
+  edit: TextEdit,
+  previousText: TokenProjectionText,
+  delta: number,
+  prefixEnd: number,
+  suffixStart: number,
+  index: EditorTokenIndex,
+): readonly EditorToken[] | null {
+  if (!shouldUseLazyProjection(tokens, suffixStart)) return null;
+
+  const builder = createContinuationTokenProjectionBuilder(
+    tokens[prefixEnd - 1],
+    index.maxEnds[prefixEnd - 1] ?? 0,
+    index,
+  );
+  const keepsLiveRanges = appendProjectedTokens(
+    builder,
+    tokens,
+    edit,
+    previousText,
+    delta,
+    prefixEnd,
+    suffixStart,
+  );
+  if (!canKeepLazyIndex(builder, tokens, suffixStart, delta, index)) return null;
+
+  return createLazyProjectedTokenArray(
+    tokens,
+    delta,
+    prefixEnd,
+    suffixStart,
+    builder,
+    index,
+    keepsLiveRanges,
+  );
+}
+
 function projectSortedTokenRangesBulk(
   tokens: readonly EditorToken[],
   edit: TextEdit,
@@ -134,7 +189,7 @@ function projectSortedTokenRangesBulk(
   const prefixMaxEnds = index.maxEnds.slice(0, prefixEnd) as number[];
   const builder = createContinuationTokenProjectionBuilder(
     tokens[prefixEnd - 1],
-    prefixMaxEnds,
+    prefixMaxEnds[prefixMaxEnds.length - 1] ?? 0,
     index,
   );
   const keepsLiveRanges = appendProjectedTokens(
@@ -163,12 +218,200 @@ function projectSortedTokenRangesBulk(
   return projectedTokens;
 }
 
+function shouldUseLazyProjection(
+  tokens: readonly EditorToken[],
+  suffixStart: number,
+): boolean {
+  if (suffixStart >= tokens.length) return false;
+  return tokens.length - suffixStart >= LAZY_PROJECTED_SUFFIX_THRESHOLD;
+}
+
+function canKeepLazyIndex(
+  builder: TokenProjectionBuilder,
+  tokens: readonly EditorToken[],
+  suffixStart: number,
+  delta: number,
+  index: EditorTokenIndex,
+): boolean {
+  if (!builder.sortedByStart) return false;
+
+  const first = tokens[suffixStart];
+  if (!first) return true;
+  const projectedFirst = shiftToken(first, delta);
+  if (projectedFirst.start < builder.previousStart) return false;
+  if (index.nonOverlapping && projectedFirst.start < builder.previousEnd) {
+    builder.nonOverlapping = false;
+  }
+  if (index.monotonicEnd && projectedFirst.end < builder.maxEnd) builder.monotonicEnd = false;
+  return true;
+}
+
 function canKeepBulkIndex(
   builder: TokenProjectionBuilder,
   suffixTokens: readonly EditorToken[],
 ): boolean {
   if (!builder.sortedByStart) return false;
   return suffixKeepsSortedStart(builder, suffixTokens);
+}
+
+function createLazyProjectedTokenArray(
+  sourceTokens: readonly EditorToken[],
+  delta: number,
+  prefixEnd: number,
+  suffixStart: number,
+  builder: TokenProjectionBuilder,
+  sourceIndex: EditorTokenIndex,
+  keepsLiveRanges: boolean,
+): readonly EditorToken[] {
+  const middleTokens = builder.tokens;
+  const projectedLength = prefixEnd + middleTokens.length + sourceTokens.length - suffixStart;
+  const suffixOffset = prefixEnd + middleTokens.length;
+  const target: EditorToken[] = [];
+  target.length = projectedLength;
+
+  const projectedTokens = new Proxy(target, {
+    get: (array, property, receiver) => {
+      if (property === Symbol.iterator) return projectedArrayIterator(projectedLength, tokenAt);
+      if (property === "slice") return projectedArraySlice(projectedLength, tokenAt);
+
+      const index = arrayIndexProperty(property);
+      if (index !== null && index < projectedLength) return tokenAt(index);
+      return Reflect.get(array, property, receiver);
+    },
+    getOwnPropertyDescriptor: (array, property) => {
+      const index = arrayIndexProperty(property);
+      if (index === null || index >= projectedLength) {
+        return Reflect.getOwnPropertyDescriptor(array, property);
+      }
+
+      return {
+        configurable: true,
+        enumerable: true,
+        value: tokenAt(index),
+        writable: false,
+      };
+    },
+    has: (array, property) => {
+      const index = arrayIndexProperty(property);
+      if (index !== null && index < projectedLength) return true;
+      return Reflect.has(array, property);
+    },
+  });
+
+  setEditorTokenIndex(projectedTokens, {
+    maxEnds: lazyProjectedMaxEnds(projectedLength, prefixEnd, suffixStart, builder, sourceIndex, delta),
+    monotonicEnd: builder.monotonicEnd,
+    nonOverlapping: builder.nonOverlapping,
+    sortedByStart: true,
+  });
+  tokenProjectionMetadata.set(projectedTokens, { keepsLiveRanges, sourceTokens });
+  return projectedTokens;
+
+  function tokenAt(index: number): EditorToken {
+    if (index < prefixEnd) return sourceTokens[index]!;
+
+    const middleIndex = index - prefixEnd;
+    if (middleIndex < middleTokens.length) return middleTokens[middleIndex]!;
+
+    const suffixIndex = suffixStart + index - suffixOffset;
+    return shiftToken(sourceTokens[suffixIndex]!, delta);
+  }
+}
+
+function lazyProjectedMaxEnds(
+  length: number,
+  prefixEnd: number,
+  suffixStart: number,
+  builder: TokenProjectionBuilder,
+  sourceIndex: EditorTokenIndex,
+  delta: number,
+): readonly number[] {
+  const target: number[] = [];
+  target.length = length;
+  const middleMaxEnds = builder.maxEnds;
+  const suffixOffset = prefixEnd + middleMaxEnds.length;
+
+  return new Proxy(target, {
+    get: (array, property, receiver) => {
+      const index = arrayIndexProperty(property);
+      if (index !== null && index < length) return maxEndAt(index);
+      return Reflect.get(array, property, receiver);
+    },
+    getOwnPropertyDescriptor: (array, property) => {
+      const index = arrayIndexProperty(property);
+      if (index === null || index >= length) {
+        return Reflect.getOwnPropertyDescriptor(array, property);
+      }
+
+      return {
+        configurable: true,
+        enumerable: true,
+        value: maxEndAt(index),
+        writable: false,
+      };
+    },
+    has: (array, property) => {
+      const index = arrayIndexProperty(property);
+      if (index !== null && index < length) return true;
+      return Reflect.has(array, property);
+    },
+  });
+
+  function maxEndAt(index: number): number {
+    if (index < prefixEnd) return sourceIndex.maxEnds[index] ?? 0;
+
+    const middleIndex = index - prefixEnd;
+    if (middleIndex < middleMaxEnds.length) return middleMaxEnds[middleIndex] ?? 0;
+
+    const sourceTokenIndex = suffixStart + index - suffixOffset;
+    return Math.max(builder.maxEnd, (sourceIndex.maxEnds[sourceTokenIndex] ?? 0) + delta);
+  }
+}
+
+function projectedArrayIterator<T>(
+  length: number,
+  itemAt: (index: number) => T,
+): () => IterableIterator<T> {
+  return function* projectedArrayValues() {
+    for (let index = 0; index < length; index += 1) yield itemAt(index);
+  };
+}
+
+function projectedArraySlice<T>(
+  length: number,
+  itemAt: (index: number) => T,
+): (start?: number, end?: number) => T[] {
+  return (start, end) => {
+    const range = normalizedSliceRange(length, start, end);
+    const items: T[] = [];
+    for (let index = range.start; index < range.end; index += 1) items.push(itemAt(index));
+    return items;
+  };
+}
+
+function normalizedSliceRange(
+  length: number,
+  start: number | undefined,
+  end: number | undefined,
+): { readonly start: number; readonly end: number } {
+  const normalizedStart = normalizeSliceIndex(length, start ?? 0);
+  const normalizedEnd = normalizeSliceIndex(length, end ?? length);
+  return { start: normalizedStart, end: normalizedEnd };
+}
+
+function normalizeSliceIndex(length: number, index: number): number {
+  if (index < 0) return Math.max(0, length + index);
+  return Math.min(length, index);
+}
+
+function arrayIndexProperty(property: string | symbol): number | null {
+  if (typeof property !== "string") return null;
+  if (property.length === 0) return null;
+
+  const index = Number(property);
+  if (!Number.isSafeInteger(index)) return null;
+  if (index < 0) return null;
+  return String(index) === property ? index : null;
 }
 
 function projectSortedTokenRanges(
@@ -323,11 +566,11 @@ function createTokenProjectionBuilder(
 
 function createContinuationTokenProjectionBuilder(
   previousToken: EditorToken | undefined,
-  prefixMaxEnds: readonly number[],
+  prefixMaxEnd: number,
   index: EditorTokenIndex,
 ): TokenProjectionBuilder {
   return {
-    maxEnd: prefixMaxEnds[prefixMaxEnds.length - 1] ?? 0,
+    maxEnd: prefixMaxEnd,
     maxEnds: [],
     monotonicEnd: index.monotonicEnd,
     nonOverlapping: index.nonOverlapping,

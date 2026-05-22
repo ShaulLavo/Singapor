@@ -74,6 +74,53 @@ describe("MinimapWorkerClient", () => {
     }
   });
 
+  it("defers content worker updates while applying viewport feedback immediately", () => {
+    const runtime = installMinimapRuntime();
+    try {
+      const host = createHost();
+      const client = new MinimapWorkerClient({
+        host,
+        options: resolveMinimapOptions(),
+        snapshot: snapshot({ scrollTop: 0 }),
+        decorations: [],
+        onLayoutWidth: vi.fn(),
+      });
+      const worker = runtime.workers[0]!;
+      worker.send(renderedResponse(1));
+      worker.postMessage.mockClear();
+
+      const edit: TextEdit = { from: 6, to: 6, text: "x" };
+      client.update(
+        snapshot(
+          { scrollTop: 120, visibleRange: { start: 6, end: 18 } },
+          { text: "line 1x\nline 2\nline 3" },
+        ),
+        "content",
+        documentEdit(edit, "line 1x\nline 2\nline 3"),
+      );
+
+      expect(host.slider.style.transform).toBe("translate3d(0, 32px, 0)");
+      runtime.flushFrames();
+      expect(worker.postMessage).not.toHaveBeenCalled();
+
+      runtime.flushTimers();
+      runtime.flushFrames();
+
+      const requests = worker.postMessage.mock.calls.map((call) => call[0] as { type: string });
+      expect(requests.map((request) => request.type)).toEqual([
+        "applyEdit",
+        "updateViewport",
+        "render",
+      ]);
+
+      client.dispose();
+      host.root.remove();
+      host.colorScope.remove();
+    } finally {
+      runtime.restore();
+    }
+  });
+
   it("keeps full token payloads out of same-line edit updates", () => {
     const runtime = installMinimapRuntime();
     try {
@@ -508,6 +555,8 @@ function renderedResponse(sequence: number): MinimapWorkerResponse {
 
 function installMinimapRuntime(): {
   readonly workers: MockWorker[];
+  readonly flushFrames: () => void;
+  readonly flushTimers: () => void;
   readonly flushAnimationFrames: () => void;
   readonly restore: () => void;
 } {
@@ -520,10 +569,16 @@ function installMinimapRuntime(): {
     "requestAnimationFrame",
   );
   const cancelAnimationFrame = Object.getOwnPropertyDescriptor(globalThis, "cancelAnimationFrame");
+  const setTimeoutDescriptor = Object.getOwnPropertyDescriptor(globalThis, "setTimeout");
+  const clearTimeoutDescriptor = Object.getOwnPropertyDescriptor(globalThis, "clearTimeout");
+  const requestIdleCallback = Object.getOwnPropertyDescriptor(globalThis, "requestIdleCallback");
+  const cancelIdleCallback = Object.getOwnPropertyDescriptor(globalThis, "cancelIdleCallback");
   const transferControlToOffscreen = Object.getOwnPropertyDescriptor(
     HTMLCanvasElement.prototype,
     "transferControlToOffscreen",
   );
+  const timers = new Map<number, () => void>();
+  let nextTimer = 1;
 
   Object.defineProperty(globalThis, "Worker", {
     configurable: true,
@@ -549,6 +604,29 @@ function installMinimapRuntime(): {
     configurable: true,
     value: vi.fn(),
   });
+  Object.defineProperty(globalThis, "setTimeout", {
+    configurable: true,
+    value: (callback: () => void) => {
+      const timer = nextTimer;
+      nextTimer += 1;
+      timers.set(timer, callback);
+      return timer;
+    },
+  });
+  Object.defineProperty(globalThis, "clearTimeout", {
+    configurable: true,
+    value: (timer: number) => {
+      timers.delete(timer);
+    },
+  });
+  Object.defineProperty(globalThis, "requestIdleCallback", {
+    configurable: true,
+    value: undefined,
+  });
+  Object.defineProperty(globalThis, "cancelIdleCallback", {
+    configurable: true,
+    value: vi.fn(),
+  });
   Object.defineProperty(HTMLCanvasElement.prototype, "transferControlToOffscreen", {
     configurable: true,
     value: () => ({}),
@@ -556,7 +634,20 @@ function installMinimapRuntime(): {
 
   return {
     workers,
+    flushFrames: () => {
+      for (const frame of frames.splice(0)) frame();
+    },
+    flushTimers: () => {
+      for (const [timer, callback] of [...timers]) {
+        timers.delete(timer);
+        callback();
+      }
+    },
     flushAnimationFrames: () => {
+      for (const [timer, callback] of [...timers]) {
+        timers.delete(timer);
+        callback();
+      }
       for (const frame of frames.splice(0)) frame();
     },
     restore: () => {
@@ -564,6 +655,10 @@ function installMinimapRuntime(): {
       restoreDescriptor(globalThis, "OffscreenCanvas", offscreenCanvas);
       restoreDescriptor(globalThis, "requestAnimationFrame", requestAnimationFrame);
       restoreDescriptor(globalThis, "cancelAnimationFrame", cancelAnimationFrame);
+      restoreDescriptor(globalThis, "setTimeout", setTimeoutDescriptor);
+      restoreDescriptor(globalThis, "clearTimeout", clearTimeoutDescriptor);
+      restoreDescriptor(globalThis, "requestIdleCallback", requestIdleCallback);
+      restoreDescriptor(globalThis, "cancelIdleCallback", cancelIdleCallback);
       restoreDescriptor(
         HTMLCanvasElement.prototype,
         "transferControlToOffscreen",

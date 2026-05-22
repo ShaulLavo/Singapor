@@ -144,6 +144,33 @@ describe("tree-sitter worker client language registration cache", () => {
     worker.resolveRequest(retryRequest, parseResult(2));
     await expect(retryParse).resolves.toMatchObject({ snapshotVersion: 2 });
   });
+
+  it("requests captures by default and allows compact parse requests", async () => {
+    FakeWorker.autoResolve = false;
+    const client = await loadWorkerClient();
+    const snapshot = createPieceTableSnapshot("const answer = 1;");
+    const parse = client.parseWithTreeSitter({
+      ...parsePayload(snapshot, 1),
+      includeCaptures: false,
+    });
+    const worker = fakeWorkerAt(0);
+
+    worker.resolveRequest(requestOfType(worker, "init"));
+    await flushMicrotasks();
+    const request = parseRequests(worker)[0]!;
+
+    expect(request.payload.includeCaptures).toBe(false);
+    worker.resolveRequest(request, parseResult(1));
+    await expect(parse).resolves.toMatchObject({ snapshotVersion: 1 });
+
+    const defaultParse = client.parseWithTreeSitter(parsePayload(snapshot, 2));
+    await flushMicrotasks();
+    const defaultRequest = parseRequests(worker)[1]!;
+
+    expect(defaultRequest.payload.includeCaptures).toBeUndefined();
+    worker.resolveRequest(defaultRequest, parseResult(2));
+    await expect(defaultParse).resolves.toMatchObject({ snapshotVersion: 2 });
+  });
 });
 
 async function loadWorkerClient(): Promise<WorkerClientModule> {

@@ -1,4 +1,4 @@
-import type { TextEdit } from "@editor/core";
+import type { EditorToken, TextEdit } from "@editor/core";
 import type { TreeSitterLanguageDescriptor, TreeSitterLanguageId } from "./registry";
 import type { TreeSitterSourceDescriptor } from "./source";
 
@@ -68,6 +68,7 @@ export type TreeSitterParseResult = {
   readonly brackets: readonly BracketInfo[];
   readonly errors: readonly TreeSitterError[];
   readonly injections: readonly TreeSitterInjectionInfo[];
+  readonly tokens?: readonly EditorToken[];
   readonly timings: readonly TreeSitterTimingMeasurement[];
 };
 
@@ -86,6 +87,7 @@ export type TreeSitterParseRequest = {
   readonly snapshotVersion: number;
   readonly languageId: TreeSitterLanguageId;
   readonly includeHighlights: boolean;
+  readonly includeCaptures?: boolean;
   readonly source: TreeSitterSourceDescriptor;
   readonly generation: number;
   readonly cancellationBuffer?: SharedArrayBuffer;
@@ -98,6 +100,7 @@ export type TreeSitterEditRequest = {
   readonly snapshotVersion: number;
   readonly languageId: TreeSitterLanguageId;
   readonly includeHighlights: boolean;
+  readonly includeCaptures?: boolean;
   readonly source: TreeSitterSourceDescriptor;
   readonly edits: readonly TextEdit[];
   readonly inputEdits: readonly TreeSitterInputEdit[];

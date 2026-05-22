@@ -9,6 +9,7 @@ import { EditorKeymapController } from "./keymap";
 import { EditorBlockSurfaceController } from "./blockSurfaceController";
 import { InputSelectionController } from "./inputSelectionController";
 import { EditorSyntaxController } from "./syntaxController";
+import { EditorSecondaryWorkScheduler } from "./secondaryWorkScheduler";
 import { appendTiming, nowMs } from "./timing";
 import { copyTokenProjectionMetadata, projectTokensThroughEdit } from "./tokenProjection";
 import { measureEditorPerformance } from "./performanceDiagnostics";
@@ -102,6 +103,14 @@ import {
   type VirtualizedTextRowDecoration,
 } from "../virtualization/virtualizedTextView";
 
+const RAPID_INPUT_SECONDARY_WORK_DELAY_MS = 150;
+const RAPID_INPUT_TIMING_NAMES = new Set([
+  "input.beforeinput",
+  "input.keydownFallback",
+  "input.backspace",
+  "input.delete",
+]);
+
 export class Editor {
   private readonly container: HTMLElement;
   private readonly view: VirtualizedTextView;
@@ -123,7 +132,9 @@ export class Editor {
   >();
   private readonly keymap: EditorKeymapController;
   private readonly viewContributions: EditorViewContributionController;
+  private readonly secondaryWork = new EditorSecondaryWorkScheduler();
   private readonly highlightPrefix: string;
+  private sessionChangeVersion = 0;
   private blockSurfaces!: EditorBlockSurfaceController;
   private readonly syntax: EditorSyntaxController;
   private readonly inputSelection: InputSelectionController;
@@ -688,6 +699,7 @@ export class Editor {
   }
 
   dispose(): void {
+    this.secondaryWork.dispose();
     this.blockSurfaces.dispose();
     this.inputSelection.dispose();
     this.viewContributions.dispose();
@@ -1152,18 +1164,14 @@ export class Editor {
     }
     const finalChange = appendTiming(timedChange, totalName, totalStart);
     this.sessionOptions.onChange?.(finalChange);
-    measureEditorPerformance("editor.refreshSyntax", () =>
-      this.refreshSyntax(this.documentVersion, finalChange),
-    );
-    measureEditorPerformance("editor.notifyEditorFeatureContributions", () =>
-      this.notifyEditorFeatureContributions(finalChange),
-    );
     measureEditorPerformance("editor.notifyViewContributions", () =>
       this.notifyViewContributions(viewContributionKindForChange(finalChange), finalChange),
     );
     measureEditorPerformance("editor.notifyChangeWithTiming", () =>
       this.notifyChangeWithTiming(finalChange),
     );
+    this.sessionChangeVersion += 1;
+    this.scheduleSecondarySessionChangeWork(finalChange, totalName, this.sessionChangeVersion);
   }
 
   private renderSessionChange(change: DocumentSessionChange): void {
@@ -1210,8 +1218,65 @@ export class Editor {
     this.options.onChange?.(state, timedChange);
   }
 
-  private refreshSyntax(documentVersion: number, change: DocumentSessionChange | null): void {
-    this.syntax.refresh(documentVersion, change);
+  private refreshSyntax(
+    documentVersion: number,
+    change: DocumentSessionChange | null,
+    options: { readonly delayMs?: number } = {},
+  ): void {
+    this.syntax.refresh(documentVersion, change, options);
+  }
+
+  private scheduleSecondarySessionChangeWork(
+    change: DocumentSessionChange,
+    timingName: string,
+    sessionChangeVersion: number,
+  ): void {
+    const documentVersion = this.documentVersion;
+    if (!this.shouldDeferSecondarySessionWork(change, timingName)) {
+      this.runSecondarySessionChangeWork(documentVersion, change);
+      return;
+    }
+
+    this.secondaryWork.schedule({
+      key: "editor.syntaxRefresh",
+      delayMs: RAPID_INPUT_SECONDARY_WORK_DELAY_MS,
+      version: sessionChangeVersion,
+      isCurrent: (version) => version === this.sessionChangeVersion,
+      run: () =>
+        measureEditorPerformance("editor.refreshSyntax", () =>
+          this.refreshSyntax(documentVersion, change, { delayMs: 0 }),
+        ),
+    });
+    this.secondaryWork.schedule({
+      key: "editor.featureContributions",
+      delayMs: RAPID_INPUT_SECONDARY_WORK_DELAY_MS,
+      version: sessionChangeVersion,
+      isCurrent: (version) => version === this.sessionChangeVersion,
+      run: () =>
+        measureEditorPerformance("editor.notifyEditorFeatureContributions", () =>
+          this.notifyEditorFeatureContributions(change),
+        ),
+    });
+  }
+
+  private runSecondarySessionChangeWork(
+    documentVersion: number,
+    change: DocumentSessionChange,
+  ): void {
+    measureEditorPerformance("editor.refreshSyntax", () =>
+      this.refreshSyntax(documentVersion, change),
+    );
+    measureEditorPerformance("editor.notifyEditorFeatureContributions", () =>
+      this.notifyEditorFeatureContributions(change),
+    );
+  }
+
+  private shouldDeferSecondarySessionWork(
+    change: DocumentSessionChange,
+    timingName: string,
+  ): boolean {
+    if (change.kind === "selection" || change.kind === "none") return false;
+    return RAPID_INPUT_TIMING_NAMES.has(timingName);
   }
 
   private handleFoldToggle = (marker: VirtualizedFoldMarker): void => {

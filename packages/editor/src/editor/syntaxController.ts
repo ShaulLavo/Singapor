@@ -32,6 +32,10 @@ export type EditorSyntaxControllerOptions = {
   notifyThemeChanged(): void;
 };
 
+export type EditorSyntaxRefreshOptions = {
+  readonly delayMs?: number;
+};
+
 export class EditorSyntaxController {
   private syntaxStatus: "plain" | "loading" | "ready" | "error" = "plain";
   private syntaxSession: EditorSyntaxSession | null = null;
@@ -129,12 +133,16 @@ export class EditorSyntaxController {
     });
   }
 
-  refresh(documentVersion: number, change: DocumentSessionChange | null): void {
+  refresh(
+    documentVersion: number,
+    change: DocumentSessionChange | null,
+    options: EditorSyntaxRefreshOptions = {},
+  ): void {
     if (!this.options.getSession()) return;
     if (change && (change.kind === "none" || change.kind === "selection")) return;
 
-    this.refreshStructuralSyntax(documentVersion, change);
-    this.refreshHighlightTokens(documentVersion, change);
+    this.refreshStructuralSyntax(documentVersion, change, options);
+    this.refreshHighlightTokens(documentVersion, change, options);
   }
 
   private reloadHighlighterSession(): void {
@@ -162,6 +170,7 @@ export class EditorSyntaxController {
       documentId: document.documentId,
       languageId: document.languageId,
       includeHighlights: !this.highlighterSession,
+      includeCaptures: false,
       textSnapshot: document.textSnapshot,
       snapshot: document.snapshot,
     };
@@ -205,13 +214,14 @@ export class EditorSyntaxController {
   private refreshStructuralSyntax(
     documentVersion: number,
     change: DocumentSessionChange | null,
+    options: EditorSyntaxRefreshOptions = {},
   ): void {
     const session = this.options.getSession();
     if (!this.syntaxSession || !session || !this.options.getLanguageId()) return;
 
     this.syntaxStatus = "loading";
 
-    const delayMs = syntaxRefreshDelay(change);
+    const delayMs = options.delayMs ?? syntaxRefreshDelay(change);
     logEditorSyntaxDebug("schedule structural syntax", {
       ...this.debugContext(documentVersion),
       changeKind: change?.kind ?? "refresh",
@@ -229,11 +239,12 @@ export class EditorSyntaxController {
   private refreshHighlightTokens(
     documentVersion: number,
     change: DocumentSessionChange | null,
+    options: EditorSyntaxRefreshOptions = {},
   ): void {
     const session = this.options.getSession();
     if (!this.highlighterSession || !session) return;
 
-    const delayMs = syntaxRefreshDelay(change);
+    const delayMs = options.delayMs ?? syntaxRefreshDelay(change);
     logEditorSyntaxDebug("schedule plugin highlighting", {
       ...this.debugContext(documentVersion),
       changeKind: change?.kind ?? "refresh",

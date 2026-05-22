@@ -5,6 +5,7 @@ describe("minimap worker", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.resetModules();
+    Reflect.deleteProperty(globalThis, "__EDITOR_PERFORMANCE_DIAGNOSTICS__");
     globalThis.onmessage = null;
   });
 
@@ -43,5 +44,33 @@ describe("minimap worker", () => {
     );
 
     expect(postMessage).not.toHaveBeenCalled();
+  });
+
+  it("records request diagnostics through the shared diagnostics sink", async () => {
+    const diagnostics: {
+      readonly name: string;
+      readonly durationMs?: number;
+      readonly detail?: Readonly<Record<string, unknown>>;
+    }[] = [];
+    vi.spyOn(globalThis, "postMessage").mockImplementation(() => undefined);
+    Object.defineProperty(globalThis, "__EDITOR_PERFORMANCE_DIAGNOSTICS__", {
+      configurable: true,
+      value: { record: (diagnostic: (typeof diagnostics)[number]) => diagnostics.push(diagnostic) },
+    });
+    await import("../src/minimap.worker");
+
+    const onmessage = globalThis.onmessage as ((event: MessageEvent) => void) | null;
+    onmessage?.(
+      new MessageEvent("message", {
+        data: { type: "render", sequence: 7 } as MinimapWorkerRequest,
+      }),
+    );
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        name: "minimap.worker.request",
+        detail: { request: "render" },
+      }),
+    ]);
   });
 });

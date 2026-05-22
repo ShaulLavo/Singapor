@@ -29,6 +29,7 @@ export type TreeSitterSyntaxSessionOptions = {
   readonly languageId: TreeSitterLanguageId;
   readonly languageResolver?: TreeSitterLanguageResolver;
   readonly includeHighlights?: boolean;
+  readonly includeCaptures?: boolean;
   readonly text?: string;
   readonly textSnapshot?: DocumentTextSnapshot;
   readonly snapshot: PieceTableSnapshot;
@@ -40,6 +41,7 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
   private readonly languageId: TreeSitterLanguageId;
   private readonly languageResolver: TreeSitterLanguageResolver | undefined;
   private readonly includeHighlights: boolean;
+  private readonly includeCaptures: boolean;
   private readonly backend: TreeSitterBackend;
   private snapshotVersion = 0;
   private parsedSnapshotVersion = 0;
@@ -53,6 +55,7 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
     this.languageId = options.languageId;
     this.languageResolver = options.languageResolver;
     this.includeHighlights = options.includeHighlights ?? true;
+    this.includeCaptures = options.includeCaptures ?? true;
     this.textSnapshot =
       options.textSnapshot ?? createDocumentTextSnapshot(options.snapshot, options.text);
     this.snapshot = options.snapshot;
@@ -79,6 +82,7 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
         snapshotVersion,
         languageId: this.languageId,
         includeHighlights: this.includeHighlights,
+        includeCaptures: this.includeCaptures,
         snapshot,
       });
       this.debug("refresh result", {
@@ -141,6 +145,7 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
       nextSnapshot: change.snapshot,
       edits,
       includeHighlights: this.includeHighlights,
+      includeCaptures: this.includeCaptures,
     });
 
     this.debug("edit payload", {
@@ -318,6 +323,7 @@ type TreeSitterEditPayloadOptions = {
   readonly nextSnapshot: PieceTableSnapshot;
   readonly edits: readonly TextEdit[];
   readonly includeHighlights?: boolean;
+  readonly includeCaptures?: boolean;
 };
 
 export const createTreeSitterEditPayload = (
@@ -331,6 +337,7 @@ export const createTreeSitterEditPayload = (
     snapshotVersion: options.snapshotVersion,
     languageId: options.languageId,
     includeHighlights: options.includeHighlights ?? true,
+    includeCaptures: options.includeCaptures,
     snapshot: options.nextSnapshot,
     edits: options.edits,
     inputEdits: createTreeSitterInputEdits(options.previousSnapshot, options.edits),
@@ -398,7 +405,7 @@ const treeSitterParseResultToEditorSyntaxResult = (
   brackets: result.brackets,
   errors: result.errors,
   injections: result.injections,
-  tokens: treeSitterCapturesToEditorTokens(result.captures),
+  tokens: result.tokens ?? treeSitterCapturesToEditorTokens(result.captures),
 });
 
 const createEmptySyntaxResult = (): EditorSyntaxResult => ({

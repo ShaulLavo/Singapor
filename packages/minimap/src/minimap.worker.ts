@@ -6,7 +6,7 @@ const renderer = new MinimapWorkerRenderer();
 globalThis.onmessage = (event: MessageEvent<MinimapWorkerRequest>): void => {
   const request = event.data;
   try {
-    handleRequest(request);
+    measureWorkerRequest(request, () => handleRequest(request));
   } catch (error) {
     post({ type: "error", message: errorMessage(error) });
   }
@@ -88,4 +88,68 @@ function post(response: MinimapWorkerResponse): void {
 function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   return String(error);
+}
+
+type MinimapWorkerDiagnostic = {
+  readonly name: string;
+  readonly durationMs?: number;
+  readonly detail?: Readonly<Record<string, unknown>>;
+};
+
+type MinimapWorkerDiagnosticSink =
+  | ((diagnostic: MinimapWorkerDiagnostic) => void)
+  | {
+      readonly enabled?: boolean;
+      readonly record?: (diagnostic: MinimapWorkerDiagnostic) => void;
+    };
+
+type MinimapWorkerDiagnosticGlobal = typeof globalThis & {
+  __EDITOR_PERFORMANCE_DIAGNOSTICS__?: MinimapWorkerDiagnosticSink | null;
+};
+
+function measureWorkerRequest(request: MinimapWorkerRequest, run: () => void): void {
+  const sink = minimapWorkerDiagnosticSink();
+  if (!sink) {
+    run();
+    return;
+  }
+
+  const start = nowMs();
+  try {
+    run();
+  } finally {
+    recordMinimapWorkerDiagnostic(sink, {
+      name: "minimap.worker.request",
+      durationMs: nowMs() - start,
+      detail: { request: request.type },
+    });
+  }
+}
+
+function minimapWorkerDiagnosticSink(): MinimapWorkerDiagnosticSink | null {
+  const sink = minimapWorkerDiagnosticGlobal().__EDITOR_PERFORMANCE_DIAGNOSTICS__;
+  if (!sink) return null;
+  if (typeof sink === "function") return sink;
+  if (sink.enabled !== true && typeof sink.record !== "function") return null;
+  return sink;
+}
+
+function recordMinimapWorkerDiagnostic(
+  sink: MinimapWorkerDiagnosticSink,
+  diagnostic: MinimapWorkerDiagnostic,
+): void {
+  if (typeof sink === "function") {
+    sink(diagnostic);
+    return;
+  }
+
+  sink.record?.(diagnostic);
+}
+
+function minimapWorkerDiagnosticGlobal(): MinimapWorkerDiagnosticGlobal {
+  return globalThis as MinimapWorkerDiagnosticGlobal;
+}
+
+function nowMs(): number {
+  return globalThis.performance?.now() ?? Date.now();
 }

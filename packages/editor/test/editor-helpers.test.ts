@@ -32,6 +32,7 @@ import {
   createEditorTokenIndexBuilder,
   finishEditorTokenIndex,
   getEditorTokenIndex,
+  setEditorTokenIndex,
 } from "../src/editor/tokenIndex";
 import type { TextSnapshot } from "../src/documentTextSnapshot";
 import { createPieceTableSnapshot } from "../src/pieceTable/pieceTable";
@@ -344,11 +345,12 @@ describe("token projection", () => {
     expect(getEditorTokenIndex(replaced)?.maxEnds).toEqual([5, 10, 16]);
   });
 
-  it("uses the indexed bulk path for large unchanged suffixes", () => {
+  it("uses the indexed bulk path for small unchanged suffixes", () => {
     const style = { color: "red" };
-    const text = "a ".repeat(1_000);
+    const tokenCount = 32;
+    const text = "a ".repeat(tokenCount);
     const tokens = indexedTokens(
-      Array.from({ length: 1_000 }, (_, index) => ({
+      Array.from({ length: tokenCount }, (_, index) => ({
         start: index * 2,
         end: index * 2 + 1,
         style,
@@ -357,13 +359,96 @@ describe("token projection", () => {
 
     const diagnostics = collectPerformanceDiagnostics(() => {
       const projected = projectTokensThroughEdit(tokens, { from: 1, to: 1, text: "X" }, text);
-      expect(projected).toHaveLength(1_000);
+      expect(projected).toHaveLength(tokenCount);
     });
 
     expect(diagnostics.find(tokenProjectionPath)?.detail).toMatchObject({
       path: "indexed.bulk",
-      suffixCount: 999,
-      tokenCount: 1_000,
+      suffixCount: tokenCount - 1,
+      tokenCount,
+    });
+  });
+
+  it("uses lazy indexed projection for very large unchanged suffixes", () => {
+    const style = { color: "red" };
+    const tokenCount = 5_000;
+    const text = "a ".repeat(tokenCount);
+    const tokens = indexedTokens(
+      Array.from({ length: tokenCount }, (_, index) => ({
+        start: index * 2,
+        end: index * 2 + 1,
+        style,
+      })),
+    );
+    let projected: readonly EditorToken[] = [];
+
+    const diagnostics = collectPerformanceDiagnostics(() => {
+      projected = projectTokensThroughEdit(tokens, { from: 1, to: 1, text: "X" }, text);
+    });
+
+    expect(diagnostics.find(tokenProjectionPath)?.detail).toMatchObject({
+      path: "indexed.lazy",
+      suffixCount: tokenCount - 1,
+      tokenCount,
+    });
+    expect(Array.isArray(projected)).toBe(true);
+    expect(projected).toHaveLength(tokenCount);
+    expect(projected[0]).toEqual({ start: 0, end: 2, style });
+    expect(projected[1]).toEqual({ start: 3, end: 4, style });
+    expect(projected.slice(0, 3)).toEqual([
+      { start: 0, end: 2, style },
+      { start: 3, end: 4, style },
+      { start: 5, end: 6, style },
+    ]);
+    expect(projected.map((token) => token.start).slice(0, 3)).toEqual([0, 3, 5]);
+    expect([...projected].at(-1)).toEqual({
+      start: (tokenCount - 1) * 2 + 1,
+      end: (tokenCount - 1) * 2 + 2,
+      style,
+    });
+    expect(getEditorTokenIndex(projected)?.maxEnds[tokenCount - 1]).toBe(
+      (tokenCount - 1) * 2 + 2,
+    );
+  });
+
+  it("does not slice prefix maxEnds for lazy indexed projections", () => {
+    const style = { color: "red" };
+    const tokenCount = 200;
+    const text = "a ".repeat(tokenCount);
+    const tokens = Array.from({ length: tokenCount }, (_, index) => ({
+      start: index * 2,
+      end: index * 2 + 1,
+      style,
+    }));
+    const maxEnds = tokens.map((token) => token.end);
+    let sliceReads = 0;
+
+    setEditorTokenIndex(tokens, {
+      maxEnds: new Proxy(maxEnds, {
+        get: (target, property, receiver) => {
+          if (property === "slice") {
+            sliceReads += 1;
+            throw new Error("lazy projection must not slice prefix maxEnds");
+          }
+
+          return Reflect.get(target, property, receiver);
+        },
+      }),
+      monotonicEnd: true,
+      nonOverlapping: true,
+      sortedByStart: true,
+    });
+
+    const diagnostics = collectPerformanceDiagnostics(() => {
+      const projected = projectTokensThroughEdit(tokens, { from: 201, to: 201, text: "X" }, text);
+      expect(projected).toHaveLength(tokenCount);
+    });
+
+    expect(sliceReads).toBe(0);
+    expect(diagnostics.find(tokenProjectionPath)?.detail).toMatchObject({
+      path: "indexed.lazy",
+      suffixCount: 99,
+      tokenCount,
     });
   });
 

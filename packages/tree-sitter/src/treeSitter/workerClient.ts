@@ -36,6 +36,7 @@ export type TreeSitterParsePayload = {
   readonly snapshotVersion: number;
   readonly languageId: TreeSitterLanguageId;
   readonly includeHighlights?: boolean;
+  readonly includeCaptures?: boolean;
   readonly snapshot: PieceTableSnapshot;
 };
 
@@ -45,6 +46,7 @@ export type TreeSitterEditPayload = {
   readonly snapshotVersion: number;
   readonly languageId: TreeSitterLanguageId;
   readonly includeHighlights: boolean;
+  readonly includeCaptures?: boolean;
   readonly snapshot: PieceTableSnapshot;
   readonly edits: readonly TreeSitterEditRequest["edits"][number][];
   readonly inputEdits: readonly TreeSitterEditRequest["inputEdits"][number][];
@@ -123,6 +125,7 @@ export const parseWithTreeSitter = async (
     snapshotVersion: payload.snapshotVersion,
     languageId: payload.languageId,
     includeHighlights: payload.includeHighlights ?? true,
+    includeCaptures: payload.includeCaptures,
     source,
   };
   const result = await postDocumentRequest(request);
@@ -142,6 +145,7 @@ export const editWithTreeSitter = async (
     snapshotVersion: payload.snapshotVersion,
     languageId: payload.languageId,
     includeHighlights: payload.includeHighlights,
+    includeCaptures: payload.includeCaptures,
     source,
     edits: payload.edits,
     inputEdits: payload.inputEdits,

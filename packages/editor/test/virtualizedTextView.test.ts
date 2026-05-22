@@ -1392,6 +1392,35 @@ describe("VirtualizedTextView", () => {
     }
   });
 
+  it("does not equality-scan projected tokens when live ranges cannot be reused", () => {
+    view.dispose();
+    view = new VirtualizedTextView(container, {
+      rowHeight: 20,
+      overscan: 2,
+      selectionHighlightName: "test-selection",
+    });
+    const style = { color: "#ff0000" };
+    const tokenCount = 200;
+    const text = "a ".repeat(tokenCount);
+    const tokens = Array.from({ length: tokenCount }, (_, index) => ({
+      start: index * 2,
+      end: index * 2 + 1,
+      style,
+    }));
+    view.setText(text);
+    view.adoptTokens(tokens);
+
+    const projected = projectTokensThroughEdit(tokens, { from: 0, to: 1, text: "b" }, text);
+    Object.defineProperty(projected[0]!, "style", {
+      configurable: true,
+      get: () => {
+        throw new Error("unexpected projected token equality scan");
+      },
+    });
+
+    expect(() => view.adoptTokens(projected)).not.toThrow();
+  });
+
   it("rebuilds token highlights below same-line edits even when local segments match", () => {
     view.setText("aa\nbb");
     view.setScrollMetrics(0, 40);

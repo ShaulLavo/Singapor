@@ -26,7 +26,11 @@ import type {
   TreeSitterParseRequest,
   TreeSitterParseResult,
 } from "../src/treeSitter/types";
-import type { TreeSitterBackend, TreeSitterEditPayload } from "../src/treeSitter/workerClient";
+import type {
+  TreeSitterBackend,
+  TreeSitterEditPayload,
+  TreeSitterParsePayload,
+} from "../src/treeSitter/workerClient";
 
 describe("Tree-sitter syntax capture conversion", () => {
   it("maps known capture names to editor token styles", () => {
@@ -312,6 +316,114 @@ describe("Tree-sitter syntax capture conversion", () => {
         oldEndPosition: { row: 0, column: 12 },
         newEndPosition: { row: 0, column: 14 },
       },
+    ]);
+  });
+
+  it("uses compact worker tokens without requiring returned captures", async () => {
+    const parsePayloads: TreeSitterParsePayload[] = [];
+    const tokens = [{ start: 0, end: 5, style: { color: "#123456" } }];
+    const backend = {
+      disposeDocument: () => undefined,
+      edit: async () => undefined,
+      parse: async (payload) => {
+        parsePayloads.push(payload);
+        return { ...createParseResult(payload), captures: [], tokens };
+      },
+      registerLanguages: async () => undefined,
+      select: async () => undefined,
+    } satisfies TreeSitterBackend;
+    const text = "const a = 1;";
+    const session = new TreeSitterSyntaxSession({
+      backend,
+      documentId: "file.ts",
+      includeCaptures: false,
+      languageId: "typescript",
+      snapshot: createPieceTableSnapshot(text),
+      text,
+    });
+
+    const result = await session.refresh(createPieceTableSnapshot(text), text);
+
+    expect(parsePayloads[0]?.includeCaptures).toBe(false);
+    expect(result.captures).toEqual([]);
+    expect(result.tokens).toEqual(tokens);
+  });
+
+  it("preserves capture-returning behavior by default", async () => {
+    const parsePayloads: TreeSitterParsePayload[] = [];
+    const captures = [
+      { startIndex: 0, endIndex: 5, captureName: "keyword.declaration" },
+    ];
+    const backend = {
+      disposeDocument: () => undefined,
+      edit: async () => undefined,
+      parse: async (payload) => {
+        parsePayloads.push(payload);
+        return { ...createParseResult(payload), captures };
+      },
+      registerLanguages: async () => undefined,
+      select: async () => undefined,
+    } satisfies TreeSitterBackend;
+    const text = "const a = 1;";
+    const session = new TreeSitterSyntaxSession({
+      backend,
+      documentId: "file.ts",
+      languageId: "typescript",
+      snapshot: createPieceTableSnapshot(text),
+      text,
+    });
+
+    const result = await session.refresh(createPieceTableSnapshot(text), text);
+
+    expect(parsePayloads[0]?.includeCaptures).toBe(true);
+    expect(result.captures).toEqual(captures);
+    expect(result.tokens).toEqual(treeSitterCapturesToEditorTokens(captures));
+  });
+
+  it("suppresses stale parse results after a newer refresh starts", async () => {
+    const parses: {
+      readonly payload: TreeSitterParsePayload;
+      readonly result: Deferred<TreeSitterParseResult>;
+    }[] = [];
+    const backend = {
+      disposeDocument: () => undefined,
+      edit: async () => undefined,
+      parse: (payload) => {
+        const result = createDeferred<TreeSitterParseResult>();
+        parses.push({ payload, result });
+        return result.promise;
+      },
+      registerLanguages: async () => undefined,
+      select: async () => undefined,
+    } satisfies TreeSitterBackend;
+    const session = new TreeSitterSyntaxSession({
+      backend,
+      documentId: "file.ts",
+      languageId: "typescript",
+      snapshot: createPieceTableSnapshot("const a = 1;"),
+      text: "const a = 1;",
+    });
+
+    const firstRefresh = session.refresh(createPieceTableSnapshot("const a = 1;"), "const a = 1;");
+    const secondRefresh = session.refresh(createPieceTableSnapshot("const b = 2;"), "const b = 2;");
+    await Promise.resolve();
+
+    const second = parses[1]!;
+    second.result.resolve({
+      ...createParseResult(second.payload),
+      tokens: [{ start: 6, end: 7, style: { color: "#00ff00" } }],
+    });
+    await secondRefresh;
+
+    const first = parses[0]!;
+    first.result.resolve({
+      ...createParseResult(first.payload),
+      tokens: [{ start: 6, end: 7, style: { color: "#ff0000" } }],
+    });
+    await firstRefresh;
+
+    expect(session.getResult().tokens).toEqual([
+      { start: 6, end: 7, style: { color: "#00ff00" } },
     ]);
   });
 
