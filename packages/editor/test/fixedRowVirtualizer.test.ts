@@ -183,4 +183,70 @@ describe("fixed row virtualizer", () => {
       virtualItems: [{ index: 1, start: 24, size: 60 }],
     });
   });
+
+  it("caps native scroll height while preserving logical scroll offsets", () => {
+    const virtualizer = new FixedRowVirtualizer({
+      count: 1_000,
+      maxScrollHeight: 1_000,
+      overscan: 0,
+      rowHeight: 100,
+    });
+
+    virtualizer.setScrollMetrics({ scrollTop: 99_900, viewportHeight: 100 });
+
+    expect(virtualizer.getSnapshot()).toMatchObject({
+      nativeScrollHeight: 1_000,
+      nativeScrollTop: 900,
+      scrollHeight: 100_000,
+      scrollTop: 99_900,
+      visibleRange: { start: 999, end: 1_000 },
+    });
+  });
+
+  it("keeps large-file rows addressable past native browser scroll caps", () => {
+    const targetRow = 699_051;
+    const virtualizer = new FixedRowVirtualizer({
+      count: targetRow + 100,
+      overscan: 0,
+      rowHeight: 48,
+    });
+
+    virtualizer.setScrollMetrics({
+      scrollTop: targetRow * 48,
+      viewportHeight: 480,
+    });
+
+    expect(virtualizer.getSnapshot()).toMatchObject({
+      nativeScrollHeight: 16_000_000,
+      visibleRange: { start: targetRow, end: targetRow + 10 },
+    });
+  });
+
+  it("exposes logical scroll metrics on attached scroll elements", () => {
+    const virtualizer = new FixedRowVirtualizer({
+      count: 1_000,
+      maxScrollHeight: 1_000,
+      overscan: 0,
+      rowHeight: 100,
+    });
+    const element = document.createElement("div");
+
+    virtualizer.attachScrollElement(element, undefined, {
+      readInitialScrollPosition: false,
+    });
+    virtualizer.setScrollMetrics({ scrollTop: 99_900, viewportHeight: 100 });
+
+    expect(element.scrollHeight).toBe(100_000);
+    expect(element.scrollTop).toBe(99_900);
+
+    element.scrollTop = 49_950;
+
+    expect(virtualizer.getSnapshot()).toMatchObject({
+      nativeScrollTop: 450,
+      scrollTop: 49_950,
+      visibleRange: { start: 499, end: 501 },
+    });
+
+    virtualizer.dispose();
+  });
 });

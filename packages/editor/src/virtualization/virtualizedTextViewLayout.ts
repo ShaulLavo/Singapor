@@ -218,10 +218,10 @@ export function scrollPastEndPadding(
 }
 
 export function scrollableHeight(
-  view: VirtualizedTextViewInternal,
+  _view: VirtualizedTextViewInternal,
   snapshot: FixedRowVirtualizerSnapshot,
 ): number {
-  return snapshot.totalSize + scrollPastEndPadding(view, snapshot.viewportHeight);
+  return snapshot.scrollHeight;
 }
 
 export function displayRowKind(view: VirtualizedTextViewInternal, row: number): "text" | "block" {

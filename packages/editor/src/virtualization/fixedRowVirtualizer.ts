@@ -25,6 +25,9 @@ export type FixedRowVirtualizerSnapshot = {
   readonly borderBoxWidth: number;
   readonly borderBoxHeight: number;
   readonly totalSize: number;
+  readonly scrollHeight: number;
+  readonly nativeScrollHeight: number;
+  readonly nativeScrollTop: number;
   readonly visibleRange: FixedRowVisibleRange;
   readonly virtualItems: readonly FixedRowVirtualItem[];
 };
@@ -36,6 +39,7 @@ export type FixedRowVirtualizerOptions = {
   readonly rowSizes?: readonly number[];
   readonly overscan?: number;
   readonly enabled?: boolean;
+  readonly maxScrollHeight?: number;
 };
 
 export type FixedRowScrollMetrics = {
@@ -61,6 +65,8 @@ type AttachedScrollElement = {
 
 const DEFAULT_ROW_HEIGHT = 1;
 const DEFAULT_ROW_GAP = 0;
+// Keep native spacer heights below browser element-size caps while preserving logical scroll size.
+const DEFAULT_MAX_SCROLL_HEIGHT = 16_000_000;
 
 export function computeFixedRowTotalSize(
   count: number,
@@ -131,6 +137,7 @@ export class FixedRowVirtualizer {
   private itemCache = new Map<number, FixedRowVirtualItem>();
   private cachedRowHeight = DEFAULT_ROW_HEIGHT;
   private cachedRowGap = DEFAULT_ROW_GAP;
+  private logicalScrollProperties: LogicalScrollProperties | null = null;
 
   public constructor(options: FixedRowVirtualizerOptions) {
     this.options = normalizeOptions(options);
@@ -142,6 +149,8 @@ export class FixedRowVirtualizer {
     const next = normalizeOptions({ ...denormalizeOptions(this.options), ...options });
     this.updateCacheForFixedRows(next.rowHeight, next.rowGap);
     this.options = next;
+    this.scrollTop = clampScrollTopForGeometry(this.scrollTop, this.scrollGeometry());
+    this.syncAttachedNativeScrollTop();
     this.emitChange();
   }
 
@@ -156,6 +165,11 @@ export class FixedRowVirtualizer {
     const onScroll = (): void => this.scheduleScrollSync();
     const resizeObserver = createResizeObserver((entries) => this.syncFromResizeEntries(entries));
     this.attached = { element, onScroll, resizeObserver };
+    this.logicalScrollProperties = installLogicalScrollProperties(element, {
+      getScrollHeight: () => this.scrollGeometry().scrollHeight,
+      getScrollTop: () => this.scrollTop,
+      setScrollTop: (value) => this.setScrollTopFromElement(value),
+    });
 
     element.addEventListener("scroll", onScroll, { passive: true });
     resizeObserver?.observe(element);
@@ -170,6 +184,8 @@ export class FixedRowVirtualizer {
 
     attached.element.removeEventListener("scroll", attached.onScroll);
     attached.resizeObserver?.disconnect();
+    this.logicalScrollProperties?.restore();
+    this.logicalScrollProperties = null;
     this.cancelScheduledScrollSync();
     this.attached = null;
   }
@@ -181,7 +197,6 @@ export class FixedRowVirtualizer {
   }
 
   public setScrollMetrics(metrics: FixedRowScrollMetrics): void {
-    const nextScrollTop = Math.max(0, normalizeNumber(metrics.scrollTop));
     const nextViewportHeight = Math.max(0, normalizeNumber(metrics.viewportHeight));
     const nextScrollLeft = optionalNonNegative(metrics.scrollLeft, this.scrollLeft);
     const nextViewportWidth = optionalNonNegative(metrics.viewportWidth, this.viewportWidth);
@@ -196,6 +211,10 @@ export class FixedRowVirtualizer {
       this.borderBoxHeight,
       nextViewportHeight,
       metrics.viewportHeight,
+    );
+    const nextScrollTop = normalizeScrollTopForMetrics(
+      metrics.scrollTop,
+      this.scrollGeometry(nextViewportHeight),
     );
     if (
       nextScrollTop === this.scrollTop &&
@@ -213,11 +232,14 @@ export class FixedRowVirtualizer {
     this.viewportHeight = nextViewportHeight;
     this.borderBoxWidth = nextBorderBoxWidth;
     this.borderBoxHeight = nextBorderBoxHeight;
+    this.syncAttachedNativeScrollTop();
     this.emitChange();
   }
 
   public getSnapshot(): FixedRowVirtualizerSnapshot {
     const visibleRange = this.getVisibleRange();
+    const totalSize = computeTotalSize(this.options);
+    const geometry = this.scrollGeometry(this.viewportHeight, totalSize);
     return {
       scrollTop: this.scrollTop,
       scrollLeft: this.scrollLeft,
@@ -225,7 +247,10 @@ export class FixedRowVirtualizer {
       viewportHeight: this.viewportHeight,
       borderBoxWidth: this.borderBoxWidth,
       borderBoxHeight: this.borderBoxHeight,
-      totalSize: computeTotalSize(this.options),
+      totalSize,
+      scrollHeight: geometry.scrollHeight,
+      nativeScrollHeight: geometry.nativeScrollHeight,
+      nativeScrollTop: nativeScrollTopForLogical(this.scrollTop, geometry),
       visibleRange,
       virtualItems: this.getVirtualItems(visibleRange),
     };
@@ -304,7 +329,7 @@ export class FixedRowVirtualizer {
     if (!element) return;
 
     this.setScrollMetrics({
-      scrollTop: element.scrollTop,
+      scrollTop: this.logicalScrollTopFromNativeElement(),
       scrollLeft: element.scrollLeft,
       borderBoxHeight: this.borderBoxHeight,
       borderBoxWidth: this.borderBoxWidth,
@@ -322,7 +347,7 @@ export class FixedRowVirtualizer {
 
     const size = resizeEntrySize(entry);
     this.setScrollMetrics({
-      scrollTop: element.scrollTop,
+      scrollTop: this.logicalScrollTopFromNativeElement(size.content.height),
       scrollLeft: element.scrollLeft,
       borderBoxHeight: size.border.height,
       borderBoxWidth: size.border.width,
@@ -349,6 +374,39 @@ export class FixedRowVirtualizer {
 
   private emitChange(): void {
     this.changeHandler?.(this.getSnapshot());
+  }
+
+  private scrollGeometry(
+    viewportHeight = this.viewportHeight,
+    totalSize?: number,
+  ): FixedRowScrollGeometry {
+    return scrollGeometryForOptions(this.options, viewportHeight, totalSize);
+  }
+
+  private logicalScrollTopFromNativeElement(viewportHeight = this.viewportHeight): number {
+    const nativeScrollTop =
+      this.logicalScrollProperties?.readNativeScrollTop() ?? this.attached?.element.scrollTop ?? 0;
+    return logicalScrollTopForNative(nativeScrollTop, this.scrollGeometry(viewportHeight));
+  }
+
+  private setScrollTopFromElement(value: number): void {
+    this.setScrollMetrics({
+      borderBoxHeight: this.borderBoxHeight,
+      borderBoxWidth: this.borderBoxWidth,
+      scrollLeft: this.scrollLeft,
+      scrollTop: value,
+      viewportHeight: this.viewportHeight,
+      viewportWidth: this.viewportWidth,
+    });
+  }
+
+  private syncAttachedNativeScrollTop(): void {
+    const properties = this.logicalScrollProperties;
+    if (!properties) return;
+
+    properties.writeNativeScrollTop(
+      nativeScrollTopForLogical(this.scrollTop, this.scrollGeometry()),
+    );
   }
 }
 
@@ -393,6 +451,7 @@ function normalizeOptions(
     rowHeightIndex: rowSizes ? createRowHeightIndex(rowSizes, rowGap) : null,
     overscan: normalizeOverscan(options.overscan),
     enabled: options.enabled ?? true,
+    maxScrollHeight: normalizeMaxScrollHeight(options.maxScrollHeight),
   };
 }
 
@@ -406,6 +465,7 @@ function denormalizeOptions(
     rowSizes: options.rowSizes ?? undefined,
     overscan: options.overscan,
     enabled: options.enabled,
+    maxScrollHeight: options.maxScrollHeight,
   };
 }
 
@@ -413,6 +473,90 @@ function computeTotalSize(options: NormalizedFixedRowVirtualizerOptions): number
   if (options.rowHeightIndex) return options.rowHeightIndex.totalSize;
 
   return computeFixedRowTotalSize(options.count, options.rowHeight, options.rowGap);
+}
+
+type FixedRowScrollGeometry = {
+  readonly scrollHeight: number;
+  readonly nativeScrollHeight: number;
+  readonly maxScrollTop: number;
+  readonly maxNativeScrollTop: number;
+};
+
+function scrollGeometryForOptions(
+  options: NormalizedFixedRowVirtualizerOptions,
+  viewportHeight: number,
+  totalSize = computeTotalSize(options),
+): FixedRowScrollGeometry {
+  const normalizedViewportHeight = Math.max(0, normalizeNumber(viewportHeight));
+  const scrollHeight = totalSize + scrollPaddingEnd(options, normalizedViewportHeight);
+  const nativeScrollHeight = nativeScrollHeightFor(
+    scrollHeight,
+    normalizedViewportHeight,
+    options.maxScrollHeight,
+  );
+
+  return {
+    scrollHeight,
+    nativeScrollHeight,
+    maxScrollTop: Math.max(0, scrollHeight - normalizedViewportHeight),
+    maxNativeScrollTop: Math.max(0, nativeScrollHeight - normalizedViewportHeight),
+  };
+}
+
+function scrollPaddingEnd(
+  options: NormalizedFixedRowVirtualizerOptions,
+  viewportHeight: number,
+): number {
+  if (options.count === 0) return 0;
+
+  return Math.max(0, viewportHeight - lastRowHeight(options));
+}
+
+function lastRowHeight(options: NormalizedFixedRowVirtualizerOptions): number {
+  if (options.rowHeightIndex) {
+    return options.rowHeightIndex.rowSizes.at(-1) ?? DEFAULT_ROW_HEIGHT;
+  }
+
+  return options.rowHeight;
+}
+
+function nativeScrollHeightFor(
+  scrollHeight: number,
+  viewportHeight: number,
+  maxScrollHeight: number,
+): number {
+  if (scrollHeight <= maxScrollHeight) return scrollHeight;
+
+  return Math.max(viewportHeight, maxScrollHeight);
+}
+
+function nativeScrollTopForLogical(scrollTop: number, geometry: FixedRowScrollGeometry): number {
+  const logical = clampScrollTopForGeometry(scrollTop, geometry);
+  if (geometry.maxScrollTop <= geometry.maxNativeScrollTop) return logical;
+  if (geometry.maxScrollTop === 0 || geometry.maxNativeScrollTop === 0) return 0;
+
+  return (logical / geometry.maxScrollTop) * geometry.maxNativeScrollTop;
+}
+
+function logicalScrollTopForNative(
+  nativeScrollTop: number,
+  geometry: FixedRowScrollGeometry,
+): number {
+  const native = clamp(nativeScrollTop, 0, geometry.maxNativeScrollTop);
+  if (geometry.maxScrollTop <= geometry.maxNativeScrollTop) return native;
+  if (geometry.maxScrollTop === 0 || geometry.maxNativeScrollTop === 0) return 0;
+
+  return (native / geometry.maxNativeScrollTop) * geometry.maxScrollTop;
+}
+
+function clampScrollTopForGeometry(scrollTop: number, geometry: FixedRowScrollGeometry): number {
+  return clamp(scrollTop, 0, geometry.maxScrollTop);
+}
+
+function normalizeScrollTopForMetrics(scrollTop: number, geometry: FixedRowScrollGeometry): number {
+  const normalized = Math.max(0, normalizeNumber(scrollTop));
+  if (geometry.scrollHeight === geometry.maxScrollTop) return normalized;
+  return clampScrollTopForGeometry(normalized, geometry);
 }
 
 function computeVariableRowVisibleRange(options: {
@@ -510,6 +654,14 @@ function normalizeOverscan(value: number | undefined): number {
   return Math.floor(value);
 }
 
+function normalizeMaxScrollHeight(value: number | undefined): number {
+  if (!Number.isFinite(value) || value === undefined || value <= 0) {
+    return DEFAULT_MAX_SCROLL_HEIGHT;
+  }
+
+  return Math.floor(value);
+}
+
 function normalizeNumber(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return value;
@@ -593,4 +745,127 @@ function cancelFrame(handle: number): void {
 
 function nowMs(): DOMHighResTimeStamp {
   return globalThis.performance?.now() ?? Date.now();
+}
+
+type LogicalScrollProperties = {
+  restore(): void;
+  readNativeScrollTop(): number;
+  writeNativeScrollTop(value: number): void;
+};
+
+type LogicalScrollPropertyHandlers = {
+  getScrollHeight(): number;
+  getScrollTop(): number;
+  setScrollTop(value: number): void;
+};
+
+function installLogicalScrollProperties(
+  element: HTMLElement,
+  handlers: LogicalScrollPropertyHandlers,
+): LogicalScrollProperties {
+  const originalScrollTop = Object.getOwnPropertyDescriptor(element, "scrollTop");
+  const originalScrollHeight = Object.getOwnPropertyDescriptor(element, "scrollHeight");
+  const nativeScrollTop = createNativeScrollTopAccess(element);
+  const scrollTopGet = (): number => handlers.getScrollTop();
+  const scrollTopSet = (value: number): void => handlers.setScrollTop(value);
+  const scrollHeightGet = (): number => handlers.getScrollHeight();
+
+  tryDefineProperty(element, "scrollTop", {
+    configurable: true,
+    get: scrollTopGet,
+    set: scrollTopSet,
+  });
+  tryDefineProperty(element, "scrollHeight", {
+    configurable: true,
+    get: scrollHeightGet,
+  });
+
+  return {
+    readNativeScrollTop: nativeScrollTop.read,
+    writeNativeScrollTop: nativeScrollTop.write,
+    restore: () => {
+      restoreInstalledProperty(element, "scrollTop", originalScrollTop, scrollTopGet, scrollTopSet);
+      restoreInstalledProperty(element, "scrollHeight", originalScrollHeight, scrollHeightGet);
+    },
+  };
+}
+
+function createNativeScrollTopAccess(element: HTMLElement): {
+  readonly read: () => number;
+  readonly write: (value: number) => void;
+} {
+  const descriptor = findPropertyDescriptor(element, "scrollTop");
+  let fallback = 0;
+
+  return {
+    read: () => normalizeNumber(readNativeScrollTop(element, descriptor, fallback)),
+    write: (value) => {
+      fallback = Math.max(0, normalizeNumber(value));
+      writeNativeScrollTop(element, descriptor, fallback);
+    },
+  };
+}
+
+function readNativeScrollTop(
+  element: HTMLElement,
+  descriptor: PropertyDescriptor | undefined,
+  fallback: number,
+): number {
+  if (descriptor?.get) return descriptor.get.call(element) as number;
+  return fallback;
+}
+
+function writeNativeScrollTop(
+  element: HTMLElement,
+  descriptor: PropertyDescriptor | undefined,
+  value: number,
+): void {
+  if (descriptor?.set) {
+    descriptor.set.call(element, value);
+    return;
+  }
+}
+
+function findPropertyDescriptor(
+  element: HTMLElement,
+  property: "scrollTop",
+): PropertyDescriptor | undefined {
+  let current: unknown = element;
+  while (current) {
+    const descriptor = Object.getOwnPropertyDescriptor(current, property);
+    if (descriptor) return descriptor;
+    current = Object.getPrototypeOf(current);
+  }
+
+  return undefined;
+}
+
+function tryDefineProperty(
+  element: HTMLElement,
+  property: "scrollTop" | "scrollHeight",
+  descriptor: PropertyDescriptor,
+): void {
+  try {
+    Object.defineProperty(element, property, descriptor);
+  } catch {
+    return;
+  }
+}
+
+function restoreInstalledProperty(
+  element: HTMLElement,
+  property: "scrollTop" | "scrollHeight",
+  original: PropertyDescriptor | undefined,
+  installedGet: (() => number) | undefined,
+  installedSet?: (value: number) => void,
+): void {
+  const current = Object.getOwnPropertyDescriptor(element, property);
+  if (!current || current.get !== installedGet || current.set !== installedSet) return;
+
+  if (original) {
+    Object.defineProperty(element, property, original);
+    return;
+  }
+
+  Reflect.deleteProperty(element, property);
 }

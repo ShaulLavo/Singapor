@@ -292,6 +292,7 @@ function throwingVirtualizer(): VirtualizedTextViewInternal["virtualizer"] {
 function fixedSnapshot(
   fields: Pick<FixedRowVirtualizerSnapshot, "totalSize" | "viewportHeight">,
 ): FixedRowVirtualizerSnapshot {
+  const scrollHeight = Math.max(fields.totalSize, fields.viewportHeight);
   return {
     scrollTop: 0,
     scrollLeft: 0,
@@ -300,6 +301,9 @@ function fixedSnapshot(
     borderBoxWidth: 0,
     borderBoxHeight: 0,
     totalSize: fields.totalSize,
+    scrollHeight,
+    nativeScrollHeight: scrollHeight,
+    nativeScrollTop: 0,
     visibleRange: { start: 0, end: 1 },
     virtualItems: [],
   };

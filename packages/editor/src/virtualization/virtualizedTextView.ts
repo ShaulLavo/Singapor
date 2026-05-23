@@ -65,7 +65,6 @@ import {
   rowForOffset,
   rowForViewportY,
   sameLineEditPatch,
-  scrollableHeight,
   setBlockRowsLayout,
   setFoldStateLayout,
   setInjectedTextRowsLayout,
@@ -458,9 +457,10 @@ export class VirtualizedTextView {
 
   public focusInput(): void {
     const view = this.view;
-    const scrollTop = this.scrollElement.scrollTop;
+    const snapshot = view.virtualizer.getSnapshot();
+    const scrollTop = snapshot.scrollTop;
     const scrollLeft = this.scrollElement.scrollLeft;
-    positionInputInViewport(view, scrollTop, scrollLeft);
+    positionInputInViewport(view, snapshot.nativeScrollTop, scrollLeft);
     this.inputElement.value = "";
     this.inputElement.focus({ preventScroll: true });
     this.inputElement.setSelectionRange(0, 0);
@@ -626,7 +626,7 @@ export class VirtualizedTextView {
       contentWidth: view.contentWidth,
       foldMapActive: view.foldMap !== null,
       metrics: view.metrics,
-      scrollHeight: Math.max(snapshot.viewportHeight, scrollableHeight(view, snapshot)),
+      scrollHeight: Math.max(snapshot.viewportHeight, snapshot.scrollHeight),
       scrollLeft: snapshot.scrollLeft,
       scrollTop: snapshot.scrollTop,
       scrollWidth: Math.max(snapshot.viewportWidth, view.contentWidth + gutterWidth(view)),

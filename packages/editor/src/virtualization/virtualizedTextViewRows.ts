@@ -1704,8 +1704,11 @@ function applyTotalHeight(
   view: VirtualizedTextViewInternal,
   snapshot: FixedRowVirtualizerSnapshot,
 ): void {
-  const height = `${scrollableHeight(view, snapshot)}px`;
+  const height = `${snapshot.nativeScrollHeight}px`;
+  const offset = snapshot.nativeScrollTop - snapshot.scrollTop;
+  const transform = offset === 0 ? "" : `translateY(${offset}px)`;
   setStyleValue(view.spacer, "height", height);
+  setStyleValue(view.spacer, "transform", transform);
   setStyleValue(view.gutterElement, "height", height);
 }
 
