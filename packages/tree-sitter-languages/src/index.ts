@@ -145,13 +145,14 @@ async function loadJavaScriptAssets(jsx: boolean): Promise<TreeSitterLanguageAss
   ]);
   if (!jsx) return { wasmUrl, highlightQuerySource, foldQuerySource, injectionQuerySource };
 
-  const jsxHighlightQuerySource = await loadDefault(
-    import("tree-sitter-javascript/queries/highlights-jsx.scm?raw"),
-  );
+  const [jsxHighlightQuerySource, jsxFoldQuerySource] = await Promise.all([
+    loadDefault(import("tree-sitter-javascript/queries/highlights-jsx.scm?raw")),
+    loadDefault(import("./queries/jsx-folds.scm?raw")),
+  ]);
   return {
     wasmUrl,
     highlightQuerySource: [highlightQuerySource, jsxHighlightQuerySource].join("\n"),
-    foldQuerySource,
+    foldQuerySource: [foldQuerySource, jsxFoldQuerySource].join("\n"),
     injectionQuerySource,
   };
 }
@@ -180,10 +181,14 @@ async function loadTypeScriptAssets(tsx: boolean): Promise<TreeSitterLanguageAss
     tsHighlightQuerySource,
     jsHighlightQuerySource,
   ]);
+  const foldQuerySource = await typeScriptFoldQuerySource(tsx, [
+    tsFoldQuerySource,
+    jsFoldQuerySource,
+  ]);
   return {
     wasmUrl,
     highlightQuerySource,
-    foldQuerySource: [tsFoldQuerySource, jsFoldQuerySource].join("\n"),
+    foldQuerySource,
     injectionQuerySource,
   };
 }
@@ -198,6 +203,16 @@ async function typeScriptHighlightQuerySource(
     import("tree-sitter-javascript/queries/highlights-jsx.scm?raw"),
   );
   return [...sources, jsxHighlightQuerySource].join("\n");
+}
+
+async function typeScriptFoldQuerySource(
+  tsx: boolean,
+  sources: readonly string[],
+): Promise<string> {
+  if (!tsx) return sources.join("\n");
+
+  const jsxFoldQuerySource = await loadDefault(import("./queries/jsx-folds.scm?raw"));
+  return [...sources, jsxFoldQuerySource].join("\n");
 }
 
 async function loadHtmlAssets(): Promise<TreeSitterLanguageAssets> {

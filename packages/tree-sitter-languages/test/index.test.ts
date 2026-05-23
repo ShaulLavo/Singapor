@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createPieceTableSnapshot, type EditorPluginContext } from "@editor/core";
+import type { TreeSitterLanguageAssets, TreeSitterLanguageContribution } from "@editor/tree-sitter";
 import {
+  JAVASCRIPT_TREE_SITTER_LANGUAGE,
   TREE_SITTER_LANGUAGE_CONTRIBUTIONS,
+  TYPESCRIPT_TREE_SITTER_LANGUAGE,
   css,
   html,
   javaScript,
@@ -63,7 +66,37 @@ describe("Tree-sitter language contributions", () => {
       }),
     ).not.toBeNull();
   });
+
+  it("loads JSX folds only for JSX-capable JavaScript and TypeScript assets", async () => {
+    const [javascriptAssets, typescriptAssets, jsxJavascriptAssets, tsxTypescriptAssets] =
+      await Promise.all([
+        loadAssets(JAVASCRIPT_TREE_SITTER_LANGUAGE),
+        loadAssets(TYPESCRIPT_TREE_SITTER_LANGUAGE),
+        loadAssets(requiredContribution("javascript")),
+        loadAssets(requiredContribution("typescript")),
+      ]);
+
+    expect(javascriptAssets.foldQuerySource).not.toContain("jsx_element");
+    expect(typescriptAssets.foldQuerySource).not.toContain("jsx_element");
+    expect(jsxJavascriptAssets.foldQuerySource).toContain("jsx_element");
+    expect(jsxJavascriptAssets.foldQuerySource).toContain("jsx_self_closing_element");
+    expect(tsxTypescriptAssets.foldQuerySource).toContain("jsx_element");
+    expect(tsxTypescriptAssets.foldQuerySource).toContain("jsx_self_closing_element");
+  });
 });
+
+function requiredContribution(id: string): TreeSitterLanguageContribution {
+  const contribution = TREE_SITTER_LANGUAGE_CONTRIBUTIONS.find((candidate) => candidate.id === id);
+  if (!contribution) throw new Error(`Missing language contribution: ${id}`);
+  return contribution;
+}
+
+async function loadAssets(
+  contribution: TreeSitterLanguageContribution,
+): Promise<TreeSitterLanguageAssets> {
+  if (!contribution.load) throw new Error(`Language contribution is not lazy: ${contribution.id}`);
+  return contribution.load();
+}
 
 function pluginContext(): EditorPluginContext {
   return {

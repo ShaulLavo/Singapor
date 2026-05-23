@@ -65,7 +65,7 @@ describe.skipIf(typeof Worker === "undefined")("tree-sitter worker client", () =
     expect(edited?.captures.length).toBeGreaterThan(0);
   });
 
-  it("highlights PascalCase TSX component tag names", async () => {
+  it("highlights PascalCase TSX component tag names and reports JSX folds", async () => {
     const documentId = "main.tsx";
     const text = [
       "const view = (",
@@ -96,6 +96,22 @@ describe.skipIf(typeof Worker === "undefined")("tree-sitter worker client", () =
       captureName: "constructor",
       languageId: "typescript",
     });
+    expect(parsed?.folds).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          endLine: 5,
+          languageId: "typescript",
+          startLine: 1,
+          type: "jsx_element",
+        }),
+        expect.objectContaining({
+          endLine: 4,
+          languageId: "typescript",
+          startLine: 2,
+          type: "jsx_element",
+        }),
+      ]),
+    );
   });
 
   it("returns highlights for a lower document range after a parse-only editor parse", async () => {
