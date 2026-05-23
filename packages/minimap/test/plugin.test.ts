@@ -227,6 +227,71 @@ describe("createMinimapPlugin", () => {
       restoreRuntime();
     }
   });
+
+  it("coalesces slider drag scrolling outside the pointermove handler", () => {
+    const restoreRuntime = installMinimapRuntime();
+    const animationFrames = installAnimationFrames();
+    try {
+      let registration: EditorViewContributionProvider | undefined;
+      const registerViewContribution: EditorPluginContext["registerViewContribution"] = (
+        provider,
+      ) => {
+        registration = provider;
+        return { dispose: vi.fn() };
+      };
+      const plugin = createMinimapPlugin({ enabled: true });
+
+      plugin.activate({
+        registerHighlighter: vi.fn(() => ({ dispose: vi.fn() })),
+        registerSyntaxProvider: vi.fn(() => ({ dispose: vi.fn() })),
+        registerViewContribution,
+        registerEditorFeatureContribution: vi.fn(() => ({ dispose: vi.fn() })),
+        registerGutterContribution: vi.fn(() => ({ dispose: vi.fn() })),
+        registerBlockProvider: vi.fn(() => ({ dispose: vi.fn() })),
+        registerInjectedTextRowProvider: vi.fn(() => ({ dispose: vi.fn() })),
+      });
+
+      const testContext = context(
+        snapshot({
+          clientHeight: 100,
+          scrollHeight: 500,
+        }),
+      );
+      const contribution = registration?.createContribution(testContext);
+      const root = testContext.container.querySelector<HTMLElement>(".editor-minimap");
+      const slider = testContext.container.querySelector<HTMLElement>(".editor-minimap-slider");
+
+      expect(contribution).not.toBeNull();
+      expect(root).not.toBeNull();
+      expect(slider).not.toBeNull();
+
+      defineReadonlyProperty(root!, "clientHeight", 100);
+      defineElementRect(slider!, { height: 20, width: 20 });
+      installPointerCapture(slider!);
+
+      dispatchPointer(slider!, "pointerdown", { clientY: 10 });
+      dispatchPointer(slider!.ownerDocument, "pointermove", { clientY: 50 });
+
+      expect(testContext.setScrollTop).not.toHaveBeenCalled();
+      expect(testContext.scrollElement.scrollTop).toBe(0);
+
+      animationFrames.flush();
+
+      expect(testContext.scrollElement.scrollTop).toBe(200);
+      expect(testContext.setScrollTop).not.toHaveBeenCalled();
+
+      dispatchPointer(slider!.ownerDocument, "pointermove", { clientY: 60 });
+      dispatchPointer(slider!.ownerDocument, "pointerup", { clientY: 60 });
+
+      expect(testContext.scrollElement.scrollTop).toBe(250);
+      expect(animationFrames.pendingCount()).toBe(0);
+
+      contribution?.dispose();
+    } finally {
+      animationFrames.restore();
+      restoreRuntime();
+    }
+  });
 });
 
 function context(viewSnapshot = snapshot()): EditorViewContributionContext {
@@ -329,6 +394,109 @@ function defineThrowingLayoutProperty(
       throw new Error(`unexpected ${property} read`);
     },
   });
+}
+
+function defineReadonlyProperty(
+  element: HTMLElement,
+  property: "clientHeight",
+  value: number,
+): void {
+  Object.defineProperty(element, property, {
+    configurable: true,
+    value,
+  });
+}
+
+function defineElementRect(
+  element: HTMLElement,
+  rect: { readonly height: number; readonly width: number },
+): void {
+  element.getBoundingClientRect = () =>
+    ({
+      bottom: rect.height,
+      height: rect.height,
+      left: 0,
+      right: rect.width,
+      top: 0,
+      width: rect.width,
+      x: 0,
+      y: 0,
+      toJSON: () => undefined,
+    }) as DOMRect;
+}
+
+function installPointerCapture(element: HTMLElement): void {
+  Object.defineProperty(element, "setPointerCapture", {
+    configurable: true,
+    value: vi.fn(),
+  });
+  Object.defineProperty(element, "hasPointerCapture", {
+    configurable: true,
+    value: vi.fn(() => true),
+  });
+  Object.defineProperty(element, "releasePointerCapture", {
+    configurable: true,
+    value: vi.fn(),
+  });
+}
+
+function dispatchPointer(
+  target: EventTarget,
+  type: string,
+  init: { readonly clientY: number; readonly pointerId?: number },
+): void {
+  const event = new MouseEvent(type, {
+    bubbles: true,
+    button: 0,
+    cancelable: true,
+    clientY: init.clientY,
+  });
+  Object.defineProperty(event, "pointerId", {
+    configurable: true,
+    value: init.pointerId ?? 1,
+  });
+  target.dispatchEvent(event);
+}
+
+function installAnimationFrames(): {
+  readonly flush: () => void;
+  readonly pendingCount: () => number;
+  readonly restore: () => void;
+} {
+  const requestAnimationFrame = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "requestAnimationFrame",
+  );
+  const cancelAnimationFrame = Object.getOwnPropertyDescriptor(globalThis, "cancelAnimationFrame");
+  const frames = new Map<number, () => void>();
+  let nextFrame = 1;
+
+  Object.defineProperty(globalThis, "requestAnimationFrame", {
+    configurable: true,
+    value: (callback: () => void) => {
+      const frame = nextFrame;
+      nextFrame += 1;
+      frames.set(frame, callback);
+      return frame;
+    },
+  });
+  Object.defineProperty(globalThis, "cancelAnimationFrame", {
+    configurable: true,
+    value: (frame: number) => frames.delete(frame),
+  });
+
+  return {
+    flush: () => {
+      const pending = new Map(frames);
+      frames.clear();
+      for (const callback of pending.values()) callback();
+    },
+    pendingCount: () => frames.size,
+    restore: () => {
+      restoreDescriptor(globalThis, "requestAnimationFrame", requestAnimationFrame);
+      restoreDescriptor(globalThis, "cancelAnimationFrame", cancelAnimationFrame);
+    },
+  };
 }
 
 function restoreDescriptor(

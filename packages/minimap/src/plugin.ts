@@ -80,6 +80,8 @@ class MinimapContribution implements EditorViewContribution {
   private scrollbarGutterSignature = "";
   private readonly scrollElementBorderMetrics: ScrollElementBorderMetrics;
   private readonly scrollbarGutterFallback: ScrollbarGutterFallbackMetrics;
+  private pendingSliderScrollTop: number | null = null;
+  private sliderScrollFrame = 0;
   private disposed = false;
 
   public constructor(
@@ -171,7 +173,7 @@ class MinimapContribution implements EditorViewContribution {
     const onMove = (move: PointerEvent): void => {
       const scrollTop = clamp(startScrollTop + (move.clientY - startY) * ratio, 0, scrollable);
       this.client.previewScrollTop(this.latestSnapshot, scrollTop);
-      this.context.setScrollTop(scrollTop);
+      this.scheduleSliderScroll(scrollTop);
     };
     const onEnd = (): void => this.stopSliderDrag();
 
@@ -197,12 +199,39 @@ class MinimapContribution implements EditorViewContribution {
     if (!drag) return;
 
     this.activeSliderDrag = null;
+    this.cancelSliderScroll();
+    this.flushSliderScroll();
     this.host.slider.ownerDocument.removeEventListener("pointermove", drag.onMove);
     this.host.slider.ownerDocument.removeEventListener("pointerup", drag.onEnd);
     this.host.slider.ownerDocument.removeEventListener("pointercancel", drag.onEnd);
     this.host.slider.removeEventListener("lostpointercapture", drag.onEnd);
     this.releaseSliderPointer(drag.pointerId);
     this.host.slider.classList.remove("active");
+  }
+
+  private scheduleSliderScroll(scrollTop: number): void {
+    this.pendingSliderScrollTop = scrollTop;
+    if (this.sliderScrollFrame !== 0) return;
+
+    this.sliderScrollFrame = requestFrame(() => {
+      this.sliderScrollFrame = 0;
+      this.flushSliderScroll();
+    });
+  }
+
+  private flushSliderScroll(): void {
+    const scrollTop = this.pendingSliderScrollTop;
+    this.pendingSliderScrollTop = null;
+    if (scrollTop === null) return;
+
+    setScrollTop(this.context.scrollElement, scrollTop);
+  }
+
+  private cancelSliderScroll(): void {
+    if (this.sliderScrollFrame === 0) return;
+
+    cancelFrame(this.sliderScrollFrame);
+    this.sliderScrollFrame = 0;
   }
 
   private releaseSliderPointer(pointerId: number): void {
@@ -361,6 +390,26 @@ function hostClassName(options: ResolvedMinimapOptions): string {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+function setScrollTop(element: HTMLElement, scrollTop: number): void {
+  if (element.scrollTop === scrollTop) return;
+
+  element.scrollTop = scrollTop;
+}
+
+function requestFrame(callback: () => void): number {
+  if (typeof requestAnimationFrame === "function") return requestAnimationFrame(callback);
+  return setTimeout(callback, 16) as unknown as number;
+}
+
+function cancelFrame(handle: number): void {
+  if (typeof cancelAnimationFrame === "function") {
+    cancelAnimationFrame(handle);
+    return;
+  }
+
+  clearTimeout(handle);
 }
 
 function nativeScrollbarGutter(
