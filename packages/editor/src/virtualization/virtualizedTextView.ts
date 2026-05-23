@@ -23,6 +23,8 @@ import {
   createScrollElement,
   createVirtualizerOptions,
   getDefaultHighlightRegistry,
+  indexFoldMarkersByKey,
+  indexFoldMarkersByStartRow,
   normalizeChunkSize,
   normalizeChunkThreshold,
   normalizeHorizontalOverscan,
@@ -37,6 +39,7 @@ import {
   clearSelection,
   clearSelectionHighlight,
   clearTokenHighlights,
+  clearTokenHighlightsFromRow,
   deleteTokenRangesForRow,
   rebuildStyleRules,
   renderRangeHighlight,
@@ -52,6 +55,7 @@ import {
   renderHiddenCharacters,
 } from "./virtualizedTextViewHiddenCharacters";
 import {
+  applyMultiLineTextLayout,
   applySameLineTextLayout,
   lineEndOffset,
   lineStartOffset,
@@ -66,6 +70,7 @@ import {
   setFoldStateLayout,
   setInjectedTextRowsLayout,
   materializeLineStarts,
+  multiLineEditPatch,
   setTextLayoutState,
   setWrapEnabledLayout,
   updateVirtualizerRows,
@@ -116,6 +121,7 @@ import type {
 import type {
   EditorCursorLineHighlightOptions,
   HiddenCharactersMode,
+  MultiLineEditPatch,
   NativeGeometryValidation,
   SameLineEditPatch,
   VirtualizedFoldMarker,
@@ -252,6 +258,7 @@ export class VirtualizedTextView {
       tokenGroups: new Map(),
       rowTokenSignatures: new Map(),
       rowTokenRanges: new Map(),
+      tokenProjectionDirtyStartRow: null,
       nextTokenGroupId: 0,
       nextTokenHighlightSlotId: 0,
       selectionStart: null,
@@ -320,6 +327,7 @@ export class VirtualizedTextView {
   public setText(text: string, textSnapshot = createStringTextSnapshot(text)): void {
     const view = this.view;
     view.sameLineTokenEdit = null;
+    view.tokenProjectionDirtyStartRow = null;
     view.tokenRenderIndexDirty = true;
     const { lineCountChanged } = setTextLayoutState(view, text, textSnapshot);
     if (lineCountChanged) view.gutterWidthDirty = true;
@@ -412,13 +420,19 @@ export class VirtualizedTextView {
     const view = this.view;
     const textSnapshot =
       typeof nextText === "string" ? createStringTextSnapshot(nextText) : nextText;
-    const patch = sameLineEditPatch(view, edit);
-    if (!patch) {
-      this.setText(textSnapshot.getText(), textSnapshot);
+    const sameLinePatch = sameLineEditPatch(view, edit);
+    if (sameLinePatch) {
+      this.applySameLineEdit(sameLinePatch, textSnapshot);
       return;
     }
 
-    this.applySameLineEdit(patch, textSnapshot);
+    const multiLinePatch = multiLineEditPatch(view, edit);
+    if (multiLinePatch) {
+      this.applyMultiLineEdit(multiLinePatch, edit, textSnapshot);
+      return;
+    }
+
+    this.setText(textSnapshot.getText(), textSnapshot);
   }
 
   public setTokens(tokens: readonly EditorToken[]): void {
@@ -736,7 +750,37 @@ export class VirtualizedTextView {
     view.sameLineTokenEdit = {
       rowIndex: patch.rowIndex,
       editedRowPatchedInPlace,
+      kind: "same-line",
     };
+    renderHiddenCharacters(view);
+  }
+
+  private applyMultiLineEdit(
+    patch: MultiLineEditPatch,
+    edit: TextEdit,
+    nextText: TextSnapshot,
+  ): void {
+    const view = this.view;
+    view.tokenRenderIndexDirty = true;
+    applyMultiLineTextLayout(view, patch, edit, nextText);
+    clampStoredSelection(view);
+    resetContentWidthScan(view);
+    clearRowGeometryCaches(view);
+    if (patch.insertedLineBreaks !== patch.endRow - patch.startRow) view.gutterWidthDirty = true;
+    view.lastRenderedRowsKey = "";
+    view.sameLineTokenEdit = {
+      rowIndex: patch.startRow,
+      editedRowPatchedInPlace: false,
+      kind: "multi-line",
+    };
+    view.tokenProjectionDirtyStartRow = dirtyTokenProjectionStartRow(
+      view.tokenProjectionDirtyStartRow,
+      patch.startRow,
+    );
+    projectFoldMarkersThroughMultiLineEdit(view, patch, edit);
+    projectRowDecorationsThroughMultiLineEdit(view, patch);
+    clearTokenHighlightsFromRow(view, patch.startRow);
+    updateVirtualizerRows(view);
     renderHiddenCharacters(view);
   }
 
@@ -796,4 +840,110 @@ function normalizeCursorLineHighlight(
     gutterBackground: options?.gutterBackground ?? DEFAULT_CURSOR_LINE_HIGHLIGHT.gutterBackground,
     rowBackground: options?.rowBackground ?? DEFAULT_CURSOR_LINE_HIGHLIGHT.rowBackground,
   };
+}
+
+function projectFoldMarkersThroughMultiLineEdit(
+  view: VirtualizedTextViewInternal,
+  patch: MultiLineEditPatch,
+  edit: TextEdit,
+): void {
+  if (view.foldMarkers.length === 0) return;
+
+  const rowDelta = multiLineEditRowDelta(patch);
+  const offsetDelta = patch.delta;
+  const markers = view.foldMarkers.map((marker) =>
+    projectFoldMarkerThroughEdit(marker, edit, offsetDelta, rowDelta, view.textLength),
+  );
+  view.foldMarkers = markers;
+  view.foldMarkerByStartRow = indexFoldMarkersByStartRow(markers);
+  view.foldMarkerByKey = indexFoldMarkersByKey(markers);
+}
+
+function projectFoldMarkerThroughEdit(
+  marker: VirtualizedFoldMarker,
+  edit: TextEdit,
+  offsetDelta: number,
+  rowDelta: number,
+  textLength: number,
+): VirtualizedFoldMarker {
+  if (edit.to <= marker.startOffset) {
+    return shiftFoldMarker(marker, offsetDelta, rowDelta, textLength);
+  }
+  if (edit.from >= marker.endOffset) return marker;
+  if (edit.from > marker.startOffset && edit.to < marker.endOffset) {
+    return resizeFoldMarkerEnd(marker, offsetDelta, rowDelta, textLength);
+  }
+
+  return marker;
+}
+
+function shiftFoldMarker(
+  marker: VirtualizedFoldMarker,
+  offsetDelta: number,
+  rowDelta: number,
+  textLength: number,
+): VirtualizedFoldMarker {
+  return {
+    ...marker,
+    startOffset: clampNumber(marker.startOffset + offsetDelta, 0, textLength),
+    endOffset: clampNumber(marker.endOffset + offsetDelta, 0, textLength),
+    startRow: Math.max(0, marker.startRow + rowDelta),
+    endRow: Math.max(0, marker.endRow + rowDelta),
+  };
+}
+
+function resizeFoldMarkerEnd(
+  marker: VirtualizedFoldMarker,
+  offsetDelta: number,
+  rowDelta: number,
+  textLength: number,
+): VirtualizedFoldMarker {
+  const endOffset = clampNumber(marker.endOffset + offsetDelta, marker.startOffset + 1, textLength);
+  return {
+    ...marker,
+    endOffset,
+    endRow: Math.max(marker.startRow + 1, marker.endRow + rowDelta),
+  };
+}
+
+function projectRowDecorationsThroughMultiLineEdit(
+  view: VirtualizedTextViewInternal,
+  patch: MultiLineEditPatch,
+): void {
+  if (view.rowDecorations.size === 0) return;
+
+  const rowDelta = multiLineEditRowDelta(patch);
+  if (rowDelta === 0) return;
+
+  const decorations = new Map<number, VirtualizedTextRowDecoration>();
+  for (const [row, decoration] of view.rowDecorations) {
+    if (row < patch.startRow) {
+      decorations.set(row, decoration);
+      continue;
+    }
+
+    if (row === patch.startRow) {
+      decorations.set(row, decoration);
+      continue;
+    }
+
+    if (row > patch.endRow) {
+      decorations.set(Math.max(0, row + rowDelta), decoration);
+    }
+  }
+
+  view.rowDecorations = decorations;
+}
+
+function multiLineEditRowDelta(patch: MultiLineEditPatch): number {
+  return patch.insertedLineBreaks - (patch.endRow - patch.startRow);
+}
+
+function dirtyTokenProjectionStartRow(current: number | null, row: number): number {
+  if (current === null) return row;
+  return Math.min(current, row);
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
 }

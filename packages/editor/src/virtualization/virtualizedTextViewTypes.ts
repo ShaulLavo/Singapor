@@ -248,6 +248,13 @@ export type SameLineEditPatch = {
   readonly text: string;
 };
 
+export type MultiLineEditPatch = {
+  readonly startRow: number;
+  readonly endRow: number;
+  readonly insertedLineBreaks: number;
+  readonly delta: number;
+};
+
 export type HorizontalChunkWindow = {
   readonly start: number;
   readonly end: number;

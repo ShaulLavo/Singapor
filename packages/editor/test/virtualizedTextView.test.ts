@@ -11,7 +11,9 @@ import {
   measureBrowserTextMetrics,
   treeSitterCapturesToEditorTokens,
   VirtualizedTextView,
+  type EditorToken,
   type EditorGutterRowContext,
+  type TextSnapshot,
   type VirtualizedFoldMarker,
   type VirtualizedTextHighlightRegistry,
 } from "../src";
@@ -48,6 +50,19 @@ class MockHighlight extends Set<Range> {
     highlightClears += 1;
     super.clear();
   }
+}
+
+function throwingFullTextSnapshot(text: string): TextSnapshot {
+  return {
+    length: text.length,
+    getText: () => {
+      throw new Error("unexpected full text read");
+    },
+    getTextInRange: (start, end) => text.slice(start, end),
+    forEachTextChunk: (visit) => {
+      if (text.length > 0) visit(text, 0, text.length);
+    },
+  };
 }
 
 describe("VirtualizedTextView", () => {
@@ -952,6 +967,17 @@ describe("VirtualizedTextView", () => {
     expect(view.getState().mountedRows.map((row) => row.text)).toEqual(["abc", "", "def"]);
   });
 
+  it("applies newline edits without materializing the full next snapshot", () => {
+    view.setText("abc\ndef");
+    view.setScrollMetrics(0, 60);
+
+    view.applyEdit({ from: 3, to: 3, text: "\n" }, throwingFullTextSnapshot("abc\n\ndef"));
+
+    expect(view.getState()).toMatchObject({ lineCount: 3, totalHeight: 60 });
+    expect(view.getState().mountedRows.map((row) => row.text)).toEqual(["abc", "", "def"]);
+    expect(view.textOffsetFromDomBoundary(view.getState().mountedRows[2]!.textNode, 1)).toBe(6);
+  });
+
   it("does not read layout while rendering seeded long-line metrics", () => {
     view.dispose();
     view = new VirtualizedTextView(container, {
@@ -1314,26 +1340,56 @@ describe("VirtualizedTextView", () => {
     expect(tokenHighlightNames()).toHaveLength(3);
   });
 
-  it("skips token highlight work when same-line edits only move existing token ranges", () => {
+  it("rebuilds the edited row when a boundary insert expands projected tokens", () => {
     view.setText("world");
     view.setScrollMetrics(0, 20);
     view.setTokens([{ start: 0, end: 5, style: { color: "#ff0000" } }]);
 
     const tokenHighlightName = tokenHighlightNames()[0]!;
     const tokenHighlight = highlightsMap.get(tokenHighlightName)!;
+    const previousRange = [...tokenHighlight][0]!;
     const addCount = highlightAdds;
     const deleteCount = highlightDeletes;
     highlightClears = 0;
 
-    view.applyEdit({ from: 2, to: 2, text: "X" }, "woXrld");
+    view.applyEdit({ from: 5, to: 5, text: "X" }, "worldX");
     view.setTokens([{ start: 0, end: 6, style: { color: "#ff0000" } }]);
 
     const ranges = [...tokenHighlight];
     expect(highlightsMap.get(tokenHighlightName)).toBe(tokenHighlight);
     expect(highlightClears).toBe(0);
+    expect(highlightAdds).toBe(addCount + 1);
+    expect(highlightDeletes).toBe(deleteCount + 1);
+    expect(ranges).toHaveLength(1);
+    expect(ranges).not.toContain(previousRange);
+    expect(ranges[0]!.endOffset).toBe(6);
+  });
+
+  it("does not invalidate live token ranges when adopting current projected tokens again", () => {
+    const text = "world";
+    const edit = { from: 2, to: 2, text: "X" };
+    const tokens = [{ start: 0, end: 5, style: { color: "#ff0000" } }];
+    view.setText(text);
+    view.setScrollMetrics(0, 20);
+    view.adoptTokens(tokens);
+
+    view.applyEdit(edit, "woXrld");
+    const projected = projectTokensThroughEdit(tokens, edit, text);
+    view.adoptTokens(projected);
+    const tokenHighlightName = tokenHighlightNames()[0]!;
+    const tokenHighlight = highlightsMap.get(tokenHighlightName)!;
+    const ranges = [...tokenHighlight];
+    const addCount = highlightAdds;
+    const deleteCount = highlightDeletes;
+    highlightClears = 0;
+
+    view.adoptTokens(projected);
+
+    expect(highlightsMap.get(tokenHighlightName)).toBe(tokenHighlight);
+    expect(highlightClears).toBe(0);
     expect(highlightAdds).toBe(addCount);
     expect(highlightDeletes).toBe(deleteCount);
-    expect(ranges).toHaveLength(1);
+    expect([...tokenHighlight]).toEqual(ranges);
   });
 
   it("does not rescan token styles when same-line edits keep live token ranges", () => {
@@ -1421,7 +1477,7 @@ describe("VirtualizedTextView", () => {
     expect(() => view.adoptTokens(projected)).not.toThrow();
   });
 
-  it("rebuilds token highlights below same-line edits even when local segments match", () => {
+  it("keeps token highlights below same-line edits when local segments match", () => {
     view.setText("aa\nbb");
     view.setScrollMetrics(0, 40);
     view.setTokens([
@@ -1438,6 +1494,33 @@ describe("VirtualizedTextView", () => {
       { start: 0, end: 1, style: { color: "#ff0000" } },
       { start: 1, end: 3, style: { color: "#00ff00" } },
       { start: 4, end: 6, style: { color: "#ff0000" } },
+    ]);
+
+    const next = tokenHighlightRangeForNode(rowOne.textNode);
+    expect(next).toBeDefined();
+    expect([...previous!.highlight]).toContain(previous!.range);
+    expect(next!.range.startContainer).toBe(rowOne.textNode);
+    expect(next!.range.startOffset).toBe(0);
+    expect(next!.range.endOffset).toBe(2);
+  });
+
+  it("rebuilds token highlights below same-line edits when local styles change", () => {
+    view.setText("aa\nbb");
+    view.setScrollMetrics(0, 40);
+    view.setTokens([
+      { start: 0, end: 2, style: { color: "#ff0000" } },
+      { start: 3, end: 5, style: { color: "#ff0000" } },
+    ]);
+
+    const rowOne = view.getState().mountedRows.find((row) => row.index === 1)!;
+    const previous = tokenHighlightRangeForNode(rowOne.textNode);
+    expect(previous).toBeDefined();
+
+    view.applyEdit({ from: 1, to: 1, text: "X" }, "aXa\nbb");
+    view.setTokens([
+      { start: 0, end: 1, style: { color: "#ff0000" } },
+      { start: 1, end: 3, style: { color: "#00ff00" } },
+      { start: 4, end: 6, style: { color: "#0000ff" } },
     ]);
 
     const next = tokenHighlightRangeForNode(rowOne.textNode);
@@ -1473,11 +1556,445 @@ describe("VirtualizedTextView", () => {
 
       const next = tokenHighlightRangeForNode(rowOne.textNode);
       expect(next).toBeDefined();
-      if (previous) expect([...previous.highlight]).not.toContain(previous.range);
+      if (previous) expect([...previous.highlight]).toContain(previous.range);
       expect(next!.range.startContainer).toBe(rowOne.textNode);
       expect(next!.range.startOffset).toBe(0);
       expect(next!.range.endOffset).toBe(2);
     }
+  });
+
+  it("keeps lower-row token highlights static when adopting projected tokens repeatedly", () => {
+    let text = "aa\nbb\ncc";
+    let tokens = [
+      { start: 0, end: 2, style: { color: "#ff0000" } },
+      { start: 3, end: 5, style: { color: "#ff0000" } },
+      { start: 6, end: 8, style: { color: "#ff0000" } },
+    ];
+    view.setText(text);
+    view.setScrollMetrics(0, 60);
+    view.adoptTokens(tokens);
+
+    for (const typed of ["X", "Y"]) {
+      const edit = { from: 1, to: 1, text: typed };
+      const nextText = `${text.slice(0, edit.from)}${typed}${text.slice(edit.to)}`;
+      view.applyEdit(edit, nextText);
+      const projected = projectTokensThroughEdit(tokens, edit, text);
+      view.adoptTokens(projected);
+      view.adoptTokens(projected);
+      tokens = [...projected];
+      text = nextText;
+
+      const rowOne = view.getState().mountedRows.find((row) => row.index === 1)!;
+      const range = tokenHighlightRangeForNode(rowOne.textNode);
+      expect(range).toBeDefined();
+      expect(range!.range.startContainer).toBe(rowOne.textNode);
+      expect(range!.range.startOffset).toBe(0);
+      expect(range!.range.endOffset).toBe(2);
+    }
+  });
+
+  it("keeps projected lower-row highlights static after an intervening viewport render", () => {
+    const text = "aa\nbb\ncc";
+    const edit = { from: 1, to: 1, text: "X" };
+    const tokens = [
+      { start: 0, end: 2, style: { color: "#ff0000" } },
+      { start: 3, end: 5, style: { color: "#ff0000" } },
+      { start: 6, end: 8, style: { color: "#ff0000" } },
+    ];
+    view.setText(text);
+    view.setScrollMetrics(0, 60, 100);
+    view.adoptTokens(tokens);
+
+    view.applyEdit(edit, "aXa\nbb\ncc");
+    view.setScrollMetrics(0, 60, 120);
+    const projected = projectTokensThroughEdit(tokens, edit, text);
+    view.adoptTokens(projected);
+
+    const rowOne = view.getState().mountedRows.find((row) => row.index === 1)!;
+    const range = tokenHighlightRangeForNode(rowOne.textNode);
+    expect(range).toBeDefined();
+    expect(range!.range.startContainer).toBe(rowOne.textNode);
+    expect(range!.range.startOffset).toBe(0);
+    expect(range!.range.endOffset).toBe(2);
+  });
+
+  it("does not render shifted stale tokens below an edit before projection lands", () => {
+    const text = "aa\nbb\ncc\n";
+    const edit = { from: 1, to: 1, text: "X" };
+    const tokens = [
+      { start: 0, end: 2, style: { color: "#ff0000" } },
+      { start: 3, end: 5, style: { color: "#ff0000" } },
+      { start: 6, end: 8, style: { color: "#ff0000" } },
+    ];
+    view.setText(text);
+    view.setScrollMetrics(0, 60, 100);
+    view.adoptTokens(tokens);
+
+    view.applyEdit(edit, "aXa\nbb\ncc\n");
+    view.setScrollMetrics(20, 60, 100);
+
+    const rowOne = view.getState().mountedRows.find((row) => row.index === 1)!;
+    const staleRange = tokenHighlightRangeForNode(rowOne.textNode);
+    expect(staleRange).toBeDefined();
+    expect(staleRange!.range.startContainer).toBe(rowOne.textNode);
+    expect(staleRange!.range.startOffset).toBe(0);
+    expect(staleRange!.range.endOffset).toBe(2);
+  });
+
+  it("fills rows mounted during a stale-token render after projected tokens land", () => {
+    const text = "aa\nbb\ncc\ndd\nee\nff";
+    const edit = { from: 1, to: 1, text: "X" };
+    const tokens = [
+      { start: 0, end: 2, style: { color: "#ff0000" } },
+      { start: 3, end: 5, style: { color: "#ff0000" } },
+      { start: 6, end: 8, style: { color: "#ff0000" } },
+      { start: 9, end: 11, style: { color: "#ff0000" } },
+      { start: 12, end: 14, style: { color: "#ff0000" } },
+      { start: 15, end: 17, style: { color: "#ff0000" } },
+    ];
+    view.setText(text);
+    view.setScrollMetrics(0, 20, 100);
+    view.adoptTokens(tokens);
+
+    view.applyEdit(edit, "aXa\nbb\ncc\ndd\nee\nff");
+    view.setScrollMetrics(80, 20, 100);
+    const projected = projectTokensThroughEdit(tokens, edit, text);
+    view.adoptTokens(projected);
+
+    const rowFive = view.getState().mountedRows.find((row) => row.index === 5)!;
+    const range = tokenHighlightRangeForNode(rowFive.textNode);
+    expect(range).toBeDefined();
+    expect(range!.range.startContainer).toBe(rowFive.textNode);
+    expect(range!.range.startOffset).toBe(0);
+    expect(range!.range.endOffset).toBe(2);
+  });
+
+  it("does not render shifted stale tokens below a newline before projection lands", () => {
+    const text = "aa\nbb\ncc";
+    const edit = { from: 1, to: 1, text: "\n" };
+    const tokens = [
+      { start: 0, end: 2, style: { color: "#ff0000" } },
+      { start: 3, end: 5, style: { color: "#00ff00" } },
+      { start: 6, end: 8, style: { color: "#0000ff" } },
+    ];
+    view.setText(text);
+    view.setScrollMetrics(0, 80, 100);
+    view.adoptTokens(tokens);
+
+    view.applyEdit(edit, "a\na\nbb\ncc");
+
+    const rowTwo = view.getState().mountedRows.find((row) => row.index === 2)!;
+    expect(rowTwo.text).toBe("bb");
+    expect(tokenHighlightRangeForNode(rowTwo.textNode)).toBeUndefined();
+
+    const projected = projectTokensThroughEdit(tokens, edit, text);
+    view.adoptTokens(projected);
+
+    const range = tokenHighlightRangeForNode(rowTwo.textNode)!;
+    expect(range.range.startContainer).toBe(rowTwo.textNode);
+    expect(range.range.startOffset).toBe(0);
+    expect(range.range.endOffset).toBe(2);
+    expect(tokenHighlightColorForNode(rowTwo.textNode)).toBe("#00ff00");
+  });
+
+  it("keeps lower-row highlights static after a newline followed by rapid typing", () => {
+    let text = "aa\nbb\ncc";
+    let tokens = [
+      { start: 0, end: 2, style: { color: "#ff0000" } },
+      { start: 3, end: 5, style: { color: "#00ff00" } },
+      { start: 6, end: 8, style: { color: "#0000ff" } },
+    ];
+    view.setText(text);
+    view.setScrollMetrics(0, 80, 100);
+    view.adoptTokens(tokens);
+
+    const newlineEdit = { from: 1, to: 1, text: "\n" };
+    const textAfterNewline = "a\na\nbb\ncc";
+    view.applyEdit(newlineEdit, textAfterNewline);
+    const projectedAfterNewline = projectTokensThroughEdit(tokens, newlineEdit, text);
+    view.adoptTokens(projectedAfterNewline);
+    tokens = [...projectedAfterNewline];
+    text = textAfterNewline;
+    let previousLowerRange = tokenHighlightRangeForNode(
+      view.getState().mountedRows.find((row) => row.text === "bb")!.textNode,
+    )?.range;
+
+    for (const typed of ["X", "Y"]) {
+      const edit = { from: 2, to: 2, text: typed };
+      const nextText = `${text.slice(0, edit.from)}${typed}${text.slice(edit.to)}`;
+      view.applyEdit(edit, nextText);
+      const projected = projectTokensThroughEdit(tokens, edit, text);
+      view.adoptTokens(projected);
+      view.adoptTokens(projected);
+      tokens = [...projected];
+      text = nextText;
+
+      const rowTwo = view.getState().mountedRows.find((row) => row.index === 2)!;
+      expect(rowTwo.text).toBe("bb");
+      const range = tokenHighlightRangeForNode(rowTwo.textNode);
+      expect(range).toBeDefined();
+      if (previousLowerRange) expect([...range!.highlight]).not.toContain(previousLowerRange);
+      expect(range!.range.startContainer).toBe(rowTwo.textNode);
+      expect(range!.range.startOffset).toBe(0);
+      expect(range!.range.endOffset).toBe(2);
+      expect(tokenHighlightColorForNode(rowTwo.textNode)).toBe("#00ff00");
+      previousLowerRange = range!.range;
+    }
+  });
+
+  it("does not push lower-row highlights after a newline and same-line edit above them", () => {
+    let lines = Array.from({ length: 90 }, (_, index) => ` ${index.toString().padStart(2, "0")}`);
+    let text = lines.join("\n");
+    let offsets = lineStartOffsets(lines);
+    let tokens: readonly EditorToken[] = offsets.map((offset) => ({
+      start: offset + 1,
+      end: offset + 3,
+      style: { color: "#00ff00" },
+    }));
+    view.setText(text);
+    view.setScrollMetrics(0, 2000, 100);
+    view.adoptTokens(tokens);
+
+    const newlineEdit = { from: offsets[10]! + 1, to: offsets[10]! + 1, text: "\n" };
+    text = `${text.slice(0, newlineEdit.from)}\n${text.slice(newlineEdit.to)}`;
+    view.applyEdit(newlineEdit, text);
+    tokens = projectTokensThroughEdit(tokens, newlineEdit, lines.join("\n"));
+    view.adoptTokens(tokens);
+
+    lines = text.split("\n");
+    offsets = lineStartOffsets(lines);
+    const targetRowBefore = view.getState().mountedRows.find((row) => row.text === " 12")!;
+    const targetRangeBefore = tokenHighlightRangeForNode(targetRowBefore.textNode);
+    expect(targetRangeBefore).toBeDefined();
+    expect(targetRangeBefore!.range.startOffset).toBe(1);
+    expect(targetRangeBefore!.range.endOffset).toBe(3);
+
+    const sameLineEdit = { from: offsets[11]!, to: offsets[11]!, text: "X" };
+    const previousText = text;
+    text = `${text.slice(0, sameLineEdit.from)}X${text.slice(sameLineEdit.to)}`;
+    view.applyEdit(sameLineEdit, text);
+    tokens = projectTokensThroughEdit(tokens, sameLineEdit, previousText);
+    view.adoptTokens(tokens);
+
+    const targetRowAfter = view.getState().mountedRows.find((row) => row.text === " 12")!;
+    const targetRangeAfter = tokenHighlightRangeForNode(targetRowAfter.textNode);
+    expect(targetRangeAfter).toBeDefined();
+    expect(targetRangeAfter!.range.startContainer).toBe(targetRowAfter.textNode);
+    expect(targetRangeAfter!.range.startOffset).toBe(1);
+    expect(targetRangeAfter!.range.endOffset).toBe(3);
+    expect(tokenHighlightColorForNode(targetRowAfter.textNode)).toBe("#00ff00");
+  });
+
+  it("keeps lower-row highlights static while alternating newlines and typing", () => {
+    let text = "aa\nbb\ncc";
+    let tokens = [
+      { start: 0, end: 2, style: { color: "#ff0000" } },
+      { start: 3, end: 5, style: { color: "#00ff00" } },
+      { start: 6, end: 8, style: { color: "#0000ff" } },
+    ];
+    view.setText(text);
+    view.setScrollMetrics(0, 100, 100);
+    view.adoptTokens(tokens);
+
+    for (const edit of [
+      { from: 1, to: 1, text: "\n" },
+      { from: 2, to: 2, text: "X" },
+      { from: 3, to: 3, text: "\n" },
+      { from: 4, to: 4, text: "Y" },
+    ]) {
+      const nextText = `${text.slice(0, edit.from)}${edit.text}${text.slice(edit.to)}`;
+      view.applyEdit(edit, nextText);
+      const projected = projectTokensThroughEdit(tokens, edit, text);
+      view.adoptTokens(projected);
+      view.adoptTokens(projected);
+      tokens = [...projected];
+      text = nextText;
+    }
+
+    const targetRow = view.getState().mountedRows.find((row) => row.text === "bb")!;
+    const range = tokenHighlightRangeForNode(targetRow.textNode);
+    expect(range).toBeDefined();
+    expect(range!.range.startContainer).toBe(targetRow.textNode);
+    expect(range!.range.startOffset).toBe(0);
+    expect(range!.range.endOffset).toBe(2);
+    expect(tokenHighlightColorForNode(targetRow.textNode)).toBe("#00ff00");
+  });
+
+  it("keeps lower-row highlights static through repeated mixed inserts above them", () => {
+    let text = "aa\nbb\ncc";
+    let tokens = [
+      { start: 0, end: 2, style: { color: "#ff0000" } },
+      { start: 3, end: 5, style: { color: "#00ff00" } },
+      { start: 6, end: 8, style: { color: "#0000ff" } },
+    ];
+    view.setText(text);
+    view.setScrollMetrics(0, 160, 100);
+    view.adoptTokens(tokens);
+
+    for (const inserted of ["X", "\n", "Y", "Z", "\n", "W", "\n", "Q"]) {
+      const targetOffset = text.indexOf("bb");
+      const editOffset = Math.max(0, targetOffset - 1);
+      const edit = { from: editOffset, to: editOffset, text: inserted };
+      const nextText = `${text.slice(0, edit.from)}${inserted}${text.slice(edit.to)}`;
+      view.applyEdit(edit, nextText);
+      const projected = projectTokensThroughEdit(tokens, edit, text);
+      view.adoptTokens(projected);
+      tokens = [...projected];
+      text = nextText;
+
+      const targetRow = view.getState().mountedRows.find((row) => row.text === "bb")!;
+      const range = tokenHighlightRangeForNode(targetRow.textNode);
+      expect(range).toBeDefined();
+      expect(range!.range.startContainer).toBe(targetRow.textNode);
+      expect(range!.range.startOffset).toBe(0);
+      expect(range!.range.endOffset).toBe(2);
+      expect(tokenHighlightColorForNode(targetRow.textNode)).toBe("#00ff00");
+    }
+  });
+
+  it("keeps lower-row highlights static through repeated newline-only inserts above them", () => {
+    const lines = Array.from({ length: 90 }, (_, index) => ` ${index.toString().padStart(2, "0")}`);
+    let text = lines.join("\n");
+    let tokens: readonly EditorToken[] = lineStartOffsets(lines).map((offset) => ({
+      start: offset + 1,
+      end: offset + 3,
+      style: { color: "#00ff00" },
+    }));
+    view.setText(text);
+    view.setScrollMetrics(0, 2000, 100);
+    view.adoptTokens(tokens);
+
+    for (let count = 0; count < 5; count += 1) {
+      const targetOffset = text.indexOf(" 12");
+      const edit = { from: targetOffset, to: targetOffset, text: "\n" };
+      const previousText = text;
+      text = `${text.slice(0, edit.from)}\n${text.slice(edit.to)}`;
+      view.applyEdit(edit, text);
+      tokens = projectTokensThroughEdit(tokens, edit, previousText);
+      view.adoptTokens(tokens);
+
+      const targetRow = view.getState().mountedRows.find((row) => row.text === " 12")!;
+      const range = tokenHighlightRangeForNode(targetRow.textNode);
+      expect(range).toBeDefined();
+      expect(range!.range.startContainer).toBe(targetRow.textNode);
+      expect(range!.range.startOffset).toBe(1);
+      expect(range!.range.endOffset).toBe(3);
+      expect(tokenHighlightColorForNode(targetRow.textNode)).toBe("#00ff00");
+    }
+  });
+
+  it("does not render shifted stale tokens below a deleted newline before projection lands", () => {
+    const text = "a\na\nbb\ncc";
+    const edit = { from: 1, to: 2, text: "" };
+    const tokens = [
+      { start: 0, end: 1, style: { color: "#ff0000" } },
+      { start: 2, end: 3, style: { color: "#ffaa00" } },
+      { start: 4, end: 6, style: { color: "#00ff00" } },
+      { start: 7, end: 9, style: { color: "#0000ff" } },
+    ];
+    view.setText(text);
+    view.setScrollMetrics(0, 80, 100);
+    view.adoptTokens(tokens);
+
+    view.applyEdit(edit, "aa\nbb\ncc");
+
+    const rowOne = view.getState().mountedRows.find((row) => row.index === 1)!;
+    expect(rowOne.text).toBe("bb");
+    expect(tokenHighlightRangeForNode(rowOne.textNode)).toBeUndefined();
+
+    const projected = projectTokensThroughEdit(tokens, edit, text);
+    view.adoptTokens(projected);
+
+    const range = tokenHighlightRangeForNode(rowOne.textNode)!;
+    expect(range.range.startContainer).toBe(rowOne.textNode);
+    expect(range.range.startOffset).toBe(0);
+    expect(range.range.endOffset).toBe(2);
+    expect(tokenHighlightColorForNode(rowOne.textNode)).toBe("#00ff00");
+  });
+
+  it("moves fold controls through newline inserts before syntax returns", () => {
+    view.dispose();
+    view = new VirtualizedTextView(container, {
+      rowHeight: 20,
+      overscan: 2,
+      highlightRegistry: mockRegistry,
+      selectionHighlightName: "test-selection",
+      gutterContributions: [createFoldGutterContribution()],
+    });
+    const lines = ["a", "if (x) {", "  y();", "}"];
+    const offsets = lineStartOffsets(lines);
+    view.setText(lines.join("\n"));
+    view.setFoldMarkers([
+      {
+        key: "fold-if",
+        startOffset: offsets[1]!,
+        endOffset: offsets[3]!,
+        startRow: 1,
+        endRow: 2,
+        collapsed: false,
+      },
+    ]);
+    view.setScrollMetrics(0, 100, 100);
+
+    view.applyEdit({ from: 0, to: 0, text: "\n" }, `\n${lines.join("\n")}`);
+
+    const gutterRow = visibleFoldButton(container).closest("[data-editor-virtual-gutter-row]");
+    expect(gutterRow?.getAttribute("data-editor-virtual-gutter-row")).toBe("2");
+  });
+
+  it("moves fold controls through deleted newlines before syntax returns", () => {
+    view.dispose();
+    view = new VirtualizedTextView(container, {
+      rowHeight: 20,
+      overscan: 2,
+      highlightRegistry: mockRegistry,
+      selectionHighlightName: "test-selection",
+      gutterContributions: [createFoldGutterContribution()],
+    });
+    const text = "\na\nif (x) {\n  y();\n}";
+    const lines = text.split("\n");
+    const offsets = lineStartOffsets(lines);
+    view.setText(text);
+    view.setFoldMarkers([
+      {
+        key: "fold-if",
+        startOffset: offsets[2]!,
+        endOffset: offsets[4]!,
+        startRow: 2,
+        endRow: 3,
+        collapsed: false,
+      },
+    ]);
+    view.setScrollMetrics(0, 100, 100);
+
+    view.applyEdit({ from: 0, to: 1, text: "" }, "a\nif (x) {\n  y();\n}");
+
+    const gutterRow = visibleFoldButton(container).closest("[data-editor-virtual-gutter-row]");
+    expect(gutterRow?.getAttribute("data-editor-virtual-gutter-row")).toBe("1");
+  });
+
+  it("moves row decorations through newline inserts and deletes", () => {
+    view.setText("aa\nbb\ncc");
+    view.setScrollMetrics(0, 100, 100);
+    view.setRowDecorations(new Map([[2, { className: "scope-line" }]]));
+
+    view.applyEdit({ from: 0, to: 0, text: "\n" }, "\naa\nbb\ncc");
+
+    expect(container.querySelector('[data-editor-virtual-row="2"]')?.className ?? "").not.toContain(
+      "scope-line",
+    );
+    expect(container.querySelector('[data-editor-virtual-row="3"]')?.className ?? "").toContain(
+      "scope-line",
+    );
+
+    view.applyEdit({ from: 0, to: 1, text: "" }, "aa\nbb\ncc");
+
+    expect(container.querySelector('[data-editor-virtual-row="3"]')?.className ?? "").not.toContain(
+      "scope-line",
+    );
+    expect(container.querySelector('[data-editor-virtual-row="2"]')?.className ?? "").toContain(
+      "scope-line",
+    );
   });
 
   it("does not repaint when the token list is unchanged", () => {
@@ -2065,6 +2582,26 @@ function tokenHighlightRangeForNode(
   }
 
   return undefined;
+}
+
+function tokenHighlightColorForNode(node: Text): string | undefined {
+  for (const name of tokenHighlightNames()) {
+    const highlight = highlightsMap.get(name)!;
+    const range = [...highlight].find((candidate) => candidate.startContainer === node);
+    if (!range) continue;
+
+    return tokenHighlightColor(name);
+  }
+
+  return undefined;
+}
+
+function tokenHighlightColor(name: string): string | undefined {
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = document.head.textContent.match(
+    new RegExp(`::highlight\\(${escapedName}\\) \\{[^}]*color: ([^;]+);`),
+  );
+  return match?.[1];
 }
 
 function countStyleTextContentWrites(callback: () => void): number {

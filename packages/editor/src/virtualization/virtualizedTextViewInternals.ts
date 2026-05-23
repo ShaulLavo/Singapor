@@ -67,6 +67,7 @@ export type TokenRenderEntry = {
 export type SameLineTokenEdit = {
   readonly rowIndex: number;
   readonly editedRowPatchedInPlace: boolean;
+  readonly kind?: "same-line" | "multi-line";
 };
 
 export interface VirtualizedTextViewInternal {
@@ -129,6 +130,7 @@ export interface VirtualizedTextViewInternal {
   tokenGroups: Map<string, TokenGroup>;
   rowTokenSignatures: Map<number, string>;
   rowTokenRanges: Map<number, Map<string, readonly AbstractRange[]>>;
+  tokenProjectionDirtyStartRow: number | null;
   nextTokenGroupId: number;
   nextTokenHighlightSlotId: number;
   selectionStart: number | null;

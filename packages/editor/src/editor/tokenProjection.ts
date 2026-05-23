@@ -38,11 +38,18 @@ export function projectTokensThroughEdit(
   previousText: TokenProjectionText,
 ): readonly EditorToken[] {
   const delta = edit.text.length - (edit.to - edit.from);
-  const indexed = projectIndexedTokensThroughEdit(tokens, edit, previousText, delta);
+  const lineStructureChanged = editChangesLineStructure(edit, previousText);
+  const indexed = projectIndexedTokensThroughEdit(
+    tokens,
+    edit,
+    previousText,
+    delta,
+    lineStructureChanged,
+  );
   if (indexed) return indexed;
 
   recordTokenProjectionPath("scan", tokens, 0, tokens.length);
-  return scanProjectTokensThroughEdit(tokens, edit, previousText, delta);
+  return scanProjectTokensThroughEdit(tokens, edit, previousText, delta, lineStructureChanged);
 }
 
 export function tokenProjectionLiveRangeStatus(
@@ -67,17 +74,24 @@ export function copyTokenProjectionMetadata(
   if (metadata) tokenProjectionMetadata.set(copiedTokens, metadata);
 }
 
+export function sourceTokensForProjectedTokens(
+  projectedTokens: readonly EditorToken[],
+): readonly EditorToken[] | null {
+  return tokenProjectionMetadata.get(projectedTokens)?.sourceTokens ?? null;
+}
+
 function scanProjectTokensThroughEdit(
   tokens: readonly EditorToken[],
   edit: TextEdit,
   previousText: TokenProjectionText,
   delta: number,
+  lineStructureChanged: boolean,
 ): readonly EditorToken[] {
   const builder = createTokenProjectionBuilder();
   let keepsLiveRanges = true;
 
   for (const token of tokens) {
-    const next = projectTokenThroughEdit(token, edit, previousText, delta);
+    const next = projectTokenThroughEdit(token, edit, previousText, delta, lineStructureChanged);
     if (!isRenderableToken(next)) {
       keepsLiveRanges = false;
       continue;
@@ -94,6 +108,7 @@ function projectIndexedTokensThroughEdit(
   edit: TextEdit,
   previousText: TokenProjectionText,
   delta: number,
+  lineStructureChanged: boolean,
 ): readonly EditorToken[] | null {
   const index = getEditorTokenIndex(tokens);
   if (!index?.sortedByStart) return null;
@@ -110,6 +125,7 @@ function projectIndexedTokensThroughEdit(
     prefixEnd,
     suffixStart,
     index,
+    lineStructureChanged,
   );
   if (lazyProjected) {
     recordTokenProjectionPath("indexed.lazy", tokens, prefixEnd, suffixStart, index, {
@@ -126,6 +142,7 @@ function projectIndexedTokensThroughEdit(
     prefixEnd,
     suffixStart,
     index,
+    lineStructureChanged,
   );
   if (projected) {
     recordTokenProjectionPath("indexed.bulk", tokens, prefixEnd, suffixStart, index, {
@@ -135,7 +152,16 @@ function projectIndexedTokensThroughEdit(
   }
 
   recordTokenProjectionPath("indexed.fallback", tokens, prefixEnd, suffixStart, index);
-  return projectSortedTokenRanges(tokens, edit, previousText, delta, prefixEnd, suffixStart, index);
+  return projectSortedTokenRanges(
+    tokens,
+    edit,
+    previousText,
+    delta,
+    prefixEnd,
+    suffixStart,
+    index,
+    lineStructureChanged,
+  );
 }
 
 function projectSortedTokenRangesLazy(
@@ -146,6 +172,7 @@ function projectSortedTokenRangesLazy(
   prefixEnd: number,
   suffixStart: number,
   index: EditorTokenIndex,
+  lineStructureChanged: boolean,
 ): readonly EditorToken[] | null {
   if (!shouldUseLazyProjection(tokens, suffixStart)) return null;
 
@@ -162,6 +189,7 @@ function projectSortedTokenRangesLazy(
     delta,
     prefixEnd,
     suffixStart,
+    lineStructureChanged,
   );
   if (!canKeepLazyIndex(builder, tokens, suffixStart, delta, index)) return null;
 
@@ -184,6 +212,7 @@ function projectSortedTokenRangesBulk(
   prefixEnd: number,
   suffixStart: number,
   index: EditorTokenIndex,
+  lineStructureChanged: boolean,
 ): readonly EditorToken[] | null {
   const prefixTokens = tokens.slice(0, prefixEnd);
   const prefixMaxEnds = index.maxEnds.slice(0, prefixEnd) as number[];
@@ -200,6 +229,7 @@ function projectSortedTokenRangesBulk(
     delta,
     prefixEnd,
     suffixStart,
+    lineStructureChanged,
   );
   const suffixTokens = shiftedTokenRange(tokens, suffixStart, delta);
   if (!canKeepBulkIndex(builder, suffixTokens)) return null;
@@ -422,6 +452,7 @@ function projectSortedTokenRanges(
   prefixEnd: number,
   suffixStart: number,
   index: EditorTokenIndex,
+  lineStructureChanged: boolean,
 ): readonly EditorToken[] {
   const builder = createTokenProjectionBuilder(tokens, prefixEnd, index);
   let keepsLiveRanges = true;
@@ -434,6 +465,7 @@ function projectSortedTokenRanges(
     delta,
     prefixEnd,
     suffixStart,
+    lineStructureChanged,
   );
   appendShiftedTokens(builder, tokens, suffixStart, tokens.length, delta);
 
@@ -459,10 +491,17 @@ function appendProjectedTokens(
   delta: number,
   start: number,
   end: number,
+  lineStructureChanged: boolean,
 ): boolean {
   let keepsLiveRanges = true;
   for (let index = start; index < end; index += 1) {
-    const next = projectTokenThroughEdit(tokens[index]!, edit, previousText, delta);
+    const next = projectTokenThroughEdit(
+      tokens[index]!,
+      edit,
+      previousText,
+      delta,
+      lineStructureChanged,
+    );
     if (!isRenderableToken(next)) {
       keepsLiveRanges = false;
       continue;
@@ -681,18 +720,49 @@ function firstTokenStartingAfter(tokens: readonly EditorToken[], offset: number)
   return low;
 }
 
+function editChangesLineStructure(edit: TextEdit, previousText: TokenProjectionText): boolean {
+  if (edit.text.includes("\n")) return true;
+  if (edit.to <= edit.from) return false;
+  return getProjectionTextInRange(previousText, edit.from, edit.to).includes("\n");
+}
+
 function projectTokenThroughEdit(
   token: EditorToken,
   edit: TextEdit,
   previousText: TokenProjectionText,
   delta: number,
+  lineStructureChanged: boolean,
 ): EditorToken | null {
+  if (lineStructureChanged) return projectTokenThroughLineEdit(token, edit, delta);
   if (edit.from === edit.to) return projectTokenThroughInsertion(token, edit, previousText);
   if (token.end <= edit.from) return token;
   if (token.start >= edit.to) return shiftToken(token, delta);
   if (!canResizeTokenAcrossEdit(token, edit)) return null;
 
   return { ...token, end: token.end + delta };
+}
+
+function projectTokenThroughLineEdit(
+  token: EditorToken,
+  edit: TextEdit,
+  delta: number,
+): EditorToken | null {
+  if (edit.from === edit.to) {
+    return projectTokenThroughLineInsertion(token, edit.from, edit.text.length);
+  }
+  if (token.end <= edit.from) return token;
+  if (token.start >= edit.to) return shiftToken(token, delta);
+  return null;
+}
+
+function projectTokenThroughLineInsertion(
+  token: EditorToken,
+  offset: number,
+  insertedLength: number,
+): EditorToken | null {
+  if (token.end <= offset) return token;
+  if (token.start >= offset) return shiftToken(token, insertedLength);
+  return null;
 }
 
 function projectTokenThroughInsertion(

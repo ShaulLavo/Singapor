@@ -410,6 +410,10 @@ function tokenSnapshotFromLastEvent(events: readonly ViewContributionEvent[]) {
   return events.findLast((event) => event.kind === "tokens")?.snapshot?.tokens ?? [];
 }
 
+function latestFoldMarkers(events: readonly ViewContributionEvent[]) {
+  return events.findLast((event) => event.snapshot)?.snapshot?.foldMarkers ?? [];
+}
+
 function rangeLength(range: EditorSyntaxRange | undefined): number {
   return range ? range.endIndex - range.startIndex : 0;
 }
@@ -3983,6 +3987,60 @@ describe("Editor", () => {
       expect(scrolledRanges.some((range) => range.startIndex > 0)).toBe(true);
     });
 
+    it("does not query stale visible syntax ranges before edit parsing catches up", async () => {
+      const ranges: EditorSyntaxRange[] = [];
+      const applyChangeResult = createDeferred<EditorSyntaxResult>();
+      let applyChangeStarted = false;
+      setEditorSyntaxSessionFactory(() =>
+        createMockSyntaxSession({
+          refresh: async () => createSyntaxResult([]),
+          applyChange: () => {
+            applyChangeStarted = true;
+            return applyChangeResult.promise;
+          },
+          queryRange: async (range) => {
+            ranges.push(range);
+            return createSyntaxResult([
+              {
+                start: range.startIndex + 10,
+                end: range.startIndex + 15,
+                style: { color: "#00ff00" },
+              },
+            ]);
+          },
+        }),
+      );
+      const text = Array.from(
+        { length: 20_000 },
+        (_value, index) => `const line${index} = ${index};`,
+      ).join("\n");
+
+      editor.openDocument({
+        documentId: "main.ts",
+        languageId: "typescript",
+        text,
+      });
+      await flushSyntaxDebounce();
+      const rangeCountAfterOpen = ranges.length;
+
+      editor.edit({ from: 0, to: 0, text: "\n" });
+      editor.setScrollPosition({ top: 300_000, left: 0 });
+      await flushTimers();
+      await flushMicrotasks();
+
+      expect(ranges).toHaveLength(rangeCountAfterOpen);
+
+      await flushSyntaxDebounce();
+      expect(applyChangeStarted).toBe(true);
+      expect(ranges).toHaveLength(rangeCountAfterOpen);
+
+      applyChangeResult.resolve(createSyntaxResult([]));
+      await flushMicrotasks();
+
+      expect(ranges).toHaveLength(rangeCountAfterOpen + 1);
+      expect(ranges.at(-1)?.startIndex).toBeGreaterThan(0);
+    });
+
     it("prefetches syntax ahead of fast scroll direction", async () => {
       const ranges: EditorSyntaxRange[] = [];
       setEditorSyntaxSessionFactory(() =>
@@ -4214,6 +4272,59 @@ describe("Editor", () => {
         (range) => range.startIndex >= 120_000 && rangeLength(range) <= 120_000,
       );
       expect(warmedTile).toBeDefined();
+      expect(ranges).not.toContainEqual({ startIndex: 0, endIndex: 120_000 });
+    });
+
+    it("keeps visible syntax folds when offscreen range warming finishes", async () => {
+      const events: ViewContributionEvent[] = [];
+      const ranges: EditorSyntaxRange[] = [];
+      const prefix = "if (x) {\n  y();\n}\n";
+      const text =
+        prefix +
+        Array.from(
+          { length: 60_000 },
+          (_value, index) => `const line${index} = ${index};`,
+        ).join("\n");
+      const fold = {
+        startIndex: 0,
+        endIndex: prefix.length - 1,
+        startLine: 0,
+        endLine: 2,
+        type: "statement_block",
+        languageId: "typescript",
+      };
+      editor.dispose();
+      editor = new Editor(container, {
+        plugins: withTestLanguagePlugins(createViewContributionPlugin(events)),
+      });
+      setEditorSyntaxSessionFactory(() =>
+        createMockSyntaxSession({
+          refresh: async () => createSyntaxResult([], []),
+          queryRange: async (range) => {
+            ranges.push(range);
+            const folds = range.startIndex <= fold.startIndex && range.endIndex >= fold.endIndex
+              ? [fold]
+              : [];
+            return createSyntaxResult([], folds);
+          },
+        }),
+      );
+
+      editor.openDocument({
+        documentId: "main.ts",
+        languageId: "typescript",
+        text,
+      });
+      await flushSyntaxDebounce();
+
+      expect(latestFoldMarkers(events)).toHaveLength(1);
+
+      await flushSyntaxDebounce();
+
+      expect(
+        ranges.some((range) => range.startIndex >= 120_000 && rangeLength(range) <= 120_000),
+      ).toBe(true);
+      expect(latestFoldMarkers(events)).toHaveLength(1);
     });
 
     it("keeps previously queried syntax tokens while scrolling to a new range", async () => {
@@ -4249,21 +4360,22 @@ describe("Editor", () => {
         text,
       });
       await flushSyntaxDebounce();
+      const rangeCountAfterOpen = ranges.length;
       const initialToken = tokenSnapshotFromLastEvent(events)[0];
       expect(initialToken).toMatchObject({ start: 10, end: 15 });
 
       editor.setScrollPosition({ top: 300_000, left: 0 });
       await flushSyntaxDebounce();
-      const scrolledRange = ranges.at(-1);
       const tokens = tokenSnapshotFromLastEvent(events);
+      const scrolledRanges = ranges.slice(rangeCountAfterOpen);
+      const scrolledToken = tokens.find((token) =>
+        scrolledRanges.some(
+          (range) => range.startIndex > 0 && token.start === range.startIndex + 10,
+        ),
+      );
 
-      expect(scrolledRange?.startIndex).toBeGreaterThan(0);
       expect(tokens).toContainEqual(initialToken);
-      expect(tokens).toContainEqual({
-        start: (scrolledRange?.startIndex ?? 0) + 10,
-        end: (scrolledRange?.startIndex ?? 0) + 15,
-        style: { color: "#00ff00" },
-      });
+      expect(scrolledToken).toBeDefined();
     });
 
     it("repaints cached syntax immediately when scrolling back to a previous range", async () => {
@@ -4312,6 +4424,53 @@ describe("Editor", () => {
       expect(rangeCountAfterScrollAway).toBeGreaterThan(1);
       expect(ranges).toHaveLength(rangeCountAfterScrollAway);
       expect(tokens).toContainEqual(initialToken);
+    });
+
+    it("does not reuse cached visible syntax after newline edits", async () => {
+      const ranges: EditorSyntaxRange[] = [];
+      setEditorSyntaxSessionFactory(() =>
+        createMockSyntaxSession({
+          refresh: async () => createSyntaxResult([]),
+          queryRange: async (range) => {
+            ranges.push(range);
+            return createSyntaxResult([
+              {
+                start: range.startIndex + 10,
+                end: range.startIndex + 15,
+                style: { color: "#00ff00" },
+              },
+            ]);
+          },
+        }),
+      );
+      const text = Array.from(
+        { length: 20_000 },
+        (_value, index) => `const line${index} = ${index};`,
+      ).join("\n");
+
+      editor.openDocument({
+        documentId: "main.ts",
+        languageId: "typescript",
+        text,
+      });
+      await flushSyntaxDebounce();
+      editor.setScrollPosition({ top: 300_000, left: 0 });
+      await flushSyntaxDebounce();
+
+      editor.setSelection(5, 5, { reveal: false });
+      editorRoot().dispatchEvent(createLineBreakEvent());
+      expect(editor.getText().startsWith("const\n line0")).toBe(true);
+      const rangeCountBeforeScrollBack = ranges.length;
+      editor.setScrollPosition({ top: 0, left: 0 });
+      await flushTimers();
+      await flushMicrotasks();
+
+      expect(ranges).toHaveLength(rangeCountBeforeScrollBack);
+
+      await flushSyntaxDebounce();
+
+      expect(ranges.length).toBeGreaterThan(rangeCountBeforeScrollBack);
+      expect(ranges.at(-1)?.startIndex).toBe(0);
     });
 
     it("applies syncText changes through incremental syntax sessions", async () => {
@@ -4865,6 +5024,69 @@ describe("Editor", () => {
 
       expect(editor.getState().syntaxStatus).toBe("ready");
       expect(tokenHighlights()).toHaveLength(1);
+    });
+
+    it("keeps projected syntax highlights stable through mixed newlines and typing", async () => {
+      setEditorSyntaxSessionFactory(() =>
+        createMockSyntaxSession({
+          refresh: async () =>
+            createSyntaxResult([
+              { start: 0, end: 2, style: { color: "#ff0000" } },
+              { start: 3, end: 5, style: { color: "#00ff00" } },
+              { start: 6, end: 8, style: { color: "#0000ff" } },
+            ]),
+          applyChange: () => new Promise<EditorSyntaxResult>(() => undefined),
+        }),
+      );
+
+      editor.openDocument({ documentId: "main.ts", languageId: "typescript", text: "aa\nbb\ncc" });
+      await flushMicrotasks();
+
+      editor.setSelection(1);
+      editorRoot().dispatchEvent(createLineBreakEvent());
+      editor.setSelection(2);
+      editorRoot().dispatchEvent(createInsertEvent("X"));
+      editor.setSelection(3);
+      editorRoot().dispatchEvent(createLineBreakEvent());
+      editor.setSelection(4);
+      editorRoot().dispatchEvent(createInsertEvent("Y"));
+
+      const bbNode = rowTextNode(3);
+      const bbRange = tokenHighlightRanges().find((range) => range.startContainer === bbNode);
+      expect(editor.getText()).toBe("a\nX\nYa\nbb\ncc");
+      expect(bbRange).toBeDefined();
+      expect(bbRange!.startOffset).toBe(0);
+      expect(bbRange!.endOffset).toBe(2);
+    });
+
+    it("keeps projected syntax highlights stable through repeated newline-only edits", async () => {
+      setEditorSyntaxSessionFactory(() =>
+        createMockSyntaxSession({
+          refresh: async () =>
+            createSyntaxResult([
+              { start: 0, end: 2, style: { color: "#ff0000" } },
+              { start: 3, end: 5, style: { color: "#00ff00" } },
+              { start: 6, end: 8, style: { color: "#0000ff" } },
+            ]),
+          applyChange: () => new Promise<EditorSyntaxResult>(() => undefined),
+        }),
+      );
+
+      editor.openDocument({ documentId: "main.ts", languageId: "typescript", text: "aa\nbb\ncc" });
+      await flushMicrotasks();
+
+      for (let count = 0; count < 4; count += 1) {
+        editor.setSelection(editor.getText().indexOf("bb"));
+        editorRoot().dispatchEvent(createLineBreakEvent());
+      }
+
+      const bbRow = editor.getText().slice(0, editor.getText().indexOf("bb")).split("\n").length - 1;
+      const bbNode = rowTextNode(bbRow);
+      const bbRange = tokenHighlightRanges().find((range) => range.startContainer === bbNode);
+      expect(editor.getText()).toBe("aa\n\n\n\n\nbb\ncc");
+      expect(bbRange).toBeDefined();
+      expect(bbRange!.startOffset).toBe(0);
+      expect(bbRange!.endOffset).toBe(2);
     });
 
     it("keeps syntax fold controls until edit syntax finishes", async () => {

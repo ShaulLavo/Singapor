@@ -282,6 +282,12 @@ describe("token projection", () => {
       { start: 0, end: 5, style },
       { start: 10, end: 15, style },
     ]);
+    expect(
+      projectTokensThroughEdit(tokens, { from: 2, to: 2, text: "\n" }, "alpha beta gamma"),
+    ).toEqual([
+      { start: 7, end: 11, style },
+      { start: 12, end: 17, style },
+    ]);
   });
 
   it("records whether projected tokens can keep live ranges", () => {

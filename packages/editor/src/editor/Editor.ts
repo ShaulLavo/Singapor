@@ -956,6 +956,33 @@ export class Editor {
     return composed;
   }
 
+  private projectRowDecorationsThroughLineEdit(
+    edit: TextEdit,
+    previousText: TextSnapshot,
+    lineStarts: readonly number[],
+  ): boolean {
+    const rowDelta = editLineDelta(edit, previousText);
+    if (rowDelta === 0) return false;
+    if (this.directRowDecorations.size === 0 && this.rowDecorationSources.size === 0) return false;
+
+    const startRow = rowForOffset(lineStarts, edit.from);
+    const endRow = rowForOffset(lineStarts, edit.to);
+    this.directRowDecorations = projectRowDecorationMapThroughLineEdit(
+      this.directRowDecorations,
+      startRow,
+      endRow,
+      rowDelta,
+    );
+    for (const [sourceId, decorations] of this.rowDecorationSources) {
+      this.rowDecorationSources.set(
+        sourceId,
+        projectRowDecorationMapThroughLineEdit(decorations, startRow, endRow, rowDelta),
+      );
+    }
+
+    return true;
+  }
+
   private createViewContributionContext(container: HTMLElement): EditorViewContributionContext {
     return {
       container,
@@ -1235,6 +1262,7 @@ export class Editor {
     totalStart = nowMs(),
     options: SessionChangeOptions = {},
   ): void {
+    this.syntax.projectCacheForChange(change);
     let timedChange = change;
     const renderStart = nowMs();
     measureEditorPerformance("editor.renderSessionChange", () => this.renderSessionChange(change));
@@ -1279,8 +1307,14 @@ export class Editor {
         () => projectTokensThroughEdit(this.tokens, edit, previousTextSnapshot),
         () => ({ tokenCount: this.tokens.length }),
       );
+      const rowDecorationsProjected = this.projectRowDecorationsThroughLineEdit(
+        edit,
+        previousTextSnapshot,
+        this.view.getLineStarts(),
+      );
       this.applyEdit(edit, projectedTokens, documentSessionChangeTextSnapshot(change));
       this.foldState.applyProjection(foldProjection);
+      if (rowDecorationsProjected) this.view.setRowDecorations(this.composedRowDecorations());
       return;
     }
 
@@ -1441,6 +1475,58 @@ function mergeRowDecorationMap(
   for (const [row, decoration] of source) {
     target.set(row, mergeRowDecoration(target.get(row), decoration));
   }
+}
+
+function projectRowDecorationMapThroughLineEdit(
+  source: ReadonlyMap<number, VirtualizedTextRowDecoration>,
+  startRow: number,
+  endRow: number,
+  rowDelta: number,
+): Map<number, VirtualizedTextRowDecoration> {
+  const projected = new Map<number, VirtualizedTextRowDecoration>();
+  for (const [row, decoration] of source) {
+    if (row < startRow) {
+      projected.set(row, decoration);
+      continue;
+    }
+
+    if (row === startRow) {
+      projected.set(row, decoration);
+      continue;
+    }
+
+    if (row > endRow) projected.set(Math.max(0, row + rowDelta), decoration);
+  }
+
+  return projected;
+}
+
+function editLineDelta(edit: TextEdit, previousText: TextSnapshot): number {
+  return countLineBreaks(edit.text) - countLineBreaks(previousText.getTextInRange(edit.from, edit.to));
+}
+
+function countLineBreaks(text: string): number {
+  let count = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    if (text[index] === "\n") count += 1;
+  }
+  return count;
+}
+
+function rowForOffset(lineStarts: readonly number[], offset: number): number {
+  let low = 0;
+  let high = lineStarts.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if ((lineStarts[middle] ?? 0) <= offset) {
+      low = middle + 1;
+      continue;
+    }
+
+    high = middle;
+  }
+
+  return Math.max(0, low - 1);
 }
 
 function syntaxScrollDirection(delta: number): SyntaxScrollDirection {

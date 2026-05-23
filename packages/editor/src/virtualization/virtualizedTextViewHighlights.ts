@@ -1,6 +1,7 @@
 import type { EditorToken, EditorTokenStyle } from "../tokens";
 import {
   copyTokenProjectionMetadata,
+  sourceTokensForProjectedTokens,
   tokenProjectionLiveRangeStatus,
 } from "../editor/tokenProjection";
 import { getEditorTokenIndex, type EditorTokenIndex } from "../editor/tokenIndex";
@@ -39,6 +40,7 @@ import type {
   VirtualizedTextRow,
 } from "./virtualizedTextViewTypes";
 import type {
+  SameLineTokenEdit,
   TokenRenderEntry,
   VirtualizedTextHighlightGroup,
   VirtualizedTextHighlightRange,
@@ -47,6 +49,11 @@ import type {
   VirtualizedTextSelection,
   VirtualizedTextViewInternal,
 } from "./virtualizedTextViewInternals";
+
+type TokenStyleSource = {
+  readonly entriesByIndex: ReadonlyMap<number, TokenRenderEntry> | null;
+  readonly tokens: readonly EditorToken[];
+};
 
 export function setTokens(view: VirtualizedTextViewInternal, tokens: readonly EditorToken[]): void {
   const copiedTokens = [...tokens];
@@ -59,10 +66,24 @@ export function adoptTokens(
   tokens: readonly EditorToken[],
 ): void {
   const projectionStatus = tokenProjectionLiveRangeStatus(view.tokens, tokens);
-  if (canKeepLiveTokenRanges(view, tokens, projectionStatus)) {
+  if (projectionStatus === true && !view.sameLineTokenEdit) {
     view.tokens = tokens;
     view.tokenRenderIndexDirty = true;
-    reconcileTokenHighlightsAfterSameLineEdit(view);
+    if (view.rowTokenRanges.size === 0 && tokens.length > 0) renderTokenHighlights(view);
+    return;
+  }
+
+  if (canKeepLiveTokenRanges(view, tokens, projectionStatus)) {
+    const styleSource =
+      projectionStatus === true ? tokenStyleSourceForProjection(view, tokens) : null;
+    view.tokens = tokens;
+    view.tokenRenderIndexDirty = true;
+    reconcileTokenHighlightsAfterSameLineEdit(view, styleSource);
+    return;
+  }
+
+  if (view.tokens === tokens) {
+    if (view.rowTokenRanges.size === 0 && tokens.length > 0) renderTokenHighlights(view);
     return;
   }
 
@@ -71,7 +92,9 @@ export function adoptTokens(
     return;
   }
 
+  view.tokenProjectionDirtyStartRow = null;
   if (editorTokensEqual(view.tokens, tokens)) {
+    view.sameLineTokenEdit = null;
     view.tokens = tokens;
     renderTokenHighlights(view);
     return;
@@ -84,9 +107,44 @@ function adoptChangedTokens(
   view: VirtualizedTextViewInternal,
   tokens: readonly EditorToken[],
 ): void {
+  const pendingEdit = takeSameLineTokenEdit(view);
+  const dirtyStartRow = view.tokenProjectionDirtyStartRow;
   view.tokens = tokens;
   view.tokenRenderIndexDirty = true;
+  if (pendingEdit) {
+    reconcileTokenHighlightsFromRow(
+      view,
+      dirtyTokenProjectionStartRow(dirtyStartRow, pendingEdit.rowIndex),
+      dirtyStartRow !== null,
+    );
+    return;
+  }
+
+  view.tokenProjectionDirtyStartRow = null;
   renderTokenHighlights(view);
+}
+
+function tokenStyleSourceForProjection(
+  view: VirtualizedTextViewInternal,
+  tokens: readonly EditorToken[],
+): TokenStyleSource | null {
+  const sourceTokens = sourceTokensForProjectedTokens(tokens);
+  if (!sourceTokens) return null;
+
+  return {
+    entriesByIndex: tokenRenderEntriesBySourceIndex(view.tokenRenderEntries),
+    tokens: sourceTokens,
+  };
+}
+
+function tokenRenderEntriesBySourceIndex(
+  entries: readonly TokenRenderEntry[],
+): ReadonlyMap<number, TokenRenderEntry> | null {
+  if (entries.length === 0) return null;
+
+  const byIndex = new Map<number, TokenRenderEntry>();
+  for (const entry of entries) byIndex.set(entry.sourceIndex, entry);
+  return byIndex;
 }
 
 export function setSelection(
@@ -244,11 +302,13 @@ export function clampStoredSelection(view: VirtualizedTextViewInternal): void {
 }
 
 export function renderTokenHighlights(view: VirtualizedTextViewInternal): void {
-  const forceStartRow = takeSameLineTokenEditRebuildStartRow(view);
+  const pendingEdit = view.sameLineTokenEdit;
   if (!view.highlightRegistry || view.tokens.length === 0 || view.textLength === 0) {
     clearTokenHighlights(view);
     return;
   }
+
+  if (pendingEdit) return;
 
   // TODO: Smooth first syntax paint without forcing CSS Highlight API color animation.
   // Highlight pseudo styles do not reliably animate color, so this likely needs a
@@ -262,7 +322,7 @@ export function renderTokenHighlights(view: VirtualizedTextViewInternal): void {
         view,
         row,
         segmentsByRow.get(row.tokenHighlightSlotId) ?? [],
-        shouldForceTokenRowRebuild(row, forceStartRow),
+        shouldForceTokenRowRebuild(row, null),
       ) || styleRulesDirty;
   }
   if (styleRulesDirty) rebuildStyleRules(view);
@@ -275,7 +335,8 @@ function reconcileTokenHighlightsForRow(
   force = false,
 ): boolean {
   const signature = tokenRowSignature(row, segments);
-  if (!force && view.rowTokenSignatures.get(row.tokenHighlightSlotId) === signature) return false;
+  const previousSignature = view.rowTokenSignatures.get(row.tokenHighlightSlotId);
+  if (!force && previousSignature === signature) return false;
 
   deleteTokenRangesForRow(view, row.tokenHighlightSlotId);
   const styleRulesDirty = addTokenSegmentsForRow(view, row, segments);
@@ -283,14 +344,44 @@ function reconcileTokenHighlightsForRow(
   return styleRulesDirty;
 }
 
-function reconcileTokenHighlightsAfterSameLineEdit(view: VirtualizedTextViewInternal): void {
-  const forceStartRow = takeSameLineTokenEditRebuildStartRow(view);
-  if (forceStartRow === null) return;
+function reconcileTokenHighlightsAfterSameLineEdit(
+  view: VirtualizedTextViewInternal,
+  styleSource: TokenStyleSource | null = null,
+): void {
+  const edit = takeSameLineTokenEdit(view);
+  if (!edit) return;
 
-  const rows = getMountedRows(view).filter((row) => row.index >= forceStartRow);
+  reconcileTokenHighlightsAfterEdit(view, edit, styleSource);
+}
+
+function reconcileTokenHighlightsAfterEdit(
+  view: VirtualizedTextViewInternal,
+  edit: SameLineTokenEdit,
+  styleSource: TokenStyleSource | null = null,
+): void {
+  if (edit.kind === "multi-line") {
+    reconcileTokenHighlightsFromRow(view, edit.rowIndex);
+    view.tokenProjectionDirtyStartRow = null;
+    return;
+  }
+
+  if (view.tokenProjectionDirtyStartRow !== null) {
+    reconcileSameLineTokenRows(view, edit, styleSource);
+    return;
+  }
+
+  reconcileSameLineTokenRows(view, edit, styleSource);
+}
+
+function reconcileSameLineTokenRows(
+  view: VirtualizedTextViewInternal,
+  edit: SameLineTokenEdit,
+  styleSource: TokenStyleSource | null,
+): void {
+  const rows = rowsNeedingSameLineProjectionReconcile(view, edit);
   if (rows.length === 0) return;
 
-  const segmentsByRow = tokenSegmentsForRows(view, rows);
+  const segmentsByRow = tokenSegmentsForRows(view, rows, styleSource);
   let styleRulesDirty = false;
   for (const row of rows) {
     styleRulesDirty =
@@ -304,20 +395,84 @@ function reconcileTokenHighlightsAfterSameLineEdit(view: VirtualizedTextViewInte
   if (styleRulesDirty) rebuildStyleRules(view);
 }
 
-function takeSameLineTokenEditRebuildStartRow(view: VirtualizedTextViewInternal): number | null {
+function reconcileTokenHighlightsFromRow(
+  view: VirtualizedTextViewInternal,
+  startRow: number,
+  force = false,
+): void {
+  const rows = getMountedRows(view).filter((row) => row.index >= startRow);
+  if (rows.length === 0) return;
+
+  const segmentsByRow = tokenSegmentsForRows(view, rows);
+  let styleRulesDirty = false;
+  for (const row of rows) {
+    styleRulesDirty =
+      reconcileTokenHighlightsForRow(
+        view,
+        row,
+        segmentsByRow.get(row.tokenHighlightSlotId) ?? [],
+        force,
+      ) || styleRulesDirty;
+  }
+  if (styleRulesDirty) rebuildStyleRules(view);
+}
+
+function takeSameLineTokenEdit(view: VirtualizedTextViewInternal): SameLineTokenEdit | null {
   const edit = view.sameLineTokenEdit;
   view.sameLineTokenEdit = null;
-  if (!edit) return null;
+  return edit;
+}
 
-  return edit.editedRowPatchedInPlace ? edit.rowIndex + 1 : edit.rowIndex;
+function dirtyTokenProjectionStartRow(current: number | null, row: number): number {
+  if (current === null) return row;
+  return Math.min(current, row);
+}
+
+function rowsNeedingSameLineProjectionReconcile(
+  view: VirtualizedTextViewInternal,
+  edit: SameLineTokenEdit,
+): readonly MountedVirtualizedTextRow[] {
+  const rows = getMountedRows(view);
+  const needed: MountedVirtualizedTextRow[] = [];
+  const seen = new Set<number>();
+
+  const editedRow = rows.find((row) => row.index === edit.rowIndex);
+  if (editedRow) {
+    needed.push(editedRow);
+    seen.add(editedRow.tokenHighlightSlotId);
+  }
+
+  for (const row of rows) {
+    if (seen.has(row.tokenHighlightSlotId)) continue;
+    if (view.rowTokenSignatures.has(row.tokenHighlightSlotId)) continue;
+
+    needed.push(row);
+    seen.add(row.tokenHighlightSlotId);
+  }
+
+  return needed;
 }
 
 function shouldForceTokenRowRebuild(
   row: MountedVirtualizedTextRow,
-  forceStartRow: number | null,
+  edit: SameLineTokenEdit | null,
 ): boolean {
-  if (forceStartRow === null) return false;
-  return row.index >= forceStartRow;
+  if (!edit) return false;
+  if (edit.kind === "multi-line") return row.index >= edit.rowIndex;
+  if (edit.editedRowPatchedInPlace) return false;
+  return row.index === edit.rowIndex;
+}
+
+export function clearTokenHighlightsFromRow(
+  view: VirtualizedTextViewInternal,
+  startRow: number,
+): void {
+  for (const row of getMountedRows(view)) {
+    if (row.index < startRow) continue;
+
+    deleteTokenRangesForRow(view, row.tokenHighlightSlotId);
+    view.rowTokenSignatures.delete(row.tokenHighlightSlotId);
+  }
 }
 
 function ensureTokenRenderIndex(view: VirtualizedTextViewInternal): void {
@@ -353,9 +508,13 @@ function tokenRenderEntry(
   view: VirtualizedTextViewInternal,
   token: EditorToken,
   sourceIndex: number,
+  styleSource: TokenStyleSource | null = null,
 ): TokenRenderEntry | null {
-  const style = normalizeTokenStyle(token.style);
+  const sourceEntry = styleSource?.entriesByIndex?.get(sourceIndex);
+  const sourceStyle = styleSource?.tokens[sourceIndex]?.style ?? token.style;
+  const style = sourceEntry?.style ?? normalizeTokenStyle(sourceStyle);
   if (!style) return null;
+  const styleKey = sourceEntry?.styleKey ?? serializeTokenStyle(style);
 
   const start = clamp(token.start, 0, view.textLength);
   const end = clamp(token.end, start, view.textLength);
@@ -366,7 +525,7 @@ function tokenRenderEntry(
     start,
     end,
     style,
-    styleKey: serializeTokenStyle(style),
+    styleKey,
     sourceIndex,
   };
 }
@@ -455,11 +614,14 @@ function firstIndexedTokenEndingAfter(
 function tokenSegmentsForRows(
   view: VirtualizedTextViewInternal,
   rows: readonly MountedVirtualizedTextRow[],
+  styleSource: TokenStyleSource | null = null,
 ): Map<number, TokenRowSegment[]> {
   const segmentsByRow = new Map<number, TokenRowSegment[]>();
   if (rows.length === 0) return segmentsByRow;
 
-  if (appendIndexedTokenSegmentsForRows(view, segmentsByRow, rows)) return segmentsByRow;
+  if (appendIndexedTokenSegmentsForRows(view, segmentsByRow, rows, styleSource)) {
+    return segmentsByRow;
+  }
 
   ensureTokenRenderIndex(view);
   if (view.tokenRenderEntries.length === 0) return segmentsByRow;
@@ -475,12 +637,13 @@ function appendIndexedTokenSegmentsForRows(
   view: VirtualizedTextViewInternal,
   segmentsByRow: Map<number, TokenRowSegment[]>,
   rows: readonly MountedVirtualizedTextRow[],
+  styleSource: TokenStyleSource | null,
 ): boolean {
   const tokenIndex = getEditorTokenIndex(view.tokens);
   if (!tokenIndex?.sortedByStart) return false;
 
   for (const row of rows) {
-    appendIndexedTokenSegmentsForMountedRow(view, tokenIndex, segmentsByRow, row);
+    appendIndexedTokenSegmentsForMountedRow(view, tokenIndex, segmentsByRow, row, styleSource);
   }
 
   return true;
@@ -491,11 +654,19 @@ function appendIndexedTokenSegmentsForMountedRow(
   tokenIndex: EditorTokenIndex,
   segmentsByRow: Map<number, TokenRowSegment[]>,
   row: MountedVirtualizedTextRow,
+  styleSource: TokenStyleSource | null,
 ): void {
   if (row.kind !== "text") return;
 
   for (const chunk of row.chunks) {
-    appendIndexedTokenSegmentsForChunk(view, tokenIndex, segmentsByRow, row, chunk);
+    appendIndexedTokenSegmentsForChunk(
+      view,
+      tokenIndex,
+      segmentsByRow,
+      row,
+      chunk,
+      styleSource,
+    );
   }
 }
 
@@ -505,6 +676,7 @@ function appendIndexedTokenSegmentsForChunk(
   segmentsByRow: Map<number, TokenRowSegment[]>,
   row: MountedVirtualizedTextRow,
   chunk: VirtualizedTextChunk,
+  styleSource: TokenStyleSource | null,
 ): void {
   if (chunk.endOffset <= chunk.startOffset) return;
 
@@ -514,7 +686,7 @@ function appendIndexedTokenSegmentsForChunk(
 
   const segments = getOrCreateTokenSegments(segmentsByRow, row.tokenHighlightSlotId);
   for (let index = startIndex; index < endIndex; index += 1) {
-    const token = tokenRenderEntry(view, view.tokens[index]!, index);
+    const token = tokenRenderEntry(view, view.tokens[index]!, index, styleSource);
     if (!token) continue;
     if (token.end <= chunk.startOffset) continue;
     appendTokenSegmentForChunk(segments, chunk, token, token.style, token.styleKey);

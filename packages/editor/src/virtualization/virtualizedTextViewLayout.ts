@@ -30,7 +30,11 @@ import {
   normalizeRowHeight,
 } from "./virtualizedTextViewHelpers";
 import type { FixedRowVirtualizerSnapshot } from "./fixedRowVirtualizer";
-import type { SameLineEditPatch, VirtualizedFoldMarker } from "./virtualizedTextViewTypes";
+import type {
+  MultiLineEditPatch,
+  SameLineEditPatch,
+  VirtualizedFoldMarker,
+} from "./virtualizedTextViewTypes";
 import type { VirtualizedTextViewInternal } from "./virtualizedTextViewInternals";
 
 export type FoldStateUpdate = {
@@ -67,6 +71,21 @@ export function applySameLineTextLayout(
   view.foldMap = null;
   shiftLineStartsAfterRow(view, patch.rowIndex, delta);
   updateDisplayRowsAfterSameLineEdit(view, patch, delta);
+}
+
+export function applyMultiLineTextLayout(
+  view: VirtualizedTextViewInternal,
+  patch: MultiLineEditPatch,
+  edit: TextEdit,
+  textSnapshot: TextSnapshot,
+): void {
+  view.textSnapshot = textSnapshot;
+  view.textLength = textSnapshot.length;
+  view.textRevision += 1;
+  view.foldMap = null;
+  view.lineStarts = lineStartsAfterMultiLineEdit(view.lineStarts, edit);
+  view.lineStartOffsetIndex = null;
+  updateDisplayRowsAfterMultiLineEdit(view, patch);
 }
 
 export function setFoldStateLayout(
@@ -304,6 +323,76 @@ function updateDisplayRowsAfterSameLineEdit(
   view.displayRows[patch.rowIndex] = updateTextDisplayRow(row, patch, delta);
 }
 
+function updateDisplayRowsAfterMultiLineEdit(
+  view: VirtualizedTextViewInternal,
+  patch: MultiLineEditPatch,
+): void {
+  const replacementRows = createPlainDisplayRowsForRange(
+    view,
+    patch.startRow,
+    patch.startRow + patch.insertedLineBreaks,
+  );
+  const suffix = shiftPlainDisplayRows(
+    view.displayRows.slice(patch.endRow + 1),
+    patch.insertedLineBreaks - (patch.endRow - patch.startRow),
+    patch.delta,
+  );
+
+  view.displayRows = [
+    ...view.displayRows.slice(0, patch.startRow),
+    ...replacementRows,
+    ...suffix,
+  ];
+}
+
+function createPlainDisplayRowsForRange(
+  view: VirtualizedTextViewInternal,
+  startRow: number,
+  endRow: number,
+): DisplayRow[] {
+  const rows: DisplayRow[] = [];
+  const lastRow = view.lineStarts.length - 1;
+  for (let rowIndex = startRow; rowIndex <= endRow && rowIndex <= lastRow; rowIndex += 1) {
+    const startOffset = bufferLineStartOffset(view, rowIndex);
+    const endOffset = bufferLineEndOffset(view, rowIndex);
+    const text = view.textSnapshot.getTextInRange(startOffset, endOffset);
+    rows.push({
+      kind: "text",
+      source: "document",
+      index: rowIndex,
+      bufferRow: rowIndex,
+      startOffset,
+      endOffset,
+      text,
+      sourceText: text,
+      sourceStartColumn: 0,
+      sourceEndColumn: text.length,
+      wrapSegment: 0,
+    });
+  }
+
+  return rows;
+}
+
+function shiftPlainDisplayRows(
+  rows: readonly DisplayRow[],
+  rowDelta: number,
+  offsetDelta: number,
+): DisplayRow[] {
+  if (rowDelta === 0 && offsetDelta === 0) return [...rows];
+
+  return rows.map((row) => {
+    if (row.kind !== "text" || row.source !== "document") return row;
+    return {
+      ...row,
+      index: row.index + rowDelta,
+      bufferRow: row.bufferRow + rowDelta,
+      startOffset: row.startOffset + offsetDelta,
+      endOffset: row.endOffset + offsetDelta,
+    };
+  });
+}
+
 function updateTextDisplayRow(
   row: DisplayTextRow,
   patch: SameLineEditPatch,
@@ -320,6 +409,40 @@ function updateTextDisplayRow(
   };
 }
 
+function lineStartsAfterMultiLineEdit(
+  lineStarts: readonly number[],
+  edit: TextEdit,
+): number[] {
+  const delta = edit.text.length - (edit.to - edit.from);
+  const next: number[] = [];
+  for (const start of lineStarts) {
+    if (start <= edit.from) next.push(start);
+  }
+
+  forEachInsertedLineStart(edit, (start) => next.push(start));
+
+  for (const start of lineStarts) {
+    if (start > edit.to) next.push(start + delta);
+  }
+
+  return next.length > 0 ? next : [0];
+}
+
+function forEachInsertedLineStart(edit: TextEdit, visit: (start: number) => void): void {
+  for (let index = 0; index < edit.text.length; index += 1) {
+    if (edit.text[index] !== "\n") continue;
+    visit(edit.from + index + 1);
+  }
+}
+
+function lineBreakCount(text: string): number {
+  let count = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    if (text[index] === "\n") count += 1;
+  }
+  return count;
+}
+
 export function sameLineEditPatch(
   view: VirtualizedTextViewInternal,
   edit: TextEdit,
@@ -329,15 +452,36 @@ export function sameLineEditPatch(
     return null;
   if (edit.from < 0 || edit.to < edit.from || edit.to > view.textLength) return null;
   if (edit.text.includes("\n")) return null;
-  if (view.textSnapshot.getTextInRange(edit.from, edit.to).includes("\n")) return null;
 
-  const rowIndex = rowForOffset(view, edit.from);
+  const rowIndex = bufferRowForOffset(view, edit.from);
+  if (rowIndex !== bufferRowForOffset(view, edit.to)) return null;
   if (lineText(view, rowIndex).length > view.longLineChunkThreshold) return null;
   return {
     rowIndex,
     localFrom: edit.from - lineStartOffset(view, rowIndex),
     deleteLength: edit.to - edit.from,
     text: edit.text,
+  };
+}
+
+export function multiLineEditPatch(
+  view: VirtualizedTextViewInternal,
+  edit: TextEdit,
+): MultiLineEditPatch | null {
+  if (view.foldMap) return null;
+  if (view.wrapEnabled || view.blockRows.length > 0 || view.injectedTextRows.length > 0)
+    return null;
+  if (edit.from < 0 || edit.to < edit.from || edit.to > view.textLength) return null;
+
+  materializeLineStarts(view);
+  const startRow = bufferRowForOffset(view, edit.from);
+  const endRow = bufferRowForOffset(view, edit.to);
+  if (!edit.text.includes("\n") && startRow === endRow) return null;
+  return {
+    startRow,
+    endRow,
+    insertedLineBreaks: lineBreakCount(edit.text),
+    delta: edit.text.length - (edit.to - edit.from),
   };
 }
 
