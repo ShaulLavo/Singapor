@@ -210,7 +210,9 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
     }
   }
 
-  private reparseAfterIncrementalFailure(snapshot: PieceTableSnapshot): Promise<EditorSyntaxResult> {
+  private reparseAfterIncrementalFailure(
+    snapshot: PieceTableSnapshot,
+  ): Promise<EditorSyntaxResult> {
     this.parsedSnapshotVersion = 0
     this.backend.disposeDocument(this.documentId)
     return this.refresh(snapshot)

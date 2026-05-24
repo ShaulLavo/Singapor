@@ -1,3 +1,5 @@
+@import '@phosphor-icons/web/regular';
+
 .editor-find-widget {
   --editor-find-background-fallback: #252526;
   --editor-find-border-fallback: rgba(255, 255, 255, 0.12);
@@ -151,8 +153,9 @@
   outline-offset: -1px;
 }
 
-.editor-find-button svg {
+.editor-find-button .ph {
   display: block;
+  font-size: 16px;
   height: 16px;
   width: 16px;
 }
@@ -189,10 +192,10 @@
   }
 }
 
-.editor-find-replace-toggle svg {
+.editor-find-replace-toggle .ph {
   transition: transform 120ms ease;
 }
 
-.editor-find-replace-toggle[aria-expanded='true'] svg {
+.editor-find-replace-toggle[aria-expanded='true'] .ph {
   transform: rotate(90deg);
 }

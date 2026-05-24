@@ -864,7 +864,7 @@ export class InputSelectionController {
     event.preventDefault()
     const change = mergeChangeTimings(session.applyText(text), selectionChange)
     this.options.applySessionChange(change, 'input.paste', start, {
-      revealBlock: 'end',
+      revealBlock: pasteRevealBlock(text),
       revealOffset: this.primarySelectionHeadOffset(change),
     })
   }
@@ -1208,4 +1208,9 @@ export class InputSelectionController {
     if ((position & Node.DOCUMENT_POSITION_PRECEDING) !== 0) return this.text.length
     return null
   }
+}
+
+function pasteRevealBlock(text: string): SessionChangeOptions['revealBlock'] {
+  if (text.includes('\n') || text.includes('\r')) return 'end'
+  return 'nearest'
 }

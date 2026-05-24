@@ -2672,6 +2672,38 @@ describe('Editor', () => {
       expect(editorRoot().scrollTop).toBeGreaterThan(0)
     })
 
+    it('keeps a visible row stable when pasting single-line text', () => {
+      const originalResizeObserver = globalThis.ResizeObserver
+      globalThis.ResizeObserver = MockResizeObserver
+      MockResizeObserver.instances = []
+      editor.dispose()
+      editor = new Editor(container, {
+        lineHeight: 20,
+        plugins: withTestLanguagePlugins(),
+      })
+
+      try {
+        const root = editorRoot()
+        const observer = MockResizeObserver.instances.find((candidate) =>
+          candidate.observed.has(root),
+        )!
+        const text = Array.from({ length: 6 }, (_value, index) => `line ${index}`).join('\n')
+        const offset = text.indexOf('line 2') + 'line 2'.length
+        observer.emit(root, { height: 40, width: 80 })
+        editor.setText(text)
+        editor.setSelection(offset, offset, { reveal: false })
+        editor.focus()
+        root.scrollTop = 30
+
+        editorInput().dispatchEvent(createPasteEvent('!'))
+
+        expect(editor.getState().cursor).toEqual({ row: 2, column: 7 })
+        expect(root.scrollTop).toBe(30)
+      } finally {
+        globalThis.ResizeObserver = originalResizeObserver
+      }
+    })
+
     it('writes scrollTop once when revealing pasted text at the viewport end', () => {
       const pasted = Array.from({ length: 8 }, (_value, index) => `line ${index}`).join('\n')
       const root = editorRoot()

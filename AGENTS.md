@@ -81,6 +81,8 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the high-level system design: main th
 
 Monorepo managed by Turborepo with Bun.
 
+Run tests through package scripts with `bun run test`. Do not use `bun test`; it bypasses the configured Vitest environments for this repo.
+
 <!-- opensrc:start -->
 
 ## Source Code Reference

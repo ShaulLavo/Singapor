@@ -18,7 +18,7 @@
     "format:check": "oxfmt ."
   },
   "dependencies": {
-    "lucide": "^1.14.0"
+    "@phosphor-icons/web": "^2.1.2"
   },
   "devDependencies": {
     "@editor/core": "workspace:*",

@@ -1,17 +1,3 @@
-import {
-  ALargeSmall,
-  CaseSensitive,
-  ChevronDown,
-  ChevronRight,
-  ChevronUp,
-  RectangleEllipsis,
-  Regex,
-  Replace,
-  ReplaceAll,
-  WholeWord,
-  X,
-  type IconNode,
-} from 'lucide'
 import type { DocumentSessionChange, TextEdit, VirtualizedTextHighlightStyle } from '@editor/core'
 import { wordRangeAtOffset } from './textRanges'
 import {
@@ -467,6 +453,22 @@ type EditorFindWidgetState = EditorFindState & {
   readonly matchesPosition: number
 }
 
+const FIND_ICONS = {
+  caseSensitive: 'text-a-underline',
+  close: 'x',
+  next: 'caret-down',
+  preserveCase: 'text-aa',
+  previous: 'caret-up',
+  regex: 'asterisk',
+  replace: 'swap',
+  replaceAll: 'arrows-clockwise',
+  replaceToggle: 'caret-right',
+  scope: 'selection',
+  wholeWord: 'textbox',
+} as const
+
+type PhosphorIconName = (typeof FIND_ICONS)[keyof typeof FIND_ICONS]
+
 class EditorFindWidget {
   private readonly root: HTMLDivElement
   private readonly findInput: HTMLInputElement
@@ -493,13 +495,17 @@ class EditorFindWidget {
     this.replaceInput = document.createElement('input')
     this.replaceRow = document.createElement('div')
     this.count = document.createElement('span')
-    this.replaceToggleButton = createFindButton(document, ChevronRight, 'Toggle Replace')
+    this.replaceToggleButton = createFindButton(
+      document,
+      FIND_ICONS.replaceToggle,
+      'Toggle Replace',
+    )
     this.replaceToggleButton.classList.add('editor-find-replace-toggle')
-    this.caseButton = createFindButton(document, CaseSensitive, 'Match Case')
-    this.wordButton = createFindButton(document, WholeWord, 'Whole Word')
-    this.regexButton = createFindButton(document, Regex, 'Use Regular Expression')
-    this.scopeButton = createFindButton(document, RectangleEllipsis, 'Find in Selection')
-    this.preserveButton = createFindButton(document, ALargeSmall, 'Preserve Case')
+    this.caseButton = createFindButton(document, FIND_ICONS.caseSensitive, 'Match Case')
+    this.wordButton = createFindButton(document, FIND_ICONS.wholeWord, 'Whole Word')
+    this.regexButton = createFindButton(document, FIND_ICONS.regex, 'Use Regular Expression')
+    this.scopeButton = createFindButton(document, FIND_ICONS.scope, 'Find in Selection')
+    this.preserveButton = createFindButton(document, FIND_ICONS.preserveCase, 'Preserve Case')
     this.build(document)
     container.appendChild(this.root)
   }
@@ -576,15 +582,15 @@ class EditorFindWidget {
       this.findInputFrame(document),
       this.count,
       this.scopeButton,
-      createFindButton(document, ChevronUp, 'Previous Match', this.options.onPrevious),
-      createFindButton(document, ChevronDown, 'Next Match', this.options.onNext),
-      createFindButton(document, X, 'Close', this.options.onClose),
+      createFindButton(document, FIND_ICONS.previous, 'Previous Match', this.options.onPrevious),
+      createFindButton(document, FIND_ICONS.next, 'Next Match', this.options.onNext),
+      createFindButton(document, FIND_ICONS.close, 'Close', this.options.onClose),
     )
     this.replaceRow.append(
       this.replaceInput,
       this.preserveButton,
-      createFindButton(document, Replace, 'Replace', this.options.onReplaceOne),
-      createFindButton(document, ReplaceAll, 'Replace All', this.options.onReplaceAll),
+      createFindButton(document, FIND_ICONS.replace, 'Replace', this.options.onReplaceOne),
+      createFindButton(document, FIND_ICONS.replaceAll, 'Replace All', this.options.onReplaceAll),
     )
     return row
   }
@@ -707,14 +713,14 @@ function mergeReplaceEdit(merged: TextEdit[], edit: TextEdit): void {
 
 function createFindButton(
   document: Document,
-  icon: IconNode,
+  icon: PhosphorIconName,
   title: string,
   onClick?: () => void,
 ): HTMLButtonElement {
   const button = document.createElement('button')
   button.type = 'button'
   button.className = 'editor-find-button'
-  button.appendChild(createLucideIcon(document, icon))
+  button.appendChild(createPhosphorIcon(document, icon))
   setNativeTooltip(button, title)
   if (onClick) button.addEventListener('click', onClick)
   return button
@@ -731,31 +737,10 @@ function syncEditorThemeVariables(target: HTMLElement, source: HTMLElement): voi
   }
 }
 
-function createLucideIcon(document: Document, icon: IconNode): SVGElement {
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-  svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
-  svg.setAttribute('width', '16')
-  svg.setAttribute('height', '16')
-  svg.setAttribute('viewBox', '0 0 24 24')
-  svg.setAttribute('fill', 'none')
-  svg.setAttribute('stroke', 'currentColor')
-  svg.setAttribute('stroke-width', '2')
-  svg.setAttribute('stroke-linecap', 'round')
-  svg.setAttribute('stroke-linejoin', 'round')
-  svg.setAttribute('aria-hidden', 'true')
-  for (const child of icon) svg.appendChild(createSvgIconChild(document, child))
-  return svg
-}
-
-function createSvgIconChild(
-  document: Document,
-  node: readonly [string, Record<string, string | number | undefined>],
-): SVGElement {
-  const [tag, attributes] = node
-  const element = document.createElementNS('http://www.w3.org/2000/svg', tag)
-  for (const [name, value] of Object.entries(attributes)) {
-    if (value !== undefined) element.setAttribute(name, String(value))
-  }
+function createPhosphorIcon(document: Document, icon: PhosphorIconName): HTMLElement {
+  const element = document.createElement('i')
+  element.className = `ph ph-${icon}`
+  element.setAttribute('aria-hidden', 'true')
   return element
 }
 
