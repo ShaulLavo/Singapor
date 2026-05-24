@@ -1,28 +1,28 @@
-import { setStyleValue } from "./virtualizedTextViewHelpers";
-import { rangeSegments } from "./virtualizedTextViewGeometry";
-import { rowTextInsetLeft } from "./virtualizedTextViewBlockLanes";
+import { setStyleValue } from './virtualizedTextViewHelpers'
+import { rangeSegments } from './virtualizedTextViewGeometry'
+import { rowTextInsetLeft } from './virtualizedTextViewBlockLanes'
 import type {
   VirtualizedStoredSelection,
   VirtualizedTextViewInternal,
-} from "./virtualizedTextViewInternals";
-import type { MountedVirtualizedTextRow } from "./virtualizedTextViewTypes";
+} from './virtualizedTextViewInternals'
+import type { MountedVirtualizedTextRow } from './virtualizedTextViewTypes'
 
 type SelectionSegment = {
-  readonly start: number;
-  readonly end: number;
-  readonly left: number;
-  readonly width: number;
-};
+  readonly start: number
+  readonly end: number
+  readonly left: number
+  readonly width: number
+}
 
 export function renderSelectionLayer(view: VirtualizedTextViewInternal): void {
   for (const row of view.rowElements.values()) {
-    renderSelectionLayerForRow(view, row);
+    renderSelectionLayerForRow(view, row)
   }
 }
 
 export function clearSelectionLayer(view: VirtualizedTextViewInternal): void {
   for (const row of view.rowElements.values()) {
-    clearSelectionLayerForRow(row);
+    clearSelectionLayerForRow(row)
   }
 }
 
@@ -30,36 +30,36 @@ function renderSelectionLayerForRow(
   view: VirtualizedTextViewInternal,
   row: MountedVirtualizedTextRow,
 ): void {
-  const segments = selectionSegmentsForRow(view, row);
+  const segments = selectionSegmentsForRow(view, row)
   if (segments.length === 0) {
-    clearSelectionLayerForRow(row);
-    return;
+    clearSelectionLayerForRow(row)
+    return
   }
 
-  const key = selectionSegmentKey(segments);
+  const key = selectionSegmentKey(segments)
   if (row.selectionLayerKey === key) {
-    attachSelectionLayer(row);
-    return;
+    attachSelectionLayer(row)
+    return
   }
 
-  setSelectionLayerKey(row, key);
+  setSelectionLayerKey(row, key)
   row.selectionLayerElement.replaceChildren(
     ...segments.map((segment) => createSelectionElement(row, segment)),
-  );
-  attachSelectionLayer(row);
+  )
+  attachSelectionLayer(row)
 }
 
 function selectionSegmentsForRow(
   view: VirtualizedTextViewInternal,
   row: MountedVirtualizedTextRow,
 ): readonly SelectionSegment[] {
-  if (row.kind !== "text") return [];
+  if (row.kind !== 'text') return []
 
-  const segments: SelectionSegment[] = [];
+  const segments: SelectionSegment[] = []
   for (const selection of view.selections)
-    appendSelectionSegmentForRange(segments, view, row, selection);
+    appendSelectionSegmentForRange(segments, view, row, selection)
 
-  return mergeSelectionSegments(segments);
+  return mergeSelectionSegments(segments)
 }
 
 function appendSelectionSegmentForRange(
@@ -68,13 +68,13 @@ function appendSelectionSegmentForRange(
   row: MountedVirtualizedTextRow,
   selection: VirtualizedStoredSelection,
 ): void {
-  const emptyRowSegment = emptyRowSelectionSegment(view, row, selection);
+  const emptyRowSegment = emptyRowSelectionSegment(view, row, selection)
   if (emptyRowSegment) {
-    segments.push(emptyRowSegment);
-    return;
+    segments.push(emptyRowSegment)
+    return
   }
 
-  segments.push(...rangeSegments(view, row, selection.start, selection.end));
+  segments.push(...rangeSegments(view, row, selection.start, selection.end))
 }
 
 function emptyRowSelectionSegment(
@@ -82,47 +82,47 @@ function emptyRowSelectionSegment(
   row: MountedVirtualizedTextRow,
   selection: VirtualizedStoredSelection,
 ): SelectionSegment | null {
-  const offset = emptyRowSelectionOffset(view, row);
-  if (offset === null) return null;
-  if (!selectionIncludesOffset(selection, offset)) return null;
+  const offset = emptyRowSelectionOffset(view, row)
+  if (offset === null) return null
+  if (!selectionIncludesOffset(selection, offset)) return null
 
   return {
     start: row.startOffset,
     end: row.endOffset,
     left: rowTextInsetLeft(row),
     width: Math.max(1, view.metrics.characterWidth),
-  };
+  }
 }
 
 function emptyRowSelectionOffset(
   view: VirtualizedTextViewInternal,
   row: MountedVirtualizedTextRow,
 ): number | null {
-  if (row.text.length !== 0) return null;
-  if (row.startOffset < view.textLength) return row.startOffset;
-  if (row.startOffset === 0) return null;
-  if (view.textSnapshot.getTextInRange(row.startOffset - 1, row.startOffset) !== "\n") return null;
-  return row.startOffset - 1;
+  if (row.text.length !== 0) return null
+  if (row.startOffset < view.textLength) return row.startOffset
+  if (row.startOffset === 0) return null
+  if (view.textSnapshot.getTextInRange(row.startOffset - 1, row.startOffset) !== '\n') return null
+  return row.startOffset - 1
 }
 
 function selectionIncludesOffset(selection: VirtualizedStoredSelection, offset: number): boolean {
-  return selection.start <= offset && offset < selection.end;
+  return selection.start <= offset && offset < selection.end
 }
 
 function mergeSelectionSegments(
   segments: readonly SelectionSegment[],
 ): readonly SelectionSegment[] {
-  const sorted = [...segments].toSorted((left, right) => left.start - right.start);
-  const merged: SelectionSegment[] = [];
-  for (const segment of sorted) mergeSelectionSegment(merged, segment);
-  return merged;
+  const sorted = segments.toSorted((left, right) => left.start - right.start)
+  const merged: SelectionSegment[] = []
+  for (const segment of sorted) mergeSelectionSegment(merged, segment)
+  return merged
 }
 
 function mergeSelectionSegment(segments: SelectionSegment[], segment: SelectionSegment): void {
-  const previous = segments.at(-1);
+  const previous = segments.at(-1)
   if (!previous || previous.end < segment.start) {
-    segments.push(segment);
-    return;
+    segments.push(segment)
+    return
   }
 
   segments[segments.length - 1] = {
@@ -132,44 +132,44 @@ function mergeSelectionSegment(segments: SelectionSegment[], segment: SelectionS
     width:
       Math.max(previous.left + previous.width, segment.left + segment.width) -
       Math.min(previous.left, segment.left),
-  };
+  }
 }
 
 function selectionSegmentKey(segments: readonly SelectionSegment[]): string {
-  return segments.map(selectionSegmentKeyPart).join("|");
+  return segments.map(selectionSegmentKeyPart).join('|')
 }
 
 function selectionSegmentKeyPart(segment: SelectionSegment): string {
-  return `${segment.start}:${segment.end}:${segment.left}:${segment.width}`;
+  return `${segment.start}:${segment.end}:${segment.left}:${segment.width}`
 }
 
 function createSelectionElement(
   row: MountedVirtualizedTextRow,
   segment: SelectionSegment,
 ): HTMLSpanElement {
-  const element = row.element.ownerDocument.createElement("span");
-  element.className = "editor-virtualized-selection-range";
-  element.dataset.editorSelectionStart = String(segment.start);
-  element.dataset.editorSelectionEnd = String(segment.end);
-  setStyleValue(element, "left", `${segment.left}px`);
-  setStyleValue(element, "width", `${segment.width}px`);
-  return element;
+  const element = row.element.ownerDocument.createElement('span')
+  element.className = 'editor-virtualized-selection-range'
+  element.dataset.editorSelectionStart = String(segment.start)
+  element.dataset.editorSelectionEnd = String(segment.end)
+  setStyleValue(element, 'left', `${segment.left}px`)
+  setStyleValue(element, 'width', `${segment.width}px`)
+  return element
 }
 
 function clearSelectionLayerForRow(row: MountedVirtualizedTextRow): void {
-  setSelectionLayerKey(row, "");
-  row.selectionLayerElement.replaceChildren();
-  row.selectionLayerElement.remove();
+  setSelectionLayerKey(row, '')
+  row.selectionLayerElement.replaceChildren()
+  row.selectionLayerElement.remove()
 }
 
 function attachSelectionLayer(row: MountedVirtualizedTextRow): void {
-  const layer = row.selectionLayerElement;
-  if (layer.parentElement === row.element) return;
+  const layer = row.selectionLayerElement
+  if (layer.parentElement === row.element) return
 
-  row.element.insertBefore(layer, row.element.firstChild);
+  row.element.insertBefore(layer, row.element.firstChild)
 }
 
 function setSelectionLayerKey(row: MountedVirtualizedTextRow, key: string): void {
-  const mutable = row as { selectionLayerKey: string };
-  mutable.selectionLayerKey = key;
+  const mutable = row as { selectionLayerKey: string }
+  mutable.selectionLayerKey = key
 }

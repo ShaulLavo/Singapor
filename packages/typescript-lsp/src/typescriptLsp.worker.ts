@@ -1,4 +1,5 @@
 import { lspPositionToOffset, offsetToLspPosition } from "@editor/lsp";
+import type { PublishDiagnosticsNotificationParams } from "@editor/lsp/types";
 import {
   createDefaultMapFromCDN,
   createSystem,
@@ -177,7 +178,7 @@ function initializeResult(params: unknown): lsp.InitializeResult {
       hoverProvider: true,
       completionProvider: {
         resolveProvider: false,
-        triggerCharacters: [...COMPLETION_TRIGGER_CHARACTERS],
+        triggerCharacters: Array.from(COMPLETION_TRIGGER_CHARACTERS),
       },
       definitionProvider: true,
       referencesProvider: true,
@@ -484,7 +485,7 @@ function isPackageFile(fileName: string, root: string, rootPrefix: string): bool
 }
 
 function workspacePackages(): readonly WorkspacePackage[] {
-  return [...workspaceFiles.entries()].flatMap(([fileName, text]) =>
+  return Array.from(workspaceFiles.entries()).flatMap(([fileName, text]) =>
     workspacePackageFromFile(fileName, text),
   );
 }
@@ -513,10 +514,10 @@ function rootFileNames(
   projectConfig: ProjectConfig | null,
 ): string[] {
   const roots = new Set(
-    projectConfig?.fileNames ?? [...fsMap.keys()].filter(isTypeScriptLspSourceFileName),
+    projectConfig?.fileNames ?? Array.from(fsMap.keys()).filter(isTypeScriptLspSourceFileName),
   );
   for (const document of documents.values()) roots.add(document.fileName);
-  return [...roots].filter(isTypeScriptLspSourceFileName);
+  return Array.from(roots).filter(isTypeScriptLspSourceFileName);
 }
 
 function invalidateService(): void {
@@ -555,7 +556,7 @@ function collectDiagnostics(
     ...service.getSyntacticDiagnostics(fileName),
     ...service.getSemanticDiagnostics(fileName),
     ...service.getSuggestionDiagnostics(fileName),
-  ].map(tsDiagnosticToLspDiagnostic);
+  ].map((diagnostic) => tsDiagnosticToLspDiagnostic(diagnostic));
 }
 
 function hoverFromQuickInfo(text: string, quickInfo: ts.QuickInfo): lsp.Hover {
@@ -794,11 +795,8 @@ function postDiagnostics(
   version: number | null,
   diagnostics: readonly lsp.Diagnostic[],
 ): void {
-  const params: lsp.PublishDiagnosticsParams = {
-    uri,
-    diagnostics: [...diagnostics],
-  };
-  if (version !== null) params.version = version;
+  const params: PublishDiagnosticsNotificationParams =
+    version === null ? { uri, diagnostics } : { uri, version, diagnostics };
   postNotification("textDocument/publishDiagnostics", params);
 }
 
@@ -883,7 +881,7 @@ function readProjectConfig(): ProjectConfig | null {
 function projectConfigFileName(): string | null {
   if (workspaceFiles.has("/tsconfig.json")) return "/tsconfig.json";
   return (
-    [...workspaceFiles.keys()]
+    Array.from(workspaceFiles.keys())
       .filter((fileName) => fileName.endsWith("/tsconfig.json"))
       .toSorted((left, right) => left.length - right.length || left.localeCompare(right))[0] ?? null
   );
@@ -911,7 +909,7 @@ function parseConfigHost(): ts.ParseConfigHost {
 
 function readWorkspaceDirectory(rootDir: string, extensions: readonly string[]): string[] {
   const root = sourcePathToFileName(rootDir);
-  return [...workspaceFiles.keys()].filter((fileName) =>
+  return Array.from(workspaceFiles.keys()).filter((fileName) =>
     isConfigDirectoryMatch(fileName, root, extensions),
   );
 }

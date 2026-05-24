@@ -1,4 +1,4 @@
-import { offsetToLspPosition } from "@editor/lsp";
+import { offsetToLspPosition } from "@editor/lsp/positions";
 import ts from "typescript";
 import type * as lsp from "vscode-languageserver-protocol";
 
@@ -6,8 +6,10 @@ const WARNING = 2;
 const INFORMATION = 3;
 const HINT = 4;
 
-export function tsDiagnosticToLspDiagnostic(diagnostic: ts.Diagnostic): lsp.Diagnostic {
-  const text = diagnostic.file?.text ?? "";
+export function tsDiagnosticToLspDiagnostic(
+  diagnostic: ts.Diagnostic,
+  text = diagnostic.file?.text ?? "",
+): lsp.Diagnostic {
   const start = clampDiagnosticOffset(diagnostic.start ?? 0, text);
   const end = clampDiagnosticOffset(start + (diagnostic.length ?? 0), text);
 
@@ -19,8 +21,12 @@ export function tsDiagnosticToLspDiagnostic(diagnostic: ts.Diagnostic): lsp.Diag
     severity: lspSeverityForTsDiagnostic(diagnostic),
     code: diagnostic.code,
     source: "typescript",
-    message: ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
+    message: tsDiagnosticMessageText(diagnostic),
   };
+}
+
+export function tsDiagnosticMessageText(diagnostic: ts.Diagnostic): string {
+  return ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n");
 }
 
 function lspSeverityForTsDiagnostic(diagnostic: ts.Diagnostic): lsp.DiagnosticSeverity {

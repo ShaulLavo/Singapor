@@ -203,7 +203,7 @@ export class IncrementalShikiTokenizer implements IncrementalTokenizer {
     );
 
     this.code += chunk;
-    this.lines = [...prefix, ...nextTail];
+    this.lines = prefix.concat(nextTail);
 
     return {
       fromLine: startLine,
@@ -288,7 +288,7 @@ export class IncrementalShikiTokenizer implements IncrementalTokenizer {
     }
 
     this.code = code;
-    this.lines = [...nextPrefix, ...rebuiltMiddle];
+    this.lines = nextPrefix.concat(rebuiltMiddle);
 
     return {
       fromLine: prefixLength,

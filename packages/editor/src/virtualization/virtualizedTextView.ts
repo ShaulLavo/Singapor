@@ -1,18 +1,18 @@
-import type { FoldMap } from "../foldMap";
+import type { FoldMap } from '../foldMap'
 import {
   normalizeTabSize,
   isDocumentTextDisplayRow,
   type BlockLane,
   type BlockRow,
   type InjectedTextRow,
-} from "../displayTransforms";
-import { createStringTextSnapshot, type TextSnapshot } from "../documentTextSnapshot";
-import type { EditorTheme } from "../theme";
-import type { EditorGutterContribution, EditorGutterWidthContext } from "../plugins";
-import type { EditorToken, TextEdit } from "../tokens";
-import { applyEditorTheme } from "../theme";
-import { measureBrowserTextMetrics, type BrowserTextMetrics } from "./browserMetrics";
-import { FixedRowVirtualizer, type FixedRowVirtualizerSnapshot } from "./fixedRowVirtualizer";
+} from '../displayTransforms'
+import { createStringTextSnapshot, type TextSnapshot } from '../documentTextSnapshot'
+import type { EditorTheme } from '../theme'
+import type { EditorGutterContribution, EditorGutterWidthContext } from '../plugins'
+import type { EditorToken, TextEdit } from '../tokens'
+import { applyEditorTheme } from '../theme'
+import { measureBrowserTextMetrics, type BrowserTextMetrics } from './browserMetrics'
+import { FixedRowVirtualizer, type FixedRowVirtualizerSnapshot } from './fixedRowVirtualizer'
 import {
   DEFAULT_OVERSCAN,
   DEFAULT_SELECTION_HIGHLIGHT,
@@ -30,7 +30,7 @@ import {
   normalizeHorizontalOverscan,
   normalizeRowGap,
   normalizeRowHeight,
-} from "./virtualizedTextViewHelpers";
+} from './virtualizedTextViewHelpers'
 import {
   adoptTokens as adoptViewTokens,
   clampStoredSelection,
@@ -49,11 +49,11 @@ import {
   setSelection,
   setSelections,
   setTokens as setViewTokens,
-} from "./virtualizedTextViewHighlights";
+} from './virtualizedTextViewHighlights'
 import {
   normalizeHiddenCharactersMode,
   renderHiddenCharacters,
-} from "./virtualizedTextViewHiddenCharacters";
+} from './virtualizedTextViewHiddenCharacters'
 import {
   applyMultiLineTextLayout,
   applySameLineTextLayout,
@@ -75,13 +75,13 @@ import {
   updateVirtualizerRows,
   visibleLineCount,
   visualColumnForOffset,
-} from "./virtualizedTextViewLayout";
-import { clearRowGeometryCaches, xToOffset } from "./virtualizedTextViewGeometry";
+} from './virtualizedTextViewLayout'
+import { clearRowGeometryCaches, xToOffset } from './virtualizedTextViewGeometry'
 import {
   disposeAllMountedBlockLanes,
   renderBlockLanes,
   setBlockLanesLayout,
-} from "./virtualizedTextViewBlockLanes";
+} from './virtualizedTextViewBlockLanes'
 import {
   applyRowHeight,
   disposeBlockRowMounts,
@@ -108,7 +108,7 @@ import {
   updateSpacerHeight,
   updateSpacerWidth,
   viewportPointMetrics,
-} from "./virtualizedTextViewRows";
+} from './virtualizedTextViewRows'
 import type {
   CreateRangeOptions,
   RevealBlock,
@@ -116,7 +116,7 @@ import type {
   VirtualizedTextHighlightStyle,
   VirtualizedTextSelection,
   VirtualizedTextViewInternal,
-} from "./virtualizedTextViewInternals";
+} from './virtualizedTextViewInternals'
 import type {
   EditorCursorLineHighlightOptions,
   HiddenCharactersMode,
@@ -127,7 +127,7 @@ import type {
   VirtualizedTextRowDecoration,
   VirtualizedTextViewOptions,
   VirtualizedTextViewState,
-} from "./virtualizedTextViewTypes";
+} from './virtualizedTextViewTypes'
 
 export type {
   EditorCursorLineHighlightOptions,
@@ -145,58 +145,58 @@ export type {
   VirtualizedTextRow,
   VirtualizedTextViewOptions,
   VirtualizedTextViewState,
-} from "./virtualizedTextViewTypes";
+} from './virtualizedTextViewTypes'
 
 const DEFAULT_CURSOR_LINE_HIGHLIGHT: Required<EditorCursorLineHighlightOptions> = {
   gutterNumber: false,
   gutterBackground: true,
   rowBackground: true,
-};
+}
 
 function normalizeGutterWidthProvider(
-  gutterWidth: VirtualizedTextViewOptions["gutterWidth"],
+  gutterWidth: VirtualizedTextViewOptions['gutterWidth'],
 ): ((context: EditorGutterWidthContext) => number) | null {
-  if (typeof gutterWidth === "function") return gutterWidth;
-  if (gutterWidth === undefined) return null;
+  if (typeof gutterWidth === 'function') return gutterWidth
+  if (gutterWidth === undefined) return null
 
-  return () => gutterWidth;
+  return () => gutterWidth
 }
 
 export class VirtualizedTextView {
-  public readonly scrollElement: HTMLDivElement;
-  public readonly inputElement: HTMLTextAreaElement;
-  private readonly view: VirtualizedTextViewInternal;
+  public readonly scrollElement: HTMLDivElement
+  public readonly inputElement: HTMLTextAreaElement
+  private readonly view: VirtualizedTextViewInternal
 
   public constructor(container: HTMLElement, options: VirtualizedTextViewOptions = {}) {
-    const overscan = options.overscan ?? DEFAULT_OVERSCAN;
-    const gutterContributions = [...(options.gutterContributions ?? [])];
-    const gutterWidthProvider = normalizeGutterWidthProvider(options.gutterWidth);
+    const overscan = options.overscan ?? DEFAULT_OVERSCAN
+    const gutterContributions = options.gutterContributions ?? []
+    const gutterWidthProvider = normalizeGutterWidthProvider(options.gutterWidth)
 
-    const styleEl = container.ownerDocument.createElement("style");
-    const scrollElement = createScrollElement(container, options.className);
-    const textMetrics = options.textMetrics ?? null;
-    const measuredMetrics = textMetrics ?? measureBrowserTextMetrics(scrollElement);
-    const lineHeightOverride = options.lineHeight ?? options.rowHeight ?? null;
-    const rowHeight = normalizeRowHeight(lineHeightOverride ?? measuredMetrics.rowHeight);
-    const rowGap = normalizeRowGap(options.rowGap);
-    const inputElement = createInputElement(container);
-    const spacer = container.ownerDocument.createElement("div");
-    const gutterElement = container.ownerDocument.createElement("div");
-    const blockLaneLayerElement = container.ownerDocument.createElement("div");
-    const caretLayerElement = container.ownerDocument.createElement("div");
-    const caretElement = container.ownerDocument.createElement("div");
-    const longLineChunkSize = normalizeChunkSize(options.longLineChunkSize);
+    const styleEl = container.ownerDocument.createElement('style')
+    const scrollElement = createScrollElement(container, options.className)
+    const textMetrics = options.textMetrics ?? null
+    const measuredMetrics = textMetrics ?? measureBrowserTextMetrics(scrollElement)
+    const lineHeightOverride = options.lineHeight ?? options.rowHeight ?? null
+    const rowHeight = normalizeRowHeight(lineHeightOverride ?? measuredMetrics.rowHeight)
+    const rowGap = normalizeRowGap(options.rowGap)
+    const inputElement = createInputElement(container)
+    const spacer = container.ownerDocument.createElement('div')
+    const gutterElement = container.ownerDocument.createElement('div')
+    const blockLaneLayerElement = container.ownerDocument.createElement('div')
+    const caretLayerElement = container.ownerDocument.createElement('div')
+    const caretElement = container.ownerDocument.createElement('div')
+    const longLineChunkSize = normalizeChunkSize(options.longLineChunkSize)
     const longLineChunkThreshold = normalizeChunkThreshold(
       options.longLineChunkThreshold,
       longLineChunkSize,
-    );
-    const tabSize = normalizeTabSize(options.tabSize);
+    )
+    const tabSize = normalizeTabSize(options.tabSize)
     const virtualizer = new FixedRowVirtualizer(
       createVirtualizerOptions(rowHeight, overscan, rowGap),
-    );
+    )
 
-    this.scrollElement = scrollElement;
-    this.inputElement = inputElement;
+    this.scrollElement = scrollElement
+    this.inputElement = inputElement
     this.view = {
       scrollElement,
       inputElement,
@@ -225,8 +225,8 @@ export class VirtualizedTextView {
       selectionHighlight: null,
       rangeHighlightGroups: new Map(),
       selectionHighlightRegistered: false,
-      text: "",
-      textSnapshot: createStringTextSnapshot(""),
+      text: '',
+      textSnapshot: createStringTextSnapshot(''),
       textLength: 0,
       textRevision: 0,
       tokens: [],
@@ -264,8 +264,8 @@ export class VirtualizedTextView {
       selectionEnd: null,
       selectionHead: null,
       selections: [],
-      lastSelectionHighlightSignature: "",
-      lastRenderedRowsKey: "",
+      lastSelectionHighlightSignature: '',
+      lastRenderedRowsKey: '',
       gutterContributionWidths: new Map(),
       gutterWidthDirty: true,
       currentGutterWidth: 0,
@@ -279,192 +279,192 @@ export class VirtualizedTextView {
       metrics: { ...measuredMetrics, rowHeight },
       textMetrics,
       hiddenCharacters: normalizeHiddenCharactersMode(options.hiddenCharacters),
-    };
+    }
 
-    scrollElement.style.setProperty("--editor-gutter-width", "0px");
-    scrollElement.style.setProperty("--editor-tab-size", String(tabSize));
-    setBlockLanesLayout(this.view, options.blockLanes ?? []);
-    applyRowHeight(this.view, rowHeight);
-    spacer.className = "editor-virtualized-spacer";
-    gutterElement.className = "editor-virtualized-gutter";
-    blockLaneLayerElement.className = "editor-virtualized-horizontal-block-layer";
-    caretLayerElement.className = "editor-virtualized-caret-layer";
-    caretElement.className = "editor-virtualized-caret";
-    caretElement.hidden = true;
-    caretLayerElement.appendChild(caretElement);
-    if (gutterContributions.length > 0 || gutterWidthProvider) spacer.appendChild(gutterElement);
-    spacer.appendChild(blockLaneLayerElement);
-    spacer.appendChild(caretLayerElement);
-    scrollElement.appendChild(spacer);
-    scrollElement.appendChild(inputElement);
+    scrollElement.style.setProperty('--editor-gutter-width', '0px')
+    scrollElement.style.setProperty('--editor-tab-size', String(tabSize))
+    setBlockLanesLayout(this.view, options.blockLanes ?? [])
+    applyRowHeight(this.view, rowHeight)
+    spacer.className = 'editor-virtualized-spacer'
+    gutterElement.className = 'editor-virtualized-gutter'
+    blockLaneLayerElement.className = 'editor-virtualized-horizontal-block-layer'
+    caretLayerElement.className = 'editor-virtualized-caret-layer'
+    caretElement.className = 'editor-virtualized-caret'
+    caretElement.hidden = true
+    caretLayerElement.appendChild(caretElement)
+    if (gutterContributions.length > 0 || gutterWidthProvider) spacer.appendChild(gutterElement)
+    spacer.appendChild(blockLaneLayerElement)
+    spacer.appendChild(caretLayerElement)
+    scrollElement.appendChild(spacer)
+    scrollElement.appendChild(inputElement)
 
     virtualizer.attachScrollElement(
       scrollElement,
       (snapshot) => {
-        this.renderSnapshot(snapshot);
+        this.renderSnapshot(snapshot)
       },
       { readInitialScrollPosition: false },
-    );
-    rebuildStyleRules(this.view);
+    )
+    rebuildStyleRules(this.view)
   }
 
   public dispose(): void {
-    const view = this.view;
-    clearSelectionHighlight(view);
-    for (const name of view.rangeHighlightGroups.keys()) clearRangeHighlight(view, name);
-    clearTokenHighlights(view);
-    view.virtualizer.dispose();
-    disposeBlockRowMounts(view);
-    disposeAllMountedBlockLanes(view);
-    disposeGutterCells(view);
-    this.scrollElement.remove();
-    view.styleEl.remove();
-    view.rowElements.clear();
-    view.rowPool.length = 0;
+    const view = this.view
+    clearSelectionHighlight(view)
+    for (const name of view.rangeHighlightGroups.keys()) clearRangeHighlight(view, name)
+    clearTokenHighlights(view)
+    view.virtualizer.dispose()
+    disposeBlockRowMounts(view)
+    disposeAllMountedBlockLanes(view)
+    disposeGutterCells(view)
+    this.scrollElement.remove()
+    view.styleEl.remove()
+    view.rowElements.clear()
+    view.rowPool.length = 0
   }
 
   public setText(text: string, textSnapshot = createStringTextSnapshot(text)): void {
-    const view = this.view;
-    view.sameLineTokenEdit = null;
-    view.tokenProjectionDirtyStartRow = null;
-    view.tokenRenderIndexDirty = true;
-    const { lineCountChanged } = setTextLayoutState(view, text, textSnapshot);
-    if (lineCountChanged) view.gutterWidthDirty = true;
-    rebuildDisplayRows(view, horizontalViewportColumns(view));
-    clampStoredSelection(view);
-    clearRowTokenState(view);
-    view.lastRenderedRowsKey = "";
-    resetContentWidthScan(view);
-    updateVirtualizerRows(view);
+    const view = this.view
+    view.sameLineTokenEdit = null
+    view.tokenProjectionDirtyStartRow = null
+    view.tokenRenderIndexDirty = true
+    const { lineCountChanged } = setTextLayoutState(view, text, textSnapshot)
+    if (lineCountChanged) view.gutterWidthDirty = true
+    rebuildDisplayRows(view, horizontalViewportColumns(view))
+    clampStoredSelection(view)
+    clearRowTokenState(view)
+    view.lastRenderedRowsKey = ''
+    resetContentWidthScan(view)
+    updateVirtualizerRows(view)
   }
 
   public refreshGutterWidth(): void {
-    const view = this.view;
-    view.gutterWidthDirty = true;
-    this.renderSnapshot(view.virtualizer.getSnapshot());
+    const view = this.view
+    view.gutterWidthDirty = true
+    this.renderSnapshot(view.virtualizer.getSnapshot())
   }
 
   public setFoldMap(foldMap: FoldMap | null): void {
-    this.setFoldState(this.view.foldMarkers, foldMap);
+    this.setFoldState(this.view.foldMarkers, foldMap)
   }
 
   public setFoldMarkers(markers: readonly VirtualizedFoldMarker[]): void {
-    this.setFoldState(markers, this.view.foldMap);
+    this.setFoldState(markers, this.view.foldMap)
   }
 
   public setFoldState(markers: readonly VirtualizedFoldMarker[], foldMap: FoldMap | null): void {
-    const view = this.view;
-    const update = setFoldStateLayout(view, markers, foldMap);
-    if (!update.changed) return;
+    const view = this.view
+    const update = setFoldStateLayout(view, markers, foldMap)
+    if (!update.changed) return
 
-    if (update.foldMapChanged) clearRowTokenState(view);
-    if (update.foldMapChanged) rebuildDisplayRows(view, horizontalViewportColumns(view));
+    if (update.foldMapChanged) clearRowTokenState(view)
+    if (update.foldMapChanged) rebuildDisplayRows(view, horizontalViewportColumns(view))
 
-    view.lastRenderedRowsKey = "";
+    view.lastRenderedRowsKey = ''
     if (update.foldMapChanged) {
-      updateVirtualizerRows(view);
-      return;
+      updateVirtualizerRows(view)
+      return
     }
 
-    this.renderSnapshot(view.virtualizer.getSnapshot());
+    this.renderSnapshot(view.virtualizer.getSnapshot())
   }
 
   public refreshMetrics(): BrowserTextMetrics {
-    const view = this.view;
-    const measured = view.textMetrics ?? measureBrowserTextMetrics(this.scrollElement);
-    const rowHeightValue = normalizeRowHeight(view.lineHeightOverride ?? measured.rowHeight);
-    this.applyMetrics({ rowHeight: rowHeightValue, characterWidth: measured.characterWidth });
-    return view.metrics;
+    const view = this.view
+    const measured = view.textMetrics ?? measureBrowserTextMetrics(this.scrollElement)
+    const rowHeightValue = normalizeRowHeight(view.lineHeightOverride ?? measured.rowHeight)
+    this.applyMetrics({ rowHeight: rowHeightValue, characterWidth: measured.characterWidth })
+    return view.metrics
   }
 
   public setLineHeight(lineHeight: number): boolean {
-    const view = this.view;
-    const rowHeightValue = normalizeRowHeight(lineHeight);
-    view.lineHeightOverride = rowHeightValue;
-    if (view.metrics.rowHeight === rowHeightValue) return false;
+    const view = this.view
+    const rowHeightValue = normalizeRowHeight(lineHeight)
+    view.lineHeightOverride = rowHeightValue
+    if (view.metrics.rowHeight === rowHeightValue) return false
 
-    this.applyMetrics({ ...view.metrics, rowHeight: rowHeightValue });
-    return true;
+    this.applyMetrics({ ...view.metrics, rowHeight: rowHeightValue })
+    return true
   }
 
   public setRowHeight(rowHeight: number): boolean {
-    return this.setLineHeight(rowHeight);
+    return this.setLineHeight(rowHeight)
   }
 
   public setRowGap(rowGap: number): boolean {
-    const view = this.view;
-    const nextRowGap = normalizeRowGap(rowGap);
-    if (view.rowGap === nextRowGap) return false;
+    const view = this.view
+    const nextRowGap = normalizeRowGap(rowGap)
+    if (view.rowGap === nextRowGap) return false
 
-    view.rowGap = nextRowGap;
-    clearRowGeometryCaches(view);
-    view.lastRenderedRowsKey = "";
-    updateVirtualizerRows(view);
-    return true;
+    view.rowGap = nextRowGap
+    clearRowGeometryCaches(view)
+    view.lastRenderedRowsKey = ''
+    updateVirtualizerRows(view)
+    return true
   }
 
   private applyMetrics(metrics: BrowserTextMetrics): void {
-    const view = this.view;
-    view.metrics = metrics;
-    clearRowGeometryCaches(view);
-    const rowHeightValue = metrics.rowHeight;
-    applyRowHeight(view, rowHeightValue);
-    view.gutterWidthDirty = true;
-    this.refreshWrapWidth();
-    view.lastRenderedRowsKey = "";
-    updateVirtualizerRows(view);
+    const view = this.view
+    view.metrics = metrics
+    clearRowGeometryCaches(view)
+    const rowHeightValue = metrics.rowHeight
+    applyRowHeight(view, rowHeightValue)
+    view.gutterWidthDirty = true
+    this.refreshWrapWidth()
+    view.lastRenderedRowsKey = ''
+    updateVirtualizerRows(view)
   }
 
   public applyEdit(edit: TextEdit, nextText: TextSnapshot | string): void {
-    const view = this.view;
+    const view = this.view
     const textSnapshot =
-      typeof nextText === "string" ? createStringTextSnapshot(nextText) : nextText;
-    const sameLinePatch = sameLineEditPatch(view, edit);
+      typeof nextText === 'string' ? createStringTextSnapshot(nextText) : nextText
+    const sameLinePatch = sameLineEditPatch(view, edit)
     if (sameLinePatch) {
-      this.applySameLineEdit(sameLinePatch, textSnapshot);
-      return;
+      this.applySameLineEdit(sameLinePatch, textSnapshot)
+      return
     }
 
-    const multiLinePatch = multiLineEditPatch(view, edit);
+    const multiLinePatch = multiLineEditPatch(view, edit)
     if (multiLinePatch) {
-      this.applyMultiLineEdit(multiLinePatch, edit, textSnapshot);
-      return;
+      this.applyMultiLineEdit(multiLinePatch, edit, textSnapshot)
+      return
     }
 
-    this.setText(textSnapshot.getText(), textSnapshot);
+    this.setText(textSnapshot.getText(), textSnapshot)
   }
 
   public setTokens(tokens: readonly EditorToken[]): void {
-    setViewTokens(this.view, tokens);
+    setViewTokens(this.view, tokens)
   }
 
   public adoptTokens(tokens: readonly EditorToken[]): void {
-    adoptViewTokens(this.view, tokens);
+    adoptViewTokens(this.view, tokens)
   }
 
   public setTheme(theme: EditorTheme | null | undefined): void {
-    applyEditorTheme(this.scrollElement, theme);
+    applyEditorTheme(this.scrollElement, theme)
   }
 
   public setEditable(editable: boolean): void {
     if (editable) {
-      this.inputElement.readOnly = false;
-      return;
+      this.inputElement.readOnly = false
+      return
     }
 
-    this.inputElement.readOnly = true;
+    this.inputElement.readOnly = true
   }
 
   public focusInput(): void {
-    const view = this.view;
-    const snapshot = view.virtualizer.getSnapshot();
-    const scrollTop = snapshot.scrollTop;
-    const scrollLeft = this.scrollElement.scrollLeft;
-    positionInputInViewport(view, snapshot.nativeScrollTop, scrollLeft);
-    this.inputElement.value = "";
-    this.inputElement.focus({ preventScroll: true });
-    this.inputElement.setSelectionRange(0, 0);
-    restoreScrollPosition(view, scrollTop, scrollLeft);
+    const view = this.view
+    const snapshot = view.virtualizer.getSnapshot()
+    const scrollTop = snapshot.scrollTop
+    const scrollLeft = this.scrollElement.scrollLeft
+    positionInputInViewport(view, snapshot.nativeScrollTop, scrollLeft)
+    this.inputElement.value = ''
+    this.inputElement.focus({ preventScroll: true })
+    this.inputElement.setSelectionRange(0, 0)
+    restoreScrollPosition(view, scrollTop, scrollLeft)
   }
 
   public setScrollMetrics(
@@ -473,131 +473,131 @@ export class VirtualizedTextView {
     viewportWidth?: number,
     scrollLeft?: number,
   ): void {
-    const width = viewportWidth ?? this.view.virtualizer.getSnapshot().viewportWidth;
-    this.refreshWrapWidth(width);
+    const width = viewportWidth ?? this.view.virtualizer.getSnapshot().viewportWidth
+    this.refreshWrapWidth(width)
     this.view.virtualizer.setScrollMetrics({
       scrollTop,
       viewportHeight,
       viewportWidth,
       scrollLeft,
-    });
+    })
   }
 
   public setWrapEnabled(enabled: boolean): void {
-    const view = this.view;
-    if (!setWrapEnabledLayout(view, enabled, horizontalViewportColumns(view))) return;
+    const view = this.view
+    if (!setWrapEnabledLayout(view, enabled, horizontalViewportColumns(view))) return
 
-    resetContentWidthScan(view);
-    clearRowGeometryCaches(view);
-    view.lastRenderedRowsKey = "";
-    updateVirtualizerRows(view);
+    resetContentWidthScan(view)
+    clearRowGeometryCaches(view)
+    view.lastRenderedRowsKey = ''
+    updateVirtualizerRows(view)
   }
 
   public setHiddenCharacters(mode: HiddenCharactersMode): void {
-    const view = this.view;
-    const next = normalizeHiddenCharactersMode(mode);
-    if (view.hiddenCharacters === next) return;
+    const view = this.view
+    const next = normalizeHiddenCharactersMode(mode)
+    if (view.hiddenCharacters === next) return
 
-    view.hiddenCharacters = next;
-    renderHiddenCharacters(view);
+    view.hiddenCharacters = next
+    renderHiddenCharacters(view)
   }
 
   public setBlockRows(blockRows: readonly BlockRow[]): void {
-    const view = this.view;
-    setBlockRowsLayout(view, blockRows, horizontalViewportColumns(view));
-    resetContentWidthScan(view);
-    clearRowGeometryCaches(view);
-    view.lastRenderedRowsKey = "";
-    updateVirtualizerRows(view);
+    const view = this.view
+    setBlockRowsLayout(view, blockRows, horizontalViewportColumns(view))
+    resetContentWidthScan(view)
+    clearRowGeometryCaches(view)
+    view.lastRenderedRowsKey = ''
+    updateVirtualizerRows(view)
   }
 
   public setInjectedTextRows(injectedTextRows: readonly InjectedTextRow[]): void {
-    const view = this.view;
-    setInjectedTextRowsLayout(view, injectedTextRows, horizontalViewportColumns(view));
-    resetContentWidthScan(view);
-    clearRowGeometryCaches(view);
-    view.lastRenderedRowsKey = "";
-    view.gutterWidthDirty = true;
-    updateVirtualizerRows(view);
+    const view = this.view
+    setInjectedTextRowsLayout(view, injectedTextRows, horizontalViewportColumns(view))
+    resetContentWidthScan(view)
+    clearRowGeometryCaches(view)
+    view.lastRenderedRowsKey = ''
+    view.gutterWidthDirty = true
+    updateVirtualizerRows(view)
   }
 
   public setBlockLanes(blockLanes: readonly BlockLane[]): void {
-    const view = this.view;
-    setBlockLanesLayout(view, blockLanes);
-    resetContentWidthScan(view);
-    clearRowGeometryCaches(view);
-    view.lastRenderedRowsKey = "";
-    this.renderSnapshot(view.virtualizer.getSnapshot());
+    const view = this.view
+    setBlockLanesLayout(view, blockLanes)
+    resetContentWidthScan(view)
+    clearRowGeometryCaches(view)
+    view.lastRenderedRowsKey = ''
+    this.renderSnapshot(view.virtualizer.getSnapshot())
   }
 
   public setRowDecorations(decorations: ReadonlyMap<number, VirtualizedTextRowDecoration>): void {
-    const view = this.view;
-    view.rowDecorations = decorations;
-    clearRowGeometryCaches(view);
-    view.lastRenderedRowsKey = "";
-    this.renderSnapshot(view.virtualizer.getSnapshot());
+    const view = this.view
+    view.rowDecorations = decorations
+    clearRowGeometryCaches(view)
+    view.lastRenderedRowsKey = ''
+    this.renderSnapshot(view.virtualizer.getSnapshot())
   }
 
   public setGutterContributions(contributions: readonly EditorGutterContribution[]): boolean {
-    if (!updateGutterContributions(this.view, contributions)) return false;
+    if (!updateGutterContributions(this.view, contributions)) return false
 
-    this.renderSnapshot(this.view.virtualizer.getSnapshot());
-    return true;
+    this.renderSnapshot(this.view.virtualizer.getSnapshot())
+    return true
   }
 
-  public reserveOverlayWidth(side: "left" | "right", width: number): boolean {
-    const value = width > 0 && Number.isFinite(width) ? `${Math.ceil(width)}px` : "";
-    const property = side === "left" ? "paddingLeft" : "paddingRight";
-    if (this.scrollElement.style[property] === value) return false;
+  public reserveOverlayWidth(side: 'left' | 'right', width: number): boolean {
+    const value = width > 0 && Number.isFinite(width) ? `${Math.ceil(width)}px` : ''
+    const property = side === 'left' ? 'paddingLeft' : 'paddingRight'
+    if (this.scrollElement.style[property] === value) return false
 
-    this.scrollElement.style[property] = value;
-    return true;
+    this.scrollElement.style[property] = value
+    return true
   }
 
   public scrollToRow(row: number): void {
-    scrollToRow(this.view, row);
+    scrollToRow(this.view, row)
   }
 
-  public revealOffset(offset: number, block: RevealBlock = "nearest"): void {
-    const view = this.view;
-    if (block === "end") {
-      scrollOffsetToViewportEnd(view, offset);
-      ensureOffsetMounted(view, offset);
-      return;
+  public revealOffset(offset: number, block: RevealBlock = 'nearest'): void {
+    const view = this.view
+    if (block === 'end') {
+      scrollOffsetToViewportEnd(view, offset)
+      ensureOffsetMounted(view, offset)
+      return
     }
 
-    ensureOffsetMounted(view, offset);
-    scrollOffsetIntoView(view, offset);
+    ensureOffsetMounted(view, offset)
+    scrollOffsetIntoView(view, offset)
   }
 
   public visualColumnForOffset(offset: number): number {
-    return visualColumnForOffset(this.view, offset);
+    return visualColumnForOffset(this.view, offset)
   }
 
   public offsetByDisplayRows(offset: number, rowDelta: number, visualColumn: number): number {
-    const view = this.view;
-    const row = rowForOffset(view, offset);
-    const targetRow = documentTextRowByDisplayDelta(view, row, rowDelta);
-    return offsetForViewportColumn(view, targetRow, visualColumn);
+    const view = this.view
+    const row = rowForOffset(view, offset)
+    const targetRow = documentTextRowByDisplayDelta(view, row, rowDelta)
+    return offsetForViewportColumn(view, targetRow, visualColumn)
   }
 
-  public offsetAtLineBoundary(offset: number, boundary: "start" | "end"): number {
-    const view = this.view;
-    const row = rowForOffset(view, offset);
-    if (boundary === "start") return lineStartOffset(view, row);
-    return lineEndOffset(view, row);
+  public offsetAtLineBoundary(offset: number, boundary: 'start' | 'end'): number {
+    const view = this.view
+    const row = rowForOffset(view, offset)
+    if (boundary === 'start') return lineStartOffset(view, row)
+    return lineEndOffset(view, row)
   }
 
   public pageRowDelta(): number {
-    return pageRowDelta(this.view);
+    return pageRowDelta(this.view)
   }
 
   public getLineStarts(): readonly number[] {
-    return materializeLineStarts(this.view);
+    return materializeLineStarts(this.view)
   }
 
   public getLineCount(): number {
-    return this.view.lineStarts.length;
+    return this.view.lineStarts.length
   }
 
   public createRange(
@@ -605,22 +605,22 @@ export class VirtualizedTextView {
     endOffset: number,
     options: CreateRangeOptions = {},
   ): Range | null {
-    const view = this.view;
-    if (options.scrollIntoView !== false) ensureOffsetMounted(view, startOffset);
+    const view = this.view
+    if (options.scrollIntoView !== false) ensureOffsetMounted(view, startOffset)
 
-    const start = resolveMountedOffset(view, startOffset);
-    const end = resolveMountedOffset(view, endOffset);
-    if (!start || !end) return null;
+    const start = resolveMountedOffset(view, startOffset)
+    const end = resolveMountedOffset(view, endOffset)
+    if (!start || !end) return null
 
-    const range = this.scrollElement.ownerDocument.createRange();
-    range.setStart(start.node, start.offset);
-    range.setEnd(end.node, end.offset);
-    return range;
+    const range = this.scrollElement.ownerDocument.createRange()
+    range.setStart(start.node, start.offset)
+    range.setEnd(end.node, end.offset)
+    return range
   }
 
   public getState(): VirtualizedTextViewState {
-    const view = this.view;
-    const snapshot = view.virtualizer.getSnapshot();
+    const view = this.view
+    const snapshot = view.virtualizer.getSnapshot()
     return {
       lineCount: view.lineStarts.length,
       contentWidth: view.contentWidth,
@@ -642,15 +642,15 @@ export class VirtualizedTextView {
       blockRowCount: view.blockRows.length,
       blockLaneCount: view.blockLanes.length,
       tabSize: view.tabSize,
-    };
+    }
   }
 
   public validateMountedNativeGeometry(): NativeGeometryValidation {
-    const rows = getMountedRows(this.view);
-    const failures: string[] = [];
-    const caretChecks = countValidCaretChecks(rows, failures);
-    const selectionChecks = countValidSelectionChecks(rows, failures);
-    const hitTestChecks = countValidHitTestChecks(this.scrollElement, rows, failures);
+    const rows = getMountedRows(this.view)
+    const failures: string[] = []
+    const caretChecks = countValidCaretChecks(rows, failures)
+    const selectionChecks = countValidSelectionChecks(rows, failures)
+    const hitTestChecks = countValidHitTestChecks(this.scrollElement, rows, failures)
 
     return {
       mountedRows: rows.length,
@@ -659,44 +659,44 @@ export class VirtualizedTextView {
       hitTestChecks,
       failures,
       ok: failures.length === 0,
-    };
+    }
   }
 
   public textOffsetFromPoint(clientX: number, clientY: number): number | null {
-    return this.textOffsetFromViewportPoint(clientX, clientY);
+    return this.textOffsetFromViewportPoint(clientX, clientY)
   }
 
   public textOffsetFromViewportPoint(clientX: number, clientY: number): number | null {
-    const view = this.view;
-    const metrics = viewportPointMetrics(view, clientX, clientY);
+    const view = this.view
+    const metrics = viewportPointMetrics(view, clientX, clientY)
     if (metrics.verticalDirection < 0)
-      return lineStartOffset(view, rowForViewportY(view, metrics.y));
-    if (metrics.verticalDirection > 0) return lineEndOffset(view, rowForViewportY(view, metrics.y));
+      return lineStartOffset(view, rowForViewportY(view, metrics.y))
+    if (metrics.verticalDirection > 0) return lineEndOffset(view, rowForViewportY(view, metrics.y))
 
-    const row = rowForViewportY(view, metrics.y);
-    if (!isDocumentTextDisplayRow(view.displayRows[row])) return null;
+    const row = rowForViewportY(view, metrics.y)
+    if (!isDocumentTextDisplayRow(view.displayRows[row])) return null
 
-    const mounted = view.rowElements.get(row);
-    if (mounted?.kind === "text") return xToOffset(view, mounted, metrics.x);
+    const mounted = view.rowElements.get(row)
+    if (mounted?.kind === 'text') return xToOffset(view, mounted, metrics.x)
 
-    const column = Math.floor(metrics.x / Math.max(1, view.metrics.characterWidth));
-    return offsetForViewportColumn(view, row, column);
+    const column = Math.floor(metrics.x / Math.max(1, view.metrics.characterWidth))
+    return offsetForViewportColumn(view, row, column)
   }
 
   public textOffsetFromDomBoundary(node: Node, offset: number): number | null {
-    return textOffsetFromDomBoundary(this.view, node, offset);
+    return textOffsetFromDomBoundary(this.view, node, offset)
   }
 
   public setSelection(anchorOffset: number, headOffset: number): void {
-    setSelection(this.view, anchorOffset, headOffset);
+    setSelection(this.view, anchorOffset, headOffset)
   }
 
   public setSelections(selections: readonly VirtualizedTextSelection[]): void {
-    setSelections(this.view, selections);
+    setSelections(this.view, selections)
   }
 
   public clearSelection(): void {
-    clearSelection(this.view);
+    clearSelection(this.view)
   }
 
   public setRangeHighlight(
@@ -704,55 +704,55 @@ export class VirtualizedTextView {
     ranges: readonly VirtualizedTextHighlightRange[],
     style: VirtualizedTextHighlightStyle,
   ): void {
-    setRangeHighlight(this.view, name, ranges, style);
+    setRangeHighlight(this.view, name, ranges, style)
   }
 
   public clearRangeHighlight(name: string): void {
-    clearRangeHighlight(this.view, name);
+    clearRangeHighlight(this.view, name)
   }
 
   private renderSnapshot(snapshot: FixedRowVirtualizerSnapshot): void {
-    const view = this.view;
-    updateGutterWidthIfNeeded(view);
-    updateSpacerHeight(view, snapshot);
-    updateSpacerWidth(view);
-    renderBlockLanes(view, snapshot);
-    const key = rowsKey(view, snapshot);
+    const view = this.view
+    updateGutterWidthIfNeeded(view)
+    updateSpacerHeight(view, snapshot)
+    updateSpacerWidth(view)
+    renderBlockLanes(view, snapshot)
+    const key = rowsKey(view, snapshot)
     if (key === view.lastRenderedRowsKey) {
-      view.onViewportChange?.();
-      return;
+      view.onViewportChange?.()
+      return
     }
 
-    view.lastRenderedRowsKey = key;
-    renderRows(view, snapshot, (rowSlotId) => deleteTokenRangesForRow(view, rowSlotId));
-    renderBlockLanes(view, snapshot);
-    renderTokenHighlights(view);
-    for (const name of view.rangeHighlightGroups.keys()) renderRangeHighlight(view, name);
-    renderSelectionHighlight(view);
-    view.onViewportChange?.();
+    view.lastRenderedRowsKey = key
+    renderRows(view, snapshot, (rowSlotId) => deleteTokenRangesForRow(view, rowSlotId))
+    renderBlockLanes(view, snapshot)
+    renderTokenHighlights(view)
+    for (const name of view.rangeHighlightGroups.keys()) renderRangeHighlight(view, name)
+    renderSelectionHighlight(view)
+    view.onViewportChange?.()
   }
 
   private applySameLineEdit(patch: SameLineEditPatch, nextText: TextSnapshot): void {
-    const view = this.view;
-    const snapshot = view.virtualizer.getSnapshot();
-    view.tokenRenderIndexDirty = true;
-    applySameLineTextLayout(view, patch, nextText);
-    clampStoredSelection(view);
-    resetContentWidthScan(view);
-    clearRowGeometryCaches(view);
-    updateContentWidth(view, snapshot.virtualItems);
+    const view = this.view
+    const snapshot = view.virtualizer.getSnapshot()
+    view.tokenRenderIndexDirty = true
+    applySameLineTextLayout(view, patch, nextText)
+    clampStoredSelection(view)
+    resetContentWidthScan(view)
+    clearRowGeometryCaches(view)
+    updateContentWidth(view, snapshot.virtualItems)
     const editedRowPatchedInPlace = updateMountedRowsAfterSameLineEdit(
       view,
       snapshot.virtualItems,
       patch,
       snapshot,
-    );
+    )
     view.sameLineTokenEdit = {
       rowIndex: patch.rowIndex,
       editedRowPatchedInPlace,
-      kind: "same-line",
-    };
-    renderHiddenCharacters(view);
+      kind: 'same-line',
+    }
+    renderHiddenCharacters(view)
   }
 
   private applyMultiLineEdit(
@@ -760,43 +760,43 @@ export class VirtualizedTextView {
     edit: TextEdit,
     nextText: TextSnapshot,
   ): void {
-    const view = this.view;
-    view.tokenRenderIndexDirty = true;
-    applyMultiLineTextLayout(view, patch, edit, nextText);
-    clampStoredSelection(view);
-    resetContentWidthScan(view);
-    clearRowGeometryCaches(view);
-    if (patch.insertedLineBreaks !== patch.endRow - patch.startRow) view.gutterWidthDirty = true;
-    view.lastRenderedRowsKey = "";
+    const view = this.view
+    view.tokenRenderIndexDirty = true
+    applyMultiLineTextLayout(view, patch, edit, nextText)
+    clampStoredSelection(view)
+    resetContentWidthScan(view)
+    clearRowGeometryCaches(view)
+    if (patch.insertedLineBreaks !== patch.endRow - patch.startRow) view.gutterWidthDirty = true
+    view.lastRenderedRowsKey = ''
     view.sameLineTokenEdit = {
       rowIndex: patch.startRow,
       editedRowPatchedInPlace: false,
-      kind: "multi-line",
-    };
+      kind: 'multi-line',
+    }
     view.tokenProjectionDirtyStartRow = dirtyTokenProjectionStartRow(
       view.tokenProjectionDirtyStartRow,
       patch.startRow,
-    );
-    projectFoldMarkersThroughMultiLineEdit(view, patch, edit);
-    projectRowDecorationsThroughMultiLineEdit(view, patch);
-    clearTokenHighlightsFromRow(view, patch.startRow);
-    updateVirtualizerRows(view);
-    renderHiddenCharacters(view);
+    )
+    projectFoldMarkersThroughMultiLineEdit(view, patch, edit)
+    projectRowDecorationsThroughMultiLineEdit(view, patch)
+    clearTokenHighlightsFromRow(view, patch.startRow)
+    updateVirtualizerRows(view)
+    renderHiddenCharacters(view)
   }
 
   private refreshWrapWidth(
     viewportWidth = this.view.virtualizer.getSnapshot().viewportWidth,
   ): void {
-    const view = this.view;
+    const view = this.view
     const changed = refreshDisplayRowsForWrapWidth(
       view,
       horizontalViewportColumns(view, viewportWidth),
-    );
-    if (!changed) return;
+    )
+    if (!changed) return
 
-    resetContentWidthScan(view);
-    view.lastRenderedRowsKey = "";
-    updateVirtualizerRows(view);
+    resetContentWidthScan(view)
+    view.lastRenderedRowsKey = ''
+    updateVirtualizerRows(view)
   }
 }
 
@@ -805,31 +805,31 @@ function documentTextRowByDisplayDelta(
   row: number,
   rowDelta: number,
 ): number {
-  if (rowDelta === 0) return row;
+  if (rowDelta === 0) return row
 
-  const step = rowDelta > 0 ? 1 : -1;
-  let remaining = Math.abs(rowDelta);
-  let current = row;
+  const step = rowDelta > 0 ? 1 : -1
+  let remaining = Math.abs(rowDelta)
+  let current = row
   while (remaining > 0) {
-    const next = nextDocumentTextRow(view, current, step);
-    if (next === current) return current;
+    const next = nextDocumentTextRow(view, current, step)
+    if (next === current) return current
 
-    current = next;
-    remaining -= 1;
+    current = next
+    remaining -= 1
   }
 
-  return current;
+  return current
 }
 
 function nextDocumentTextRow(view: VirtualizedTextViewInternal, row: number, step: 1 | -1): number {
-  const end = step > 0 ? visibleLineCount(view) - 1 : 0;
-  let current = row;
+  const end = step > 0 ? visibleLineCount(view) - 1 : 0
+  let current = row
   while (current !== end) {
-    current += step;
-    if (isDocumentTextDisplayRow(view.displayRows[current])) return current;
+    current += step
+    if (isDocumentTextDisplayRow(view.displayRows[current])) return current
   }
 
-  return row;
+  return row
 }
 
 function normalizeCursorLineHighlight(
@@ -839,7 +839,7 @@ function normalizeCursorLineHighlight(
     gutterNumber: options?.gutterNumber ?? DEFAULT_CURSOR_LINE_HIGHLIGHT.gutterNumber,
     gutterBackground: options?.gutterBackground ?? DEFAULT_CURSOR_LINE_HIGHLIGHT.gutterBackground,
     rowBackground: options?.rowBackground ?? DEFAULT_CURSOR_LINE_HIGHLIGHT.rowBackground,
-  };
+  }
 }
 
 function projectFoldMarkersThroughMultiLineEdit(
@@ -847,16 +847,16 @@ function projectFoldMarkersThroughMultiLineEdit(
   patch: MultiLineEditPatch,
   edit: TextEdit,
 ): void {
-  if (view.foldMarkers.length === 0) return;
+  if (view.foldMarkers.length === 0) return
 
-  const rowDelta = multiLineEditRowDelta(patch);
-  const offsetDelta = patch.delta;
+  const rowDelta = multiLineEditRowDelta(patch)
+  const offsetDelta = patch.delta
   const markers = view.foldMarkers.map((marker) =>
     projectFoldMarkerThroughEdit(marker, edit, offsetDelta, rowDelta, view.textLength),
-  );
-  view.foldMarkers = markers;
-  view.foldMarkerByStartRow = indexFoldMarkersByStartRow(markers);
-  view.foldMarkerByKey = indexFoldMarkersByKey(markers);
+  )
+  view.foldMarkers = markers
+  view.foldMarkerByStartRow = indexFoldMarkersByStartRow(markers)
+  view.foldMarkerByKey = indexFoldMarkersByKey(markers)
 }
 
 function projectFoldMarkerThroughEdit(
@@ -867,14 +867,14 @@ function projectFoldMarkerThroughEdit(
   textLength: number,
 ): VirtualizedFoldMarker {
   if (edit.to <= marker.startOffset) {
-    return shiftFoldMarker(marker, offsetDelta, rowDelta, textLength);
+    return shiftFoldMarker(marker, offsetDelta, rowDelta, textLength)
   }
-  if (edit.from >= marker.endOffset) return marker;
+  if (edit.from >= marker.endOffset) return marker
   if (edit.from > marker.startOffset && edit.to < marker.endOffset) {
-    return resizeFoldMarkerEnd(marker, offsetDelta, rowDelta, textLength);
+    return resizeFoldMarkerEnd(marker, offsetDelta, rowDelta, textLength)
   }
 
-  return marker;
+  return marker
 }
 
 function shiftFoldMarker(
@@ -889,7 +889,7 @@ function shiftFoldMarker(
     endOffset: clampNumber(marker.endOffset + offsetDelta, 0, textLength),
     startRow: Math.max(0, marker.startRow + rowDelta),
     endRow: Math.max(0, marker.endRow + rowDelta),
-  };
+  }
 }
 
 function resizeFoldMarkerEnd(
@@ -898,52 +898,52 @@ function resizeFoldMarkerEnd(
   rowDelta: number,
   textLength: number,
 ): VirtualizedFoldMarker {
-  const endOffset = clampNumber(marker.endOffset + offsetDelta, marker.startOffset + 1, textLength);
+  const endOffset = clampNumber(marker.endOffset + offsetDelta, marker.startOffset + 1, textLength)
   return {
     ...marker,
     endOffset,
     endRow: Math.max(marker.startRow + 1, marker.endRow + rowDelta),
-  };
+  }
 }
 
 function projectRowDecorationsThroughMultiLineEdit(
   view: VirtualizedTextViewInternal,
   patch: MultiLineEditPatch,
 ): void {
-  if (view.rowDecorations.size === 0) return;
+  if (view.rowDecorations.size === 0) return
 
-  const rowDelta = multiLineEditRowDelta(patch);
-  if (rowDelta === 0) return;
+  const rowDelta = multiLineEditRowDelta(patch)
+  if (rowDelta === 0) return
 
-  const decorations = new Map<number, VirtualizedTextRowDecoration>();
+  const decorations = new Map<number, VirtualizedTextRowDecoration>()
   for (const [row, decoration] of view.rowDecorations) {
     if (row < patch.startRow) {
-      decorations.set(row, decoration);
-      continue;
+      decorations.set(row, decoration)
+      continue
     }
 
     if (row === patch.startRow) {
-      decorations.set(row, decoration);
-      continue;
+      decorations.set(row, decoration)
+      continue
     }
 
     if (row > patch.endRow) {
-      decorations.set(Math.max(0, row + rowDelta), decoration);
+      decorations.set(Math.max(0, row + rowDelta), decoration)
     }
   }
 
-  view.rowDecorations = decorations;
+  view.rowDecorations = decorations
 }
 
 function multiLineEditRowDelta(patch: MultiLineEditPatch): number {
-  return patch.insertedLineBreaks - (patch.endRow - patch.startRow);
+  return patch.insertedLineBreaks - (patch.endRow - patch.startRow)
 }
 
 function dirtyTokenProjectionStartRow(current: number | null, row: number): number {
-  if (current === null) return row;
-  return Math.min(current, row);
+  if (current === null) return row
+  return Math.min(current, row)
 }
 
 function clampNumber(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
+  return Math.min(Math.max(value, min), max)
 }

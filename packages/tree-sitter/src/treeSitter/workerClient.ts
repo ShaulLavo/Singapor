@@ -299,7 +299,9 @@ function postDocumentRequest(
   return postRequest(withCancellation(cancelPreviousDocumentRequests(payload.documentId), payload));
 }
 
-function postRangeRequest(payload: TreeSitterRangeDocumentRequest): Promise<TreeSitterWorkerResult> {
+function postRangeRequest(
+  payload: TreeSitterRangeDocumentRequest,
+): Promise<TreeSitterWorkerResult> {
   return postRequest(withCancellation(cancelPreviousRangeRequests(payload.documentId), payload));
 }
 
@@ -528,7 +530,8 @@ const sourceEpochForPayload = (payload: TreeSitterWorkerRequestPayload): number 
   return currentSourceEpoch(payload.documentId);
 };
 
-const currentSourceEpoch = (documentId: string): number => sourceDocumentEpochs.get(documentId) ?? 0;
+const currentSourceEpoch = (documentId: string): number =>
+  sourceDocumentEpochs.get(documentId) ?? 0;
 
 const invalidateDocumentSourceState = (documentId: string): void => {
   sentSourceChunkIds.delete(documentId);
@@ -549,9 +552,8 @@ const isTreeSitterParseAckResult = (
 ): result is TreeSitterParseAckResult =>
   Boolean(result && "status" in result && result.status === "parsed");
 
-const isTreeSitterRangeResult = (
-  result: TreeSitterWorkerResult,
-): result is TreeSitterRangeResult => Boolean(result && "range" in result && "tokens" in result);
+const isTreeSitterRangeResult = (result: TreeSitterWorkerResult): result is TreeSitterRangeResult =>
+  Boolean(result && "range" in result && "tokens" in result);
 
 const isTreeSitterSelectionResult = (
   result: TreeSitterWorkerResult,

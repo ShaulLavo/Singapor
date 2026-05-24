@@ -638,13 +638,13 @@ function installMinimapRuntime(): {
       for (const frame of frames.splice(0)) frame();
     },
     flushTimers: () => {
-      for (const [timer, callback] of [...timers]) {
+      for (const [timer, callback] of Array.from(timers)) {
         timers.delete(timer);
         callback();
       }
     },
     flushAnimationFrames: () => {
-      for (const [timer, callback] of [...timers]) {
+      for (const [timer, callback] of Array.from(timers)) {
         timers.delete(timer);
         callback();
       }

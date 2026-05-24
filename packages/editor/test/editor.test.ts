@@ -4281,10 +4281,9 @@ describe("Editor", () => {
       const prefix = "if (x) {\n  y();\n}\n";
       const text =
         prefix +
-        Array.from(
-          { length: 60_000 },
-          (_value, index) => `const line${index} = ${index};`,
-        ).join("\n");
+        Array.from({ length: 60_000 }, (_value, index) => `const line${index} = ${index};`).join(
+          "\n",
+        );
       const fold = {
         startIndex: 0,
         endIndex: prefix.length - 1,
@@ -4302,9 +4301,8 @@ describe("Editor", () => {
           refresh: async () => createSyntaxResult([], []),
           queryRange: async (range) => {
             ranges.push(range);
-            const folds = range.startIndex <= fold.startIndex && range.endIndex >= fold.endIndex
-              ? [fold]
-              : [];
+            const folds =
+              range.startIndex <= fold.startIndex && range.endIndex >= fold.endIndex ? [fold] : [];
             return createSyntaxResult([], folds);
           },
         }),
@@ -5080,7 +5078,8 @@ describe("Editor", () => {
         editorRoot().dispatchEvent(createLineBreakEvent());
       }
 
-      const bbRow = editor.getText().slice(0, editor.getText().indexOf("bb")).split("\n").length - 1;
+      const bbRow =
+        editor.getText().slice(0, editor.getText().indexOf("bb")).split("\n").length - 1;
       const bbNode = rowTextNode(bbRow);
       const bbRange = tokenHighlightRanges().find((range) => range.startContainer === bbNode);
       expect(editor.getText()).toBe("aa\n\n\n\n\nbb\ncc");

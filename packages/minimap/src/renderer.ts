@@ -1,5 +1,5 @@
-import type { TextEdit } from "@editor/core";
-import { parseCssColor, relativeLuminance, rgbaToCss, transparent } from "./color";
+import type { TextEdit } from '@editor/core'
+import { parseCssColor, relativeLuminance, rgbaToCss, transparent } from './color'
 import {
   computeFrameLayout,
   computeRenderLayout,
@@ -7,13 +7,10 @@ import {
   MINIMAP_GUTTER_WIDTH,
   MINIMAP_RIGHT_GUTTER_WIDTH,
   yForLineNumber,
-} from "./layout";
-import { MinimapCharRendererFactory } from "./minimapCharRendererFactory";
-import { Constants } from "./minimapCharSheet";
-import {
-  findSectionHeaderDecorations,
-  findSectionHeaderDecorationsInRange,
-} from "./sectionHeaders";
+} from './layout'
+import { MinimapCharRendererFactory } from './minimapCharRendererFactory'
+import { Constants } from './minimapCharSheet'
+import { findSectionHeaderDecorations, findSectionHeaderDecorationsInRange } from './sectionHeaders'
 import type {
   EditorMinimapDecoration,
   MinimapBaseStyles,
@@ -27,48 +24,48 @@ import type {
   MinimapViewport,
   ResolvedMinimapOptions,
   RGBA8,
-} from "./types";
-import { RenderMinimap } from "./types";
+} from './types'
+import { RenderMinimap } from './types'
 
 type RendererState = {
-  readonly mainCanvas: OffscreenCanvas;
-  readonly decorationsCanvas: OffscreenCanvas;
-  readonly mainContext: OffscreenCanvasRenderingContext2D;
-  readonly decorationsContext: OffscreenCanvasRenderingContext2D;
-  options: ResolvedMinimapOptions;
-  styles: MinimapBaseStyles;
-  document: MinimapDocumentPayload;
-  externalDecorations: readonly EditorMinimapDecoration[];
-  metrics: MinimapMetrics;
-  viewport: MinimapViewport;
-  layout: MinimapRenderLayout | null;
-  previousFrame: MinimapFrameLayout | null;
-  linesDirty: boolean;
-  decorationsDirty: boolean;
-};
+  readonly mainCanvas: OffscreenCanvas
+  readonly decorationsCanvas: OffscreenCanvas
+  readonly mainContext: OffscreenCanvasRenderingContext2D
+  readonly decorationsContext: OffscreenCanvasRenderingContext2D
+  options: ResolvedMinimapOptions
+  styles: MinimapBaseStyles
+  document: MinimapDocumentPayload
+  externalDecorations: readonly EditorMinimapDecoration[]
+  metrics: MinimapMetrics
+  viewport: MinimapViewport
+  layout: MinimapRenderLayout | null
+  previousFrame: MinimapFrameLayout | null
+  linesDirty: boolean
+  decorationsDirty: boolean
+}
 
 const EMPTY_DOCUMENT: MinimapDocumentPayload = {
-  text: "",
+  text: '',
   lineStarts: [0],
   tokens: [],
   selections: [],
   decorations: [],
   externalDecorations: [],
-};
+}
 
 export class MinimapWorkerRenderer {
-  private state: RendererState | null = null;
+  private state: RendererState | null = null
 
   public init(options: {
-    readonly mainCanvas: OffscreenCanvas;
-    readonly decorationsCanvas: OffscreenCanvas;
-    readonly options: ResolvedMinimapOptions;
-    readonly styles: MinimapBaseStyles;
+    readonly mainCanvas: OffscreenCanvas
+    readonly decorationsCanvas: OffscreenCanvas
+    readonly options: ResolvedMinimapOptions
+    readonly styles: MinimapBaseStyles
   }): void {
-    const mainContext = options.mainCanvas.getContext("2d");
-    const decorationsContext = options.decorationsCanvas.getContext("2d");
+    const mainContext = options.mainCanvas.getContext('2d')
+    const decorationsContext = options.decorationsCanvas.getContext('2d')
     if (!mainContext || !decorationsContext)
-      throw new Error("Unable to create minimap canvas context");
+      throw new Error('Unable to create minimap canvas context')
 
     this.state = {
       mainCanvas: options.mainCanvas,
@@ -85,48 +82,48 @@ export class MinimapWorkerRenderer {
       previousFrame: null,
       linesDirty: true,
       decorationsDirty: true,
-    };
+    }
   }
 
   public setDocument(document: MinimapDocumentPayload): void {
-    if (!this.state) return;
+    if (!this.state) return
     const externalDecorations =
-      document.externalDecorations ?? externalDecorationsFrom(document.decorations);
+      document.externalDecorations ?? externalDecorationsFrom(document.decorations)
     const sectionHeaders = findSectionHeaderDecorations(
-      document.text.split("\n"),
+      document.text.split('\n'),
       this.state.options,
-    );
-    this.state.externalDecorations = externalDecorations;
+    )
+    this.state.externalDecorations = externalDecorations
     this.state.document = {
       ...document,
-      decorations: [...sectionHeaders, ...externalDecorations],
+      decorations: sectionHeaders.concat(externalDecorations),
       externalDecorations,
-    };
-    this.state.previousFrame = null;
-    this.state.linesDirty = true;
-    this.state.decorationsDirty = true;
+    }
+    this.state.previousFrame = null
+    this.state.linesDirty = true
+    this.state.decorationsDirty = true
   }
 
   public applyEdit(edit: TextEdit, document: MinimapDocumentEditPayload): void {
-    this.applyEdits([edit], document);
+    this.applyEdits([edit], document)
   }
 
   public applyEdits(edits: readonly TextEdit[], document: MinimapDocumentEditPayload): void {
-    if (!this.state) return;
+    if (!this.state) return
     if (edits.length === 0) {
-      this.setSelections(document.selections);
-      return;
+      this.setSelections(document.selections)
+      return
     }
 
-    const previous = this.state.document;
-    const next = applyTextEditsToMinimapDocument(previous, edits);
-    this.setEditedDocument(previous, next, edits, document.selections);
+    const previous = this.state.document
+    const next = applyTextEditsToMinimapDocument(previous, edits)
+    this.setEditedDocument(previous, next, edits, document.selections)
   }
 
   public setExternalDecorations(decorations: readonly EditorMinimapDecoration[]): void {
-    if (!this.state) return;
+    if (!this.state) return
 
-    this.state.externalDecorations = decorations;
+    this.state.externalDecorations = decorations
     this.state.document = {
       ...this.state.document,
       externalDecorations: decorations,
@@ -134,21 +131,21 @@ export class MinimapWorkerRenderer {
         ...sectionHeaderDecorationsFrom(this.state.document.decorations),
         ...decorations,
       ],
-    };
-    this.state.decorationsDirty = true;
+    }
+    this.state.decorationsDirty = true
   }
 
   private setEditedDocument(
-    previous: Pick<MinimapDocumentPayload, "decorations" | "lineStarts" | "text">,
-    document: Pick<MinimapDocumentPayload, "lineStarts" | "text" | "tokens">,
+    previous: Pick<MinimapDocumentPayload, 'decorations' | 'lineStarts' | 'text'>,
+    document: Pick<MinimapDocumentPayload, 'lineStarts' | 'text' | 'tokens'>,
     edits: readonly TextEdit[],
     selections: readonly MinimapSelection[],
   ): void {
-    const state = this.requireState();
+    const state = this.requireState()
     const decorations = [
       ...updateSectionHeaderDecorations(previous, document, edits, state.options),
       ...state.externalDecorations,
-    ];
+    ]
     state.document = {
       text: document.text,
       lineStarts: document.lineStarts,
@@ -156,76 +153,76 @@ export class MinimapWorkerRenderer {
       selections,
       decorations,
       externalDecorations: state.externalDecorations,
-    };
-    state.linesDirty = true;
-    state.decorationsDirty = true;
+    }
+    state.linesDirty = true
+    state.decorationsDirty = true
   }
 
   public setBaseStyles(styles: MinimapBaseStyles): void {
-    if (!this.state) return;
-    this.state.styles = styles;
-    this.state.linesDirty = true;
-    this.state.decorationsDirty = true;
+    if (!this.state) return
+    this.state.styles = styles
+    this.state.linesDirty = true
+    this.state.decorationsDirty = true
   }
 
   public setTokens(tokens: readonly MinimapToken[]): void {
-    if (!this.state) return;
-    this.state.document = { ...this.state.document, tokens };
-    this.state.linesDirty = true;
+    if (!this.state) return
+    this.state.document = { ...this.state.document, tokens }
+    this.state.linesDirty = true
   }
 
   public updateTokenRange(patch: MinimapTokenPatch): void {
-    if (!this.state) return;
+    if (!this.state) return
 
-    const tokens = replaceTokenRange(this.state.document.tokens, patch);
-    this.state.document = { ...this.state.document, tokens };
-    this.state.linesDirty = true;
+    const tokens = replaceTokenRange(this.state.document.tokens, patch)
+    this.state.document = { ...this.state.document, tokens }
+    this.state.linesDirty = true
   }
 
   public setSelections(selections: readonly MinimapSelection[]): void {
-    if (!this.state) return;
-    this.state.document = { ...this.state.document, selections };
-    this.state.decorationsDirty = true;
+    if (!this.state) return
+    this.state.document = { ...this.state.document, selections }
+    this.state.decorationsDirty = true
   }
 
   public setDecorations(decorations: readonly EditorMinimapDecoration[]): void {
-    if (!this.state) return;
-    this.state.externalDecorations = externalDecorationsFrom(decorations);
-    this.state.document = { ...this.state.document, decorations };
-    this.state.decorationsDirty = true;
+    if (!this.state) return
+    this.state.externalDecorations = externalDecorationsFrom(decorations)
+    this.state.document = { ...this.state.document, decorations }
+    this.state.decorationsDirty = true
   }
 
   public updateLayout(
     metrics: MinimapMetrics,
     viewport: MinimapViewport,
   ): MinimapRenderLayout | null {
-    if (!this.state) return null;
-    this.state.metrics = metrics;
-    this.state.viewport = viewport;
-    const nextLayout = this.createRenderLayout();
-    const layoutChanged = !this.state.layout || !renderLayoutsEqual(this.state.layout, nextLayout);
-    this.state.layout = nextLayout;
+    if (!this.state) return null
+    this.state.metrics = metrics
+    this.state.viewport = viewport
+    const nextLayout = this.createRenderLayout()
+    const layoutChanged = !this.state.layout || !renderLayoutsEqual(this.state.layout, nextLayout)
+    this.state.layout = nextLayout
     if (layoutChanged) {
-      this.state.linesDirty = true;
-      this.state.decorationsDirty = true;
-      this.state.previousFrame = null;
+      this.state.linesDirty = true
+      this.state.decorationsDirty = true
+      this.state.previousFrame = null
     }
-    this.resizeCanvases(this.state.layout);
-    return this.state.layout;
+    this.resizeCanvases(this.state.layout)
+    return this.state.layout
   }
 
   public updateViewport(viewport: MinimapViewport): void {
-    if (!this.state) return;
-    this.state.viewport = viewport;
+    if (!this.state) return
+    this.state.viewport = viewport
   }
 
   public render(): RenderResult | null {
-    if (!this.state) return null;
+    if (!this.state) return null
 
-    const layout = this.state.layout ?? this.createRenderLayout();
-    this.state.layout = layout;
-    this.resizeCanvases(layout);
-    if (layout.renderMinimap === RenderMinimap.None) return emptyRenderResult();
+    const layout = this.state.layout ?? this.createRenderLayout()
+    this.state.layout = layout
+    this.resizeCanvases(layout)
+    if (layout.renderMinimap === RenderMinimap.None) return emptyRenderResult()
 
     const frame = computeFrameLayout({
       renderLayout: layout,
@@ -233,15 +230,15 @@ export class MinimapWorkerRenderer {
       lineCount: this.minimapLineCount(layout),
       realLineCount: this.state.document.lineStarts.length,
       previous: this.state.previousFrame,
-    });
+    })
     const frameChanged =
-      !this.state.previousFrame || !framesPaintSameWindow(this.state.previousFrame, frame);
+      !this.state.previousFrame || !framesPaintSameWindow(this.state.previousFrame, frame)
 
-    if (this.state.linesDirty || frameChanged) this.renderLines(layout, frame);
-    if (this.state.decorationsDirty || frameChanged) this.renderDecorations(layout, frame);
-    this.state.previousFrame = frame;
-    this.state.linesDirty = false;
-    this.state.decorationsDirty = false;
+    if (this.state.linesDirty || frameChanged) this.renderLines(layout, frame)
+    if (this.state.decorationsDirty || frameChanged) this.renderDecorations(layout, frame)
+    this.state.previousFrame = frame
+    this.state.linesDirty = false
+    this.state.decorationsDirty = false
     return {
       sliderNeeded: frame.sliderNeeded,
       sliderTop: frame.sliderTop,
@@ -249,47 +246,47 @@ export class MinimapWorkerRenderer {
       shadowVisible:
         this.state.viewport.scrollLeft + this.state.viewport.clientWidth <
         this.state.viewport.scrollWidth,
-    };
+    }
   }
 
   public dispose(): void {
-    this.state = null;
+    this.state = null
   }
 
   private createRenderLayout(): MinimapRenderLayout {
-    const state = this.requireState();
+    const state = this.requireState()
     return computeRenderLayout({
       minimap: state.options,
       metrics: state.metrics,
       viewport: state.viewport,
       lineCount: state.document.lineStarts.length,
-    });
+    })
   }
 
   private renderLines(layout: MinimapRenderLayout, frame: FrameLike): void {
-    const state = this.requireState();
+    const state = this.requireState()
     const imageData = createBackgroundImageData(
       state.mainContext,
       layout.canvasInnerWidth,
       layout.canvasInnerHeight,
       state.styles.minimapBackground,
-    );
-    const charRenderer = MinimapCharRendererFactory.create(layout.scale, state.styles.fontFamily);
-    const useLighterFont = relativeLuminance(state.styles.background) >= 0.5;
-    const renderBackground = state.styles.background;
-    let tokenCursor = 0;
+    )
+    const charRenderer = MinimapCharRendererFactory.create(layout.scale, state.styles.fontFamily)
+    const useLighterFont = relativeLuminance(state.styles.background) >= 0.5
+    const renderBackground = state.styles.background
+    let tokenCursor = 0
 
     for (let line = frame.startLineNumber; line <= frame.endLineNumber; line += 1) {
-      const text = this.lineText(line);
-      const lineStart = this.lineStartOffset(line);
-      const lineEnd = lineStart + text.length;
+      const text = this.lineText(line)
+      const lineStart = this.lineStartOffset(line)
+      const lineEnd = lineStart + text.length
       const lineTokens = tokensForLineFromCursor(
         state.document.tokens,
         lineStart,
         lineEnd,
         tokenCursor,
-      );
-      tokenCursor = lineTokens.cursor;
+      )
+      tokenCursor = lineTokens.cursor
       this.renderLine({
         imageData,
         layout,
@@ -304,17 +301,17 @@ export class MinimapWorkerRenderer {
         useLighterFont,
         renderBackground,
         renderBackgroundAlpha: state.styles.minimapBackground.a,
-      });
+      })
     }
 
-    state.mainContext.putImageData(imageData, 0, 0);
+    state.mainContext.putImageData(imageData, 0, 0)
   }
 
   private renderLine(options: RenderLineOptions): void {
-    const state = this.requireState();
-    const y = yForLineNumber(options.frame, options.line, options.layout.lineHeight);
-    const maxDx = maxTextX(options.layout);
-    let dx = MINIMAP_GUTTER_WIDTH;
+    const state = this.requireState()
+    const y = yForLineNumber(options.frame, options.line, options.layout.lineHeight)
+    const maxDx = maxTextX(options.layout)
+    let dx = MINIMAP_GUTTER_WIDTH
 
     visitTokenSegments(
       options.text,
@@ -324,171 +321,171 @@ export class MinimapWorkerRenderer {
       options.tokenEnd,
       state.styles.foreground,
       (text, color) => {
-        if (dx > maxDx) return false;
-        dx = renderSegment({ ...options, text, color, dx, y, maxDx });
-        return dx <= maxDx;
+        if (dx > maxDx) return false
+        dx = renderSegment({ ...options, text, color, dx, y, maxDx })
+        return dx <= maxDx
       },
-    );
+    )
   }
 
   private renderDecorations(layout: MinimapRenderLayout, frame: FrameLike): void {
-    const state = this.requireState();
-    state.decorationsContext.clearRect(0, 0, layout.canvasInnerWidth, layout.canvasInnerHeight);
-    this.renderSelectionHighlights(layout, frame);
-    this.renderMinimapDecorations(layout, frame);
-    this.renderSectionHeaders(layout, frame);
+    const state = this.requireState()
+    state.decorationsContext.clearRect(0, 0, layout.canvasInnerWidth, layout.canvasInnerHeight)
+    this.renderSelectionHighlights(layout, frame)
+    this.renderMinimapDecorations(layout, frame)
+    this.renderSectionHeaders(layout, frame)
   }
 
   private renderSelectionHighlights(layout: MinimapRenderLayout, frame: FrameLike): void {
-    const state = this.requireState();
-    const color = transparent(state.styles.selection, 0.5);
-    state.decorationsContext.fillStyle = rgbaToCss(color);
+    const state = this.requireState()
+    const color = transparent(state.styles.selection, 0.5)
+    state.decorationsContext.fillStyle = rgbaToCss(color)
 
     for (const selection of state.document.selections) {
-      const range = this.offsetRangeToLineRange(selection.startOffset, selection.endOffset);
-      fillLineRange(state.decorationsContext, layout, frame, range.start, range.end);
+      const range = this.offsetRangeToLineRange(selection.startOffset, selection.endOffset)
+      fillLineRange(state.decorationsContext, layout, frame, range.start, range.end)
     }
   }
 
   private renderMinimapDecorations(layout: MinimapRenderLayout, frame: FrameLike): void {
-    const state = this.requireState();
+    const state = this.requireState()
     const decorations = state.document.decorations
       .filter((decoration) => !decoration.sectionHeaderStyle)
-      .toSorted((left, right) => (left.zIndex ?? 0) - (right.zIndex ?? 0));
+      .toSorted((left, right) => (left.zIndex ?? 0) - (right.zIndex ?? 0))
 
     for (const decoration of decorations) {
-      const color = parseCssColor(decoration.color, state.styles.selection);
-      state.decorationsContext.fillStyle = rgbaToCss(transparent(color, 0.5));
-      fillDecorationRange(state.decorationsContext, layout, frame, decoration);
+      const color = parseCssColor(decoration.color, state.styles.selection)
+      state.decorationsContext.fillStyle = rgbaToCss(transparent(color, 0.5))
+      fillDecorationRange(state.decorationsContext, layout, frame, decoration)
     }
   }
 
   private renderSectionHeaders(layout: MinimapRenderLayout, frame: FrameLike): void {
-    const state = this.requireState();
-    const context = state.decorationsContext;
-    const fontSize = state.options.sectionHeaderFontSize * state.metrics.devicePixelRatio;
-    context.font = `500 ${fontSize}px ${state.styles.fontFamily}`;
-    context.fillStyle = rgbaToCss(transparent(state.styles.minimapBackground, 0.7));
-    context.strokeStyle = rgbaToCss(state.styles.foreground);
-    context.lineWidth = 0.4;
+    const state = this.requireState()
+    const context = state.decorationsContext
+    const fontSize = state.options.sectionHeaderFontSize * state.metrics.devicePixelRatio
+    context.font = `500 ${fontSize}px ${state.styles.fontFamily}`
+    context.fillStyle = rgbaToCss(transparent(state.styles.minimapBackground, 0.7))
+    context.strokeStyle = rgbaToCss(state.styles.foreground)
+    context.lineWidth = 0.4
 
     for (const decoration of state.document.decorations) {
-      if (!decoration.sectionHeaderStyle) continue;
-      renderSectionHeader(context, decoration, layout, frame, fontSize, state.styles.foreground);
+      if (!decoration.sectionHeaderStyle) continue
+      renderSectionHeader(context, decoration, layout, frame, fontSize, state.styles.foreground)
     }
   }
 
   private minimapLineCount(layout: MinimapRenderLayout): number {
-    const state = this.requireState();
-    if (!layout.isSampling) return state.document.lineStarts.length;
-    return Math.max(1, Math.min(state.document.lineStarts.length, layout.canvasInnerHeight));
+    const state = this.requireState()
+    if (!layout.isSampling) return state.document.lineStarts.length
+    return Math.max(1, Math.min(state.document.lineStarts.length, layout.canvasInnerHeight))
   }
 
   private lineText(lineNumber: number): string {
-    const state = this.requireState();
-    const start = this.lineStartOffset(lineNumber);
-    const next = state.document.lineStarts[lineNumber];
-    const end = next === undefined ? state.document.text.length : Math.max(start, next - 1);
-    return state.document.text.slice(start, end);
+    const state = this.requireState()
+    const start = this.lineStartOffset(lineNumber)
+    const next = state.document.lineStarts[lineNumber]
+    const end = next === undefined ? state.document.text.length : Math.max(start, next - 1)
+    return state.document.text.slice(start, end)
   }
 
   private lineStartOffset(lineNumber: number): number {
-    const state = this.requireState();
-    return state.document.lineStarts[lineNumber - 1] ?? state.document.text.length;
+    const state = this.requireState()
+    return state.document.lineStarts[lineNumber - 1] ?? state.document.text.length
   }
 
   private offsetRangeToLineRange(startOffset: number, endOffset: number): LineRange {
     return {
       start: this.lineNumberForOffset(startOffset),
       end: this.lineNumberForOffset(endOffset),
-    };
+    }
   }
 
   private lineNumberForOffset(offset: number): number {
-    const state = this.requireState();
-    let low = 0;
-    let high = state.document.lineStarts.length - 1;
-    const clamped = Math.max(0, Math.min(offset, state.document.text.length));
+    const state = this.requireState()
+    let low = 0
+    let high = state.document.lineStarts.length - 1
+    const clamped = Math.max(0, Math.min(offset, state.document.text.length))
 
     while (low <= high) {
-      const middle = Math.floor((low + high) / 2);
-      const start = state.document.lineStarts[middle] ?? 0;
-      const next = state.document.lineStarts[middle + 1] ?? Number.POSITIVE_INFINITY;
-      if (clamped < start) high = middle - 1;
-      else if (clamped >= next) low = middle + 1;
-      else return middle + 1;
+      const middle = Math.floor((low + high) / 2)
+      const start = state.document.lineStarts[middle] ?? 0
+      const next = state.document.lineStarts[middle + 1] ?? Number.POSITIVE_INFINITY
+      if (clamped < start) high = middle - 1
+      else if (clamped >= next) low = middle + 1
+      else return middle + 1
     }
 
-    return state.document.lineStarts.length;
+    return state.document.lineStarts.length
   }
 
   private resizeCanvases(layout: MinimapRenderLayout): void {
-    const state = this.requireState();
-    resizeCanvas(state.mainCanvas, layout.canvasInnerWidth, layout.canvasInnerHeight);
-    resizeCanvas(state.decorationsCanvas, layout.canvasInnerWidth, layout.canvasInnerHeight);
+    const state = this.requireState()
+    resizeCanvas(state.mainCanvas, layout.canvasInnerWidth, layout.canvasInnerHeight)
+    resizeCanvas(state.decorationsCanvas, layout.canvasInnerWidth, layout.canvasInnerHeight)
   }
 
   private requireState(): RendererState {
-    if (!this.state) throw new Error("Minimap renderer is not initialized");
-    return this.state;
+    if (!this.state) throw new Error('Minimap renderer is not initialized')
+    return this.state
   }
 }
 
 type RenderResult = {
-  readonly sliderNeeded: boolean;
-  readonly sliderTop: number;
-  readonly sliderHeight: number;
-  readonly shadowVisible: boolean;
-};
+  readonly sliderNeeded: boolean
+  readonly sliderTop: number
+  readonly sliderHeight: number
+  readonly shadowVisible: boolean
+}
 
 type FrameLike = {
-  readonly startLineNumber: number;
-  readonly endLineNumber: number;
-  readonly topPaddingLineCount: number;
-};
+  readonly startLineNumber: number
+  readonly endLineNumber: number
+  readonly topPaddingLineCount: number
+}
 
 type LineRange = {
-  readonly start: number;
-  readonly end: number;
-};
+  readonly start: number
+  readonly end: number
+}
 
 type RenderLineOptions = {
-  readonly imageData: ImageData;
-  readonly layout: MinimapRenderLayout;
-  readonly frame: FrameLike;
-  readonly line: number;
-  readonly text: string;
-  readonly lineStart: number;
-  readonly tokens: readonly MinimapToken[];
-  readonly tokenEnd: number;
-  readonly tokenStart: number;
-  readonly charRenderer: ReturnType<typeof MinimapCharRendererFactory.create>;
-  readonly useLighterFont: boolean;
-  readonly renderBackground: RGBA8;
-  readonly renderBackgroundAlpha: number;
-};
+  readonly imageData: ImageData
+  readonly layout: MinimapRenderLayout
+  readonly frame: FrameLike
+  readonly line: number
+  readonly text: string
+  readonly lineStart: number
+  readonly tokens: readonly MinimapToken[]
+  readonly tokenEnd: number
+  readonly tokenStart: number
+  readonly charRenderer: ReturnType<typeof MinimapCharRendererFactory.create>
+  readonly useLighterFont: boolean
+  readonly renderBackground: RGBA8
+  readonly renderBackgroundAlpha: number
+}
 
 type TokenRange = {
-  readonly start: number;
-  readonly end: number;
-  readonly cursor: number;
-};
+  readonly start: number
+  readonly end: number
+  readonly cursor: number
+}
 
 function renderSegment(
   options: RenderLineOptions & {
-    readonly text: string;
-    readonly color: RGBA8;
-    readonly maxDx: number;
-    dx: number;
-    y: number;
+    readonly text: string
+    readonly color: RGBA8
+    readonly maxDx: number
+    dx: number
+    y: number
   },
 ): number {
-  let dx = options.dx;
+  let dx = options.dx
   for (let index = 0; index < options.text.length; index += 1) {
-    if (dx > options.maxDx) return dx;
-    dx = renderCharacter(options, dx, options.text.charCodeAt(index));
+    if (dx > options.maxDx) return dx
+    dx = renderCharacter(options, dx, options.text.charCodeAt(index))
   }
-  return dx;
+  return dx
 }
 
 function renderCharacter(
@@ -496,8 +493,8 @@ function renderCharacter(
   dx: number,
   code: number,
 ): number {
-  if (code === 9) return dx + 4 * options.layout.charWidth;
-  if (code === 32) return dx + options.layout.charWidth;
+  if (code === 9) return dx + 4 * options.layout.charWidth
+  if (code === 32) return dx + options.layout.charWidth
 
   if (options.layout.renderMinimap === RenderMinimap.Blocks) {
     options.charRenderer.blockRenderChar(
@@ -509,8 +506,8 @@ function renderCharacter(
       options.renderBackground,
       options.renderBackgroundAlpha,
       options.layout.lineHeight === 1,
-    );
-    return dx + options.layout.charWidth;
+    )
+    return dx + options.layout.charWidth
   }
 
   options.charRenderer.renderChar(
@@ -525,14 +522,14 @@ function renderCharacter(
     options.layout.scale,
     options.useLighterFont,
     options.layout.lineHeight === 1,
-  );
-  return dx + options.layout.charWidth;
+  )
+  return dx + options.layout.charWidth
 }
 
 function maxTextX(layout: MinimapRenderLayout): number {
-  const horizontalScale = layout.canvasInnerWidth / Math.max(1, layout.canvasOuterWidth);
-  const rightGutterWidth = MINIMAP_RIGHT_GUTTER_WIDTH * horizontalScale;
-  return layout.canvasInnerWidth - rightGutterWidth - layout.charWidth;
+  const horizontalScale = layout.canvasInnerWidth / Math.max(1, layout.canvasOuterWidth)
+  const rightGutterWidth = MINIMAP_RIGHT_GUTTER_WIDTH * horizontalScale
+  return layout.canvasInnerWidth - rightGutterWidth - layout.charWidth
 }
 
 function visitTokenSegments(
@@ -544,16 +541,16 @@ function visitTokenSegments(
   fallback: RGBA8,
   visit: (text: string, color: RGBA8) => boolean,
 ): void {
-  let cursor = 0;
+  let cursor = 0
   for (let index = tokenStart; index < tokenEnd; index += 1) {
-    const token = tokens[index]!;
-    const start = Math.max(0, token.start - lineStart);
-    const end = Math.min(text.length, token.end - lineStart);
-    if (start > cursor && !visit(text.slice(cursor, start), fallback)) return;
-    if (end > start && !visit(text.slice(start, end), token.color)) return;
-    cursor = Math.max(cursor, end);
+    const token = tokens[index]!
+    const start = Math.max(0, token.start - lineStart)
+    const end = Math.min(text.length, token.end - lineStart)
+    if (start > cursor && !visit(text.slice(cursor, start), fallback)) return
+    if (end > start && !visit(text.slice(start, end), token.color)) return
+    cursor = Math.max(cursor, end)
   }
-  if (cursor < text.length) visit(text.slice(cursor), fallback);
+  if (cursor < text.length) visit(text.slice(cursor), fallback)
 }
 
 function tokensForLineFromCursor(
@@ -562,13 +559,13 @@ function tokensForLineFromCursor(
   lineEnd: number,
   cursor: number,
 ): TokenRange {
-  let index = cursor;
-  while (index < tokens.length && tokens[index]!.end <= lineStart) index += 1;
+  let index = cursor
+  while (index < tokens.length && tokens[index]!.end <= lineStart) index += 1
 
-  const start = index;
-  while (index < tokens.length && tokens[index]!.start < lineEnd) index += 1;
+  const start = index
+  while (index < tokens.length && tokens[index]!.start < lineEnd) index += 1
 
-  return { start, end: index, cursor: start };
+  return { start, end: index, cursor: start }
 }
 
 function createBackgroundImageData(
@@ -577,14 +574,14 @@ function createBackgroundImageData(
   height: number,
   background: RGBA8,
 ): ImageData {
-  const imageData = context.createImageData(Math.max(1, width), Math.max(1, height));
+  const imageData = context.createImageData(Math.max(1, width), Math.max(1, height))
   for (let index = 0; index < imageData.data.length; index += Constants.RGBA_CHANNELS_CNT) {
-    imageData.data[index] = background.r;
-    imageData.data[index + 1] = background.g;
-    imageData.data[index + 2] = background.b;
-    imageData.data[index + 3] = background.a;
+    imageData.data[index] = background.r
+    imageData.data[index + 1] = background.g
+    imageData.data[index + 2] = background.b
+    imageData.data[index + 3] = background.a
   }
-  return imageData;
+  return imageData
 }
 
 function fillLineRange(
@@ -594,16 +591,16 @@ function fillLineRange(
   startLineNumber: number,
   endLineNumber: number,
 ): void {
-  const start = Math.max(frame.startLineNumber, startLineNumber);
-  const end = Math.min(frame.endLineNumber, endLineNumber);
-  if (start > end) return;
+  const start = Math.max(frame.startLineNumber, startLineNumber)
+  const end = Math.min(frame.endLineNumber, endLineNumber)
+  if (start > end) return
 
-  const y = yForLineNumber(frame, start, layout.lineHeight);
+  const y = yForLineNumber(frame, start, layout.lineHeight)
   const height = Math.max(
     layout.lineHeight,
     yForLineNumber(frame, end, layout.lineHeight) - y + layout.lineHeight,
-  );
-  context.fillRect(MINIMAP_GUTTER_WIDTH, y, layout.canvasInnerWidth, height);
+  )
+  context.fillRect(MINIMAP_GUTTER_WIDTH, y, layout.canvasInnerWidth, height)
 }
 
 function fillDecorationRange(
@@ -612,18 +609,18 @@ function fillDecorationRange(
   frame: FrameLike,
   decoration: EditorMinimapDecoration,
 ): void {
-  if (decoration.position === "gutter") {
+  if (decoration.position === 'gutter') {
     fillGutterLineRange(
       context,
       layout,
       frame,
       decoration.startLineNumber,
       decoration.endLineNumber,
-    );
-    return;
+    )
+    return
   }
 
-  fillLineRange(context, layout, frame, decoration.startLineNumber, decoration.endLineNumber);
+  fillLineRange(context, layout, frame, decoration.startLineNumber, decoration.endLineNumber)
 }
 
 function fillGutterLineRange(
@@ -633,13 +630,13 @@ function fillGutterLineRange(
   startLineNumber: number,
   endLineNumber: number,
 ): void {
-  const range = visibleLineRange(frame, startLineNumber, endLineNumber);
-  if (!range) return;
+  const range = visibleLineRange(frame, startLineNumber, endLineNumber)
+  if (!range) return
 
-  const y = yForLineNumber(frame, range.start, layout.lineHeight);
-  const height = lineRangeHeight(layout, frame, range.end, y);
-  const width = minimapRightGutterWidth(layout);
-  context.fillRect(layout.canvasInnerWidth - width, y, width, height);
+  const y = yForLineNumber(frame, range.start, layout.lineHeight)
+  const height = lineRangeHeight(layout, frame, range.end, y)
+  const width = minimapRightGutterWidth(layout)
+  context.fillRect(layout.canvasInnerWidth - width, y, width, height)
 }
 
 function visibleLineRange(
@@ -647,10 +644,10 @@ function visibleLineRange(
   startLineNumber: number,
   endLineNumber: number,
 ): LineRange | null {
-  const start = Math.max(frame.startLineNumber, startLineNumber);
-  const end = Math.min(frame.endLineNumber, endLineNumber);
-  if (start > end) return null;
-  return { start, end };
+  const start = Math.max(frame.startLineNumber, startLineNumber)
+  const end = Math.min(frame.endLineNumber, endLineNumber)
+  if (start > end) return null
+  return { start, end }
 }
 
 function lineRangeHeight(
@@ -662,12 +659,12 @@ function lineRangeHeight(
   return Math.max(
     layout.lineHeight,
     yForLineNumber(frame, endLineNumber, layout.lineHeight) - y + layout.lineHeight,
-  );
+  )
 }
 
 function minimapRightGutterWidth(layout: MinimapRenderLayout): number {
-  const horizontalScale = layout.canvasInnerWidth / Math.max(1, layout.canvasOuterWidth);
-  return Math.max(2, Math.ceil(MINIMAP_RIGHT_GUTTER_WIDTH * horizontalScale));
+  const horizontalScale = layout.canvasInnerWidth / Math.max(1, layout.canvasOuterWidth)
+  return Math.max(2, Math.ceil(MINIMAP_RIGHT_GUTTER_WIDTH * horizontalScale))
 }
 
 function renderSectionHeader(
@@ -682,33 +679,28 @@ function renderSectionHeader(
     decoration.startLineNumber < frame.startLineNumber ||
     decoration.startLineNumber > frame.endLineNumber
   ) {
-    return;
+    return
   }
 
-  const y = yForLineNumber(frame, decoration.startLineNumber, layout.lineHeight) + fontSize;
-  context.fillRect(0, y - fontSize, layout.canvasInnerWidth, fontSize * 1.5);
-  context.fillStyle = rgbaToCss(color);
+  const y = yForLineNumber(frame, decoration.startLineNumber, layout.lineHeight) + fontSize
+  context.fillRect(0, y - fontSize, layout.canvasInnerWidth, fontSize * 1.5)
+  context.fillStyle = rgbaToCss(color)
   if (decoration.sectionHeaderText) {
-    context.fillText(
-      decoration.sectionHeaderText,
-      MINIMAP_GUTTER_WIDTH,
-      y,
-      layout.canvasInnerWidth,
-    );
+    context.fillText(decoration.sectionHeaderText, MINIMAP_GUTTER_WIDTH, y, layout.canvasInnerWidth)
   }
-  if (decoration.sectionHeaderStyle === "underlined") {
-    context.beginPath();
-    context.moveTo(0, y - fontSize + 2);
-    context.lineTo(layout.canvasInnerWidth, y - fontSize + 2);
-    context.stroke();
+  if (decoration.sectionHeaderStyle === 'underlined') {
+    context.beginPath()
+    context.moveTo(0, y - fontSize + 2)
+    context.lineTo(layout.canvasInnerWidth, y - fontSize + 2)
+    context.stroke()
   }
 }
 
 function resizeCanvas(canvas: OffscreenCanvas, width: number, height: number): void {
-  const safeWidth = Math.max(1, width);
-  const safeHeight = Math.max(1, height);
-  if (canvas.width !== safeWidth) canvas.width = safeWidth;
-  if (canvas.height !== safeHeight) canvas.height = safeHeight;
+  const safeWidth = Math.max(1, width)
+  const safeHeight = Math.max(1, height)
+  if (canvas.width !== safeWidth) canvas.width = safeWidth
+  if (canvas.height !== safeHeight) canvas.height = safeHeight
 }
 
 function renderLayoutsEqual(left: MinimapRenderLayout, right: MinimapRenderLayout): boolean {
@@ -723,7 +715,7 @@ function renderLayoutsEqual(left: MinimapRenderLayout, right: MinimapRenderLayou
     left.isSampling === right.isSampling &&
     left.heightIsEditorHeight === right.heightIsEditorHeight &&
     left.renderMinimap === right.renderMinimap
-  );
+  )
 }
 
 function framesPaintSameWindow(left: MinimapFrameLayout, right: MinimapFrameLayout): boolean {
@@ -731,11 +723,11 @@ function framesPaintSameWindow(left: MinimapFrameLayout, right: MinimapFrameLayo
     left.startLineNumber === right.startLineNumber &&
     left.endLineNumber === right.endLineNumber &&
     left.topPaddingLineCount === right.topPaddingLineCount
-  );
+  )
 }
 
 function defaultMetrics(): MinimapMetrics {
-  return { rowHeight: 20, characterWidth: 8, devicePixelRatio: 1 };
+  return { rowHeight: 20, characterWidth: 8, devicePixelRatio: 1 }
 }
 
 function defaultViewport(): MinimapViewport {
@@ -748,33 +740,33 @@ function defaultViewport(): MinimapViewport {
     clientWidth: 0,
     visibleStart: 0,
     visibleEnd: 1,
-  };
+  }
 }
 
 function emptyRenderResult(): RenderResult {
-  return { sliderNeeded: false, sliderTop: 0, sliderHeight: 0, shadowVisible: false };
+  return { sliderNeeded: false, sliderTop: 0, sliderHeight: 0, shadowVisible: false }
 }
 
 function applyTextEdit(text: string, edit: TextEdit): string {
-  return `${text.slice(0, edit.from)}${edit.text}${text.slice(edit.to)}`;
+  return `${text.slice(0, edit.from)}${edit.text}${text.slice(edit.to)}`
 }
 
 function applyTextEditsToMinimapDocument(
-  document: Pick<MinimapDocumentPayload, "lineStarts" | "text" | "tokens">,
+  document: Pick<MinimapDocumentPayload, 'lineStarts' | 'text' | 'tokens'>,
   edits: readonly TextEdit[],
-): Pick<MinimapDocumentPayload, "lineStarts" | "text" | "tokens"> {
-  let text = document.text;
-  let lineStarts = document.lineStarts;
-  let tokens = document.tokens;
+): Pick<MinimapDocumentPayload, 'lineStarts' | 'text' | 'tokens'> {
+  let text = document.text
+  let lineStarts = document.lineStarts
+  let tokens = document.tokens
 
   for (const edit of edits) {
-    tokens = projectMinimapTokensThroughEdit(tokens, edit, text);
-    const nextText = applyTextEdit(text, edit);
-    lineStarts = applyLineStartsEdit(lineStarts, edit, nextText);
-    text = nextText;
+    tokens = projectMinimapTokensThroughEdit(tokens, edit, text)
+    const nextText = applyTextEdit(text, edit)
+    lineStarts = applyLineStartsEdit(lineStarts, edit, nextText)
+    text = nextText
   }
 
-  return { text, lineStarts, tokens };
+  return { text, lineStarts, tokens }
 }
 
 function applyLineStartsEdit(
@@ -783,18 +775,18 @@ function applyLineStartsEdit(
   nextText: string,
 ): readonly number[] {
   if (editChangesLineStructure(lineStarts, edit)) {
-    return spliceLineStartsThroughEdit(lineStarts, edit, nextText.length);
+    return spliceLineStartsThroughEdit(lineStarts, edit, nextText.length)
   }
 
-  const delta = edit.text.length - (edit.to - edit.from);
-  if (delta === 0) return lineStarts;
+  const delta = edit.text.length - (edit.to - edit.from)
+  if (delta === 0) return lineStarts
 
-  const next = [...lineStarts];
-  const lineIndex = lineIndexForOffset(next, edit.from);
+  const next = [...lineStarts]
+  const lineIndex = lineIndexForOffset(next, edit.from)
   for (let index = lineIndex + 1; index < next.length; index += 1) {
-    next[index] = (next[index] ?? 0) + delta;
+    next[index] = (next[index] ?? 0) + delta
   }
-  return next;
+  return next
 }
 
 function spliceLineStartsThroughEdit(
@@ -802,21 +794,21 @@ function spliceLineStartsThroughEdit(
   edit: TextEdit,
   nextTextLength: number,
 ): readonly number[] {
-  const startLine = lineIndexForOffset(lineStarts, edit.from);
-  const endLine = lineIndexForOffset(lineStarts, edit.to);
-  const delta = edit.text.length - (edit.to - edit.from);
-  const next = lineStarts.slice(0, startLine + 1);
+  const startLine = lineIndexForOffset(lineStarts, edit.from)
+  const endLine = lineIndexForOffset(lineStarts, edit.to)
+  const delta = edit.text.length - (edit.to - edit.from)
+  const next = lineStarts.slice(0, startLine + 1)
 
-  appendInsertedLineStarts(next, edit);
-  appendShiftedLineStarts(next, lineStarts, endLine + 1, delta, nextTextLength);
-  return next;
+  appendInsertedLineStarts(next, edit)
+  appendShiftedLineStarts(next, lineStarts, endLine + 1, delta, nextTextLength)
+  return next
 }
 
 function appendInsertedLineStarts(target: number[], edit: TextEdit): void {
-  let index = edit.text.indexOf("\n");
+  let index = edit.text.indexOf('\n')
   while (index !== -1) {
-    target.push(edit.from + index + 1);
-    index = edit.text.indexOf("\n", index + 1);
+    target.push(edit.from + index + 1)
+    index = edit.text.indexOf('\n', index + 1)
   }
 }
 
@@ -828,47 +820,47 @@ function appendShiftedLineStarts(
   nextTextLength: number,
 ): void {
   for (let index = startIndex; index < lineStarts.length; index += 1) {
-    const nextStart = (lineStarts[index] ?? 0) + delta;
-    if (nextStart <= nextTextLength) target.push(nextStart);
+    const nextStart = (lineStarts[index] ?? 0) + delta
+    if (nextStart <= nextTextLength) target.push(nextStart)
   }
 }
 
 function editChangesLineStructure(lineStarts: readonly number[], edit: TextEdit): boolean {
-  if (edit.text.includes("\n")) return true;
-  return lineIndexForOffset(lineStarts, edit.from) !== lineIndexForOffset(lineStarts, edit.to);
+  if (edit.text.includes('\n')) return true
+  return lineIndexForOffset(lineStarts, edit.from) !== lineIndexForOffset(lineStarts, edit.to)
 }
 
 function lineIndexForOffset(lineStarts: readonly number[], offset: number): number {
-  let low = 0;
-  let high = lineStarts.length - 1;
-  const clamped = Math.max(0, offset);
+  let low = 0
+  let high = lineStarts.length - 1
+  const clamped = Math.max(0, offset)
 
   while (low <= high) {
-    const middle = Math.floor((low + high) / 2);
-    const start = lineStarts[middle] ?? 0;
-    const next = lineStarts[middle + 1] ?? Number.POSITIVE_INFINITY;
+    const middle = Math.floor((low + high) / 2)
+    const start = lineStarts[middle] ?? 0
+    const next = lineStarts[middle + 1] ?? Number.POSITIVE_INFINITY
     if (clamped < start) {
-      high = middle - 1;
-      continue;
+      high = middle - 1
+      continue
     }
     if (clamped >= next) {
-      low = middle + 1;
-      continue;
+      low = middle + 1
+      continue
     }
-    return middle;
+    return middle
   }
 
-  return Math.max(0, lineStarts.length - 1);
+  return Math.max(0, lineStarts.length - 1)
 }
 
-const SECTION_HEADER_EDIT_CONTEXT_LINES = 10;
+const SECTION_HEADER_EDIT_CONTEXT_LINES = 10
 
-type SectionHeaderDocument = Pick<MinimapDocumentPayload, "decorations" | "lineStarts" | "text">;
-type SectionHeaderTextDocument = Pick<MinimapDocumentPayload, "lineStarts" | "text">;
+type SectionHeaderDocument = Pick<MinimapDocumentPayload, 'decorations' | 'lineStarts' | 'text'>
+type SectionHeaderTextDocument = Pick<MinimapDocumentPayload, 'lineStarts' | 'text'>
 type LineNumberRange = {
-  readonly start: number;
-  readonly end: number;
-};
+  readonly start: number
+  readonly end: number
+}
 
 function updateSectionHeaderDecorations(
   previous: SectionHeaderDocument,
@@ -876,52 +868,52 @@ function updateSectionHeaderDecorations(
   edits: readonly TextEdit[],
   options: ResolvedMinimapOptions,
 ): readonly EditorMinimapDecoration[] {
-  if (!options.showMarkSectionHeaders) return [];
-  if (edits.length === 0) return sectionHeaderDecorationsFrom(previous.decorations);
+  if (!options.showMarkSectionHeaders) return []
+  if (edits.length === 0) return sectionHeaderDecorationsFrom(previous.decorations)
 
-  const oldRange = affectedOldLineRange(previous.lineStarts, edits);
-  const nextRange = affectedNextLineRange(next.lineStarts, edits);
-  const lineDelta = next.lineStarts.length - previous.lineStarts.length;
-  const shifted = shiftedSectionHeaders(previous.decorations, oldRange, nextRange, lineDelta);
-  const rescanned = rescanSectionHeaders(next, nextRange, options);
-  return [...shifted, ...rescanned].toSorted(compareDecorationsByLine);
+  const oldRange = affectedOldLineRange(previous.lineStarts, edits)
+  const nextRange = affectedNextLineRange(next.lineStarts, edits)
+  const lineDelta = next.lineStarts.length - previous.lineStarts.length
+  const shifted = shiftedSectionHeaders(previous.decorations, oldRange, nextRange, lineDelta)
+  const rescanned = rescanSectionHeaders(next, nextRange, options)
+  return shifted.concat(rescanned).sort(compareDecorationsByLine)
 }
 
 function affectedOldLineRange(
   lineStarts: readonly number[],
   edits: readonly TextEdit[],
 ): LineNumberRange {
-  let start = Number.POSITIVE_INFINITY;
-  let end = 1;
+  let start = Number.POSITIVE_INFINITY
+  let end = 1
 
   for (const edit of edits) {
-    start = Math.min(start, lineIndexForOffset(lineStarts, edit.from) + 1);
-    end = Math.max(end, lineIndexForOffset(lineStarts, edit.to) + 1);
+    start = Math.min(start, lineIndexForOffset(lineStarts, edit.from) + 1)
+    end = Math.max(end, lineIndexForOffset(lineStarts, edit.to) + 1)
   }
 
-  return expandLineRange({ start, end }, lineStarts.length);
+  return expandLineRange({ start, end }, lineStarts.length)
 }
 
 function affectedNextLineRange(
   lineStarts: readonly number[],
   edits: readonly TextEdit[],
 ): LineNumberRange {
-  let start = Number.POSITIVE_INFINITY;
-  let end = 1;
+  let start = Number.POSITIVE_INFINITY
+  let end = 1
 
   for (const edit of edits) {
-    start = Math.min(start, lineIndexForOffset(lineStarts, edit.from) + 1);
-    end = Math.max(end, lineIndexForOffset(lineStarts, edit.from + edit.text.length) + 1);
+    start = Math.min(start, lineIndexForOffset(lineStarts, edit.from) + 1)
+    end = Math.max(end, lineIndexForOffset(lineStarts, edit.from + edit.text.length) + 1)
   }
 
-  return expandLineRange({ start, end }, lineStarts.length);
+  return expandLineRange({ start, end }, lineStarts.length)
 }
 
 function expandLineRange(range: LineNumberRange, lineCount: number): LineNumberRange {
   return {
     start: Math.max(1, range.start - SECTION_HEADER_EDIT_CONTEXT_LINES),
     end: Math.min(lineCount, range.end + SECTION_HEADER_EDIT_CONTEXT_LINES),
-  };
+  }
 }
 
 function shiftedSectionHeaders(
@@ -930,10 +922,10 @@ function shiftedSectionHeaders(
   nextRange: LineNumberRange,
   lineDelta: number,
 ): readonly EditorMinimapDecoration[] {
-  const headers = sectionHeaderDecorationsFrom(decorations);
+  const headers = sectionHeaderDecorationsFrom(decorations)
   return headers.flatMap((decoration) =>
     shiftSectionHeaderDecoration(decoration, oldRange, nextRange, lineDelta),
-  );
+  )
 }
 
 function shiftSectionHeaderDecoration(
@@ -942,27 +934,27 @@ function shiftSectionHeaderDecoration(
   nextRange: LineNumberRange,
   lineDelta: number,
 ): readonly EditorMinimapDecoration[] {
-  if (lineRangesIntersect(decoration, oldRange)) return [];
+  if (lineRangesIntersect(decoration, oldRange)) return []
 
   if (decoration.startLineNumber <= oldRange.end) {
-    return lineRangesIntersect(decoration, nextRange) ? [] : [decoration];
+    return lineRangesIntersect(decoration, nextRange) ? [] : [decoration]
   }
 
-  const shifted = shiftDecoration(decoration, lineDelta);
-  return lineRangesIntersect(shifted, nextRange) ? [] : [shifted];
+  const shifted = shiftDecoration(decoration, lineDelta)
+  return lineRangesIntersect(shifted, nextRange) ? [] : [shifted]
 }
 
 function shiftDecoration(
   decoration: EditorMinimapDecoration,
   lineDelta: number,
 ): EditorMinimapDecoration {
-  if (lineDelta === 0) return decoration;
+  if (lineDelta === 0) return decoration
 
   return {
     ...decoration,
     startLineNumber: decoration.startLineNumber + lineDelta,
     endLineNumber: decoration.endLineNumber + lineDelta,
-  };
+  }
 }
 
 function rescanSectionHeaders(
@@ -970,8 +962,8 @@ function rescanSectionHeaders(
   range: LineNumberRange,
   options: ResolvedMinimapOptions,
 ): readonly EditorMinimapDecoration[] {
-  const lines = linesForRange(document.text, document.lineStarts, range);
-  return findSectionHeaderDecorationsInRange(lines, range.start, options);
+  const lines = linesForRange(document.text, document.lineStarts, range)
+  return findSectionHeaderDecorationsInRange(lines, range.start, options)
 }
 
 function linesForRange(
@@ -979,59 +971,56 @@ function linesForRange(
   lineStarts: readonly number[],
   range: LineNumberRange,
 ): readonly string[] {
-  const lines: string[] = [];
+  const lines: string[] = []
   for (let lineNumber = range.start; lineNumber <= range.end; lineNumber += 1) {
-    lines.push(lineTextByNumber(text, lineStarts, lineNumber));
+    lines.push(lineTextByNumber(text, lineStarts, lineNumber))
   }
 
-  return lines;
+  return lines
 }
 
 function lineTextByNumber(text: string, lineStarts: readonly number[], lineNumber: number): string {
-  const index = lineNumber - 1;
-  const start = lineStarts[index] ?? 0;
-  const rawEnd = lineStarts[index + 1] ?? text.length;
-  const end = rawEnd > start && text[rawEnd - 1] === "\n" ? rawEnd - 1 : rawEnd;
-  return text.slice(start, end);
+  const index = lineNumber - 1
+  const start = lineStarts[index] ?? 0
+  const rawEnd = lineStarts[index + 1] ?? text.length
+  const end = rawEnd > start && text[rawEnd - 1] === '\n' ? rawEnd - 1 : rawEnd
+  return text.slice(start, end)
 }
 
-function lineRangesIntersect(
-  decoration: EditorMinimapDecoration,
-  range: LineNumberRange,
-): boolean {
-  return decoration.startLineNumber <= range.end && decoration.endLineNumber >= range.start;
+function lineRangesIntersect(decoration: EditorMinimapDecoration, range: LineNumberRange): boolean {
+  return decoration.startLineNumber <= range.end && decoration.endLineNumber >= range.start
 }
 
 function compareDecorationsByLine(
   left: EditorMinimapDecoration,
   right: EditorMinimapDecoration,
 ): number {
-  return left.startLineNumber - right.startLineNumber || left.endLineNumber - right.endLineNumber;
+  return left.startLineNumber - right.startLineNumber || left.endLineNumber - right.endLineNumber
 }
 
 function externalDecorationsFrom(
   decorations: readonly EditorMinimapDecoration[],
 ): readonly EditorMinimapDecoration[] {
-  return decorations.filter((decoration) => !decoration.sectionHeaderStyle);
+  return decorations.filter((decoration) => !decoration.sectionHeaderStyle)
 }
 
 function sectionHeaderDecorationsFrom(
   decorations: readonly EditorMinimapDecoration[],
 ): readonly EditorMinimapDecoration[] {
-  return decorations.filter((decoration) => decoration.sectionHeaderStyle);
+  return decorations.filter((decoration) => decoration.sectionHeaderStyle)
 }
 
 function replaceTokenRange(
   tokens: readonly MinimapToken[],
   patch: MinimapTokenPatch,
 ): readonly MinimapToken[] {
-  const start = clampTokenIndex(patch.start, tokens.length);
-  const deleteEnd = clampTokenIndex(start + patch.deleteCount, tokens.length);
-  return [...tokens.slice(0, start), ...patch.tokens, ...tokens.slice(deleteEnd)];
+  const start = clampTokenIndex(patch.start, tokens.length)
+  const deleteEnd = clampTokenIndex(start + patch.deleteCount, tokens.length)
+  return tokens.slice(0, start).concat(patch.tokens, tokens.slice(deleteEnd))
 }
 
 function clampTokenIndex(index: number, length: number): number {
-  return Math.min(length, Math.max(0, index));
+  return Math.min(length, Math.max(0, index))
 }
 
 export function projectMinimapTokensThroughEdit(
@@ -1039,13 +1028,13 @@ export function projectMinimapTokensThroughEdit(
   edit: TextEdit,
   previousText: string,
 ): readonly MinimapToken[] {
-  const delta = edit.text.length - (edit.to - edit.from);
-  const projected: MinimapToken[] = [];
+  const delta = edit.text.length - (edit.to - edit.from)
+  const projected: MinimapToken[] = []
   for (const token of tokens) {
-    const next = projectMinimapTokenThroughEdit(token, edit, previousText, delta);
-    if (isRenderableMinimapToken(next)) projected.push(next);
+    const next = projectMinimapTokenThroughEdit(token, edit, previousText, delta)
+    if (isRenderableMinimapToken(next)) projected.push(next)
   }
-  return projected;
+  return projected
 }
 
 function projectMinimapTokenThroughEdit(
@@ -1054,12 +1043,12 @@ function projectMinimapTokenThroughEdit(
   previousText: string,
   delta: number,
 ): MinimapToken | null {
-  if (edit.from === edit.to) return projectMinimapTokenThroughInsertion(token, edit, previousText);
-  if (token.end <= edit.from) return token;
-  if (token.start >= edit.to) return shiftMinimapToken(token, delta);
-  if (!canResizeMinimapTokenAcrossEdit(token, edit)) return null;
+  if (edit.from === edit.to) return projectMinimapTokenThroughInsertion(token, edit, previousText)
+  if (token.end <= edit.from) return token
+  if (token.start >= edit.to) return shiftMinimapToken(token, delta)
+  if (!canResizeMinimapTokenAcrossEdit(token, edit)) return null
 
-  return { ...token, end: token.end + delta };
+  return { ...token, end: token.end + delta }
 }
 
 function projectMinimapTokenThroughInsertion(
@@ -1068,16 +1057,16 @@ function projectMinimapTokenThroughInsertion(
   previousText: string,
 ): MinimapToken {
   if (shouldExpandMinimapTokenForInsertion(token, edit, previousText)) {
-    return { ...token, end: token.end + edit.text.length };
+    return { ...token, end: token.end + edit.text.length }
   }
-  if (token.start >= edit.from) return shiftMinimapToken(token, edit.text.length);
+  if (token.start >= edit.from) return shiftMinimapToken(token, edit.text.length)
 
-  return token;
+  return token
 }
 
 function canResizeMinimapTokenAcrossEdit(token: MinimapToken, edit: TextEdit): boolean {
-  if (edit.text.includes("\n")) return false;
-  return token.start < edit.from && edit.to < token.end;
+  if (edit.text.includes('\n')) return false
+  return token.start < edit.from && edit.to < token.end
 }
 
 function shouldExpandMinimapTokenForInsertion(
@@ -1085,18 +1074,18 @@ function shouldExpandMinimapTokenForInsertion(
   edit: TextEdit,
   previousText: string,
 ): boolean {
-  if (edit.text.length === 0) return false;
-  if (edit.text.includes("\n")) return false;
-  if (token.start < edit.from && edit.from < token.end) return true;
-  if (!isWordLikeText(edit.text)) return false;
-  if (token.end === edit.from) return isWordBeforeOffset(previousText, edit.from);
+  if (edit.text.length === 0) return false
+  if (edit.text.includes('\n')) return false
+  if (token.start < edit.from && edit.from < token.end) return true
+  if (!isWordLikeText(edit.text)) return false
+  if (token.end === edit.from) return isWordBeforeOffset(previousText, edit.from)
   if (token.start === edit.from) {
     return (
       !isWordBeforeOffset(previousText, edit.from) && isWordCodePointAt(previousText, edit.from)
-    );
+    )
   }
 
-  return false;
+  return false
 }
 
 function shiftMinimapToken(token: MinimapToken, delta: number): MinimapToken {
@@ -1104,40 +1093,40 @@ function shiftMinimapToken(token: MinimapToken, delta: number): MinimapToken {
     ...token,
     start: token.start + delta,
     end: token.end + delta,
-  };
+  }
 }
 
 function isRenderableMinimapToken(token: MinimapToken | null): token is MinimapToken {
-  if (!token) return false;
-  return token.end > token.start;
+  if (!token) return false
+  return token.end > token.start
 }
 
 function isWordLikeText(text: string): boolean {
-  return /^[\p{L}\p{N}_]+$/u.test(text);
+  return /^[\p{L}\p{N}_]+$/u.test(text)
 }
 
 function isWordBeforeOffset(text: string, offset: number): boolean {
-  const previous = previousCodePointStart(text, offset);
-  if (previous === null) return false;
-  return isWordCodePointAt(text, previous);
+  const previous = previousCodePointStart(text, offset)
+  if (previous === null) return false
+  return isWordCodePointAt(text, previous)
 }
 
 function isWordCodePointAt(text: string, offset: number): boolean {
-  const codePoint = text.codePointAt(offset);
-  if (codePoint === undefined) return false;
-  return /^[\p{L}\p{N}_]$/u.test(String.fromCodePoint(codePoint));
+  const codePoint = text.codePointAt(offset)
+  if (codePoint === undefined) return false
+  return /^[\p{L}\p{N}_]$/u.test(String.fromCodePoint(codePoint))
 }
 
 function previousCodePointStart(text: string, offset: number): number | null {
-  if (offset <= 0) return null;
+  if (offset <= 0) return null
 
-  const previous = offset - 1;
-  const codeUnit = text.charCodeAt(previous);
-  const beforePrevious = previous - 1;
-  const isLowSurrogate = codeUnit >= 0xdc00 && codeUnit <= 0xdfff;
-  if (!isLowSurrogate || beforePrevious < 0) return previous;
+  const previous = offset - 1
+  const codeUnit = text.charCodeAt(previous)
+  const beforePrevious = previous - 1
+  const isLowSurrogate = codeUnit >= 0xdc00 && codeUnit <= 0xdfff
+  if (!isLowSurrogate || beforePrevious < 0) return previous
 
-  const previousCodeUnit = text.charCodeAt(beforePrevious);
-  const isHighSurrogate = previousCodeUnit >= 0xd800 && previousCodeUnit <= 0xdbff;
-  return isHighSurrogate ? beforePrevious : previous;
+  const previousCodeUnit = text.charCodeAt(beforePrevious)
+  const isHighSurrogate = previousCodeUnit >= 0xd800 && previousCodeUnit <= 0xdbff
+  return isHighSurrogate ? beforePrevious : previous
 }

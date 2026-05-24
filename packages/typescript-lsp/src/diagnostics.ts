@@ -38,7 +38,7 @@ export function summarizeDiagnostics(
   return {
     uri,
     version,
-    diagnostics: [...diagnostics],
+    diagnostics,
     counts: {
       ...counts,
       total: diagnostics.length,

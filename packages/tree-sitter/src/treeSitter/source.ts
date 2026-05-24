@@ -313,16 +313,12 @@ const safeParserReadEnd = (
   return Math.max(start + 1, end - 1);
 };
 
-const readResolvedChunkCodeUnit = (
-  chunk: ResolvedTreeSitterSourceChunk,
-  index: number,
-): number => {
+const readResolvedChunkCodeUnit = (chunk: ResolvedTreeSitterSourceChunk, index: number): number => {
   if (chunk.kind === "string") return chunk.text.charCodeAt(index);
   return chunk.units[index] ?? Number.NaN;
 };
 
-const isHighSurrogate = (codeUnit: number): boolean =>
-  codeUnit >= 0xd800 && codeUnit <= 0xdbff;
+const isHighSurrogate = (codeUnit: number): boolean => codeUnit >= 0xd800 && codeUnit <= 0xdbff;
 
 const readUtf16Text = (units: Uint16Array, start: number, end: number): string => {
   let text = "";

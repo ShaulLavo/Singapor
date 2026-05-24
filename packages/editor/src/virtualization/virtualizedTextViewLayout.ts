@@ -338,11 +338,7 @@ function updateDisplayRowsAfterMultiLineEdit(
     patch.delta,
   );
 
-  view.displayRows = [
-    ...view.displayRows.slice(0, patch.startRow),
-    ...replacementRows,
-    ...suffix,
-  ];
+  view.displayRows = view.displayRows.slice(0, patch.startRow).concat(replacementRows, suffix);
 }
 
 function createPlainDisplayRowsForRange(
@@ -409,10 +405,7 @@ function updateTextDisplayRow(
   };
 }
 
-function lineStartsAfterMultiLineEdit(
-  lineStarts: readonly number[],
-  edit: TextEdit,
-): number[] {
+function lineStartsAfterMultiLineEdit(lineStarts: readonly number[], edit: TextEdit): number[] {
   const delta = edit.text.length - (edit.to - edit.from);
   const next: number[] = [];
   for (const start of lineStarts) {

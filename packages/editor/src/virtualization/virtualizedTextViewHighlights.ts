@@ -659,14 +659,7 @@ function appendIndexedTokenSegmentsForMountedRow(
   if (row.kind !== "text") return;
 
   for (const chunk of row.chunks) {
-    appendIndexedTokenSegmentsForChunk(
-      view,
-      tokenIndex,
-      segmentsByRow,
-      row,
-      chunk,
-      styleSource,
-    );
+    appendIndexedTokenSegmentsForChunk(view, tokenIndex, segmentsByRow, row, chunk, styleSource);
   }
 }
 

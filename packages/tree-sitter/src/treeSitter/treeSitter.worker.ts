@@ -7,10 +7,10 @@ import {
   type Range as TreeSitterRange,
   type Tree,
   type TreeCursor,
-} from "web-tree-sitter";
-import { treeSitterCapturesToEditorTokens } from "@editor/core";
-import parserWasmUrl from "web-tree-sitter/web-tree-sitter.wasm?url";
-import type { TreeSitterLanguageDescriptor } from "./registry";
+} from 'web-tree-sitter'
+import { treeSitterCapturesToEditorTokens } from '@editor/core'
+import parserWasmUrl from 'web-tree-sitter/web-tree-sitter.wasm?url'
+import type { TreeSitterLanguageDescriptor } from './registry'
 import {
   clearTreeSitterSourceCache,
   disposeTreeSitterSourceDocument,
@@ -19,7 +19,7 @@ import {
   resolveTreeSitterSourceDescriptor,
   type TreeSitterSourceCache,
   type TreeSitterPieceTableInput,
-} from "./source";
+} from './source'
 import type {
   BracketInfo,
   FoldRange,
@@ -40,159 +40,159 @@ import type {
   TreeSitterWorkerRequest,
   TreeSitterWorkerResult,
   TreeSitterWorkerResponse,
-} from "./types";
+} from './types'
 
 type Runtime = {
-  readonly descriptor: TreeSitterLanguageDescriptor;
-  readonly language: Language;
-  readonly parser: Parser;
-  highlightQuery: Query | null;
-  foldQuery: Query | null;
-  injectionQuery: Query | null;
-};
+  readonly descriptor: TreeSitterLanguageDescriptor
+  readonly language: Language
+  readonly parser: Parser
+  highlightQuery: Query | null
+  foldQuery: Query | null
+  injectionQuery: Query | null
+}
 
-type LayerKind = "root" | "injection" | "combined-injection";
+type LayerKind = 'root' | 'injection' | 'combined-injection'
 
-type LayerKey = string;
+type LayerKey = string
 
 type ParsedLayer = {
-  readonly id: string;
-  readonly key: LayerKey;
-  readonly kind: LayerKind;
-  readonly parentId: string | null;
-  readonly parentLanguageId: TreeSitterLanguageId | null;
-  readonly languageId: TreeSitterLanguageId;
-  readonly depth: number;
-  readonly tree: Tree;
-  readonly ranges: readonly TreeSitterRange[];
-};
+  readonly id: string
+  readonly key: LayerKey
+  readonly kind: LayerKind
+  readonly parentId: string | null
+  readonly parentLanguageId: TreeSitterLanguageId | null
+  readonly languageId: TreeSitterLanguageId
+  readonly depth: number
+  readonly tree: Tree
+  readonly ranges: readonly TreeSitterRange[]
+}
 
 type ParsedDocument = {
-  readonly snapshotVersion: number;
-  readonly languageId: TreeSitterLanguageId;
-  readonly source: TreeSitterPieceTableInput;
-  readonly layers: readonly ParsedLayer[];
-  readonly size: number;
-  lastUsed: number;
-};
+  readonly snapshotVersion: number
+  readonly languageId: TreeSitterLanguageId
+  readonly source: TreeSitterPieceTableInput
+  readonly layers: readonly ParsedLayer[]
+  readonly size: number
+  lastUsed: number
+}
 
 type DocumentCache = {
-  readonly documentId: string;
-  readonly snapshots: ParsedDocument[];
-};
+  readonly documentId: string
+  readonly snapshots: ParsedDocument[]
+}
 
 type CancellationContext = {
-  readonly startedAt: number;
-  readonly budgetMs: number;
-  readonly flag: Int32Array | null;
-};
+  readonly startedAt: number
+  readonly budgetMs: number
+  readonly flag: Int32Array | null
+}
 
 type FlattenedDocument = Pick<
   TreeSitterParseResult,
-  "captures" | "folds" | "brackets" | "errors" | "injections" | "tokens"
->;
+  'captures' | 'folds' | 'brackets' | 'errors' | 'injections' | 'tokens'
+>
 
 type RangeFlattenOptions = {
-  readonly range: TreeSitterSyntaxRange;
-  readonly includeHighlights: boolean;
-  readonly includeCaptures: boolean;
-};
+  readonly range: TreeSitterSyntaxRange
+  readonly includeHighlights: boolean
+  readonly includeCaptures: boolean
+}
 
 type InjectionPlan = {
-  readonly id: string;
-  readonly key: LayerKey;
-  readonly kind: Extract<LayerKind, "injection" | "combined-injection">;
-  readonly parentId: string;
-  readonly parentLanguageId: TreeSitterLanguageId;
-  readonly languageId: TreeSitterLanguageId;
-  readonly depth: number;
-  readonly ranges: readonly TreeSitterRange[];
-};
+  readonly id: string
+  readonly key: LayerKey
+  readonly kind: Extract<LayerKind, 'injection' | 'combined-injection'>
+  readonly parentId: string
+  readonly parentLanguageId: TreeSitterLanguageId
+  readonly languageId: TreeSitterLanguageId
+  readonly depth: number
+  readonly ranges: readonly TreeSitterRange[]
+}
 
 type TreeWalkVisitors = {
-  readonly onBracket: (info: BracketInfo) => void;
-  readonly onError: (info: TreeSitterError) => void;
-};
+  readonly onBracket: (info: BracketInfo) => void
+  readonly onError: (info: TreeSitterError) => void
+}
 
 const BRACKET_PAIRS: Record<string, string> = {
-  "(": ")",
-  "[": "]",
-  "{": "}",
-};
+  '(': ')',
+  '[': ']',
+  '{': '}',
+}
 
-const OPEN_BRACKETS = new Set(Object.keys(BRACKET_PAIRS));
-const CLOSE_BRACKETS = new Set(Object.values(BRACKET_PAIRS));
-const MAX_RETAINED_SNAPSHOTS = 6;
-const MAX_RETAINED_SOURCE_UNITS = 8_000_000;
-const MAX_INJECTION_DEPTH = 2;
-const PARSE_BUDGET_MS = 20_000;
-const QUERY_BUDGET_MS = 20_000;
+const OPEN_BRACKETS = new Set(Object.keys(BRACKET_PAIRS))
+const CLOSE_BRACKETS = new Set(Object.values(BRACKET_PAIRS))
+const MAX_RETAINED_SNAPSHOTS = 6
+const MAX_RETAINED_SOURCE_UNITS = 8_000_000
+const MAX_INJECTION_DEPTH = 2
+const PARSE_BUDGET_MS = 20_000
+const QUERY_BUDGET_MS = 20_000
 
-let parserInitPromise: Promise<void> | null = null;
-let nextUse = 1;
-const languageDescriptors = new Map<TreeSitterLanguageId, TreeSitterLanguageDescriptor>();
-const languageDescriptorOrder: TreeSitterLanguageId[] = [];
-const runtimePromises = new Map<TreeSitterLanguageId, Promise<Runtime>>();
-const documentCaches = new Map<string, DocumentCache>();
-const sourceCache: TreeSitterSourceCache = new Map();
+let parserInitPromise: Promise<void> | null = null
+let nextUse = 1
+const languageDescriptors = new Map<TreeSitterLanguageId, TreeSitterLanguageDescriptor>()
+const languageDescriptorOrder: TreeSitterLanguageId[] = []
+const runtimePromises = new Map<TreeSitterLanguageId, Promise<Runtime>>()
+const documentCaches = new Map<string, DocumentCache>()
+const sourceCache: TreeSitterSourceCache = new Map()
 
 class SyntaxRequestCancelled extends Error {
   public constructor() {
-    super("Tree-sitter request cancelled");
+    super('Tree-sitter request cancelled')
   }
 }
 
 const createErrorMessage = (error: unknown): string => {
-  if (error instanceof Error) return error.message;
-  return String(error);
-};
+  if (error instanceof Error) return error.message
+  return String(error)
+}
 
 const ensureParserRuntime = async (): Promise<void> => {
-  if (parserInitPromise) return parserInitPromise;
+  if (parserInitPromise) return parserInitPromise
 
   parserInitPromise = Parser.init({ locateFile: () => parserWasmUrl }).catch((error) => {
-    parserInitPromise = null;
-    throw error;
-  });
-  return parserInitPromise;
-};
+    parserInitPromise = null
+    throw error
+  })
+  return parserInitPromise
+}
 
 const registerLanguages = (descriptors: readonly TreeSitterLanguageDescriptor[]): void => {
-  for (const descriptor of descriptors) registerLanguage(descriptor);
-};
+  for (const descriptor of descriptors) registerLanguage(descriptor)
+}
 
 const registerLanguage = (descriptor: TreeSitterLanguageDescriptor): void => {
-  const normalized = normalizeLanguageDescriptor(descriptor);
-  const existing = languageDescriptors.get(normalized.id);
+  const normalized = normalizeLanguageDescriptor(descriptor)
+  const existing = languageDescriptors.get(normalized.id)
 
-  languageDescriptors.set(normalized.id, normalized);
-  moveLanguageToEnd(normalized.id);
+  languageDescriptors.set(normalized.id, normalized)
+  moveLanguageToEnd(normalized.id)
 
-  if (!existing) return;
-  if (languageDescriptorsEqual(existing, normalized)) return;
+  if (!existing) return
+  if (languageDescriptorsEqual(existing, normalized)) return
 
-  disposeRuntimeForLanguage(normalized.id);
-  disposeCachedSnapshotsForLanguage(normalized.id);
-};
+  disposeRuntimeForLanguage(normalized.id)
+  disposeCachedSnapshotsForLanguage(normalized.id)
+}
 
 const ensureRuntime = async (languageId: TreeSitterLanguageId): Promise<Runtime> => {
-  const existing = runtimePromises.get(languageId);
-  if (existing) return existing;
+  const existing = runtimePromises.get(languageId)
+  if (existing) return existing
 
-  const promise = createRuntime(languageId);
-  runtimePromises.set(languageId, promise);
-  return promise;
-};
+  const promise = createRuntime(languageId)
+  runtimePromises.set(languageId, promise)
+  return promise
+}
 
 const createRuntime = async (languageId: TreeSitterLanguageId): Promise<Runtime> => {
-  await ensureParserRuntime();
+  await ensureParserRuntime()
 
-  const descriptor = languageDescriptors.get(languageId);
-  if (!descriptor) throw new Error(`Tree-sitter language "${languageId}" is not registered`);
+  const descriptor = languageDescriptors.get(languageId)
+  if (!descriptor) throw new Error(`Tree-sitter language "${languageId}" is not registered`)
 
-  const language = await Language.load(descriptor.wasmUrl);
-  const parser = new Parser();
-  parser.setLanguage(language);
+  const language = await Language.load(descriptor.wasmUrl)
+  const parser = new Parser()
+  parser.setLanguage(language)
 
   return {
     descriptor,
@@ -201,56 +201,56 @@ const createRuntime = async (languageId: TreeSitterLanguageId): Promise<Runtime>
     highlightQuery: null,
     foldQuery: null,
     injectionQuery: null,
-  };
-};
+  }
+}
 
-const ensureQuery = (runtime: Runtime, kind: "highlight" | "fold" | "injection"): Query | null => {
-  if (kind === "highlight") return ensureHighlightQuery(runtime);
-  if (kind === "fold") return ensureFoldQuery(runtime);
-  return ensureInjectionQuery(runtime);
-};
+const ensureQuery = (runtime: Runtime, kind: 'highlight' | 'fold' | 'injection'): Query | null => {
+  if (kind === 'highlight') return ensureHighlightQuery(runtime)
+  if (kind === 'fold') return ensureFoldQuery(runtime)
+  return ensureInjectionQuery(runtime)
+}
 
 const ensureHighlightQuery = (runtime: Runtime): Query | null => {
-  if (!runtime.descriptor.highlightQuerySource) return null;
-  if (runtime.descriptor.highlightQuerySource.trim().length === 0) return null;
-  if (runtime.highlightQuery) return runtime.highlightQuery;
+  if (!runtime.descriptor.highlightQuerySource) return null
+  if (runtime.descriptor.highlightQuerySource.trim().length === 0) return null
+  if (runtime.highlightQuery) return runtime.highlightQuery
 
-  runtime.highlightQuery = new Query(runtime.language, runtime.descriptor.highlightQuerySource);
-  return runtime.highlightQuery;
-};
+  runtime.highlightQuery = new Query(runtime.language, runtime.descriptor.highlightQuerySource)
+  return runtime.highlightQuery
+}
 
 const ensureFoldQuery = (runtime: Runtime): Query | null => {
-  if (!runtime.descriptor.foldQuerySource) return null;
-  if (runtime.foldQuery) return runtime.foldQuery;
+  if (!runtime.descriptor.foldQuerySource) return null
+  if (runtime.foldQuery) return runtime.foldQuery
 
-  runtime.foldQuery = new Query(runtime.language, runtime.descriptor.foldQuerySource);
-  return runtime.foldQuery;
-};
+  runtime.foldQuery = new Query(runtime.language, runtime.descriptor.foldQuerySource)
+  return runtime.foldQuery
+}
 
 const ensureInjectionQuery = (runtime: Runtime): Query | null => {
-  if (!runtime.descriptor.injectionQuerySource) return null;
-  if (runtime.descriptor.injectionQuerySource.trim().length === 0) return null;
-  if (runtime.injectionQuery) return runtime.injectionQuery;
+  if (!runtime.descriptor.injectionQuerySource) return null
+  if (runtime.descriptor.injectionQuerySource.trim().length === 0) return null
+  if (runtime.injectionQuery) return runtime.injectionQuery
 
-  runtime.injectionQuery = new Query(runtime.language, runtime.descriptor.injectionQuerySource);
-  return runtime.injectionQuery;
-};
+  runtime.injectionQuery = new Query(runtime.language, runtime.descriptor.injectionQuerySource)
+  return runtime.injectionQuery
+}
 
 const parseDocument = async (
   request: TreeSitterParseRequest,
 ): Promise<TreeSitterParseResult | TreeSitterParseAckResult | undefined> =>
   runCancellableRequest(request, async (context) => {
-    const runtime = await runAsyncWorkerPhase("load runtime", () =>
+    const runtime = await runAsyncWorkerPhase('load runtime', () =>
       ensureRuntime(request.languageId),
-    );
-    const source = runWorkerPhase("resolve source", () =>
+    )
+    const source = runWorkerPhase('resolve source', () =>
       resolveTreeSitterSourceDescriptor(sourceCache, request.documentId, request.source),
-    );
-    const parseStart = nowMs();
-    const rootLayer = runWorkerPhase("parse root", () =>
+    )
+    const parseStart = nowMs()
+    const rootLayer = runWorkerPhase('parse root', () =>
       parseRootLayer(runtime, source, null, context),
-    );
-    const parsedDocument = await runAsyncWorkerPhase("parse injections", () =>
+    )
+    const parsedDocument = await runAsyncWorkerPhase('parse injections', () =>
       parseParsedDocument({
         documentId: request.documentId,
         snapshotVersion: request.snapshotVersion,
@@ -261,25 +261,25 @@ const parseDocument = async (
         oldDocument: null,
         inputEdits: [],
       }),
-    );
-    assertNotCancelled(context);
-    const parseMs = nowMs() - parseStart;
-    replaceCachedDocument(request.documentId, parsedDocument);
-    if (request.resultMode === "parseOnly") {
-      return parseAckResult(request, [], [{ name: "treeSitter.parse", durationMs: parseMs }]);
+    )
+    assertNotCancelled(context)
+    const parseMs = nowMs() - parseStart
+    replaceCachedDocument(request.documentId, parsedDocument)
+    if (request.resultMode === 'parseOnly') {
+      return parseAckResult(request, [], [{ name: 'treeSitter.parse', durationMs: parseMs }])
     }
 
-    const queryStart = nowMs();
-    const result = await runAsyncWorkerPhase("flatten", () =>
+    const queryStart = nowMs()
+    const result = await runAsyncWorkerPhase('flatten', () =>
       flattenDocument(
         parsedDocument,
         context,
         request.includeHighlights,
         request.includeCaptures ?? true,
       ),
-    );
-    assertNotCancelled(context);
-    const queryMs = nowMs() - queryStart;
+    )
+    assertNotCancelled(context)
+    const queryMs = nowMs() - queryStart
 
     return {
       documentId: request.documentId,
@@ -292,43 +292,43 @@ const parseDocument = async (
       injections: result.injections,
       tokens: result.tokens,
       timings: [
-        { name: "treeSitter.parse", durationMs: parseMs },
-        { name: "treeSitter.query", durationMs: queryMs },
+        { name: 'treeSitter.parse', durationMs: parseMs },
+        { name: 'treeSitter.query', durationMs: queryMs },
       ],
-    };
-  });
+    }
+  })
 
 const editDocument = async (
   request: TreeSitterEditRequest,
 ): Promise<TreeSitterParseResult | TreeSitterParseAckResult | undefined> =>
   runCancellableRequest(request, async (context) => {
-    const runtime = await runAsyncWorkerPhase("load runtime", () =>
+    const runtime = await runAsyncWorkerPhase('load runtime', () =>
       ensureRuntime(request.languageId),
-    );
+    )
     const cached = cachedDocumentForVersion(
       request.documentId,
       request.languageId,
       request.previousSnapshotVersion,
-    );
-    if (!cached) return undefined;
+    )
+    if (!cached) return undefined
 
-    const editStart = nowMs();
-    const oldRootLayer = rootLayerForDocument(cached);
-    const reusableTree = runWorkerPhase("prepare reusable tree", () =>
+    const editStart = nowMs()
+    const oldRootLayer = rootLayerForDocument(cached)
+    const reusableTree = runWorkerPhase('prepare reusable tree', () =>
       editReusableTree(oldRootLayer.tree, request.inputEdits),
-    );
-    const editMs = nowMs() - editStart;
-    const source = runWorkerPhase("resolve source", () =>
+    )
+    const editMs = nowMs() - editStart
+    const source = runWorkerPhase('resolve source', () =>
       resolveTreeSitterSourceDescriptor(sourceCache, request.documentId, request.source),
-    );
-    const parseStart = nowMs();
-    const rootLayer = runWorkerPhase("parse root", () =>
+    )
+    const parseStart = nowMs()
+    const rootLayer = runWorkerPhase('parse root', () =>
       parseRootLayer(runtime, source, reusableTree, context),
-    );
-    const changedRanges = runWorkerPhase("changed ranges", () =>
+    )
+    const changedRanges = runWorkerPhase('changed ranges', () =>
       treeChangedRanges(reusableTree, rootLayer.tree),
-    );
-    const parsedDocument = await runAsyncWorkerPhase("parse injections", () =>
+    )
+    const parsedDocument = await runAsyncWorkerPhase('parse injections', () =>
       parseParsedDocument({
         documentId: request.documentId,
         snapshotVersion: request.snapshotVersion,
@@ -339,29 +339,29 @@ const editDocument = async (
         oldDocument: cached,
         inputEdits: request.inputEdits,
       }),
-    );
-    const parseMs = nowMs() - parseStart;
-    reusableTree.delete();
-    assertNotCancelled(context);
-    replaceCachedDocument(request.documentId, parsedDocument);
-    if (request.resultMode === "parseOnly") {
+    )
+    const parseMs = nowMs() - parseStart
+    reusableTree.delete()
+    assertNotCancelled(context)
+    replaceCachedDocument(request.documentId, parsedDocument)
+    if (request.resultMode === 'parseOnly') {
       return parseAckResult(request, changedRanges, [
-        { name: "treeSitter.edit", durationMs: editMs },
-        { name: "treeSitter.parse", durationMs: parseMs },
-      ]);
+        { name: 'treeSitter.edit', durationMs: editMs },
+        { name: 'treeSitter.parse', durationMs: parseMs },
+      ])
     }
 
-    const queryStart = nowMs();
-    const result = await runAsyncWorkerPhase("flatten", () =>
+    const queryStart = nowMs()
+    const result = await runAsyncWorkerPhase('flatten', () =>
       flattenDocument(
         parsedDocument,
         context,
         request.includeHighlights,
         request.includeCaptures ?? true,
       ),
-    );
-    assertNotCancelled(context);
-    const queryMs = nowMs() - queryStart;
+    )
+    assertNotCancelled(context)
+    const queryMs = nowMs() - queryStart
 
     return {
       documentId: request.documentId,
@@ -374,24 +374,24 @@ const editDocument = async (
       injections: result.injections,
       tokens: result.tokens,
       timings: [
-        { name: "treeSitter.edit", durationMs: editMs },
-        { name: "treeSitter.parse", durationMs: parseMs },
-        { name: "treeSitter.query", durationMs: queryMs },
+        { name: 'treeSitter.edit', durationMs: editMs },
+        { name: 'treeSitter.parse', durationMs: parseMs },
+        { name: 'treeSitter.query', durationMs: queryMs },
       ],
-    };
-  });
+    }
+  })
 
 const queryDocumentRange = async (
   request: TreeSitterRangeRequest,
 ): Promise<TreeSitterRangeResult | undefined> => {
-  const context = createCancellationContext(request.cancellationBuffer, QUERY_BUDGET_MS);
+  const context = createCancellationContext(request.cancellationBuffer, QUERY_BUDGET_MS)
   try {
-    return await queryDocumentRangeWithContext(request, context);
+    return await queryDocumentRangeWithContext(request, context)
   } catch (error) {
-    if (error instanceof SyntaxRequestCancelled) return undefined;
-    throw error;
+    if (error instanceof SyntaxRequestCancelled) return undefined
+    throw error
   }
-};
+}
 
 const queryDocumentRangeWithContext = async (
   request: TreeSitterRangeRequest,
@@ -401,19 +401,19 @@ const queryDocumentRangeWithContext = async (
     request.documentId,
     request.languageId,
     request.snapshotVersion,
-  );
-  if (!cached) return undefined;
+  )
+  if (!cached) return undefined
 
-  const range = normalizedSyntaxRange(request.range, cached.size);
-  const queryStart = nowMs();
-  const result = await runAsyncWorkerPhase("flatten range", () =>
+  const range = normalizedSyntaxRange(request.range, cached.size)
+  const queryStart = nowMs()
+  const result = await runAsyncWorkerPhase('flatten range', () =>
     flattenDocumentRange(cached, context, {
       range,
       includeHighlights: request.includeHighlights,
       includeCaptures: request.includeCaptures ?? true,
     }),
-  );
-  assertNotCancelled(context);
+  )
+  assertNotCancelled(context)
 
   return {
     documentId: request.documentId,
@@ -426,9 +426,9 @@ const queryDocumentRangeWithContext = async (
     errors: result.errors,
     injections: result.injections,
     tokens: result.tokens,
-    timings: [{ name: "treeSitter.queryRange", durationMs: nowMs() - queryStart }],
-  };
-};
+    timings: [{ name: 'treeSitter.queryRange', durationMs: nowMs() - queryStart }],
+  }
+}
 
 const runCancellableRequest = async <
   TRequest extends TreeSitterParseRequest | TreeSitterEditRequest,
@@ -438,33 +438,36 @@ const runCancellableRequest = async <
     context: CancellationContext,
   ) => Promise<TreeSitterParseResult | TreeSitterParseAckResult | undefined>,
 ): Promise<TreeSitterParseResult | TreeSitterParseAckResult | undefined> => {
-  const context = createCancellationContext(request.cancellationBuffer, PARSE_BUDGET_MS);
+  const context = createCancellationContext(request.cancellationBuffer, PARSE_BUDGET_MS)
 
   try {
-    return await run(context);
+    return await run(context)
   } catch (error) {
-    if (error instanceof SyntaxRequestCancelled) return undefined;
-    throw error;
+    if (error instanceof SyntaxRequestCancelled) return undefined
+    throw error
   }
-};
+}
 
 const parseAckResult = (
-  request: Pick<TreeSitterParseRequest | TreeSitterEditRequest, "documentId" | "languageId" | "snapshotVersion">,
+  request: Pick<
+    TreeSitterParseRequest | TreeSitterEditRequest,
+    'documentId' | 'languageId' | 'snapshotVersion'
+  >,
   changedRanges: readonly TreeSitterSyntaxRange[],
-  timings: TreeSitterParseAckResult["timings"],
+  timings: TreeSitterParseAckResult['timings'],
 ): TreeSitterParseAckResult => ({
   documentId: request.documentId,
   snapshotVersion: request.snapshotVersion,
   languageId: request.languageId,
-  status: "parsed",
+  status: 'parsed',
   changedRanges,
   timings,
-});
+})
 
 const treeChangedRanges = (oldTree: Tree, newTree: Tree): TreeSitterSyntaxRange[] =>
   oldTree
     .getChangedRanges(newTree)
-    .map((range) => ({ startIndex: range.startIndex, endIndex: range.endIndex }));
+    .map((range) => ({ startIndex: range.startIndex, endIndex: range.endIndex }))
 
 const createCancellationContext = (
   cancellationBuffer: SharedArrayBuffer | undefined,
@@ -473,53 +476,51 @@ const createCancellationContext = (
   startedAt: nowMs(),
   budgetMs,
   flag: cancellationBuffer ? new Int32Array(cancellationBuffer) : null,
-});
+})
 
 const runWorkerPhase = <T>(phase: string, run: () => T): T => {
   try {
-    return run();
+    return run()
   } catch (error) {
-    throw workerPhaseError(phase, error);
+    throw workerPhaseError(phase, error)
   }
-};
+}
 
 const runAsyncWorkerPhase = async <T>(phase: string, run: () => Promise<T>): Promise<T> => {
   try {
-    return await run();
+    return await run()
   } catch (error) {
-    throw workerPhaseError(phase, error);
+    throw workerPhaseError(phase, error)
   }
-};
+}
 
 const runOptionalWorkerPhase = <T>(phase: string, fallback: T, run: () => T): T => {
   try {
-    return run();
+    return run()
   } catch (error) {
-    if (error instanceof SyntaxRequestCancelled) throw error;
+    if (error instanceof SyntaxRequestCancelled) throw error
 
-    warnOptionalWorkerPhase(phase, error);
-    return fallback;
+    warnOptionalWorkerPhase(phase, error)
+    return fallback
   }
-};
+}
 
 const workerPhaseError = (phase: string, error: unknown): Error => {
-  if (error instanceof SyntaxRequestCancelled) return error;
+  if (error instanceof SyntaxRequestCancelled) return error
 
-  const message = `Tree-sitter ${phase} failed: ${createErrorMessage(error)}`;
-  const nextError = new Error(message);
+  const message = `Tree-sitter ${phase} failed: ${createErrorMessage(error)}`
+  const nextError = new Error(message)
   if (error instanceof Error) {
-    nextError.name = error.name;
-    nextError.stack = error.stack;
+    nextError.name = error.name
+    nextError.stack = error.stack
   }
 
-  return nextError;
-};
+  return nextError
+}
 
 const warnOptionalWorkerPhase = (phase: string, error: unknown): void => {
-  console.warn(
-    `[tree-sitter-worker] optional phase failed: ${phase}: ${createErrorMessage(error)}`,
-  );
-};
+  console.warn(`[tree-sitter-worker] optional phase failed: ${phase}: ${createErrorMessage(error)}`)
+}
 
 const parseSource = (
   parser: Parser,
@@ -529,42 +530,42 @@ const parseSource = (
 ): Tree => {
   const tree = parser.parse((index) => readTreeSitterPieceTableInput(source, index), oldTree, {
     progressCallback: () => isCancelled(context),
-  });
-  if (tree) return tree;
-  if (isCancelled(context)) throw new SyntaxRequestCancelled();
-  throw new Error("Tree-sitter parse returned no tree");
-};
+  })
+  if (tree) return tree
+  if (isCancelled(context)) throw new SyntaxRequestCancelled()
+  throw new Error('Tree-sitter parse returned no tree')
+}
 
 const editReusableTree = (
   tree: Tree,
-  edits: readonly TreeSitterEditRequest["inputEdits"][number][],
+  edits: readonly TreeSitterEditRequest['inputEdits'][number][],
 ): Tree => {
-  const reusableTree = tree.copy();
+  const reusableTree = tree.copy()
   for (const inputEdit of edits) {
-    reusableTree.edit(new Edit(inputEdit));
+    reusableTree.edit(new Edit(inputEdit))
   }
 
-  return reusableTree;
-};
+  return reusableTree
+}
 
 type ParseParsedDocumentOptions = {
-  readonly documentId: string;
-  readonly snapshotVersion: number;
-  readonly languageId: TreeSitterLanguageId;
-  readonly source: TreeSitterPieceTableInput;
-  readonly rootLayer: ParsedLayer;
-  readonly context: CancellationContext;
-  readonly oldDocument: ParsedDocument | null;
-  readonly inputEdits: readonly TreeSitterEditRequest["inputEdits"][number][];
-};
+  readonly documentId: string
+  readonly snapshotVersion: number
+  readonly languageId: TreeSitterLanguageId
+  readonly source: TreeSitterPieceTableInput
+  readonly rootLayer: ParsedLayer
+  readonly context: CancellationContext
+  readonly oldDocument: ParsedDocument | null
+  readonly inputEdits: readonly TreeSitterEditRequest['inputEdits'][number][]
+}
 
-type PendingInjectionPlan = Omit<InjectionPlan, "id" | "key"> & {
-  readonly patternIndex: number;
-};
+type PendingInjectionPlan = Omit<InjectionPlan, 'id' | 'key'> & {
+  readonly patternIndex: number
+}
 
-type InjectionGroup = Omit<PendingInjectionPlan, "kind" | "patternIndex" | "ranges"> & {
-  ranges: TreeSitterRange[];
-};
+type InjectionGroup = Omit<PendingInjectionPlan, 'kind' | 'patternIndex' | 'ranges'> & {
+  ranges: TreeSitterRange[]
+}
 
 const parseRootLayer = (
   runtime: Runtime,
@@ -572,26 +573,26 @@ const parseRootLayer = (
   oldTree: Tree | null,
   context: CancellationContext,
 ): ParsedLayer => {
-  const tree = parseSource(runtime.parser, source, oldTree, context);
+  const tree = parseSource(runtime.parser, source, oldTree, context)
 
   return {
-    id: "root",
-    key: "root",
-    kind: "root",
+    id: 'root',
+    key: 'root',
+    kind: 'root',
     parentId: null,
     parentLanguageId: null,
     languageId: runtime.descriptor.id,
     depth: 0,
     tree,
     ranges: [rangeForNode(tree.rootNode)],
-  };
-};
+  }
+}
 
 const parseParsedDocument = async (
   options: ParseParsedDocumentOptions,
 ): Promise<ParsedDocument> => {
-  const layers: ParsedLayer[] = [options.rootLayer];
-  await appendInjectionLayers(layers, options.rootLayer, options);
+  const layers: ParsedLayer[] = [options.rootLayer]
+  await appendInjectionLayers(layers, options.rootLayer, options)
 
   return {
     snapshotVersion: options.snapshotVersion,
@@ -600,37 +601,37 @@ const parseParsedDocument = async (
     layers,
     size: options.source.length,
     lastUsed: nextUse++,
-  };
-};
+  }
+}
 
 const appendInjectionLayers = async (
   layers: ParsedLayer[],
   parent: ParsedLayer,
   options: ParseParsedDocumentOptions,
 ): Promise<void> => {
-  const runtime = await ensureRuntime(parent.languageId);
-  const plans = runOptionalWorkerPhase("find injections", [] as InjectionPlan[], () =>
+  const runtime = await ensureRuntime(parent.languageId)
+  const plans = runOptionalWorkerPhase('find injections', [] as InjectionPlan[], () =>
     findInjections(parent, runtime, options.source, options.context),
-  );
+  )
 
   for (const plan of plans) {
     try {
-      const layer = await parseInjectionLayer(plan, options);
-      layers.push(layer);
-      await appendInjectionLayers(layers, layer, options);
+      const layer = await parseInjectionLayer(plan, options)
+      layers.push(layer)
+      await appendInjectionLayers(layers, layer, options)
     } catch (error) {
-      if (error instanceof SyntaxRequestCancelled) throw error;
-      warnOptionalWorkerPhase("parse injection", error);
+      if (error instanceof SyntaxRequestCancelled) throw error
+      warnOptionalWorkerPhase('parse injection', error)
     }
   }
-};
+}
 
 const parseInjectionLayer = async (
   plan: InjectionPlan,
   options: ParseParsedDocumentOptions,
 ): Promise<ParsedLayer> => {
-  const runtime = await ensureRuntime(plan.languageId);
-  const oldTree = reuseLayer(options.oldDocument, plan, options.inputEdits);
+  const runtime = await ensureRuntime(plan.languageId)
+  const oldTree = reuseLayer(options.oldDocument, plan, options.inputEdits)
 
   try {
     const tree = parseInjectedSource(
@@ -639,51 +640,51 @@ const parseInjectionLayer = async (
       plan.ranges,
       oldTree,
       options.context,
-    );
-    return { ...plan, tree };
+    )
+    return { ...plan, tree }
   } finally {
-    oldTree?.delete();
+    oldTree?.delete()
   }
-};
+}
 
 const reuseLayer = (
   oldDocument: ParsedDocument | null,
   plan: InjectionPlan,
-  inputEdits: ParseParsedDocumentOptions["inputEdits"],
+  inputEdits: ParseParsedDocumentOptions['inputEdits'],
 ): Tree | null => {
-  const oldLayer = matchingOldLayer(oldDocument, plan);
-  if (!oldLayer) return null;
-  return editReusableTree(oldLayer.tree, inputEdits);
-};
+  const oldLayer = matchingOldLayer(oldDocument, plan)
+  if (!oldLayer) return null
+  return editReusableTree(oldLayer.tree, inputEdits)
+}
 
 const matchingOldLayer = (
   oldDocument: ParsedDocument | null,
   plan: InjectionPlan,
 ): ParsedLayer | null => {
-  if (!oldDocument) return null;
+  if (!oldDocument) return null
 
   const exact = oldDocument.layers.find((layer) => {
     return (
       layer.key === plan.key && layer.kind === plan.kind && layer.languageId === plan.languageId
-    );
-  });
-  if (exact) return exact;
+    )
+  })
+  if (exact) return exact
 
   return (
     oldDocument.layers.find((layer) => {
-      if (layer.kind !== plan.kind) return false;
-      if (layer.languageId !== plan.languageId) return false;
-      if (layer.parentId !== plan.parentId) return false;
-      return rangesOverlap(layer.ranges, plan.ranges);
+      if (layer.kind !== plan.kind) return false
+      if (layer.languageId !== plan.languageId) return false
+      if (layer.parentId !== plan.parentId) return false
+      return rangesOverlap(layer.ranges, plan.ranges)
     }) ?? null
-  );
-};
+  )
+}
 
 const rangesOverlap = (
   left: readonly TreeSitterRange[],
   right: readonly TreeSitterRange[],
 ): boolean =>
-  left.some((a) => right.some((b) => a.startIndex < b.endIndex && b.startIndex < a.endIndex));
+  left.some((a) => right.some((b) => a.startIndex < b.endIndex && b.startIndex < a.endIndex))
 
 const findInjections = (
   parent: ParsedLayer,
@@ -691,39 +692,37 @@ const findInjections = (
   source: TreeSitterPieceTableInput,
   context: CancellationContext,
 ): InjectionPlan[] => {
-  if (parent.depth >= MAX_INJECTION_DEPTH) return [];
+  if (parent.depth >= MAX_INJECTION_DEPTH) return []
 
-  const query = ensureQuery(runtime, "injection");
-  if (!query) return [];
+  const query = ensureQuery(runtime, 'injection')
+  if (!query) return []
 
   const matches = query.matches(parent.tree.rootNode, {
     progressCallback: () => isCancelled(context),
-  });
-  assertNotCancelled(context);
+  })
+  assertNotCancelled(context)
 
-  const singles: PendingInjectionPlan[] = [];
-  const groups = new Map<string, InjectionGroup>();
+  const singles: PendingInjectionPlan[] = []
+  const groups = new Map<string, InjectionGroup>()
   for (const match of matches) {
-    addInjectionMatchPlan(parent, match, source, singles, groups);
+    addInjectionMatchPlan(parent, match, source, singles, groups)
   }
 
-  return [...singlesToPlans(singles), ...groupsToPlans(groups, source)].toSorted(
-    compareInjectionPlans,
-  );
-};
+  return singlesToPlans(singles).concat(groupsToPlans(groups, source)).sort(compareInjectionPlans)
+}
 
 const addInjectionMatchPlan = (
   parent: ParsedLayer,
-  match: ReturnType<Query["matches"]>[number],
+  match: ReturnType<Query['matches']>[number],
   source: TreeSitterPieceTableInput,
   singles: PendingInjectionPlan[],
   groups: Map<string, InjectionGroup>,
 ): void => {
-  const languageId = languageIdForInjectionMatch(match, source);
-  if (!languageId) return;
+  const languageId = languageIdForInjectionMatch(match, source)
+  if (!languageId) return
 
-  const ranges = rangesForInjectionMatch(match);
-  if (ranges.length === 0) return;
+  const ranges = rangesForInjectionMatch(match)
+  if (ranges.length === 0) return
 
   const basePlan = {
     parentId: parent.id,
@@ -732,17 +731,17 @@ const addInjectionMatchPlan = (
     depth: parent.depth + 1,
     ranges: sortRanges(ranges),
     patternIndex: match.patternIndex,
-  };
+  }
   if (!isCombinedInjectionMatch(match)) {
-    singles.push({ ...basePlan, kind: "injection" });
-    return;
+    singles.push({ ...basePlan, kind: 'injection' })
+    return
   }
 
-  const key = `${parent.id}:combined-injection:${languageId}`;
-  const existing = groups.get(key);
+  const key = `${parent.id}:combined-injection:${languageId}`
+  const existing = groups.get(key)
   if (existing) {
-    appendItems(existing.ranges, basePlan.ranges);
-    return;
+    appendItems(existing.ranges, basePlan.ranges)
+    return
   }
 
   groups.set(key, {
@@ -751,68 +750,68 @@ const addInjectionMatchPlan = (
     languageId,
     depth: basePlan.depth,
     ranges: [...basePlan.ranges],
-  });
-};
+  })
+}
 
 const singlesToPlans = (singles: readonly PendingInjectionPlan[]): InjectionPlan[] => {
-  const ordinals = new Map<string, number>();
+  const ordinals = new Map<string, number>()
 
   return singles.map((plan) => {
-    const baseKey = `${plan.parentId}:${plan.kind}:${plan.languageId}:${plan.patternIndex}`;
-    const ordinal = ordinals.get(baseKey) ?? 0;
-    ordinals.set(baseKey, ordinal + 1);
-    const key = `${baseKey}:${ordinal}`;
+    const baseKey = `${plan.parentId}:${plan.kind}:${plan.languageId}:${plan.patternIndex}`
+    const ordinal = ordinals.get(baseKey) ?? 0
+    ordinals.set(baseKey, ordinal + 1)
+    const key = `${baseKey}:${ordinal}`
     return {
       ...plan,
       id: key,
       key,
-    };
-  });
-};
+    }
+  })
+}
 
 const groupsToPlans = (
   groups: Map<string, InjectionGroup>,
   source: TreeSitterPieceTableInput,
 ): InjectionPlan[] =>
   [...groups.entries()].map(([key, group]) => {
-    const ranges = rangesWithBridgeNewlines(sortRanges(group.ranges), source);
+    const ranges = rangesWithBridgeNewlines(sortRanges(group.ranges), source)
     return {
       parentId: group.parentId,
       parentLanguageId: group.parentLanguageId,
       languageId: group.languageId,
       depth: group.depth,
-      kind: "combined-injection",
+      kind: 'combined-injection',
       ranges,
       id: key,
       key,
-    };
-  });
+    }
+  })
 
 const compareInjectionPlans = (left: InjectionPlan, right: InjectionPlan): number => {
-  const leftRange = rangeSpan(left.ranges);
-  const rightRange = rangeSpan(right.ranges);
-  return leftRange.startIndex - rightRange.startIndex || leftRange.endIndex - rightRange.endIndex;
-};
+  const leftRange = rangeSpan(left.ranges)
+  const rightRange = rangeSpan(right.ranges)
+  return leftRange.startIndex - rightRange.startIndex || leftRange.endIndex - rightRange.endIndex
+}
 
 const queryOptions = (
   context: CancellationContext,
   range?: TreeSitterSyntaxRange,
-): NonNullable<Parameters<Query["matches"]>[1]> => {
-  const options: NonNullable<Parameters<Query["matches"]>[1]> = {
+): NonNullable<Parameters<Query['matches']>[1]> => {
+  const options: NonNullable<Parameters<Query['matches']>[1]> = {
     progressCallback: () => isCancelled(context),
-  };
-  if (!range) return options;
+  }
+  if (!range) return options
 
   return {
     ...options,
     startIndex: treeSitterQueryIndex(range.startIndex),
     endIndex: treeSitterQueryIndex(range.endIndex),
-  };
-};
+  }
+}
 
 // web-tree-sitter exposes node indexes as UTF-16 code units, but query cursor
 // byte ranges still use raw UTF-16 bytes.
-const treeSitterQueryIndex = (index: number): number => index * Uint16Array.BYTES_PER_ELEMENT;
+const treeSitterQueryIndex = (index: number): number => index * Uint16Array.BYTES_PER_ELEMENT
 
 const collectCaptures = (
   tree: Tree,
@@ -820,31 +819,31 @@ const collectCaptures = (
   context: CancellationContext,
   range?: TreeSitterSyntaxRange,
 ): TreeSitterCapture[] => {
-  const query = ensureQuery(runtime, "highlight");
-  if (!query) return [];
+  const query = ensureQuery(runtime, 'highlight')
+  if (!query) return []
 
-  const captures: TreeSitterCapture[] = [];
-  const seen = new Set<string>();
+  const captures: TreeSitterCapture[] = []
+  const seen = new Set<string>()
   if (range) {
-    const queryCaptures = query.captures(tree.rootNode, queryOptions(context, range));
-    assertNotCancelled(context);
+    const queryCaptures = query.captures(tree.rootNode, queryOptions(context, range))
+    assertNotCancelled(context)
 
     for (const capture of queryCaptures) {
-      collectCapture(capture, captures, seen, runtime.descriptor.id, range);
+      collectCapture(capture, captures, seen, runtime.descriptor.id, range)
     }
 
-    return captures;
+    return captures
   }
 
-  const matches = query.matches(tree.rootNode, queryOptions(context, range));
-  assertNotCancelled(context);
+  const matches = query.matches(tree.rootNode, queryOptions(context, range))
+  assertNotCancelled(context)
 
   for (const match of matches) {
-    collectMatchCaptures(match.captures, captures, seen, runtime.descriptor.id, range);
+    collectMatchCaptures(match.captures, captures, seen, runtime.descriptor.id, range)
   }
 
-  return captures;
-};
+  return captures
+}
 
 const collectFolds = (
   tree: Tree,
@@ -852,70 +851,70 @@ const collectFolds = (
   context: CancellationContext,
   range?: TreeSitterSyntaxRange,
 ): FoldRange[] => {
-  const query = ensureQuery(runtime, "fold");
-  if (!query) return [];
+  const query = ensureQuery(runtime, 'fold')
+  if (!query) return []
 
-  const folds: FoldRange[] = [];
-  const seen = new Set<string>();
-  const matches = query.matches(tree.rootNode, queryOptions(context, range));
-  assertNotCancelled(context);
+  const folds: FoldRange[] = []
+  const seen = new Set<string>()
+  const matches = query.matches(tree.rootNode, queryOptions(context, range))
+  assertNotCancelled(context)
 
   for (const match of matches) {
-    collectMatchFolds(match.captures, folds, seen, runtime.descriptor.id, range);
+    collectMatchFolds(match.captures, folds, seen, runtime.descriptor.id, range)
   }
 
-  return folds;
-};
+  return folds
+}
 
 const collectMatchCaptures = (
-  matchCaptures: ReturnType<Query["matches"]>[number]["captures"],
+  matchCaptures: ReturnType<Query['matches']>[number]['captures'],
   captures: TreeSitterCapture[],
   seen: Set<string>,
   languageId: TreeSitterLanguageId,
   range?: TreeSitterSyntaxRange,
 ): void => {
   for (const capture of matchCaptures) {
-    collectCapture(capture, captures, seen, languageId, range);
+    collectCapture(capture, captures, seen, languageId, range)
   }
-};
+}
 
 const collectCapture = (
-  capture: ReturnType<Query["captures"]>[number],
+  capture: ReturnType<Query['captures']>[number],
   captures: TreeSitterCapture[],
   seen: Set<string>,
   languageId: TreeSitterLanguageId,
   range?: TreeSitterSyntaxRange,
 ): void => {
-  const startIndex = capture.node.startIndex;
-  const endIndex = capture.node.endIndex;
-  const captureName = capture.name ?? "";
-  const key = `${startIndex}:${endIndex}:${captureName}:${languageId}`;
-  if (seen.has(key)) return;
-  if (startIndex >= endIndex) return;
-  if (range && !indexesIntersectRange(startIndex, endIndex, range)) return;
+  const startIndex = capture.node.startIndex
+  const endIndex = capture.node.endIndex
+  const captureName = capture.name ?? ''
+  const key = `${startIndex}:${endIndex}:${captureName}:${languageId}`
+  if (seen.has(key)) return
+  if (startIndex >= endIndex) return
+  if (range && !indexesIntersectRange(startIndex, endIndex, range)) return
 
-  seen.add(key);
-  captures.push({ startIndex, endIndex, captureName, languageId });
-};
+  seen.add(key)
+  captures.push({ startIndex, endIndex, captureName, languageId })
+}
 
 const collectMatchFolds = (
-  matchCaptures: ReturnType<Query["matches"]>[number]["captures"],
+  matchCaptures: ReturnType<Query['matches']>[number]['captures'],
   folds: FoldRange[],
   seen: Set<string>,
   languageId: TreeSitterLanguageId,
   range?: TreeSitterSyntaxRange,
 ): void => {
   for (const capture of matchCaptures) {
-    const node = capture.node;
-    const startLine = node.startPosition.row;
-    const endLine = node.endPosition.row;
-    if (endLine <= startLine) continue;
-    if (range && !indexesIntersectRange(node.startIndex, node.endIndex, range)) continue;
+    const node = capture.node
+    const startLine = node.startPosition.row
+    const endLine = node.endPosition.row
+    if (endLine <= startLine) continue
+    if (range && !indexesIntersectRange(node.startIndex, node.endIndex, range)) continue
 
-    const key = `${node.startIndex}:${node.endIndex}:${node.type}:${languageId}`;
-    if (seen.has(key)) continue;
+    const key = `${node.startIndex}:${node.endIndex}:${node.type}:${languageId}`
+    if (seen.has(key)) continue
 
-    seen.add(key);
+    seen.add(key)
     folds.push({
       startIndex: node.startIndex,
       endIndex: node.endIndex,
@@ -923,83 +922,83 @@ const collectMatchFolds = (
       endLine,
       type: node.type,
       languageId,
-    });
+    })
   }
-};
+}
 
 const languageIdForInjectionMatch = (
-  match: ReturnType<Query["matches"]>[number],
+  match: ReturnType<Query['matches']>[number],
   source: TreeSitterPieceTableInput,
 ): TreeSitterLanguageId | null => {
-  const setLanguage = propertyValue(match.setProperties, ["injection.language", "language"]);
-  const languageId = resolveRegisteredLanguageAlias(setLanguage);
-  if (languageId) return languageId;
+  const setLanguage = propertyValue(match.setProperties, ['injection.language', 'language'])
+  const languageId = resolveRegisteredLanguageAlias(setLanguage)
+  if (languageId) return languageId
 
-  const languageCapture = match.captures.find(isInjectionLanguageCapture);
-  if (!languageCapture) return null;
+  const languageCapture = match.captures.find(isInjectionLanguageCapture)
+  if (!languageCapture) return null
 
   const languageName = readTreeSitterInputRange(
     source,
     languageCapture.node.startIndex,
     languageCapture.node.endIndex,
-  );
-  return resolveRegisteredLanguageAlias(languageName);
-};
+  )
+  return resolveRegisteredLanguageAlias(languageName)
+}
 
-const rangesForInjectionMatch = (match: ReturnType<Query["matches"]>[number]): TreeSitterRange[] =>
-  match.captures.filter(isInjectionContentCapture).map((capture) => rangeForNode(capture.node));
+const rangesForInjectionMatch = (match: ReturnType<Query['matches']>[number]): TreeSitterRange[] =>
+  match.captures.filter(isInjectionContentCapture).map((capture) => rangeForNode(capture.node))
 
 const isInjectionContentCapture = (
-  capture: ReturnType<Query["matches"]>[number]["captures"][number],
-): boolean => capture.name === "injection.content" || capture.name === "content";
+  capture: ReturnType<Query['matches']>[number]['captures'][number],
+): boolean => capture.name === 'injection.content' || capture.name === 'content'
 
 const isInjectionLanguageCapture = (
-  capture: ReturnType<Query["matches"]>[number]["captures"][number],
-): boolean => capture.name === "injection.language" || capture.name === "language";
+  capture: ReturnType<Query['matches']>[number]['captures'][number],
+): boolean => capture.name === 'injection.language' || capture.name === 'language'
 
-const isCombinedInjectionMatch = (match: ReturnType<Query["matches"]>[number]): boolean =>
-  hasProperty(match.setProperties, "injection.combined") ||
-  hasProperty(match.setProperties, "combined");
+const isCombinedInjectionMatch = (match: ReturnType<Query['matches']>[number]): boolean =>
+  hasProperty(match.setProperties, 'injection.combined') ||
+  hasProperty(match.setProperties, 'combined')
 
 const propertyValue = (
   properties: Record<string, string | null> | undefined,
   names: readonly string[],
 ): string | null => {
-  if (!properties) return null;
+  if (!properties) return null
 
   for (const name of names) {
-    if (!hasProperty(properties, name)) continue;
-    return properties[name] ?? null;
+    if (!hasProperty(properties, name)) continue
+    return properties[name] ?? null
   }
 
-  return null;
-};
+  return null
+}
 
 const hasProperty = (
   properties: Record<string, string | null> | undefined,
   name: string,
-): boolean => Boolean(properties && Object.prototype.hasOwnProperty.call(properties, name));
+): boolean => Boolean(properties && Object.prototype.hasOwnProperty.call(properties, name))
 
 const resolveRegisteredLanguageAlias = (
   alias: string | null | undefined,
 ): TreeSitterLanguageId | null => {
-  if (!alias) return null;
+  if (!alias) return null
 
-  const normalized = alias.trim().toLowerCase();
-  if (!normalized) return null;
+  const normalized = alias.trim().toLowerCase()
+  if (!normalized) return null
 
   for (let index = languageDescriptorOrder.length - 1; index >= 0; index -= 1) {
-    const languageId = languageDescriptorOrder[index]!;
-    const descriptor = languageDescriptors.get(languageId);
-    if (!descriptor) continue;
-    if (descriptor.id.toLowerCase() === normalized) return descriptor.id;
+    const languageId = languageDescriptorOrder[index]!
+    const descriptor = languageDescriptors.get(languageId)
+    if (!descriptor) continue
+    if (descriptor.id.toLowerCase() === normalized) return descriptor.id
     if (descriptor.aliases.map((item) => item.toLowerCase()).includes(normalized)) {
-      return descriptor.id;
+      return descriptor.id
     }
   }
 
-  return null;
-};
+  return null
+}
 
 const parseInjectedSource = (
   parser: Parser,
@@ -1011,11 +1010,11 @@ const parseInjectedSource = (
   const tree = parser.parse((index) => readTreeSitterPieceTableInput(source, index), oldTree, {
     includedRanges: [...ranges],
     progressCallback: () => isCancelled(context),
-  });
-  if (tree) return tree;
-  if (isCancelled(context)) throw new SyntaxRequestCancelled();
-  throw new Error("Tree-sitter injection parse returned no tree");
-};
+  })
+  if (tree) return tree
+  if (isCancelled(context)) throw new SyntaxRequestCancelled()
+  throw new Error('Tree-sitter injection parse returned no tree')
+}
 
 const flattenDocument = async (
   document: ParsedDocument,
@@ -1023,14 +1022,14 @@ const flattenDocument = async (
   includeHighlights: boolean,
   includeCaptures: boolean,
 ): Promise<FlattenedDocument> => {
-  const result = createEmptyFlattenedDocument();
-  const queryContext = { ...context, budgetMs: QUERY_BUDGET_MS };
+  const result = createEmptyFlattenedDocument()
+  const queryContext = { ...context, budgetMs: QUERY_BUDGET_MS }
 
   for (const layer of document.layers) {
-    await flattenLayer(layer, result, queryContext, includeHighlights);
+    await flattenLayer(layer, result, queryContext, includeHighlights)
   }
 
-  const captures = sortCaptures(result.captures);
+  const captures = sortCaptures(result.captures)
   return {
     captures: includeCaptures ? captures : [],
     folds: sortFolds(result.folds),
@@ -1038,23 +1037,23 @@ const flattenDocument = async (
     errors: sortErrors(result.errors),
     injections: sortInjections(result.injections),
     tokens: treeSitterCapturesToEditorTokens(captures),
-  };
-};
+  }
+}
 
 const flattenDocumentRange = async (
   document: ParsedDocument,
   context: CancellationContext,
   options: RangeFlattenOptions,
 ): Promise<FlattenedDocument> => {
-  const result = createEmptyFlattenedDocument();
-  if (options.range.endIndex <= options.range.startIndex) return result;
+  const result = createEmptyFlattenedDocument()
+  if (options.range.endIndex <= options.range.startIndex) return result
 
   for (const layer of document.layers) {
-    if (!layerIntersectsSyntaxRange(layer, options.range)) continue;
-    await flattenLayerRange(layer, result, context, options);
+    if (!layerIntersectsSyntaxRange(layer, options.range)) continue
+    await flattenLayerRange(layer, result, context, options)
   }
 
-  const captures = sortCaptures(result.captures);
+  const captures = sortCaptures(result.captures)
   return {
     captures: options.includeCaptures ? captures : [],
     folds: sortFolds(result.folds),
@@ -1062,8 +1061,8 @@ const flattenDocumentRange = async (
     errors: sortErrors(result.errors),
     injections: sortInjections(result.injections),
     tokens: treeSitterCapturesToEditorTokens(captures),
-  };
-};
+  }
+}
 
 const flattenLayer = async (
   layer: ParsedLayer,
@@ -1071,28 +1070,28 @@ const flattenLayer = async (
   context: CancellationContext,
   includeHighlights: boolean,
 ): Promise<void> => {
-  const runtime = await ensureRuntime(layer.languageId);
-  const treeData = runOptionalWorkerPhase("collect diagnostics", emptyTreeData(), () =>
+  const runtime = await ensureRuntime(layer.languageId)
+  const treeData = runOptionalWorkerPhase('collect diagnostics', emptyTreeData(), () =>
     collectTreeData(layer.tree),
-  );
+  )
   if (includeHighlights) {
     appendItems(
       result.captures,
-      runOptionalWorkerPhase("collect highlights", [] as TreeSitterCapture[], () =>
+      runOptionalWorkerPhase('collect highlights', [] as TreeSitterCapture[], () =>
         collectCaptures(layer.tree, runtime, context),
       ),
-    );
+    )
   }
   appendItems(
     result.folds,
-    runOptionalWorkerPhase("collect folds", [] as FoldRange[], () =>
+    runOptionalWorkerPhase('collect folds', [] as FoldRange[], () =>
       collectFolds(layer.tree, runtime, context),
     ),
-  );
-  appendItems(result.brackets, treeData.brackets);
-  appendItems(result.errors, treeData.errors);
-  if (layer.kind !== "root") result.injections.push(injectionInfoForLayer(layer));
-};
+  )
+  appendItems(result.brackets, treeData.brackets)
+  appendItems(result.errors, treeData.errors)
+  if (layer.kind !== 'root') result.injections.push(injectionInfoForLayer(layer))
+}
 
 const flattenLayerRange = async (
   layer: ParsedLayer,
@@ -1100,42 +1099,42 @@ const flattenLayerRange = async (
   context: CancellationContext,
   options: RangeFlattenOptions,
 ): Promise<void> => {
-  const runtime = await ensureRuntime(layer.languageId);
-  const treeData = runOptionalWorkerPhase("collect range diagnostics", emptyTreeData(), () =>
+  const runtime = await ensureRuntime(layer.languageId)
+  const treeData = runOptionalWorkerPhase('collect range diagnostics', emptyTreeData(), () =>
     collectTreeData(layer.tree, options.range),
-  );
+  )
   if (options.includeHighlights) {
     appendItems(
       result.captures,
-      runOptionalWorkerPhase("collect range highlights", [] as TreeSitterCapture[], () =>
+      runOptionalWorkerPhase('collect range highlights', [] as TreeSitterCapture[], () =>
         collectCaptures(layer.tree, runtime, context, options.range),
       ),
-    );
+    )
   }
   appendItems(
     result.folds,
-    runOptionalWorkerPhase("collect range folds", [] as FoldRange[], () =>
+    runOptionalWorkerPhase('collect range folds', [] as FoldRange[], () =>
       collectFolds(layer.tree, runtime, context, options.range),
     ),
-  );
-  appendItems(result.brackets, treeData.brackets);
-  appendItems(result.errors, treeData.errors);
-  if (layer.kind !== "root") result.injections.push(injectionInfoForLayer(layer));
-};
+  )
+  appendItems(result.brackets, treeData.brackets)
+  appendItems(result.errors, treeData.errors)
+  if (layer.kind !== 'root') result.injections.push(injectionInfoForLayer(layer))
+}
 
 type Writable<T> = {
-  -readonly [K in keyof T]: T[K] extends readonly (infer U)[] ? U[] : T[K];
-};
+  -readonly [K in keyof T]: T[K] extends readonly (infer U)[] ? U[] : T[K]
+}
 
 const injectionInfoForLayer = (layer: ParsedLayer): TreeSitterInjectionInfo => {
-  const span = rangeSpan(layer.ranges);
+  const span = rangeSpan(layer.ranges)
   return {
     parentLanguageId: layer.parentLanguageId ?? layer.languageId,
     languageId: layer.languageId,
     startIndex: span.startIndex,
     endIndex: span.endIndex,
-  };
-};
+  }
+}
 
 const createEmptyFlattenedDocument = (): Writable<FlattenedDocument> => ({
   captures: [],
@@ -1144,160 +1143,157 @@ const createEmptyFlattenedDocument = (): Writable<FlattenedDocument> => ({
   errors: [],
   injections: [],
   tokens: [],
-});
+})
 
-const emptyTreeData = (): Pick<TreeSitterParseResult, "brackets" | "errors"> => ({
+const emptyTreeData = (): Pick<TreeSitterParseResult, 'brackets' | 'errors'> => ({
   brackets: [],
   errors: [],
-});
+})
 
 const rangeForNode = (node: Node): TreeSitterRange => ({
   startIndex: node.startIndex,
   endIndex: node.endIndex,
   startPosition: node.startPosition,
   endPosition: node.endPosition,
-});
+})
 
 const sortRanges = (ranges: readonly TreeSitterRange[]): TreeSitterRange[] =>
   ranges.toSorted(
     (left, right) => left.startIndex - right.startIndex || left.endIndex - right.endIndex,
-  );
+  )
 
 const rangeSpan = (
   ranges: readonly TreeSitterRange[],
-): Pick<TreeSitterRange, "startIndex" | "endIndex"> => ({
+): Pick<TreeSitterRange, 'startIndex' | 'endIndex'> => ({
   startIndex: minRangeStartIndex(ranges),
   endIndex: maxRangeEndIndex(ranges),
-});
+})
 
 const normalizedSyntaxRange = (
   range: TreeSitterSyntaxRange,
   documentLength: number,
 ): TreeSitterSyntaxRange => {
-  const startIndex = Math.max(0, Math.min(range.startIndex, documentLength));
-  const endIndex = Math.max(startIndex, Math.min(range.endIndex, documentLength));
-  return { startIndex, endIndex };
-};
+  const startIndex = Math.max(0, Math.min(range.startIndex, documentLength))
+  const endIndex = Math.max(startIndex, Math.min(range.endIndex, documentLength))
+  return { startIndex, endIndex }
+}
 
-const layerIntersectsSyntaxRange = (
-  layer: ParsedLayer,
-  range: TreeSitterSyntaxRange,
-): boolean => {
-  if (layer.kind === "root") return true;
+const layerIntersectsSyntaxRange = (layer: ParsedLayer, range: TreeSitterSyntaxRange): boolean => {
+  if (layer.kind === 'root') return true
   return layer.ranges.some((layerRange) =>
     indexesIntersectRange(layerRange.startIndex, layerRange.endIndex, range),
-  );
-};
+  )
+}
 
 const indexesIntersectRange = (
   startIndex: number,
   endIndex: number,
   range: TreeSitterSyntaxRange,
-): boolean => startIndex < range.endIndex && endIndex > range.startIndex;
+): boolean => startIndex < range.endIndex && endIndex > range.startIndex
 
 const minRangeStartIndex = (ranges: readonly TreeSitterRange[]): number => {
-  let result = Infinity;
-  for (const range of ranges) result = Math.min(result, range.startIndex);
-  return result;
-};
+  let result = Infinity
+  for (const range of ranges) result = Math.min(result, range.startIndex)
+  return result
+}
 
 const maxRangeEndIndex = (ranges: readonly TreeSitterRange[]): number => {
-  let result = -Infinity;
-  for (const range of ranges) result = Math.max(result, range.endIndex);
-  return result;
-};
+  let result = -Infinity
+  for (const range of ranges) result = Math.max(result, range.endIndex)
+  return result
+}
 
 const rangesWithBridgeNewlines = (
   ranges: readonly TreeSitterRange[],
   source: TreeSitterPieceTableInput,
 ): TreeSitterRange[] => {
-  const nextRanges: TreeSitterRange[] = [];
+  const nextRanges: TreeSitterRange[] = []
   for (const range of ranges) {
-    appendBridgeNewline(nextRanges, range, source);
-    nextRanges.push(range);
+    appendBridgeNewline(nextRanges, range, source)
+    nextRanges.push(range)
   }
 
-  return nextRanges;
-};
+  return nextRanges
+}
 
 const appendBridgeNewline = (
   ranges: TreeSitterRange[],
   nextRange: TreeSitterRange,
   source: TreeSitterPieceTableInput,
 ): void => {
-  const previous = ranges[ranges.length - 1];
-  if (!previous) return;
-  if (previous.endPosition.row >= nextRange.startPosition.row) return;
-  if (previous.endPosition.column === 0) return;
+  const previous = ranges[ranges.length - 1]
+  if (!previous) return
+  if (previous.endPosition.row >= nextRange.startPosition.row) return
+  if (previous.endPosition.column === 0) return
 
   const bridge = bridgeNewlineRange(
     source,
     previous.endIndex,
     nextRange.startIndex,
     previous.endPosition,
-  );
-  if (bridge) ranges.push(bridge);
-};
+  )
+  if (bridge) ranges.push(bridge)
+}
 
 const bridgeNewlineRange = (
   source: TreeSitterPieceTableInput,
   startIndex: number,
   endIndex: number,
-  startPosition: TreeSitterRange["startPosition"],
+  startPosition: TreeSitterRange['startPosition'],
 ): TreeSitterRange | null => {
-  const text = readTreeSitterInputRange(source, startIndex, endIndex);
-  let row = startPosition.row;
-  let column = startPosition.column;
+  const text = readTreeSitterInputRange(source, startIndex, endIndex)
+  let row = startPosition.row
+  let column = startPosition.column
 
   for (let index = 0; index < text.length; index++) {
-    if (text[index] === "\n") {
+    if (text[index] === '\n') {
       return {
         startIndex: startIndex + index,
         endIndex: startIndex + index + 1,
         startPosition: { row, column },
         endPosition: { row: row + 1, column: 0 },
-      };
+      }
     }
 
-    column += 1;
+    column += 1
   }
 
-  return null;
-};
+  return null
+}
 
 const sortCaptures = (captures: readonly TreeSitterCapture[]): TreeSitterCapture[] =>
-  captures.toSorted((a, b) => a.startIndex - b.startIndex || a.endIndex - b.endIndex);
+  captures.toSorted((a, b) => a.startIndex - b.startIndex || a.endIndex - b.endIndex)
 
 const sortFolds = (folds: readonly FoldRange[]): FoldRange[] =>
-  folds.toSorted((a, b) => a.startLine - b.startLine || a.endLine - b.endLine);
+  folds.toSorted((a, b) => a.startLine - b.startLine || a.endLine - b.endLine)
 
 const sortBrackets = (brackets: readonly BracketInfo[]): BracketInfo[] =>
-  brackets.toSorted((a, b) => a.index - b.index || a.depth - b.depth);
+  brackets.toSorted((a, b) => a.index - b.index || a.depth - b.depth)
 
 const sortErrors = (errors: readonly TreeSitterError[]): TreeSitterError[] =>
-  errors.toSorted((a, b) => a.startIndex - b.startIndex || a.endIndex - b.endIndex);
+  errors.toSorted((a, b) => a.startIndex - b.startIndex || a.endIndex - b.endIndex)
 
 const sortInjections = (
   injections: readonly TreeSitterInjectionInfo[],
 ): TreeSitterInjectionInfo[] =>
-  injections.toSorted((a, b) => a.startIndex - b.startIndex || a.endIndex - b.endIndex);
+  injections.toSorted((a, b) => a.startIndex - b.startIndex || a.endIndex - b.endIndex)
 
 const collectTreeData = (
   tree: Tree,
   range?: TreeSitterSyntaxRange,
-): Pick<TreeSitterParseResult, "brackets" | "errors"> => {
-  const brackets: BracketInfo[] = [];
-  const errors: TreeSitterError[] = [];
-  const bracketStack: { char: string; index: number }[] = [];
-  const cursor = tree.walk();
+): Pick<TreeSitterParseResult, 'brackets' | 'errors'> => {
+  const brackets: BracketInfo[] = []
+  const errors: TreeSitterError[] = []
+  const bracketStack: { char: string; index: number }[] = []
+  const cursor = tree.walk()
 
   try {
     if (range) {
       walkTreeCursorRange(cursor, range, {
         onBracket: (info) => brackets.push(info),
         onError: (info) => errors.push(info),
-      });
-      return { brackets, errors };
+      })
+      return { brackets, errors }
     }
 
     walkTreeCursor(
@@ -1307,50 +1303,50 @@ const collectTreeData = (
         onError: (info) => errors.push(info),
       },
       bracketStack,
-    );
+    )
   } finally {
-    cursor.delete();
+    cursor.delete()
   }
 
-  return { brackets, errors };
-};
+  return { brackets, errors }
+}
 
 const walkTreeCursorRange = (
   cursor: TreeCursor,
   range: TreeSitterSyntaxRange,
   visitors: TreeWalkVisitors,
 ): void => {
-  const bracketStack: { char: string; index: number }[] = [];
+  const bracketStack: { char: string; index: number }[] = []
 
   while (true) {
     if (cursor.endIndex <= range.startIndex) {
-      if (!advanceCursorPastSubtree(cursor)) return;
-      continue;
+      if (!advanceCursorPastSubtree(cursor)) return
+      continue
     }
     if (cursor.startIndex >= range.endIndex) {
-      if (!advanceCursorPastSubtree(cursor)) return;
-      continue;
+      if (!advanceCursorPastSubtree(cursor)) return
+      continue
     }
 
-    collectCursorDiagnostics(cursor, visitors, bracketStack);
-    if (cursor.gotoFirstChild()) continue;
-    if (advanceCursorPastSubtree(cursor)) continue;
-    return;
+    collectCursorDiagnostics(cursor, visitors, bracketStack)
+    if (cursor.gotoFirstChild()) continue
+    if (advanceCursorPastSubtree(cursor)) continue
+    return
   }
-};
+}
 
 const advanceCursorPastSubtree = (cursor: TreeCursor): boolean => {
-  if (cursor.gotoNextSibling()) return true;
-  return advanceCursorToAncestorSibling(cursor);
-};
+  if (cursor.gotoNextSibling()) return true
+  return advanceCursorToAncestorSibling(cursor)
+}
 
 const advanceCursorToAncestorSibling = (cursor: TreeCursor): boolean => {
   while (cursor.gotoParent()) {
-    if (cursor.gotoNextSibling()) return true;
+    if (cursor.gotoNextSibling()) return true
   }
 
-  return false;
-};
+  return false
+}
 
 const walkTreeCursor = (
   cursor: TreeCursor,
@@ -1358,39 +1354,39 @@ const walkTreeCursor = (
   bracketStack: { char: string; index: number }[],
 ): void => {
   while (true) {
-    collectCursorDiagnostics(cursor, visitors, bracketStack);
+    collectCursorDiagnostics(cursor, visitors, bracketStack)
 
-    if (cursor.gotoFirstChild()) continue;
-    if (cursor.gotoNextSibling()) continue;
+    if (cursor.gotoFirstChild()) continue
+    if (cursor.gotoNextSibling()) continue
 
     while (true) {
-      if (!cursor.gotoParent()) return;
-      if (cursor.gotoNextSibling()) break;
+      if (!cursor.gotoParent()) return
+      if (cursor.gotoNextSibling()) break
     }
   }
-};
+}
 
 const collectCursorDiagnostics = (
   cursor: TreeCursor,
   visitors: TreeWalkVisitors,
   bracketStack: { char: string; index: number }[],
 ): void => {
-  const bracket = collectCursorBracket(cursor, bracketStack);
-  if (bracket) visitors.onBracket(bracket);
+  const bracket = collectCursorBracket(cursor, bracketStack)
+  if (bracket) visitors.onBracket(bracket)
 
-  const error = collectCursorError(cursor);
-  if (error) visitors.onError(error);
-};
+  const error = collectCursorError(cursor)
+  if (error) visitors.onError(error)
+}
 
 const collectCursorBracket = (
   cursor: TreeCursor,
   bracketStack: { char: string; index: number }[],
-): BracketInfo | null => collectBracketInfo(cursor.nodeType, cursor.startIndex, bracketStack);
+): BracketInfo | null => collectBracketInfo(cursor.nodeType, cursor.startIndex, bracketStack)
 
 const collectBracket = (
   node: Node,
   bracketStack: { char: string; index: number }[],
-): BracketInfo | null => collectBracketInfo(node.type, node.startIndex, bracketStack);
+): BracketInfo | null => collectBracketInfo(node.type, node.startIndex, bracketStack)
 
 const collectBracketInfo = (
   type: string,
@@ -1398,40 +1394,40 @@ const collectBracketInfo = (
   bracketStack: { char: string; index: number }[],
 ): BracketInfo | null => {
   if (OPEN_BRACKETS.has(type)) {
-    bracketStack.push({ char: type, index: startIndex });
-    return { index: startIndex, char: type, depth: bracketStack.length };
+    bracketStack.push({ char: type, index: startIndex })
+    return { index: startIndex, char: type, depth: bracketStack.length }
   }
 
-  if (!CLOSE_BRACKETS.has(type)) return null;
+  if (!CLOSE_BRACKETS.has(type)) return null
 
-  const depth = bracketStack.length > 0 ? bracketStack.length : 1;
-  const last = bracketStack[bracketStack.length - 1];
-  if (last && BRACKET_PAIRS[last.char] === type) bracketStack.pop();
-  return { index: startIndex, char: type, depth };
-};
+  const depth = bracketStack.length > 0 ? bracketStack.length : 1
+  const last = bracketStack[bracketStack.length - 1]
+  if (last && BRACKET_PAIRS[last.char] === type) bracketStack.pop()
+  return { index: startIndex, char: type, depth }
+}
 
 const collectCursorError = (cursor: TreeCursor): TreeSitterError | null => {
-  const isError = cursor.nodeType === "ERROR";
-  if (!isError && !cursor.nodeIsMissing) return null;
+  const isError = cursor.nodeType === 'ERROR'
+  if (!isError && !cursor.nodeIsMissing) return null
 
   return {
     startIndex: cursor.startIndex,
     endIndex: cursor.endIndex,
     isMissing: cursor.nodeIsMissing,
     message: cursor.nodeType,
-  };
-};
+  }
+}
 
 const collectError = (node: Node): TreeSitterError | null => {
-  if (!node.isError && !node.isMissing) return null;
+  if (!node.isError && !node.isMissing) return null
 
   return {
     startIndex: node.startIndex,
     endIndex: node.endIndex,
     isMissing: node.isMissing,
     message: node.type,
-  };
-};
+  }
+}
 
 const selectDocument = async (
   request: TreeSitterSelectionRequest,
@@ -1440,261 +1436,261 @@ const selectDocument = async (
     request.documentId,
     request.languageId,
     request.snapshotVersion,
-  );
+  )
 
-  if (!cached) return staleSelectionResult(request);
+  if (!cached) return staleSelectionResult(request)
   return {
     documentId: request.documentId,
     snapshotVersion: request.snapshotVersion,
     languageId: request.languageId,
-    status: "ok",
+    status: 'ok',
     ranges: request.ranges.map((range) =>
       selectionRangeForAction(layerForSelection(cached, range).tree, request.action, range),
     ),
-  };
-};
+  }
+}
 
 const selectionRangeForAction = (
   tree: Tree,
-  action: TreeSitterSelectionRequest["action"],
+  action: TreeSitterSelectionRequest['action'],
   range: TreeSitterSelectionRange,
 ): TreeSitterSelectionRange => {
-  if (action === "selectToken") return tokenRangeAt(tree.rootNode, range);
-  return expandedRangeAt(tree.rootNode, range);
-};
+  if (action === 'selectToken') return tokenRangeAt(tree.rootNode, range)
+  return expandedRangeAt(tree.rootNode, range)
+}
 
 const tokenRangeAt = (root: Node, range: TreeSitterSelectionRange): TreeSitterSelectionRange => {
-  const index = clampSelectionIndex(root, range.startIndex);
-  const node = nonEmptyNode(root.descendantForIndex(index, index), root);
-  return rangeForSelectionNode(node);
-};
+  const index = clampSelectionIndex(root, range.startIndex)
+  const node = nonEmptyNode(root.descendantForIndex(index, index), root)
+  return rangeForSelectionNode(node)
+}
 
 const expandedRangeAt = (root: Node, range: TreeSitterSelectionRange): TreeSitterSelectionRange => {
-  const node = root.namedDescendantForIndex(range.startIndex, range.endIndex) ?? root;
-  const containing = containingNamedNode(node, range);
-  return rangeForSelectionNode(containing);
-};
+  const node = root.namedDescendantForIndex(range.startIndex, range.endIndex) ?? root
+  const containing = containingNamedNode(node, range)
+  return rangeForSelectionNode(containing)
+}
 
 const containingNamedNode = (node: Node, range: TreeSitterSelectionRange): Node => {
-  let current: Node | null = node;
+  let current: Node | null = node
 
   while (current) {
-    if (current.isNamed && strictlyContainsRange(current, range)) return current;
-    current = current.parent;
+    if (current.isNamed && strictlyContainsRange(current, range)) return current
+    current = current.parent
   }
 
-  return node.tree.rootNode;
-};
+  return node.tree.rootNode
+}
 
 const nonEmptyNode = (node: Node | null, fallback: Node): Node => {
-  let current = node;
+  let current = node
 
   while (current) {
-    if (current.endIndex > current.startIndex) return current;
-    current = current.parent;
+    if (current.endIndex > current.startIndex) return current
+    current = current.parent
   }
 
-  return fallback;
-};
+  return fallback
+}
 
 const rangeForSelectionNode = (node: Node): TreeSitterSelectionRange => ({
   startIndex: node.startIndex,
   endIndex: node.endIndex,
-});
+})
 
 const strictlyContainsRange = (node: Node, range: TreeSitterSelectionRange): boolean => {
-  if (node.startIndex > range.startIndex) return false;
-  if (node.endIndex < range.endIndex) return false;
-  return node.startIndex < range.startIndex || node.endIndex > range.endIndex;
-};
+  if (node.startIndex > range.startIndex) return false
+  if (node.endIndex < range.endIndex) return false
+  return node.startIndex < range.startIndex || node.endIndex > range.endIndex
+}
 
 const clampSelectionIndex = (root: Node, index: number): number => {
-  if (root.endIndex <= root.startIndex) return root.startIndex;
-  return Math.max(root.startIndex, Math.min(index, root.endIndex - 1));
-};
+  if (root.endIndex <= root.startIndex) return root.startIndex
+  return Math.max(root.startIndex, Math.min(index, root.endIndex - 1))
+}
 
 const layerForSelection = (
   document: ParsedDocument,
   range: TreeSitterSelectionRange,
 ): ParsedLayer => {
-  let best = rootLayerForDocument(document);
+  let best = rootLayerForDocument(document)
   for (const layer of document.layers) {
-    if (!layerContainsSelection(layer, range)) continue;
-    if (layer.depth < best.depth) continue;
-    best = layer;
+    if (!layerContainsSelection(layer, range)) continue
+    if (layer.depth < best.depth) continue
+    best = layer
   }
 
-  return best;
-};
+  return best
+}
 
 const layerContainsSelection = (layer: ParsedLayer, range: TreeSitterSelectionRange): boolean => {
-  if (layer.kind === "root") return true;
-  return layer.ranges.some((layerRange) => rangeInsideLayerRange(range, layerRange));
-};
+  if (layer.kind === 'root') return true
+  return layer.ranges.some((layerRange) => rangeInsideLayerRange(range, layerRange))
+}
 
 const rangeInsideLayerRange = (
   range: TreeSitterSelectionRange,
   layerRange: TreeSitterRange,
 ): boolean => {
-  const start = Math.min(range.startIndex, range.endIndex);
-  const end = Math.max(range.startIndex, range.endIndex);
-  if (start < layerRange.startIndex) return false;
-  if (end > layerRange.endIndex) return false;
-  return true;
-};
+  const start = Math.min(range.startIndex, range.endIndex)
+  const end = Math.max(range.startIndex, range.endIndex)
+  if (start < layerRange.startIndex) return false
+  if (end > layerRange.endIndex) return false
+  return true
+}
 
 const rootLayerForDocument = (document: ParsedDocument): ParsedLayer => {
-  const root = document.layers.find((layer) => layer.kind === "root");
-  if (!root) throw new Error("Tree-sitter parsed document is missing a root layer");
-  return root;
-};
+  const root = document.layers.find((layer) => layer.kind === 'root')
+  if (!root) throw new Error('Tree-sitter parsed document is missing a root layer')
+  return root
+}
 
 const staleSelectionResult = (request: TreeSitterSelectionRequest): TreeSitterSelectionResult => ({
   documentId: request.documentId,
   snapshotVersion: request.snapshotVersion,
   languageId: request.languageId,
-  status: "stale",
+  status: 'stale',
   ranges: request.ranges,
-});
+})
 
 const replaceCachedDocument = (documentId: string, snapshot: ParsedDocument): void => {
-  const cache = ensureDocumentCache(documentId);
+  const cache = ensureDocumentCache(documentId)
   const existingIndex = cache.snapshots.findIndex(
     (item) => item.snapshotVersion === snapshot.snapshotVersion,
-  );
+  )
 
   if (existingIndex !== -1) {
-    const existing = cache.snapshots.splice(existingIndex, 1, snapshot)[0];
-    if (existing) disposeCachedSnapshot(existing);
+    const existing = cache.snapshots.splice(existingIndex, 1, snapshot)[0]
+    if (existing) disposeCachedSnapshot(existing)
   } else {
-    cache.snapshots.push(snapshot);
+    cache.snapshots.push(snapshot)
   }
 
-  evictCachedSnapshots(cache);
-};
+  evictCachedSnapshots(cache)
+}
 
 const ensureDocumentCache = (documentId: string): DocumentCache => {
-  const existing = documentCaches.get(documentId);
-  if (existing) return existing;
+  const existing = documentCaches.get(documentId)
+  if (existing) return existing
 
-  const cache = { documentId, snapshots: [] };
-  documentCaches.set(documentId, cache);
-  return cache;
-};
+  const cache = { documentId, snapshots: [] }
+  documentCaches.set(documentId, cache)
+  return cache
+}
 
 const cachedDocumentForVersion = (
   documentId: string,
   languageId: TreeSitterLanguageId,
   snapshotVersion: number,
 ): ParsedDocument | null => {
-  const cache = documentCaches.get(documentId);
-  if (!cache) return null;
+  const cache = documentCaches.get(documentId)
+  if (!cache) return null
 
   const snapshot = cache.snapshots.find((item) => {
-    return item.languageId === languageId && item.snapshotVersion === snapshotVersion;
-  });
-  if (!snapshot) return null;
+    return item.languageId === languageId && item.snapshotVersion === snapshotVersion
+  })
+  if (!snapshot) return null
 
-  snapshot.lastUsed = nextUse++;
-  return snapshot;
-};
+  snapshot.lastUsed = nextUse++
+  return snapshot
+}
 
 const evictCachedSnapshots = (cache: DocumentCache): void => {
-  cache.snapshots.sort((left, right) => right.snapshotVersion - left.snapshotVersion);
+  cache.snapshots.sort((left, right) => right.snapshotVersion - left.snapshotVersion)
 
   while (cache.snapshots.length > MAX_RETAINED_SNAPSHOTS) {
-    disposeOldestRetainedSnapshot(cache.snapshots);
+    disposeOldestRetainedSnapshot(cache.snapshots)
   }
 
   while (retainedSourceUnits(cache.snapshots) > MAX_RETAINED_SOURCE_UNITS) {
-    if (cache.snapshots.length <= 2) return;
-    disposeOldestRetainedSnapshot(cache.snapshots);
+    if (cache.snapshots.length <= 2) return
+    disposeOldestRetainedSnapshot(cache.snapshots)
   }
-};
+}
 
 const disposeOldestRetainedSnapshot = (snapshots: ParsedDocument[]): void => {
-  let oldestIndex = Math.min(2, snapshots.length - 1);
+  let oldestIndex = Math.min(2, snapshots.length - 1)
 
   for (let index = oldestIndex + 1; index < snapshots.length; index++) {
-    if (snapshots[index]!.lastUsed >= snapshots[oldestIndex]!.lastUsed) continue;
-    oldestIndex = index;
+    if (snapshots[index]!.lastUsed >= snapshots[oldestIndex]!.lastUsed) continue
+    oldestIndex = index
   }
 
-  const [oldest] = snapshots.splice(oldestIndex, 1);
-  if (oldest) disposeCachedSnapshot(oldest);
-};
+  const [oldest] = snapshots.splice(oldestIndex, 1)
+  if (oldest) disposeCachedSnapshot(oldest)
+}
 
 const retainedSourceUnits = (snapshots: readonly ParsedDocument[]): number =>
-  snapshots.reduce((sum, snapshot) => sum + snapshot.size, 0);
+  snapshots.reduce((sum, snapshot) => sum + snapshot.size, 0)
 
 const disposeCachedSnapshot = (snapshot: ParsedDocument): void => {
-  for (const layer of snapshot.layers) layer.tree.delete();
-};
+  for (const layer of snapshot.layers) layer.tree.delete()
+}
 
 const disposeDocument = (documentId: string): void => {
-  const cache = documentCaches.get(documentId);
-  disposeTreeSitterSourceDocument(sourceCache, documentId);
-  if (!cache) return;
+  const cache = documentCaches.get(documentId)
+  disposeTreeSitterSourceDocument(sourceCache, documentId)
+  if (!cache) return
 
-  for (const snapshot of cache.snapshots) disposeCachedSnapshot(snapshot);
-  documentCaches.delete(documentId);
-};
+  for (const snapshot of cache.snapshots) disposeCachedSnapshot(snapshot)
+  documentCaches.delete(documentId)
+}
 
 const disposeCachedSnapshotsForLanguage = (languageId: TreeSitterLanguageId): void => {
   for (const cache of documentCaches.values()) {
-    disposeCachedSnapshotsMatchingLanguage(cache, languageId);
+    disposeCachedSnapshotsMatchingLanguage(cache, languageId)
   }
-};
+}
 
 const disposeCachedSnapshotsMatchingLanguage = (
   cache: DocumentCache,
   languageId: TreeSitterLanguageId,
 ): void => {
-  const retained: ParsedDocument[] = [];
+  const retained: ParsedDocument[] = []
 
   for (const snapshot of cache.snapshots) {
     if (snapshot.languageId !== languageId) {
-      retained.push(snapshot);
-      continue;
+      retained.push(snapshot)
+      continue
     }
 
-    disposeCachedSnapshot(snapshot);
+    disposeCachedSnapshot(snapshot)
   }
 
-  cache.snapshots.length = 0;
-  appendItems(cache.snapshots, retained);
-};
+  cache.snapshots.length = 0
+  appendItems(cache.snapshots, retained)
+}
 
 const disposeAll = (): void => {
   for (const cache of documentCaches.values()) {
-    for (const snapshot of cache.snapshots) disposeCachedSnapshot(snapshot);
+    for (const snapshot of cache.snapshots) disposeCachedSnapshot(snapshot)
   }
 
-  documentCaches.clear();
-  clearTreeSitterSourceCache(sourceCache);
-  languageDescriptors.clear();
-  languageDescriptorOrder.length = 0;
+  documentCaches.clear()
+  clearTreeSitterSourceCache(sourceCache)
+  languageDescriptors.clear()
+  languageDescriptorOrder.length = 0
   for (const promise of runtimePromises.values()) {
-    void promise.then(disposeRuntime).catch(() => undefined);
+    void promise.then(disposeRuntime).catch(() => undefined)
   }
-  runtimePromises.clear();
-  parserInitPromise = null;
-};
+  runtimePromises.clear()
+  parserInitPromise = null
+}
 
 const disposeRuntime = (runtime: Runtime): void => {
-  runtime.highlightQuery?.delete();
-  runtime.foldQuery?.delete();
-  runtime.injectionQuery?.delete();
-  runtime.parser.delete();
-};
+  runtime.highlightQuery?.delete()
+  runtime.foldQuery?.delete()
+  runtime.injectionQuery?.delete()
+  runtime.parser.delete()
+}
 
 const disposeRuntimeForLanguage = (languageId: TreeSitterLanguageId): void => {
-  const runtime = runtimePromises.get(languageId);
-  if (!runtime) return;
+  const runtime = runtimePromises.get(languageId)
+  if (!runtime) return
 
-  runtimePromises.delete(languageId);
-  void runtime.then(disposeRuntime).catch(() => undefined);
-};
+  runtimePromises.delete(languageId)
+  void runtime.then(disposeRuntime).catch(() => undefined)
+}
 
 const normalizeLanguageDescriptor = (
   descriptor: TreeSitterLanguageDescriptor,
@@ -1706,13 +1702,13 @@ const normalizeLanguageDescriptor = (
   highlightQuerySource: descriptor.highlightQuerySource,
   foldQuerySource: descriptor.foldQuerySource,
   injectionQuerySource: descriptor.injectionQuerySource,
-});
+})
 
 const moveLanguageToEnd = (languageId: TreeSitterLanguageId): void => {
-  const index = languageDescriptorOrder.indexOf(languageId);
-  if (index !== -1) languageDescriptorOrder.splice(index, 1);
-  languageDescriptorOrder.push(languageId);
-};
+  const index = languageDescriptorOrder.indexOf(languageId)
+  if (index !== -1) languageDescriptorOrder.splice(index, 1)
+  languageDescriptorOrder.push(languageId)
+}
 
 const languageDescriptorsEqual = (
   left: TreeSitterLanguageDescriptor,
@@ -1724,126 +1720,126 @@ const languageDescriptorsEqual = (
   sameItems(left.aliases, right.aliases) &&
   left.highlightQuerySource === right.highlightQuerySource &&
   left.foldQuerySource === right.foldQuerySource &&
-  left.injectionQuerySource === right.injectionQuerySource;
+  left.injectionQuerySource === right.injectionQuerySource
 
 const sameItems = (left: readonly string[], right: readonly string[]): boolean => {
-  if (left.length !== right.length) return false;
-  return left.every((item, index) => item === right[index]);
-};
+  if (left.length !== right.length) return false
+  return left.every((item, index) => item === right[index])
+}
 
 const normalizeLanguageId = (languageId: string): TreeSitterLanguageId => {
-  const normalized = languageId.trim();
-  if (normalized) return normalized;
+  const normalized = languageId.trim()
+  if (normalized) return normalized
 
-  throw new Error("Tree-sitter language id cannot be empty");
-};
+  throw new Error('Tree-sitter language id cannot be empty')
+}
 
 const normalizeWasmUrl = (wasmUrl: string, languageId: string): string => {
-  const normalized = wasmUrl.trim();
-  if (normalized) return normalized;
+  const normalized = wasmUrl.trim()
+  if (normalized) return normalized
 
-  throw new Error(`Tree-sitter language "${languageId}" is missing a wasmUrl`);
-};
+  throw new Error(`Tree-sitter language "${languageId}" is missing a wasmUrl`)
+}
 
 const normalizeExtension = (extension: string): string => {
-  const normalized = extension.trim().toLowerCase();
-  if (!normalized) throw new Error("Tree-sitter language extension cannot be empty");
-  if (normalized.startsWith(".")) return normalized;
-  return `.${normalized}`;
-};
+  const normalized = extension.trim().toLowerCase()
+  if (!normalized) throw new Error('Tree-sitter language extension cannot be empty')
+  if (normalized.startsWith('.')) return normalized
+  return `.${normalized}`
+}
 
 const normalizeAlias = (alias: string): string => {
-  const normalized = alias.trim().toLowerCase();
-  if (normalized) return normalized;
+  const normalized = alias.trim().toLowerCase()
+  if (normalized) return normalized
 
-  throw new Error("Tree-sitter language alias cannot be empty");
-};
+  throw new Error('Tree-sitter language alias cannot be empty')
+}
 
-const uniqueItems = <T>(items: readonly T[]): readonly T[] => [...new Set(items)];
+const uniqueItems = <T>(items: readonly T[]): readonly T[] => Array.from(new Set(items))
 
 const isCancelled = (context: CancellationContext): boolean => {
-  if (context.flag && Atomics.load(context.flag, 0) === 1) return true;
-  return nowMs() - context.startedAt > context.budgetMs;
-};
+  if (context.flag && Atomics.load(context.flag, 0) === 1) return true
+  return nowMs() - context.startedAt > context.budgetMs
+}
 
 const assertNotCancelled = (context: CancellationContext): void => {
-  if (isCancelled(context)) throw new SyntaxRequestCancelled();
-};
+  if (isCancelled(context)) throw new SyntaxRequestCancelled()
+}
 
-const nowMs = (): number => globalThis.performance?.now() ?? Date.now();
+const nowMs = (): number => globalThis.performance?.now() ?? Date.now()
 
 const applyTextEdit = (
   text: string,
   startIndex: number,
   oldEndIndex: number,
   insertedText: string,
-): string => text.slice(0, startIndex) + insertedText + text.slice(oldEndIndex);
+): string => text.slice(0, startIndex) + insertedText + text.slice(oldEndIndex)
 
 const applyTextEdits = (
   text: string,
-  edits: readonly TreeSitterEditRequest["edits"][number][],
+  edits: readonly TreeSitterEditRequest['edits'][number][],
 ): string => {
-  let next = text;
-  const sorted = edits.toSorted((left, right) => right.from - left.from || right.to - left.to);
+  let next = text
+  const sorted = edits.toSorted((left, right) => right.from - left.from || right.to - left.to)
 
   for (const edit of sorted) {
-    next = applyTextEdit(next, edit.from, edit.to, edit.text);
+    next = applyTextEdit(next, edit.from, edit.to, edit.text)
   }
 
-  return next;
-};
+  return next
+}
 
 const appendItems = <T>(target: T[], items: readonly T[]): void => {
-  for (const item of items) target.push(item);
-};
+  for (const item of items) target.push(item)
+}
 
 const handleRequest = async (request: TreeSitterWorkerRequest): Promise<TreeSitterWorkerResult> => {
-  const { payload } = request;
+  const { payload } = request
 
-  if (payload.type === "init") {
-    await ensureParserRuntime();
-    return undefined;
+  if (payload.type === 'init') {
+    await ensureParserRuntime()
+    return undefined
   }
 
-  if (payload.type === "registerLanguages") {
-    registerLanguages(payload.languages);
-    return undefined;
+  if (payload.type === 'registerLanguages') {
+    registerLanguages(payload.languages)
+    return undefined
   }
 
-  if (payload.type === "parse") return parseDocument(payload);
-  if (payload.type === "edit") return editDocument(payload);
-  if (payload.type === "queryRange") return queryDocumentRange(payload);
-  if (payload.type === "selection") return selectDocument(payload);
+  if (payload.type === 'parse') return parseDocument(payload)
+  if (payload.type === 'edit') return editDocument(payload)
+  if (payload.type === 'queryRange') return queryDocumentRange(payload)
+  if (payload.type === 'selection') return selectDocument(payload)
 
-  if (payload.type === "disposeDocument") {
-    disposeDocument(payload.documentId);
-    return undefined;
+  if (payload.type === 'disposeDocument') {
+    disposeDocument(payload.documentId)
+    return undefined
   }
 
-  disposeAll();
-  return undefined;
-};
+  disposeAll()
+  return undefined
+}
 
 const workerScope = globalThis as typeof globalThis & {
-  readonly importScripts?: unknown;
-  onmessage?: (event: MessageEvent<TreeSitterWorkerRequest>) => void;
-  postMessage?: (response: TreeSitterWorkerResponse) => void;
-};
+  readonly importScripts?: unknown
+  onmessage?: (event: MessageEvent<TreeSitterWorkerRequest>) => void
+  postMessage?: (response: TreeSitterWorkerResponse) => void
+}
 
 const shouldInstallWorkerHandler = (): boolean => {
-  if (typeof workerScope.postMessage !== "function") return false;
-  return typeof document === "undefined";
-};
+  if (typeof workerScope.postMessage !== 'function') return false
+  return typeof document === 'undefined'
+}
 
 if (shouldInstallWorkerHandler()) {
   workerScope.onmessage = (event: MessageEvent<TreeSitterWorkerRequest>): void => {
-    const request = event.data;
+    const request = event.data
     void handleRequest(request)
       .then((result) => postResponse({ id: request.id, ok: true, result }))
       .catch((error) => {
-        postResponse({ id: request.id, ok: false, error: createErrorMessage(error) });
-      });
-  };
+        postResponse({ id: request.id, ok: false, error: createErrorMessage(error) })
+      })
+  }
 }
 
 export const __treeSitterWorkerInternalsForTests = {
@@ -1857,8 +1853,8 @@ export const __treeSitterWorkerInternalsForTests = {
   rangeSpan,
   resolveTreeSitterSourceDescriptor,
   readTreeSitterPieceTableInput,
-};
+}
 
 const postResponse = (response: TreeSitterWorkerResponse): void => {
-  workerScope.postMessage?.(response);
-};
+  workerScope.postMessage?.(response)
+}

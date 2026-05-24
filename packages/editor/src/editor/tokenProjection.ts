@@ -248,10 +248,7 @@ function projectSortedTokenRangesBulk(
   return projectedTokens;
 }
 
-function shouldUseLazyProjection(
-  tokens: readonly EditorToken[],
-  suffixStart: number,
-): boolean {
+function shouldUseLazyProjection(tokens: readonly EditorToken[], suffixStart: number): boolean {
   if (suffixStart >= tokens.length) return false;
   return tokens.length - suffixStart >= LAZY_PROJECTED_SUFFIX_THRESHOLD;
 }
@@ -329,7 +326,14 @@ function createLazyProjectedTokenArray(
   });
 
   setEditorTokenIndex(projectedTokens, {
-    maxEnds: lazyProjectedMaxEnds(projectedLength, prefixEnd, suffixStart, builder, sourceIndex, delta),
+    maxEnds: lazyProjectedMaxEnds(
+      projectedLength,
+      prefixEnd,
+      suffixStart,
+      builder,
+      sourceIndex,
+      delta,
+    ),
     monotonicEnd: builder.monotonicEnd,
     nonOverlapping: builder.nonOverlapping,
     sortedByStart: true,

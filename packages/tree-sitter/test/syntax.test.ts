@@ -354,9 +354,7 @@ describe("Tree-sitter syntax capture conversion", () => {
 
   it("preserves capture-returning behavior by default", async () => {
     const parsePayloads: TreeSitterBackendParsePayload[] = [];
-    const captures = [
-      { startIndex: 0, endIndex: 5, captureName: "keyword.declaration" },
-    ];
+    const captures = [{ startIndex: 0, endIndex: 5, captureName: "keyword.declaration" }];
     const backend = {
       disposeDocument: () => undefined,
       edit: async () => undefined,
@@ -573,9 +571,7 @@ describe("Tree-sitter syntax capture conversion", () => {
     });
     await firstRefresh;
 
-    expect(session.getResult().tokens).toEqual([
-      { start: 6, end: 7, style: { color: "#00ff00" } },
-    ]);
+    expect(session.getResult().tokens).toEqual([{ start: 6, end: 7, style: { color: "#00ff00" } }]);
   });
 
   it("reuses document change edits when they apply to the cached syntax snapshot", async () => {

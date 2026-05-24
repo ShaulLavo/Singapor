@@ -488,15 +488,13 @@ export class EditorSyntaxController {
       });
     }
 
-    return this.syntaxSession
-      .queryRange(range)
-      .then((result) => ({
-        contentVersion,
-        range,
-        result,
-        source,
-        updatesDocument: options.updatesDocument,
-      }));
+    return this.syntaxSession.queryRange(range).then((result) => ({
+      contentVersion,
+      range,
+      result,
+      source,
+      updatesDocument: options.updatesDocument,
+    }));
   }
 
   private loadHighlightResult(

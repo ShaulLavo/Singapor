@@ -43,6 +43,7 @@ export type {
   LspDocumentOpenOptions,
   LspDocumentSyncMode,
   LspNotificationHandler,
+  PublishDiagnosticsNotificationParams,
   LspTextDocumentSnapshot,
   LspTextEdit,
   LspTextSnapshot,

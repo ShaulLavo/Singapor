@@ -34,7 +34,7 @@ export function mergeChangeTimings(
   earlierChange: DocumentSessionChange | null,
 ): DocumentSessionChange {
   if (!earlierChange) return change;
-  return withDocumentSessionChangeTimings(change, [...earlierChange.timings, ...change.timings]);
+  return withDocumentSessionChangeTimings(change, earlierChange.timings.concat(change.timings));
 }
 
 function createTiming(name: string, startMs: number): EditorTimingMeasurement {

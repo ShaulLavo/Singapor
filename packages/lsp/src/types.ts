@@ -47,6 +47,12 @@ export type LspWorkspaceSnapshotEditOptions = LspTextDocumentSnapshot & {
   readonly edits?: readonly LspTextEdit[];
 };
 
+export type PublishDiagnosticsNotificationParams = {
+  readonly uri: lsp.DocumentUri;
+  readonly version?: number;
+  readonly diagnostics: readonly lsp.Diagnostic[];
+};
+
 export type LspNotificationHandler<TClient = unknown> = (
   client: TClient,
   params: unknown,

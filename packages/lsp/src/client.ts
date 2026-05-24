@@ -1,9 +1,9 @@
-import type * as lsp from "vscode-languageserver-protocol";
+import type * as lsp from 'vscode-languageserver-protocol'
 import {
   defaultClientCapabilities,
   documentSyncModeFromCapabilities,
   mergeClientCapabilities,
-} from "./capabilities";
+} from './capabilities'
 import {
   createMethodNotFoundResponse,
   createNotificationMessage,
@@ -14,9 +14,9 @@ import {
   LspRequestCancelledError,
   responseResult,
   type LspRequestId,
-} from "./protocol";
-import { createLspContentChanges, createLspContentChangesInSnapshot } from "./positions";
-import { measureLspPerformance } from "./performanceDiagnostics";
+} from './protocol'
+import { createLspContentChanges, createLspContentChangesInSnapshot } from './positions'
+import { measureLspPerformance } from './performanceDiagnostics'
 import type {
   LspDocument,
   LspDocumentSyncMode,
@@ -25,111 +25,111 @@ import type {
   LspTextEdit,
   LspTransport,
   LspUnhandledNotificationHandler,
-} from "./types";
-import { LspWorkspace } from "./workspace";
+} from './types'
+import { LspWorkspace } from './workspace'
 
-export type LspClientState = "disconnected" | "initializing" | "ready" | "failed";
+export type LspClientState = 'disconnected' | 'initializing' | 'ready' | 'failed'
 
 export type LspClientConfig = {
-  readonly rootUri?: lsp.DocumentUri | null;
-  readonly workspaceFolders?: readonly lsp.WorkspaceFolder[] | null;
-  readonly clientInfo?: lsp.InitializeParams["clientInfo"];
-  readonly initializationOptions?: unknown;
-  readonly capabilities?: lsp.ClientCapabilities;
-  readonly timeoutMs?: number;
-  readonly processId?: number | null;
-  readonly locale?: string;
-  readonly workspace?: LspWorkspace;
-  readonly notificationHandlers?: Readonly<Record<string, LspNotificationHandler<LspClient>>>;
-  readonly unhandledNotification?: LspUnhandledNotificationHandler<LspClient>;
-};
+  readonly rootUri?: lsp.DocumentUri | null
+  readonly workspaceFolders?: readonly lsp.WorkspaceFolder[] | null
+  readonly clientInfo?: lsp.InitializeParams['clientInfo']
+  readonly initializationOptions?: unknown
+  readonly capabilities?: lsp.ClientCapabilities
+  readonly timeoutMs?: number
+  readonly processId?: number | null
+  readonly locale?: string
+  readonly workspace?: LspWorkspace
+  readonly notificationHandlers?: Readonly<Record<string, LspNotificationHandler<LspClient>>>
+  readonly unhandledNotification?: LspUnhandledNotificationHandler<LspClient>
+}
 
 type PendingRequest = {
-  readonly id: LspRequestId;
-  readonly method: string;
-  readonly params: unknown;
-  readonly timeout: ReturnType<typeof setTimeout>;
-  readonly resolve: (result: unknown) => void;
-  readonly reject: (error: unknown) => void;
-  readonly abortCleanup?: () => void;
-};
+  readonly id: LspRequestId
+  readonly method: string
+  readonly params: unknown
+  readonly timeout: ReturnType<typeof setTimeout>
+  readonly resolve: (result: unknown) => void
+  readonly reject: (error: unknown) => void
+  readonly abortCleanup?: () => void
+}
 
 type RequestOptions = {
-  readonly timeoutMs?: number;
-  readonly signal?: AbortSignal;
-};
+  readonly timeoutMs?: number
+  readonly signal?: AbortSignal
+}
 
 type LspDocumentChange = {
-  readonly edits: readonly LspTextEdit[];
-  readonly previousSnapshot?: LspTextDocumentSnapshot;
-  readonly previousText?: string;
-};
+  readonly edits: readonly LspTextEdit[]
+  readonly previousSnapshot?: LspTextDocumentSnapshot
+  readonly previousText?: string
+}
 
 export class LspClient {
-  public readonly workspace: LspWorkspace;
-  public serverCapabilities: lsp.ServerCapabilities | null = null;
-  public initializeResult: lsp.InitializeResult | null = null;
+  public readonly workspace: LspWorkspace
+  public serverCapabilities: lsp.ServerCapabilities | null = null
+  public initializeResult: lsp.InitializeResult | null = null
 
-  private readonly config: LspClientConfig;
-  private readonly timeoutMs: number;
-  private transport: LspTransport | null = null;
-  private state: LspClientState = "disconnected";
-  private nextRequestId = 1;
-  private initializePromise: Promise<void> | null = null;
-  private syncMode: LspDocumentSyncMode = "none";
-  private readonly pendingRequests = new Map<LspRequestId, PendingRequest>();
-  private readonly syncedDocuments = new Set<lsp.DocumentUri>();
+  private readonly config: LspClientConfig
+  private readonly timeoutMs: number
+  private transport: LspTransport | null = null
+  private state: LspClientState = 'disconnected'
+  private nextRequestId = 1
+  private initializePromise: Promise<void> | null = null
+  private syncMode: LspDocumentSyncMode = 'none'
+  private readonly pendingRequests = new Map<LspRequestId, PendingRequest>()
+  private readonly syncedDocuments = new Set<lsp.DocumentUri>()
 
   public constructor(config: LspClientConfig = {}) {
-    this.config = config;
-    this.timeoutMs = config.timeoutMs ?? 3000;
-    this.workspace = config.workspace ?? new LspWorkspace();
-    this.workspace.attachClient(this);
-    this.receiveMessage = this.receiveMessage.bind(this);
+    this.config = config
+    this.timeoutMs = config.timeoutMs ?? 3000
+    this.workspace = config.workspace ?? new LspWorkspace()
+    this.workspace.attachClient(this)
+    this.receiveMessage = this.receiveMessage.bind(this)
   }
 
   public get connected(): boolean {
-    return this.transport !== null;
+    return this.transport !== null
   }
 
   public get initialized(): boolean {
-    return this.state === "ready";
+    return this.state === 'ready'
   }
 
   public get initialization(): Promise<void> | null {
-    return this.initializePromise;
+    return this.initializePromise
   }
 
   public connect(transport: LspTransport): Promise<void> {
-    this.disconnect();
-    this.transport = transport;
-    this.state = "initializing";
-    transport.subscribe(this.receiveMessage);
-    this.initializePromise = this.initialize();
-    return this.initializePromise;
+    this.disconnect()
+    this.transport = transport
+    this.state = 'initializing'
+    transport.subscribe(this.receiveMessage)
+    this.initializePromise = this.initialize()
+    return this.initializePromise
   }
 
   public disconnect(): void {
-    const transport = this.transport;
-    if (transport) transport.unsubscribe(this.receiveMessage);
+    const transport = this.transport
+    if (transport) transport.unsubscribe(this.receiveMessage)
 
-    this.transport = null;
-    this.state = "disconnected";
-    this.initializePromise = null;
-    this.initializeResult = null;
-    this.serverCapabilities = null;
-    this.syncMode = "none";
-    this.syncedDocuments.clear();
-    this.rejectPendingRequests(new Error("LSP client disconnected"));
-    this.workspace.disconnected();
+    this.transport = null
+    this.state = 'disconnected'
+    this.initializePromise = null
+    this.initializeResult = null
+    this.serverCapabilities = null
+    this.syncMode = 'none'
+    this.syncedDocuments.clear()
+    this.rejectPendingRequests(new Error('LSP client disconnected'))
+    this.workspace.disconnected()
   }
 
   public async shutdown(): Promise<void> {
-    if (!this.transport) return;
+    if (!this.transport) return
 
-    await this.request("shutdown");
-    this.sendNotification("exit");
-    this.disconnect();
+    await this.request('shutdown')
+    this.sendNotification('exit')
+    this.disconnect()
   }
 
   public request<TResult = unknown, TParams = unknown>(
@@ -137,104 +137,104 @@ export class LspClient {
     params?: TParams,
     options: RequestOptions = {},
   ): Promise<TResult> {
-    if (!this.transport) return Promise.reject(new Error("LSP client is not connected"));
-    if (this.state === "ready") return this.requestInner<TResult>(method, params, options);
+    if (!this.transport) return Promise.reject(new Error('LSP client is not connected'))
+    if (this.state === 'ready') return this.requestInner<TResult>(method, params, options)
     return this.awaitInitialization().then(() =>
       this.requestInner<TResult>(method, params, options),
-    );
+    )
   }
 
   public notify<TParams = unknown>(method: string, params?: TParams): Promise<void> {
-    if (!this.transport) return Promise.reject(new Error("LSP client is not connected"));
-    if (this.state === "ready") return this.notifyReady(method, params);
+    if (!this.transport) return Promise.reject(new Error('LSP client is not connected'))
+    if (this.state === 'ready') return this.notifyReady(method, params)
 
-    return this.awaitInitialization().then(() => this.notifyReady(method, params));
+    return this.awaitInitialization().then(() => this.notifyReady(method, params))
   }
 
   public notification<TParams = unknown>(method: string, params?: TParams): Promise<void> {
-    return this.notify(method, params);
+    return this.notify(method, params)
   }
 
   public cancelRequest(params: unknown): void {
-    const pending = this.pendingRequestForParams(params);
-    if (!pending) return;
+    const pending = this.pendingRequestForParams(params)
+    if (!pending) return
 
-    this.trySendNotification("$/cancelRequest", { id: pending.id });
+    this.trySendNotification('$/cancelRequest', { id: pending.id })
   }
 
   public hasCapability(name: keyof lsp.ServerCapabilities): boolean | null {
-    if (!this.serverCapabilities) return null;
-    return Boolean(this.serverCapabilities[name]);
+    if (!this.serverCapabilities) return null
+    return Boolean(this.serverCapabilities[name])
   }
 
   public didOpenDocument(document: LspDocument): void {
-    if (this.state !== "ready") return;
-    if (this.syncMode === "none") return;
-    if (this.syncedDocuments.has(document.uri)) return;
+    if (this.state !== 'ready') return
+    if (this.syncMode === 'none') return
+    if (this.syncedDocuments.has(document.uri)) return
 
-    this.syncedDocuments.add(document.uri);
-    this.trySendNotification("textDocument/didOpen", {
+    this.syncedDocuments.add(document.uri)
+    this.trySendNotification('textDocument/didOpen', {
       textDocument: {
         uri: document.uri,
         languageId: document.languageId,
         version: document.version,
         text: document.text,
       },
-    });
+    })
   }
 
   public didChangeDocument(document: LspDocument, change: LspDocumentChange): void {
-    if (this.state !== "ready") return;
-    if (this.syncMode === "none") return;
-    if (!this.syncedDocuments.has(document.uri)) return;
+    if (this.state !== 'ready') return
+    if (this.syncMode === 'none') return
+    if (!this.syncedDocuments.has(document.uri)) return
 
-    this.trySendNotification("textDocument/didChange", {
+    this.trySendNotification('textDocument/didChange', {
       textDocument: { uri: document.uri, version: document.version },
       contentChanges: this.contentChangesForDocumentChange(document, change),
-    });
+    })
   }
 
   public didCloseDocument(document: LspDocument): void {
-    if (this.state !== "ready") return;
-    if (!this.syncedDocuments.delete(document.uri)) return;
+    if (this.state !== 'ready') return
+    if (!this.syncedDocuments.delete(document.uri)) return
 
-    this.trySendNotification("textDocument/didClose", {
+    this.trySendNotification('textDocument/didClose', {
       textDocument: { uri: document.uri },
-    });
+    })
   }
 
   private async initialize(): Promise<void> {
     try {
       const result = await this.requestInner<lsp.InitializeResult>(
-        "initialize",
+        'initialize',
         this.initializeParams(),
-      );
-      this.applyInitializeResult(result);
-      this.sendNotification("initialized", {});
-      this.workspace.connected();
+      )
+      this.applyInitializeResult(result)
+      this.sendNotification('initialized', {})
+      this.workspace.connected()
     } catch (error) {
-      this.state = "failed";
-      throw error;
+      this.state = 'failed'
+      throw error
     }
   }
 
   private initializeParams(): lsp.InitializeParams {
     return {
       processId: this.config.processId ?? null,
-      clientInfo: this.config.clientInfo ?? { name: "@editor/lsp" },
+      clientInfo: this.config.clientInfo ?? { name: '@editor/lsp' },
       locale: this.config.locale,
       rootUri: this.config.rootUri ?? null,
       capabilities: mergeClientCapabilities(defaultClientCapabilities(), this.config.capabilities),
       initializationOptions: this.config.initializationOptions,
       workspaceFolders: this.config.workspaceFolders ? [...this.config.workspaceFolders] : null,
-    };
+    }
   }
 
   private applyInitializeResult(result: lsp.InitializeResult): void {
-    this.initializeResult = result;
-    this.serverCapabilities = result.capabilities;
-    this.syncMode = documentSyncModeFromCapabilities(result.capabilities);
-    this.state = "ready";
+    this.initializeResult = result
+    this.serverCapabilities = result.capabilities
+    this.syncMode = documentSyncModeFromCapabilities(result.capabilities)
+    this.state = 'ready'
   }
 
   private contentChangesForDocumentChange(
@@ -242,7 +242,7 @@ export class LspClient {
     change: LspDocumentChange,
   ): readonly lsp.TextDocumentContentChangeEvent[] {
     return measureLspPerformance(
-      "lsp.createContentChanges",
+      'lsp.createContentChanges',
       () => this.createContentChanges(document, change),
       () => ({
         syncMode: this.syncMode,
@@ -250,24 +250,24 @@ export class LspClient {
         snapshot: Boolean(change.previousSnapshot),
         length: document.textSnapshot.length,
       }),
-    );
+    )
   }
 
   private createContentChanges(
     document: LspDocument,
     change: LspDocumentChange,
   ): readonly lsp.TextDocumentContentChangeEvent[] {
-    if (this.syncMode === "incremental" && change.previousSnapshot) {
+    if (this.syncMode === 'incremental' && change.previousSnapshot) {
       return createLspContentChangesInSnapshot(change.previousSnapshot, document, {
         incremental: true,
         edits: change.edits,
-      });
+      })
     }
 
-    return createLspContentChanges(change.previousText ?? "", document.text, {
-      incremental: this.syncMode === "incremental",
+    return createLspContentChanges(change.previousText ?? '', document.text, {
+      incremental: this.syncMode === 'incremental',
       edits: change.edits,
-    });
+    })
   }
 
   private requestInner<TResult>(
@@ -275,10 +275,10 @@ export class LspClient {
     params: unknown,
     options: RequestOptions = {},
   ): Promise<TResult> {
-    const transport = this.requireTransport();
-    const id = this.nextRequestId;
-    this.nextRequestId += 1;
-    const message = createRequestMessage(id, method, params);
+    const transport = this.requireTransport()
+    const id = this.nextRequestId
+    this.nextRequestId += 1
+    const message = createRequestMessage(id, method, params)
 
     return new Promise<TResult>((resolve, reject) => {
       const pending = this.createPendingRequest(
@@ -288,10 +288,10 @@ export class LspClient {
         (result) => resolve(result as TResult),
         reject,
         options,
-      );
-      this.pendingRequests.set(id, pending);
-      this.sendMessage(transport, message, pending);
-    });
+      )
+      this.pendingRequests.set(id, pending)
+      this.sendMessage(transport, message, pending)
+    })
   }
 
   private createPendingRequest(
@@ -302,13 +302,13 @@ export class LspClient {
     reject: (error: unknown) => void,
     options: RequestOptions,
   ): PendingRequest {
-    const timeout = setTimeout(() => this.timeoutRequest(id), options.timeoutMs ?? this.timeoutMs);
-    const pending: PendingRequest = { id, method, params, timeout, resolve, reject };
-    if (!options.signal) return pending;
+    const timeout = setTimeout(() => this.timeoutRequest(id), options.timeoutMs ?? this.timeoutMs)
+    const pending: PendingRequest = { id, method, params, timeout, resolve, reject }
+    if (!options.signal) return pending
 
-    const abort = () => this.abortRequest(id);
-    options.signal.addEventListener("abort", abort, { once: true });
-    return { ...pending, abortCleanup: () => options.signal?.removeEventListener("abort", abort) };
+    const abort = () => this.abortRequest(id)
+    options.signal.addEventListener('abort', abort, { once: true })
+    return { ...pending, abortCleanup: () => options.signal?.removeEventListener('abort', abort) }
   }
 
   private sendMessage(
@@ -317,146 +317,146 @@ export class LspClient {
     pending: PendingRequest,
   ): void {
     try {
-      transport.send(JSON.stringify(message));
+      transport.send(JSON.stringify(message))
     } catch (error) {
-      this.deletePendingRequest(pending.id);
-      this.handleTransportSendError(error);
-      pending.reject(error);
+      this.deletePendingRequest(pending.id)
+      this.handleTransportSendError(error)
+      pending.reject(error)
     }
   }
 
   private sendNotification(method: string, params?: unknown): void {
-    const transport = this.requireTransport();
+    const transport = this.requireTransport()
     try {
-      transport.send(JSON.stringify(createNotificationMessage(method, params)));
+      transport.send(JSON.stringify(createNotificationMessage(method, params)))
     } catch (error) {
-      this.handleTransportSendError(error);
-      throw error;
+      this.handleTransportSendError(error)
+      throw error
     }
   }
 
   private notifyReady(method: string, params?: unknown): Promise<void> {
     try {
-      this.sendNotification(method, params);
-      return Promise.resolve();
+      this.sendNotification(method, params)
+      return Promise.resolve()
     } catch (error) {
-      return Promise.reject(error);
+      return Promise.reject(error)
     }
   }
 
   private trySendNotification(method: string, params?: unknown): boolean {
     try {
-      this.sendNotification(method, params);
-      return true;
+      this.sendNotification(method, params)
+      return true
     } catch {
-      return false;
+      return false
     }
   }
 
   private receiveMessage(message: string): void {
-    const parsed = JSON.parse(message) as unknown;
+    const parsed = JSON.parse(message) as unknown
     if (isResponseMessage(parsed)) {
-      this.handleResponse(parsed);
-      return;
+      this.handleResponse(parsed)
+      return
     }
     if (isNotificationMessage(parsed)) {
-      this.handleNotification(parsed);
-      return;
+      this.handleNotification(parsed)
+      return
     }
     if (isRequestMessage(parsed)) {
-      this.handleRequest(parsed);
+      this.handleRequest(parsed)
     }
   }
 
   private handleResponse(message: lsp.ResponseMessage): void {
-    if (message.id === null) return;
+    if (message.id === null) return
 
-    const pending = this.pendingRequests.get(message.id);
-    if (!pending) return;
+    const pending = this.pendingRequests.get(message.id)
+    if (!pending) return
 
-    this.deletePendingRequest(message.id);
+    this.deletePendingRequest(message.id)
     try {
-      pending.resolve(responseResult(message));
+      pending.resolve(responseResult(message))
     } catch (error) {
-      pending.reject(error);
+      pending.reject(error)
     }
   }
 
   private handleNotification(message: lsp.NotificationMessage): void {
-    const handler = this.config.notificationHandlers?.[message.method];
-    if (handler?.(this, message.params, message)) return;
-    if (defaultNotificationHandler(this, message)) return;
-    this.config.unhandledNotification?.(this, message.method, message.params, message);
+    const handler = this.config.notificationHandlers?.[message.method]
+    if (handler?.(this, message.params, message)) return
+    if (defaultNotificationHandler(this, message)) return
+    this.config.unhandledNotification?.(this, message.method, message.params, message)
   }
 
   private handleRequest(message: lsp.RequestMessage): void {
-    const transport = this.requireTransport();
-    const id = message.id ?? null;
+    const transport = this.requireTransport()
+    const id = message.id ?? null
     try {
-      transport.send(JSON.stringify(createMethodNotFoundResponse(id, message.method)));
+      transport.send(JSON.stringify(createMethodNotFoundResponse(id, message.method)))
     } catch (error) {
-      this.handleTransportSendError(error);
+      this.handleTransportSendError(error)
     }
   }
 
   private timeoutRequest(id: LspRequestId): void {
-    const pending = this.pendingRequests.get(id);
-    if (!pending) return;
+    const pending = this.pendingRequests.get(id)
+    if (!pending) return
 
-    this.deletePendingRequest(id);
-    pending.reject(new Error(`LSP request timed out: ${pending.method}`));
+    this.deletePendingRequest(id)
+    pending.reject(new Error(`LSP request timed out: ${pending.method}`))
   }
 
   private abortRequest(id: LspRequestId): void {
-    const pending = this.pendingRequests.get(id);
-    if (!pending) return;
+    const pending = this.pendingRequests.get(id)
+    if (!pending) return
 
-    this.trySendNotification("$/cancelRequest", { id });
-    this.deletePendingRequest(id);
-    pending.reject(new LspRequestCancelledError());
+    this.trySendNotification('$/cancelRequest', { id })
+    this.deletePendingRequest(id)
+    pending.reject(new LspRequestCancelledError())
   }
 
   private pendingRequestForParams(params: unknown): PendingRequest | null {
     for (const pending of this.pendingRequests.values()) {
-      if (pending.params === params) return pending;
+      if (pending.params === params) return pending
     }
 
-    return null;
+    return null
   }
 
   private deletePendingRequest(id: LspRequestId): void {
-    const pending = this.pendingRequests.get(id);
-    if (!pending) return;
+    const pending = this.pendingRequests.get(id)
+    if (!pending) return
 
-    clearTimeout(pending.timeout);
-    pending.abortCleanup?.();
-    this.pendingRequests.delete(id);
+    clearTimeout(pending.timeout)
+    pending.abortCleanup?.()
+    this.pendingRequests.delete(id)
   }
 
   private rejectPendingRequests(error: Error): void {
     for (const pending of this.pendingRequests.values()) {
-      clearTimeout(pending.timeout);
-      pending.abortCleanup?.();
-      pending.reject(error);
+      clearTimeout(pending.timeout)
+      pending.abortCleanup?.()
+      pending.reject(error)
     }
 
-    this.pendingRequests.clear();
+    this.pendingRequests.clear()
   }
 
   private handleTransportSendError(_error: unknown): void {
-    if (!this.transport) return;
+    if (!this.transport) return
 
-    this.disconnect();
+    this.disconnect()
   }
 
   private awaitInitialization(): Promise<void> {
-    if (this.initializePromise) return this.initializePromise;
-    return Promise.reject(new Error("LSP client is not initialized"));
+    if (this.initializePromise) return this.initializePromise
+    return Promise.reject(new Error('LSP client is not initialized'))
   }
 
   private requireTransport(): LspTransport {
-    if (this.transport) return this.transport;
-    throw new Error("LSP client is not connected");
+    if (this.transport) return this.transport
+    throw new Error('LSP client is not connected')
   }
 }
 
@@ -464,42 +464,42 @@ const defaultNotificationHandler = (
   _client: LspClient,
   message: lsp.NotificationMessage,
 ): boolean => {
-  if (message.method === "window/logMessage") return handleWindowLogMessage(message.params);
-  if (message.method === "window/showMessage") return handleWindowShowMessage(message.params);
-  return false;
-};
+  if (message.method === 'window/logMessage') return handleWindowLogMessage(message.params)
+  if (message.method === 'window/showMessage') return handleWindowShowMessage(message.params)
+  return false
+}
 
 const handleWindowLogMessage = (params: unknown): boolean => {
-  const message = messageText(params);
-  if (!message) return true;
+  const message = messageText(params)
+  if (!message) return true
 
-  const type = messageType(params);
-  if (type === 1) console.error(`[lsp] ${message}`);
-  else if (type === 2) console.warn(`[lsp] ${message}`);
-  else console.info(`[lsp] ${message}`);
-  return true;
-};
+  const type = messageType(params)
+  if (type === 1) console.error(`[lsp] ${message}`)
+  else if (type === 2) console.warn(`[lsp] ${message}`)
+  else console.info(`[lsp] ${message}`)
+  return true
+}
 
 const handleWindowShowMessage = (params: unknown): boolean => {
-  const message = messageText(params);
-  if (!message) return true;
+  const message = messageText(params)
+  if (!message) return true
 
-  const type = messageType(params);
-  if (type === 1) console.error(`[lsp] ${message}`);
-  else if (type === 2) console.warn(`[lsp] ${message}`);
-  else console.info(`[lsp] ${message}`);
-  return true;
-};
+  const type = messageType(params)
+  if (type === 1) console.error(`[lsp] ${message}`)
+  else if (type === 2) console.warn(`[lsp] ${message}`)
+  else console.info(`[lsp] ${message}`)
+  return true
+}
 
 const messageText = (params: unknown): string | null => {
-  if (!isRecord(params)) return null;
-  return typeof params.message === "string" ? params.message : null;
-};
+  if (!isRecord(params)) return null
+  return typeof params.message === 'string' ? params.message : null
+}
 
 const messageType = (params: unknown): number => {
-  if (!isRecord(params)) return 3;
-  return typeof params.type === "number" ? params.type : 3;
-};
+  if (!isRecord(params)) return 3
+  return typeof params.type === 'number' ? params.type : 3
+}
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+  typeof value === 'object' && value !== null && !Array.isArray(value)

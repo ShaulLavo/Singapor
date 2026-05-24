@@ -412,9 +412,7 @@ describe("token projection", () => {
       end: (tokenCount - 1) * 2 + 2,
       style,
     });
-    expect(getEditorTokenIndex(projected)?.maxEnds[tokenCount - 1]).toBe(
-      (tokenCount - 1) * 2 + 2,
-    );
+    expect(getEditorTokenIndex(projected)?.maxEnds[tokenCount - 1]).toBe((tokenCount - 1) * 2 + 2);
   });
 
   it("does not slice prefix maxEnds for lazy indexed projections", () => {
