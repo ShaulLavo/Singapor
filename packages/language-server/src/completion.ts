@@ -1,4 +1,5 @@
-import type { DocumentSessionChange, EditorSelectionRange, TextEdit } from '@editor/core'
+import type { DocumentSessionChange, TextEdit } from '@editor/core/document'
+import type { EditorSelectionRange } from '@editor/core/extensions'
 import { lspPositionToOffset } from '@editor/lsp'
 import type * as lsp from 'vscode-languageserver-protocol'
 

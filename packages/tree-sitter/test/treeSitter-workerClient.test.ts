@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createPieceTableSnapshot } from '@editor/core'
+import { createPieceTableSnapshot } from '@editor/core/document'
 import type { TreeSitterLanguageDescriptor } from '../src'
 import type {
   TreeSitterParseRequest,

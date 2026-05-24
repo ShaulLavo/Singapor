@@ -4,19 +4,16 @@ import {
   createLineGutterContribution,
 } from '../../gutters/src/index.ts'
 import { projectTokensThroughEdit } from '../src/editor/tokenProjection'
+import { createPieceTableSnapshot, type TextSnapshot } from '../src/public/document'
+import { type EditorToken, treeSitterCapturesToEditorTokens } from '../src/public/syntax'
+import type { VirtualizedFoldMarker } from '../src/public/rendering'
+import type { EditorGutterRowContext } from '../src/public/extensions'
+import { createFoldMap } from '../src/foldMap'
 import {
-  createFoldMap,
-  createPieceTableSnapshot,
   clearBrowserTextMetricsCache,
   measureBrowserTextMetrics,
-  treeSitterCapturesToEditorTokens,
-  VirtualizedTextView,
-  type EditorToken,
-  type EditorGutterRowContext,
-  type TextSnapshot,
-  type VirtualizedFoldMarker,
-  type VirtualizedTextHighlightRegistry,
-} from '../src'
+} from '../src/virtualization/browserMetrics'
+import { type VirtualizedTextHighlightRegistry, VirtualizedTextView } from '../src/virtualization'
 
 const highlightsMap = new Map<string, Highlight>()
 let registrySets = 0

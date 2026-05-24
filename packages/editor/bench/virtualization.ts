@@ -1,7 +1,8 @@
 import { performance } from 'node:perf_hooks'
 import { Window } from 'happy-dom'
 
-import { VirtualizedTextView, type VirtualizedFoldMarker } from '../src'
+import type { VirtualizedFoldMarker } from '../src/public/rendering'
+import { VirtualizedTextView } from '../src/virtualization'
 
 type Sample = {
   readonly name: string

@@ -1,4 +1,8 @@
-import type { EditorGutterContribution, EditorGutterRowContext, EditorPlugin } from '@editor/core'
+import type {
+  EditorGutterContribution,
+  EditorGutterRowContext,
+  EditorPlugin,
+} from '@editor/core/extensions'
 import { normalizeNonNegativeNumber, normalizePositiveInteger, setElementHidden } from './utils'
 import './lineGutter.css'
 

@@ -1,9 +1,5 @@
-import type {
-  EditorSyntaxLanguageId,
-  EditorSyntaxProvider,
-  EditorTheme,
-  EditorToken,
-} from '@editor/core'
+import type { EditorSyntaxLanguageId, EditorSyntaxProvider, EditorToken } from '@editor/core/syntax'
+import type { EditorTheme } from '@editor/core/rendering'
 import type { ResizablePaneHandleContext } from '@editor/panes'
 
 export type DiffViewMode = 'split' | 'stacked'

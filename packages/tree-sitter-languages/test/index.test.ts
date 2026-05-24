@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { createPieceTableSnapshot, type EditorPluginContext } from '@editor/core'
+import { createPieceTableSnapshot } from '@editor/core/document'
+import type { EditorPluginContext } from '@editor/core/extensions'
 import type { TreeSitterLanguageAssets, TreeSitterLanguageContribution } from '@editor/tree-sitter'
 import {
   JAVASCRIPT_TREE_SITTER_LANGUAGE,

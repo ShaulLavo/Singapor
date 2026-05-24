@@ -6,7 +6,7 @@ import {
   createPieceTableSnapshot,
   getPieceTableText,
   insertIntoPieceTable,
-} from '@editor/core'
+} from '@editor/core/document'
 import {
   createTreeSitterSourceDescriptor,
   readTreeSitterInputRange,

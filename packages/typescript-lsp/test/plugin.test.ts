@@ -1,17 +1,15 @@
+import type { EditorCommandId } from '@editor/core/editor'
+import type { DocumentSessionChange, TextEdit, TextSnapshot } from '@editor/core/document'
 import type {
-  DocumentSessionChange,
-  EditorCommandId,
+  EditorCommandHandler,
   EditorFeatureContributionContext,
   EditorMinimapFeature,
   EditorPluginContext,
-  EditorCommandHandler,
   EditorViewContributionContext,
   EditorViewContributionProvider,
   EditorViewSnapshot,
-  TextEdit,
-  TextSnapshot,
-} from '@editor/core'
-import { EDITOR_MINIMAP_FEATURE_ID } from '@editor/core'
+} from '@editor/core/extensions'
+import { EDITOR_MINIMAP_FEATURE_ID } from '@editor/core/extensions'
 import type { LspWebSocketLike, LspWorkerLike } from '@editor/lsp'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTypeScriptLspPlugin, type TypeScriptLspDiagnosticSummary } from '../src'

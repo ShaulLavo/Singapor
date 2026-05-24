@@ -1,9 +1,9 @@
+import type { DocumentSessionChange } from '@editor/core/document'
 import type {
-  DocumentSessionChange,
   EditorViewContributionContext,
   EditorViewContributionUpdateKind,
   EditorViewSnapshot,
-} from '@editor/core'
+} from '@editor/core/extensions'
 import { offsetToLspPosition, type LspClient } from '@editor/lsp'
 import type * as lsp from 'vscode-languageserver-protocol'
 

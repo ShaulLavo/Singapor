@@ -1,4 +1,4 @@
-import { applyEditorTheme, type EditorTheme } from '@editor/core'
+import { applyEditorTheme, type EditorTheme } from '@editor/core/rendering'
 import remarkGfm from 'remark-gfm'
 import remarkParse from 'remark-parse'
 import remarkStringify from 'remark-stringify'

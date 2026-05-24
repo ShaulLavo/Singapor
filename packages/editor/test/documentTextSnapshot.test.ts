@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { createDocumentTextSnapshot, createPieceTableSnapshot } from '../src'
+import { createDocumentTextSnapshot, createPieceTableSnapshot } from '../src/public/document'
 
 type Diagnostic = {
   readonly name: string

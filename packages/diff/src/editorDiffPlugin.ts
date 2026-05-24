@@ -6,7 +6,7 @@ import type {
   EditorGutterRowContext,
   EditorInjectedTextRow,
   EditorPlugin,
-} from '@editor/core'
+} from '@editor/core/extensions'
 import { createLiveDiffProjection, type LiveDiffProjection } from './liveProjection'
 import { createTextDiff } from './model'
 import {

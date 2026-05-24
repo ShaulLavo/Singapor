@@ -1,21 +1,25 @@
 import { describe, expect, it } from 'vitest'
 import {
-  applyTextToSelections,
-  backspaceSelections,
-  commitEditorHistory,
-  createAnchorSelection,
-  createEditorHistory,
   createPieceTableSnapshot,
-  createSelectionSet,
-  deleteSelections,
   deleteFromPieceTable,
   getPieceTableText,
+} from '../src/public/document'
+import {
+  applyTextToSelections,
+  backspaceSelections,
+  createAnchorSelection,
+  createSelectionSet,
+  deleteSelections,
   normalizeSelectionSet,
-  redoEditorHistory,
   resolveSelection,
   SelectionGoal,
+} from '../src/selections'
+import {
+  commitEditorHistory,
+  createEditorHistory,
+  redoEditorHistory,
   undoEditorHistory,
-} from '../src'
+} from '../src/history'
 
 describe('selections', () => {
   it('creates anchor-backed selections with resolved anchor and head offsets', () => {

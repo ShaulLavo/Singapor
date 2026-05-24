@@ -5,7 +5,7 @@ import {
   createLineGutterContribution,
 } from '../../gutters/src/index.ts'
 
-import { VirtualizedTextView } from '../src'
+import { VirtualizedTextView } from '../src/virtualization'
 import { projectTokensThroughEdit } from '../src/editor/tokenProjection'
 
 describe.skipIf(typeof globalThis.Highlight === 'undefined')(

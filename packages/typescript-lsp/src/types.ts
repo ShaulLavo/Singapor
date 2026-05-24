@@ -1,4 +1,4 @@
-import type { EditorPlugin } from '@editor/core'
+import type { EditorPlugin } from '@editor/core/extensions'
 import type { LspWebSocketTransportOptions, LspWorkerLike } from '@editor/lsp'
 import type ts from 'typescript'
 import type * as lsp from 'vscode-languageserver-protocol'

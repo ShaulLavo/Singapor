@@ -1,18 +1,23 @@
 import { describe, expect, it } from 'vitest'
 
+import * as core from '@editor/core'
+import { createPieceTableSnapshot, getPieceTableText, type TextEdit } from '@editor/core/document'
+import { Editor } from '@editor/core/editor'
+import { EDITOR_MINIMAP_FEATURE_ID, type EditorPluginContext } from '@editor/core/extensions'
+import { applyEditorTheme, type EditorTheme } from '@editor/core/rendering'
+import { createEmptySyntaxResult, treeSitterCapturesToEditorTokens } from '@editor/core/syntax'
+import { EditorPluginHost } from '@editor/core/testing'
+import { debugPieceTable } from '@editor/core/debug'
+import { VirtualizedTextView } from '@editor/core/internal'
 import {
   createMergeConflictDocumentText,
-  createPieceTableSnapshot,
-  Editor,
-  getPieceTableText,
   parseMergeConflicts,
   type EditorState,
   type MergeConflictRegion,
-  type TextEdit,
-} from '../src/index.ts'
+} from '@editor/core'
 
 describe('public API facade', () => {
-  it('exports editor and piece-table entrypoints from the package root', () => {
+  it('exports reviewed root entrypoints without internal debug surfaces', () => {
     const snapshot = createPieceTableSnapshot('abc')
     const edit: TextEdit = { from: 1, to: 2, text: 'B' }
     const state = { documentId: null } as EditorState
@@ -31,5 +36,26 @@ describe('public API facade', () => {
     expect(edit).toEqual({ from: 1, to: 2, text: 'B' })
     expect({ index: 0 } as MergeConflictRegion).toMatchObject({ index: 0 })
     expect(state.documentId).toBeNull()
+    expect('debugPieceTable' in core).toBe(false)
+    expect('VirtualizedTextView' in core).toBe(false)
+    expect('EditorPluginHost' in core).toBe(false)
+    expect('defineLazyTextProperty' in core).toBe(false)
+    expect('createAnchorSelection' in core).toBe(false)
+  })
+
+  it('exposes named category entrypoints for public, test, internal, and debug consumers', () => {
+    const host = new EditorPluginHost([])
+    const syntax = createEmptySyntaxResult()
+    const theme: EditorTheme = { foregroundColor: 'red' }
+
+    expect(EDITOR_MINIMAP_FEATURE_ID).toBe('editor.minimap')
+    expect(applyEditorTheme).toBeTypeOf('function')
+    expect(theme.foregroundColor).toBe('red')
+    expect(treeSitterCapturesToEditorTokens([])).toEqual([])
+    expect(syntax.tokens).toEqual([])
+    expect(debugPieceTable(createPieceTableSnapshot('abc')).length).toBeGreaterThan(0)
+    expect(VirtualizedTextView).toBeTypeOf('function')
+    expect({} as EditorPluginContext).toMatchObject({})
+    host.dispose()
   })
 })

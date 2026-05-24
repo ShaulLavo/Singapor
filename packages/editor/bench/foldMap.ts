@@ -1,16 +1,18 @@
 import { performance } from 'node:perf_hooks'
 
 import {
-  bufferPointToFoldPoint,
-  createFoldMap,
   createPieceTableSnapshot,
-  foldPointToBufferPoint,
   insertIntoPieceTable,
-  type FoldMap,
-  type FoldPoint,
   type PieceTableSnapshot,
   type Point,
-} from '../src'
+} from '../src/public/document'
+import {
+  bufferPointToFoldPoint,
+  createFoldMap,
+  type FoldMap,
+  type FoldPoint,
+  foldPointToBufferPoint,
+} from '../src/foldMap'
 import type { FoldRange } from '../src/syntax'
 
 type Sample = {

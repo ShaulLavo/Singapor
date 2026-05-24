@@ -1,4 +1,4 @@
-import type { VirtualizedTextView, VirtualizedTextViewState } from '@editor/core'
+import type { VirtualizedTextView, VirtualizedTextViewState } from '@editor/core/internal'
 import {
   diffGutterColor,
   diffGutterIndicatorColor,

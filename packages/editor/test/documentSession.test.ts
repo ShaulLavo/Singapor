@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   createDocumentSession,
-  getPieceTableText,
-  resolveSelection,
   type DocumentSession,
-} from '../src'
+  getPieceTableText,
+} from '../src/public/document'
+import { resolveSelection } from '../src/selections'
 
 function resolvedOffsets(session: DocumentSession): { start: number; end: number } {
   const selection = session.getSelections().selections[0]!

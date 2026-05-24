@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { EditorPluginContext } from '@editor/core'
+import type { EditorPluginContext } from '@editor/core/extensions'
 import {
   createFoldGutterContribution,
   createFoldGutterPlugin,

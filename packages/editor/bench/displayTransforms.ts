@@ -1,12 +1,8 @@
 import { performance } from 'node:perf_hooks'
 
-import {
-  createDisplayRows,
-  createFoldMap,
-  createPieceTableSnapshot,
-  foldPointToBufferPoint,
-  type BlockRow,
-} from '../src'
+import { createPieceTableSnapshot } from '../src/public/document'
+import { type BlockRow, createDisplayRows } from '../src/displayTransforms'
+import { createFoldMap, foldPointToBufferPoint } from '../src/foldMap'
 import { computeLineStarts } from '../src/virtualization/virtualizedTextViewHelpers'
 
 type TransformSample = {

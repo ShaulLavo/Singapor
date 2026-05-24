@@ -1,5 +1,5 @@
+import type { DocumentSessionChange } from '@editor/core/document'
 import type {
-  DocumentSessionChange,
   EditorDisposable,
   EditorFeatureContribution,
   EditorFeatureContributionContext,
@@ -10,8 +10,8 @@ import type {
   EditorViewContributionContext,
   EditorViewContributionUpdateKind,
   EditorViewSnapshot,
-} from '@editor/core'
-import { EDITOR_MINIMAP_FEATURE_ID } from '@editor/core'
+} from '@editor/core/extensions'
+import { EDITOR_MINIMAP_FEATURE_ID } from '@editor/core/extensions'
 import { resolveMinimapOptions } from './options'
 import type { EditorMinimapOptions, ResolvedMinimapOptions } from './types'
 import { canUseMinimapWorker, MinimapWorkerClient, type MinimapHost } from './workerClient'

@@ -1,9 +1,9 @@
+import type { TextEdit } from '@editor/core/document'
 import type {
   EditorMinimapDecoration as CoreEditorMinimapDecoration,
   EditorMinimapDecorationPosition as CoreEditorMinimapDecorationPosition,
   EditorMinimapSectionHeaderStyle as CoreEditorMinimapSectionHeaderStyle,
-  TextEdit,
-} from '@editor/core'
+} from '@editor/core/extensions'
 
 export const enum RenderMinimap {
   None = 0,

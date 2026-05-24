@@ -4,7 +4,7 @@ import type {
   EditorFeatureContributionContext,
   EditorPlugin,
   EditorResolvedSelection,
-} from '@editor/core'
+} from '@editor/core/extensions'
 import type { EditorFindOptions } from './types'
 import {
   EditorFindController,

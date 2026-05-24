@@ -1,4 +1,4 @@
-import type { DocumentSessionChange, TextEdit } from '@editor/core'
+import type { DocumentSessionChange, TextEdit } from '@editor/core/document'
 import {
   lspPositionToOffset,
   lspPositionToOffsetInSnapshot,

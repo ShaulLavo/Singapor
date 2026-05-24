@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type {
   EditorPluginContext,
-  EditorViewContributionProvider,
   EditorViewContributionContext,
+  EditorViewContributionProvider,
   EditorViewSnapshot,
-} from '@editor/core'
+} from '@editor/core/extensions'
 import { createMinimapPlugin } from '../src/plugin'
 
 describe('createMinimapPlugin', () => {

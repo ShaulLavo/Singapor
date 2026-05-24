@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  blockPointToBufferPoint,
+  type BlockRow,
   bufferColumnToVisualColumn,
   bufferPointToTabPoint,
-  blockPointToBufferPoint,
   createDisplayRows,
   createWrapMap,
+  type InjectedTextRow,
   tabPointToBufferPoint,
   tabPointToWrapPoint,
   visualColumnToBufferColumn,
   wrapPointToTabPoint,
-  type BlockRow,
-  type InjectedTextRow,
-} from '../src'
+} from '../src/displayTransforms'
 import { computeLineStarts } from '../src/virtualization/virtualizedTextViewHelpers'
 
 describe('display transform core', () => {

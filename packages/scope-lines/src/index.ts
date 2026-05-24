@@ -1,3 +1,5 @@
+import type { TextSnapshot } from '@editor/core/document'
+import type { VirtualizedFoldMarker } from '@editor/core/rendering'
 import type {
   EditorPlugin,
   EditorViewContribution,
@@ -5,11 +7,9 @@ import type {
   EditorViewContributionUpdateKind,
   EditorViewSnapshot,
   EditorVisibleRowSnapshot,
-  TextSnapshot,
-  VirtualizedFoldMarker,
-} from '@editor/core'
-import { createStringTextSnapshot } from '@editor/core'
-import type { DocumentSessionChange } from '@editor/core'
+} from '@editor/core/extensions'
+import { createStringTextSnapshot } from '@editor/core/document'
+import type { DocumentSessionChange } from '@editor/core/document'
 import './style.css'
 
 export type ScopeLinesPluginOptions = {

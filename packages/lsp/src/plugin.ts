@@ -1,13 +1,13 @@
+import type { DocumentSessionChange, TextSnapshot } from '@editor/core/document'
 import type {
-  DocumentSessionChange,
   EditorPlugin,
   EditorViewContribution,
   EditorViewContributionContext,
   EditorViewContributionUpdateKind,
   EditorViewSnapshot,
-  TextSnapshot,
-} from '@editor/core'
-import { createStringTextSnapshot, defineLazyTextProperty } from '@editor/core'
+} from '@editor/core/extensions'
+import { createStringTextSnapshot } from '@editor/core/document'
+import { defineLazyTextProperty } from '@editor/core/internal'
 import type * as lsp from 'vscode-languageserver-protocol'
 import { LspClient, type LspClientConfig } from './client'
 import type { LspTextEdit } from './types'

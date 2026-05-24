@@ -1,4 +1,4 @@
-import type { TextEdit } from '@editor/core'
+import type { TextEdit } from '@editor/core/document'
 import { parseCssColor, relativeLuminance, rgbaToCss, transparent } from './color'
 import {
   computeFrameLayout,

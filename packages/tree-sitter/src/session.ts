@@ -1,18 +1,20 @@
 import {
   applyBatchToPieceTable,
   createDocumentTextSnapshot,
-  documentSessionChangeTextSnapshot,
-  offsetToPoint,
-  pieceTableSnapshotsHaveSameText,
-  treeSitterCapturesToEditorTokens,
   type DocumentSessionChange,
   type DocumentTextSnapshot,
+  offsetToPoint,
+  type PieceTableSnapshot,
+  pieceTableSnapshotsHaveSameText,
+  type TextEdit,
+} from '@editor/core/document'
+import {
+  type EditorSyntaxRange,
   type EditorSyntaxResult,
   type EditorSyntaxSession,
-  type EditorSyntaxRange,
-  type PieceTableSnapshot,
-  type TextEdit,
-} from '@editor/core'
+  treeSitterCapturesToEditorTokens,
+} from '@editor/core/syntax'
+import { documentSessionChangeTextSnapshot } from '@editor/core/internal'
 import type {
   TreeSitterInputEdit,
   TreeSitterLanguageId,

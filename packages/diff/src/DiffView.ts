@@ -1,10 +1,10 @@
-import {
-  createPieceTableSnapshot,
-  VirtualizedTextView,
-  type EditorToken,
-  type VirtualizedTextHighlightRange,
-  type VirtualizedTextRowDecoration,
-} from '@editor/core'
+import { createPieceTableSnapshot } from '@editor/core/document'
+import type { EditorToken } from '@editor/core/syntax'
+import type {
+  VirtualizedTextHighlightRange,
+  VirtualizedTextRowDecoration,
+} from '@editor/core/rendering'
+import { VirtualizedTextView } from '@editor/core/internal'
 import { ResizablePaneGroup, type ResizablePaneLayout } from '@editor/panes'
 import { createDiffCanvasGutterRenderer, type DiffCanvasGutterRenderer } from './canvasGutter'
 import { diffGutterWidth } from './gutters'

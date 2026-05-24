@@ -1,4 +1,4 @@
-import type { VirtualizedTextHighlightStyle } from '@editor/core'
+import type { VirtualizedTextHighlightStyle } from '@editor/core/rendering'
 
 import type { LanguageServerDiagnosticSeverity } from './diagnostics'
 

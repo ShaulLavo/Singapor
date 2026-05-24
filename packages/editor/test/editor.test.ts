@@ -2,33 +2,36 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { detectPlatform } from '@tanstack/hotkeys'
 import { createEditorFindPlugin } from '../../find/src/index.ts'
 import { createFoldGutterPlugin, createLineGutterPlugin } from '../../gutters/src/index.ts'
+import { createMergeConflictPlugin, Editor, type EditorState } from '../src/editor'
+import { createDocumentSession, type DocumentSessionChange } from '../src/public/document'
+import type {
+  EditorSyntaxRange,
+  EditorSyntaxResult,
+  EditorSyntaxSession,
+  EditorSyntaxSessionOptions,
+} from '../src/public/syntax'
+import type {
+  EditorBlock,
+  EditorBlockAnchor,
+  EditorBlockMountContext,
+  EditorBlockProviderContext,
+  EditorTheme,
+} from '../src/public/rendering'
+import type {
+  EditorFeatureContributionContext,
+  EditorHighlighterSession,
+  EditorHighlightResult,
+  EditorPlugin,
+  EditorViewContributionContext,
+  EditorViewContributionUpdateKind,
+  EditorViewSnapshot,
+} from '../src/public/extensions'
 import {
-  createDocumentSession,
-  createMergeConflictPlugin,
-  Editor,
   resetEditorInstanceCount,
-  resolveSelection,
   setEditorSyntaxSessionFactory,
   setHighlightRegistry,
-  type EditorBlock,
-  type EditorBlockAnchor,
-  type EditorBlockMountContext,
-  type DocumentSessionChange,
-  type EditorBlockProviderContext,
-  type EditorFeatureContributionContext,
-  type EditorHighlightResult,
-  type EditorHighlighterSession,
-  type EditorPlugin,
-  type EditorTheme,
-  type EditorViewContributionContext,
-  type EditorViewContributionUpdateKind,
-  type EditorViewSnapshot,
-  type EditorState,
-  type EditorSyntaxResult,
-  type EditorSyntaxRange,
-  type EditorSyntaxSession,
-  type EditorSyntaxSessionOptions,
-} from '../src'
+} from '../src/public/testing'
+import { resolveSelection } from '../src/selections'
 
 // Mock HighlightRegistry backed by a Map, used to assert highlight state.
 const highlightsMap = new Map<string, Highlight>()

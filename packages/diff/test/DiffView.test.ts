@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import type { EditorTheme } from '@editor/core'
+import type { EditorTheme } from '@editor/core/rendering'
 import { createTextDiff, DiffView } from '../src'
 import { diffSyntaxBackend, projectDiffSyntaxTokens } from '../src/DiffView'
 import type {

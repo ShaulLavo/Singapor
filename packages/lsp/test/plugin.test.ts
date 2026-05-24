@@ -1,11 +1,10 @@
+import type { DocumentSessionChange, TextEdit } from '@editor/core/document'
 import type {
-  DocumentSessionChange,
   EditorPluginContext,
   EditorViewContributionContext,
   EditorViewContributionProvider,
   EditorViewSnapshot,
-  TextEdit,
-} from '@editor/core'
+} from '@editor/core/extensions'
 import { describe, expect, it } from 'vitest'
 
 import { createLspPlugin, type LspWebSocketLike } from '../src/index.ts'

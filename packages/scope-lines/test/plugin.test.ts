@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { TextSnapshot } from '@editor/core/document'
+import type { VirtualizedFoldMarker } from '@editor/core/rendering'
 import type {
   EditorPluginContext,
   EditorViewContributionContext,
   EditorViewContributionProvider,
   EditorViewSnapshot,
-  TextSnapshot,
-  VirtualizedFoldMarker,
-} from '@editor/core'
+} from '@editor/core/extensions'
 import { createScopeLinesPlugin } from '../src/index'
 
 describe('createScopeLinesPlugin', () => {

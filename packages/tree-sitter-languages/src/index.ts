@@ -1,7 +1,7 @@
 // oxlint-disable-next-line typescript-eslint/triple-slash-reference
 /// <reference path="./vite-assets.d.ts" />
 import { createTreeSitterLanguagePlugin } from '@editor/tree-sitter'
-import type { EditorPlugin } from '@editor/core'
+import type { EditorPlugin } from '@editor/core/extensions'
 import type {
   TreeSitterLanguageAssets,
   TreeSitterLanguageContribution,

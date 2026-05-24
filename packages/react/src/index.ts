@@ -1,28 +1,27 @@
 import {
   Editor,
-  type DocumentSession,
-  type DocumentSessionChange,
   type EditorChangeHandler,
   type EditorCommandContext,
-  type EditorDocumentMode,
   type EditorCommandId,
+  type EditorDocumentMode,
   type EditorEditInput,
   type EditorEditOptions,
   type EditorOpenDocumentOptions,
   type EditorOptions,
   type EditorRangeDecoration,
-  type EditorSelectionRevealTarget,
-  type EditorPlugin,
   type EditorScrollPosition,
+  type EditorSelectionRevealTarget,
   type EditorSetTextOptions,
   type EditorState,
-  type EditorSyntaxLanguageId,
-  type EditorTheme,
-  type EditorViewContributionUpdateKind,
-  type EditorViewSnapshot,
-  type HiddenCharactersMode,
-  type TextSnapshot,
-} from '@editor/core'
+} from '@editor/core/editor'
+import type { DocumentSession, DocumentSessionChange, TextSnapshot } from '@editor/core/document'
+import type { EditorSyntaxLanguageId } from '@editor/core/syntax'
+import type { EditorTheme, HiddenCharactersMode } from '@editor/core/rendering'
+import type {
+  EditorPlugin,
+  EditorViewContributionUpdateKind,
+  EditorViewSnapshot,
+} from '@editor/core/extensions'
 import {
   createElement,
   useCallback,

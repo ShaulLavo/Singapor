@@ -1,16 +1,18 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  bufferPointToFoldPoint,
   applyBatchToPieceTable,
-  createFoldMap,
   createPieceTableSnapshot,
   deleteFromPieceTable,
-  foldPointToBufferPoint,
   offsetToPoint,
   resolveAnchor,
+} from '../src/public/document'
+import {
+  bufferPointToFoldPoint,
+  createFoldMap,
+  foldPointToBufferPoint,
   updateFoldMapForEdit,
-} from '../src'
+} from '../src/foldMap'
 import type { FoldRange } from '../src/syntax'
 
 describe('FoldMap', () => {

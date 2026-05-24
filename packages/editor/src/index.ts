@@ -1,25 +1,42 @@
 export {
+  createMergeConflictDocumentText,
+  createMergeConflictPlugin,
   Editor,
-  observeEditorMountTiming,
-  resetEditorInstanceCount,
-  setEditorSyntaxSessionFactory,
-  setHighlightRegistry,
+  EDITOR_MERGE_CONFLICT_FEATURE_ID,
+  parseMergeConflicts,
+  resolveMergeConflict,
 } from './editor'
-export * from './documentSession'
-export * from './documentTextSnapshot'
-export * from './displayTransforms'
-export * from './foldMap'
-export * from './history'
-export * from './mergeConflicts'
-export * from './mergeConflictPlugin'
-export * from './editorBlocks'
-export * from './pieceTable'
-export * from './plugins'
-export * from './selections'
-export * from './syntax'
-export * from './theme'
-export * from './virtualization'
-export type { EditorCommandContext, EditorCommandId } from './editor/commands'
+export {
+  Anchor,
+  anchorAfter,
+  anchorAt,
+  anchorBefore,
+  applyBatchToPieceTable,
+  createDocumentSession,
+  createDocumentTextSnapshot,
+  createPieceTableSnapshot,
+  createStaticDocumentSession,
+  createStringTextSnapshot,
+  deleteFromPieceTable,
+  forEachPieceTableTextChunk,
+  getPieceTableLength,
+  getPieceTableText,
+  insertIntoPieceTable,
+  offsetToPoint,
+  pieceTableSnapshotsHaveSameText,
+  pointToOffset,
+  resolveAnchor,
+} from './public/document'
+export { EDITOR_MINIMAP_FEATURE_ID } from './public/extensions'
+export { applyEditorTheme, editorThemesEqual, mergeEditorThemes } from './public/rendering'
+export {
+  createEditorSyntaxSession,
+  createEmptySyntaxResult,
+  createEmptySyntaxSession,
+  isEditorSyntaxLanguage,
+  styleForTreeSitterCapture,
+  treeSitterCapturesToEditorTokens,
+} from './public/syntax'
 export {
   defaultEditorCommandPacks,
   defaultEditorKeyBindings,
@@ -35,14 +52,31 @@ export {
   readonlySafeEditorCommandPacks,
 } from './editor/keymap'
 export type {
-  EditorCommandPack,
-  EditorKeyBinding,
-  EditorKeymapLayer,
-  EditorKeymapLayerSource,
-  EditorKeymapOptions,
-} from './editor/keymap'
+  AnchorBias,
+  AnchorLiveness,
+  DocumentSession,
+  DocumentSessionApplyEditsOptions,
+  DocumentSessionChange,
+  DocumentSessionChangeKind,
+  DocumentSessionEditHistoryMode,
+  DocumentSessionEditSelection,
+  DocumentSessionSelectionOptions,
+  DocumentSessionSelectionRange,
+  DocumentTextSnapshot,
+  EditorDocument,
+  EditorTimingMeasurement,
+  PieceTableAnchor,
+  PieceTableEdit,
+  PieceTableSnapshot,
+  Point,
+  ResolvedAnchor,
+  TextEdit,
+  TextSnapshot,
+} from './public/document'
 export type {
   EditorChangeHandler,
+  EditorCommandContext,
+  EditorCommandId,
   EditorDocumentMode,
   EditorEditability,
   EditorEditHistoryMode,
@@ -52,16 +86,102 @@ export type {
   EditorOpenDocumentOptions,
   EditorOptions,
   EditorRangeDecoration,
+  EditorScrollPosition,
   EditorSelectionRevealOptions,
   EditorSelectionRevealTarget,
   EditorSelectionSyncMode,
   EditorSetTextOptions,
-  EditorScrollPosition,
   EditorState,
   EditorSyntaxSessionFactory,
   EditorSyntaxStatus,
-  HiddenCharactersMode,
   HighlightRegistry,
 } from './editor'
-export type { EditorDocument, EditorToken, EditorTokenStyle, TextEdit } from './tokens'
-export type { EditorSyntaxTheme, EditorSyntaxThemeColor, EditorTheme } from './theme'
+export type {
+  EditorCommandPack,
+  EditorKeyBinding,
+  EditorKeymapLayer,
+  EditorKeymapLayerSource,
+  EditorKeymapOptions,
+} from './editor/keymap'
+export type {
+  EditorCommandHandler,
+  EditorDisposable,
+  EditorFeatureContribution,
+  EditorFeatureContributionContext,
+  EditorFeatureContributionProvider,
+  EditorGutterContribution,
+  EditorGutterRowContext,
+  EditorGutterWidthContext,
+  EditorHighlighterProvider,
+  EditorHighlighterSession,
+  EditorHighlighterSessionOptions,
+  EditorHighlightResult,
+  EditorInjectedTextRow,
+  EditorInjectedTextRowProvider,
+  EditorInjectedTextRowProviderContext,
+  EditorMinimapDecoration,
+  EditorMinimapDecorationPosition,
+  EditorMinimapFeature,
+  EditorMinimapSectionHeaderStyle,
+  EditorOverlaySide,
+  EditorPlugin,
+  EditorPluginContext,
+  EditorResolvedSelection,
+  EditorSelectionRange,
+  EditorViewContribution,
+  EditorViewContributionContext,
+  EditorViewContributionProvider,
+  EditorViewContributionUpdateKind,
+  EditorViewportSnapshot,
+  EditorViewSnapshot,
+  EditorVisibleRowSnapshot,
+} from './public/extensions'
+export type {
+  BoundedSize,
+  EditorBlock,
+  EditorBlockAnchor,
+  EditorBlockHorizontalSurface,
+  EditorBlockMount,
+  EditorBlockMountContext,
+  EditorBlockProvider,
+  EditorBlockProviderContext,
+  EditorBlockSize,
+  EditorBlockSurfaceSlot,
+  EditorBlockVerticalSurface,
+  EditorCursorLineHighlightOptions,
+  EditorSyntaxTheme,
+  EditorSyntaxThemeColor,
+  EditorTheme,
+  FixedSize,
+  HiddenCharactersMode,
+  MaxSize,
+  MinSize,
+  VirtualizedFoldMarker,
+  VirtualizedTextHighlightRange,
+  VirtualizedTextHighlightStyle,
+  VirtualizedTextRowDecoration,
+} from './public/rendering'
+export type {
+  BracketInfo,
+  EditorSyntaxCapture,
+  EditorSyntaxError,
+  EditorSyntaxInjection,
+  EditorSyntaxLanguageId,
+  EditorSyntaxProvider,
+  EditorSyntaxRange,
+  EditorSyntaxResult,
+  EditorSyntaxSession,
+  EditorSyntaxSessionOptions,
+  FoldRange,
+} from './public/syntax'
+export type { EditorToken, EditorTokenStyle } from './tokens'
+export type {
+  CreateMergeConflictDocumentTextOptions,
+  EditorMergeConflictFeature,
+  EditorMergeConflictPluginOptions,
+  MergeConflictRegion,
+  MergeConflictResolution,
+  MergeConflictResolutionResult,
+  MergeConflictSide,
+  TextOffsetRange,
+} from './editor'

@@ -1,4 +1,5 @@
-import type { DocumentSessionChange, TextEdit, VirtualizedTextHighlightStyle } from '@editor/core'
+import type { DocumentSessionChange, TextEdit } from '@editor/core/document'
+import type { VirtualizedTextHighlightStyle } from '@editor/core/rendering'
 import { wordRangeAtOffset } from './textRanges'
 import {
   FIND_MATCHES_LIMIT,

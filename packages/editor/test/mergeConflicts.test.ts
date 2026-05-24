@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { createMergeConflictDocumentText, parseMergeConflicts, resolveMergeConflict } from '../src'
+import {
+  createMergeConflictDocumentText,
+  parseMergeConflicts,
+  resolveMergeConflict,
+} from '../src/editor'
 
 describe('merge conflict document text', () => {
   it('wraps only a one-line replacement', () => {

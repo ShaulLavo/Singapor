@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  FixedRowVirtualizer,
   computeFixedRowTotalSize,
-  computeFixedRowVisibleRange,
   computeFixedRowVirtualItems,
-} from '../src'
+  computeFixedRowVisibleRange,
+  FixedRowVirtualizer,
+} from '../src/virtualization/fixedRowVirtualizer'
 
 describe('fixed row virtualizer', () => {
   it('computes total scroll height from count and row height', () => {

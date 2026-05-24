@@ -8,8 +8,15 @@
   ],
   "exports": {
     ".": "./src/index.ts",
+    "./debug": "./src/debug.ts",
+    "./document": "./src/public/document.ts",
     "./editor": "./src/editor.ts",
+    "./extensions": "./src/public/extensions.ts",
+    "./internal": "./src/internal.ts",
+    "./rendering": "./src/public/rendering.ts",
     "./shiki": "./src/shiki/index.ts",
+    "./syntax": "./src/public/syntax.ts",
+    "./testing": "./src/public/testing.ts",
     "./style.css": "./src/style.css"
   },
   "scripts": {

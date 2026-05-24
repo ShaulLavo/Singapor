@@ -52,7 +52,7 @@ body {
   background: #3c3c3c;
 }
 
-#toolbar button[aria-pressed="true"] {
+#toolbar button[aria-pressed='true'] {
   background: #094771;
   border-color: #0e639c;
   color: #fff;
@@ -135,15 +135,15 @@ body {
   transform-origin: center;
 }
 
-.editor-virtualized-fold-toggle[data-editor-fold-state="collapsed"] .app-fold-chevron {
+.editor-virtualized-fold-toggle[data-editor-fold-state='collapsed'] .app-fold-chevron {
   transform: rotate(-90deg);
 }
 
-.editor-virtualized-fold-toggle[data-editor-fold-transition="collapse"] .app-fold-chevron {
+.editor-virtualized-fold-toggle[data-editor-fold-transition='collapse'] .app-fold-chevron {
   animation: app-fold-chevron-collapse 120ms ease-out;
 }
 
-.editor-virtualized-fold-toggle[data-editor-fold-transition="expand"] .app-fold-chevron {
+.editor-virtualized-fold-toggle[data-editor-fold-transition='expand'] .app-fold-chevron {
   animation: app-fold-chevron-expand 120ms ease-out;
 }
 

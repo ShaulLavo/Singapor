@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { type DocumentSessionChange, type EditorViewSnapshot, type TextEdit } from '@editor/core'
+import type { DocumentSessionChange, TextEdit } from '@editor/core/document'
+import type { EditorViewSnapshot } from '@editor/core/extensions'
 import { resolveMinimapOptions } from '../src/options'
 import { MinimapWorkerClient, type MinimapHost } from '../src/workerClient'
 import type { MinimapWorkerRequest, MinimapWorkerResponse } from '../src/types'

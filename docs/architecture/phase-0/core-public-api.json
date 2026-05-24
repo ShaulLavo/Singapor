@@ -5,230 +5,146 @@
         {
           "kind": "type",
           "name": "AnchorBias",
-          "source": "packages/editor/src/pieceTable/pieceTableTypes.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/pieceTable/index.ts"
-        },
-        {
-          "kind": "type",
-          "name": "AnchorFoldRange",
-          "source": "packages/editor/src/foldMap.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/foldMap.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "AnchorLiveness",
-          "source": "packages/editor/src/pieceTable/pieceTableTypes.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/pieceTable/index.ts"
-        },
-        {
-          "kind": "type",
-          "name": "AnchorSelection",
-          "source": "packages/editor/src/selections.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/selections.ts"
-        },
-        {
-          "kind": "type",
-          "name": "BlockLane",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "type",
-          "name": "BlockLanePlacement",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "type",
-          "name": "BlockPoint",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "type",
-          "name": "BlockRow",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "type",
-          "name": "BlockRowPlacement",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "BoundedSize",
-          "source": "packages/editor/src/editorBlocks.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/editorBlocks.ts"
+          "source": "packages/editor/src/public/rendering.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
-          "name": "BrowserTextMetrics",
-          "source": "packages/editor/src/virtualization/browserMetrics.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
-        },
-        {
-          "kind": "type",
-          "name": "CreateAnchorSelectionOptions",
-          "source": "packages/editor/src/selections.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/selections.ts"
+          "name": "BracketInfo",
+          "source": "packages/editor/src/public/syntax.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "CreateMergeConflictDocumentTextOptions",
-          "source": "packages/editor/src/mergeConflicts.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/mergeConflicts.ts"
-        },
-        {
-          "kind": "type",
-          "name": "DisplayBlockRow",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "type",
-          "name": "DisplayDocumentTextRow",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "type",
-          "name": "DisplayInjectedTextRow",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "type",
-          "name": "DisplayRow",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "type",
-          "name": "DisplayTextRow",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "type",
-          "name": "DisplayTextRowSource",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
+          "source": "packages/editor/src/editor.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "DocumentSession",
-          "source": "packages/editor/src/documentSession.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/documentSession.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "DocumentSessionApplyEditsOptions",
-          "source": "packages/editor/src/documentSession.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/documentSession.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "DocumentSessionChange",
-          "source": "packages/editor/src/documentSession.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/documentSession.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "DocumentSessionChangeKind",
-          "source": "packages/editor/src/documentSession.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/documentSession.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "DocumentSessionEditHistoryMode",
-          "source": "packages/editor/src/documentSession.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/documentSession.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "DocumentSessionEditSelection",
-          "source": "packages/editor/src/documentSession.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/documentSession.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "DocumentSessionSelectionOptions",
-          "source": "packages/editor/src/documentSession.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/documentSession.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "DocumentSessionSelectionRange",
-          "source": "packages/editor/src/documentSession.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/documentSession.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "DocumentTextSnapshot",
-          "source": "packages/editor/src/documentTextSnapshot.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/documentTextSnapshot.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorBlock",
-          "source": "packages/editor/src/editorBlocks.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/editorBlocks.ts"
+          "source": "packages/editor/src/public/rendering.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorBlockAnchor",
-          "source": "packages/editor/src/editorBlocks.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/editorBlocks.ts"
+          "source": "packages/editor/src/public/rendering.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorBlockHorizontalSurface",
-          "source": "packages/editor/src/editorBlocks.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/editorBlocks.ts"
+          "source": "packages/editor/src/public/rendering.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorBlockMount",
-          "source": "packages/editor/src/editorBlocks.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/editorBlocks.ts"
+          "source": "packages/editor/src/public/rendering.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorBlockMountContext",
-          "source": "packages/editor/src/editorBlocks.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/editorBlocks.ts"
+          "source": "packages/editor/src/public/rendering.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorBlockProvider",
-          "source": "packages/editor/src/editorBlocks.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/editorBlocks.ts"
+          "source": "packages/editor/src/public/rendering.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorBlockProviderContext",
-          "source": "packages/editor/src/editorBlocks.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/editorBlocks.ts"
+          "source": "packages/editor/src/public/rendering.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorBlockSize",
-          "source": "packages/editor/src/editorBlocks.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/editorBlocks.ts"
+          "source": "packages/editor/src/public/rendering.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorBlockSurfaceSlot",
-          "source": "packages/editor/src/editorBlocks.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/editorBlocks.ts"
+          "source": "packages/editor/src/public/rendering.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorBlockVerticalSurface",
-          "source": "packages/editor/src/editorBlocks.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/editorBlocks.ts"
+          "source": "packages/editor/src/public/rendering.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
@@ -239,19 +155,19 @@
         {
           "kind": "type",
           "name": "EditorCommandContext",
-          "source": "packages/editor/src/editor/commands.ts",
+          "source": "packages/editor/src/editor.ts",
           "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorCommandHandler",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorCommandId",
-          "source": "packages/editor/src/editor/commands.ts",
+          "source": "packages/editor/src/editor.ts",
           "via": "packages/editor/src/index.ts"
         },
         {
@@ -263,19 +179,19 @@
         {
           "kind": "type",
           "name": "EditorCursorLineHighlightOptions",
-          "source": "packages/editor/src/virtualization/virtualizedTextViewTypes.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
+          "source": "packages/editor/src/public/rendering.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorDisposable",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorDocument",
-          "source": "packages/editor/src/tokens.ts",
+          "source": "packages/editor/src/public/document.ts",
           "via": "packages/editor/src/index.ts"
         },
         {
@@ -317,98 +233,80 @@
         {
           "kind": "type",
           "name": "EditorFeatureContribution",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorFeatureContributionContext",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorFeatureContributionProvider",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorGutterContribution",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorGutterRowContext",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorGutterWidthContext",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorHighlighterProvider",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorHighlighterSession",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorHighlighterSessionOptions",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorHighlightResult",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
-        },
-        {
-          "kind": "type",
-          "name": "EditorHistory",
-          "source": "packages/editor/src/history.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/history.ts"
-        },
-        {
-          "kind": "type",
-          "name": "EditorHistoryEntry",
-          "source": "packages/editor/src/history.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/history.ts"
-        },
-        {
-          "kind": "type",
-          "name": "EditorHistoryStack",
-          "source": "packages/editor/src/history.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/history.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorInjectedTextRow",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorInjectedTextRowProvider",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorInjectedTextRowProviderContext",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
@@ -437,38 +335,38 @@
         {
           "kind": "type",
           "name": "EditorMergeConflictFeature",
-          "source": "packages/editor/src/mergeConflictPlugin.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/mergeConflictPlugin.ts"
+          "source": "packages/editor/src/editor.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorMergeConflictPluginOptions",
-          "source": "packages/editor/src/mergeConflictPlugin.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/mergeConflictPlugin.ts"
+          "source": "packages/editor/src/editor.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorMinimapDecoration",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorMinimapDecorationPosition",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorMinimapFeature",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorMinimapSectionHeaderStyle",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
@@ -485,26 +383,20 @@
         {
           "kind": "type",
           "name": "EditorOverlaySide",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorPlugin",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorPluginContext",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
-        },
-        {
-          "kind": "type",
-          "name": "EditorPluginHostEvents",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
@@ -515,8 +407,8 @@
         {
           "kind": "type",
           "name": "EditorResolvedSelection",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
@@ -527,8 +419,8 @@
         {
           "kind": "type",
           "name": "EditorSelectionRange",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
@@ -562,8 +454,62 @@
         },
         {
           "kind": "type",
+          "name": "EditorSyntaxCapture",
+          "source": "packages/editor/src/public/syntax.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSyntaxError",
+          "source": "packages/editor/src/public/syntax.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSyntaxInjection",
+          "source": "packages/editor/src/public/syntax.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSyntaxLanguageId",
+          "source": "packages/editor/src/public/syntax.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSyntaxProvider",
+          "source": "packages/editor/src/public/syntax.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSyntaxRange",
+          "source": "packages/editor/src/public/syntax.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSyntaxResult",
+          "source": "packages/editor/src/public/syntax.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSyntaxSession",
+          "source": "packages/editor/src/public/syntax.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
           "name": "EditorSyntaxSessionFactory",
           "source": "packages/editor/src/editor.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSyntaxSessionOptions",
+          "source": "packages/editor/src/public/syntax.ts",
           "via": "packages/editor/src/index.ts"
         },
         {
@@ -575,44 +521,26 @@
         {
           "kind": "type",
           "name": "EditorSyntaxTheme",
-          "source": "packages/editor/src/theme.ts",
-          "via": "packages/editor/src/index.ts"
-        },
-        {
-          "kind": "type",
-          "name": "EditorSyntaxTheme",
-          "source": "packages/editor/src/theme.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/theme.ts"
-        },
-        {
-          "kind": "type",
-          "name": "EditorSyntaxThemeColor",
-          "source": "packages/editor/src/theme.ts",
+          "source": "packages/editor/src/public/rendering.ts",
           "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorSyntaxThemeColor",
-          "source": "packages/editor/src/theme.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/theme.ts"
-        },
-        {
-          "kind": "type",
-          "name": "EditorTheme",
-          "source": "packages/editor/src/theme.ts",
+          "source": "packages/editor/src/public/rendering.ts",
           "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorTheme",
-          "source": "packages/editor/src/theme.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/theme.ts"
+          "source": "packages/editor/src/public/rendering.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorTimingMeasurement",
-          "source": "packages/editor/src/documentSession.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/documentSession.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
@@ -629,128 +557,62 @@
         {
           "kind": "type",
           "name": "EditorViewContribution",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorViewContributionContext",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorViewContributionProvider",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorViewContributionUpdateKind",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorViewportSnapshot",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorViewSnapshot",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "EditorVisibleRowSnapshot",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
-        },
-        {
-          "kind": "type",
-          "name": "FixedRowScrollMetrics",
-          "source": "packages/editor/src/virtualization/fixedRowVirtualizer.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
-        },
-        {
-          "kind": "type",
-          "name": "FixedRowVirtualItem",
-          "source": "packages/editor/src/virtualization/fixedRowVirtualizer.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
-        },
-        {
-          "kind": "type",
-          "name": "FixedRowVirtualizerChangeHandler",
-          "source": "packages/editor/src/virtualization/fixedRowVirtualizer.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
-        },
-        {
-          "kind": "type",
-          "name": "FixedRowVirtualizerOptions",
-          "source": "packages/editor/src/virtualization/fixedRowVirtualizer.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
-        },
-        {
-          "kind": "type",
-          "name": "FixedRowVirtualizerSnapshot",
-          "source": "packages/editor/src/virtualization/fixedRowVirtualizer.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
-        },
-        {
-          "kind": "type",
-          "name": "FixedRowVisibleRange",
-          "source": "packages/editor/src/virtualization/fixedRowVirtualizer.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "FixedSize",
-          "source": "packages/editor/src/editorBlocks.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/editorBlocks.ts"
+          "source": "packages/editor/src/public/rendering.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
-          "name": "FoldMap",
-          "source": "packages/editor/src/foldMap.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/foldMap.ts"
-        },
-        {
-          "kind": "type",
-          "name": "FoldMapInvalidatedRange",
-          "source": "packages/editor/src/foldMap.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/foldMap.ts"
-        },
-        {
-          "kind": "type",
-          "name": "FoldMapInvalidationReason",
-          "source": "packages/editor/src/foldMap.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/foldMap.ts"
-        },
-        {
-          "kind": "type",
-          "name": "FoldMapUpdate",
-          "source": "packages/editor/src/foldMap.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/foldMap.ts"
-        },
-        {
-          "kind": "type",
-          "name": "FoldPoint",
-          "source": "packages/editor/src/foldMap.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/foldMap.ts"
-        },
-        {
-          "kind": "type",
-          "name": "HiddenCharactersMode",
-          "source": "packages/editor/src/editor.ts",
+          "name": "FoldRange",
+          "source": "packages/editor/src/public/syntax.ts",
           "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "HiddenCharactersMode",
-          "source": "packages/editor/src/virtualization/virtualizedTextViewTypes.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
+          "source": "packages/editor/src/public/rendering.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
@@ -760,393 +622,207 @@
         },
         {
           "kind": "type",
-          "name": "InjectedTextRow",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "type",
-          "name": "InjectedTextRowPlacement",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "type",
-          "name": "InvalidatedRange",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "type",
-          "name": "InvalidationSet",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "type",
           "name": "MaxSize",
-          "source": "packages/editor/src/editorBlocks.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/editorBlocks.ts"
+          "source": "packages/editor/src/public/rendering.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "MergeConflictRegion",
-          "source": "packages/editor/src/mergeConflicts.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/mergeConflicts.ts"
+          "source": "packages/editor/src/editor.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "MergeConflictResolution",
-          "source": "packages/editor/src/mergeConflicts.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/mergeConflicts.ts"
+          "source": "packages/editor/src/editor.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "MergeConflictResolutionResult",
-          "source": "packages/editor/src/mergeConflicts.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/mergeConflicts.ts"
+          "source": "packages/editor/src/editor.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "MergeConflictSide",
-          "source": "packages/editor/src/mergeConflicts.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/mergeConflicts.ts"
+          "source": "packages/editor/src/editor.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "MinSize",
-          "source": "packages/editor/src/editorBlocks.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/editorBlocks.ts"
-        },
-        {
-          "kind": "type",
-          "name": "NativeGeometryValidation",
-          "source": "packages/editor/src/virtualization/virtualizedTextViewTypes.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
-        },
-        {
-          "kind": "type",
-          "name": "Piece",
-          "source": "packages/editor/src/pieceTable/pieceTableTypes.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/pieceTable/index.ts"
-        },
-        {
-          "kind": "type",
-          "name": "PieceBufferId",
-          "source": "packages/editor/src/pieceTable/pieceTableTypes.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/pieceTable/index.ts"
+          "source": "packages/editor/src/public/rendering.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "PieceTableAnchor",
-          "source": "packages/editor/src/pieceTable/pieceTableTypes.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/pieceTable/index.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "PieceTableEdit",
-          "source": "packages/editor/src/pieceTable/pieceTableTypes.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/pieceTable/index.ts"
-        },
-        {
-          "kind": "type",
-          "name": "PieceTableEditorHistory",
-          "source": "packages/editor/src/history.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/history.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "PieceTableSnapshot",
-          "source": "packages/editor/src/pieceTable/pieceTableTypes.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/pieceTable/index.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "Point",
-          "source": "packages/editor/src/pieceTable/pieceTableTypes.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/pieceTable/index.ts"
-        },
-        {
-          "kind": "type",
-          "name": "RealAnchor",
-          "source": "packages/editor/src/pieceTable/pieceTableTypes.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/pieceTable/index.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "ResolvedAnchor",
-          "source": "packages/editor/src/pieceTable/pieceTableTypes.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/pieceTable/index.ts"
-        },
-        {
-          "kind": "type",
-          "name": "ResolvedSelection",
-          "source": "packages/editor/src/selections.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/selections.ts"
-        },
-        {
-          "kind": "type",
-          "name": "Selection",
-          "source": "packages/editor/src/selections.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/selections.ts"
-        },
-        {
-          "kind": "type",
-          "name": "SelectionEditResult",
-          "source": "packages/editor/src/selections.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/selections.ts"
-        },
-        {
-          "kind": "type",
-          "name": "SelectionGoal",
-          "source": "packages/editor/src/selections.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/selections.ts"
-        },
-        {
-          "kind": "type",
-          "name": "SelectionSet",
-          "source": "packages/editor/src/selections.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/selections.ts"
-        },
-        {
-          "kind": "type",
-          "name": "TabPoint",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "TextEdit",
-          "source": "packages/editor/src/tokens.ts",
+          "source": "packages/editor/src/public/document.ts",
           "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "TextOffsetRange",
-          "source": "packages/editor/src/mergeConflicts.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/mergeConflicts.ts"
+          "source": "packages/editor/src/editor.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "TextSnapshot",
-          "source": "packages/editor/src/documentTextSnapshot.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/documentTextSnapshot.ts"
-        },
-        {
-          "kind": "type",
-          "name": "TransformBias",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "type",
-          "name": "TransformLayer",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "type",
-          "name": "VirtualizedBlockLaneMount",
-          "source": "packages/editor/src/virtualization/virtualizedTextViewTypes.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
-        },
-        {
-          "kind": "type",
-          "name": "VirtualizedBlockLaneMountContext",
-          "source": "packages/editor/src/virtualization/virtualizedTextViewTypes.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
-        },
-        {
-          "kind": "type",
-          "name": "VirtualizedBlockRowDisposable",
-          "source": "packages/editor/src/virtualization/virtualizedTextViewTypes.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
-        },
-        {
-          "kind": "type",
-          "name": "VirtualizedBlockRowMount",
-          "source": "packages/editor/src/virtualization/virtualizedTextViewTypes.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
-        },
-        {
-          "kind": "type",
-          "name": "VirtualizedBlockRowMountContext",
-          "source": "packages/editor/src/virtualization/virtualizedTextViewTypes.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "VirtualizedFoldMarker",
-          "source": "packages/editor/src/virtualization/virtualizedTextViewTypes.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
-        },
-        {
-          "kind": "type",
-          "name": "VirtualizedTextChunk",
-          "source": "packages/editor/src/virtualization/virtualizedTextViewTypes.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
+          "source": "packages/editor/src/public/rendering.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "VirtualizedTextHighlightRange",
-          "source": "packages/editor/src/virtualization/virtualizedTextViewTypes.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
-        },
-        {
-          "kind": "type",
-          "name": "VirtualizedTextHighlightRegistry",
-          "source": "packages/editor/src/virtualization/virtualizedTextViewTypes.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
+          "source": "packages/editor/src/public/rendering.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "VirtualizedTextHighlightStyle",
-          "source": "packages/editor/src/virtualization/virtualizedTextViewTypes.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
-        },
-        {
-          "kind": "type",
-          "name": "VirtualizedTextRow",
-          "source": "packages/editor/src/virtualization/virtualizedTextViewTypes.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
+          "source": "packages/editor/src/public/rendering.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "type",
           "name": "VirtualizedTextRowDecoration",
-          "source": "packages/editor/src/virtualization/virtualizedTextViewTypes.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
-        },
-        {
-          "kind": "type",
-          "name": "VirtualizedTextSelection",
-          "source": "packages/editor/src/virtualization/virtualizedTextViewInternals.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
-        },
-        {
-          "kind": "type",
-          "name": "VirtualizedTextViewOptions",
-          "source": "packages/editor/src/virtualization/virtualizedTextViewTypes.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
-        },
-        {
-          "kind": "type",
-          "name": "VirtualizedTextViewState",
-          "source": "packages/editor/src/virtualization/virtualizedTextViewTypes.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
-        },
-        {
-          "kind": "type",
-          "name": "WrapMap",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "type",
-          "name": "WrapPoint",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "type",
-          "name": "WrapSegment",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
+          "source": "packages/editor/src/public/rendering.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "unknown",
           "name": "Anchor",
-          "source": "packages/editor/src/pieceTable/pieceTable.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/pieceTable/index.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "unknown",
           "name": "anchorAfter",
-          "source": "packages/editor/src/pieceTable/pieceTable.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/pieceTable/index.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "unknown",
           "name": "anchorAt",
-          "source": "packages/editor/src/pieceTable/pieceTable.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/pieceTable/index.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "unknown",
           "name": "anchorBefore",
-          "source": "packages/editor/src/pieceTable/pieceTable.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/pieceTable/index.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "unknown",
           "name": "applyBatchToPieceTable",
-          "source": "packages/editor/src/pieceTable/pieceTable.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/pieceTable/index.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "unknown",
-          "name": "BracketInfo",
-          "source": "packages/editor/src/syntax/session.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/syntax/index.ts"
+          "name": "applyEditorTheme",
+          "source": "packages/editor/src/public/rendering.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "unknown",
-          "name": "clearBrowserTextMetricsCache",
-          "source": "packages/editor/src/virtualization/browserMetrics.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
+          "name": "createDocumentSession",
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "unknown",
-          "name": "compareAnchors",
-          "source": "packages/editor/src/pieceTable/pieceTable.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/pieceTable/index.ts"
-        },
-        {
-          "kind": "unknown",
-          "name": "computeFixedRowTotalSize",
-          "source": "packages/editor/src/virtualization/fixedRowVirtualizer.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
-        },
-        {
-          "kind": "unknown",
-          "name": "computeFixedRowVirtualItems",
-          "source": "packages/editor/src/virtualization/fixedRowVirtualizer.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
-        },
-        {
-          "kind": "unknown",
-          "name": "computeFixedRowVisibleRange",
-          "source": "packages/editor/src/virtualization/fixedRowVirtualizer.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
+          "name": "createDocumentTextSnapshot",
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "unknown",
           "name": "createEditorSyntaxSession",
-          "source": "packages/editor/src/syntax/session.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/syntax/index.ts"
+          "source": "packages/editor/src/public/syntax.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "unknown",
           "name": "createEmptySyntaxResult",
-          "source": "packages/editor/src/syntax/session.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/syntax/index.ts"
+          "source": "packages/editor/src/public/syntax.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "unknown",
           "name": "createEmptySyntaxSession",
-          "source": "packages/editor/src/syntax/session.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/syntax/index.ts"
+          "source": "packages/editor/src/public/syntax.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "createMergeConflictDocumentText",
+          "source": "packages/editor/src/editor.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "createMergeConflictPlugin",
+          "source": "packages/editor/src/editor.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "unknown",
           "name": "createPieceTableSnapshot",
-          "source": "packages/editor/src/pieceTable/pieceTable.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/pieceTable/index.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "unknown",
-          "name": "debugPieceTable",
-          "source": "packages/editor/src/pieceTable/pieceTable.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/pieceTable/index.ts"
+          "name": "createStaticDocumentSession",
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "createStringTextSnapshot",
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "unknown",
@@ -1169,8 +845,20 @@
         {
           "kind": "unknown",
           "name": "deleteFromPieceTable",
-          "source": "packages/editor/src/pieceTable/pieceTable.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/pieceTable/index.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "EDITOR_MERGE_CONFLICT_FEATURE_ID",
+          "source": "packages/editor/src/editor.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "EDITOR_MINIMAP_FEATURE_ID",
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "unknown",
@@ -1222,57 +910,9 @@
         },
         {
           "kind": "unknown",
-          "name": "EditorSyntaxCapture",
-          "source": "packages/editor/src/syntax/session.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/syntax/index.ts"
-        },
-        {
-          "kind": "unknown",
-          "name": "EditorSyntaxError",
-          "source": "packages/editor/src/syntax/session.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/syntax/index.ts"
-        },
-        {
-          "kind": "unknown",
-          "name": "EditorSyntaxInjection",
-          "source": "packages/editor/src/syntax/session.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/syntax/index.ts"
-        },
-        {
-          "kind": "unknown",
-          "name": "EditorSyntaxLanguageId",
-          "source": "packages/editor/src/syntax/session.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/syntax/index.ts"
-        },
-        {
-          "kind": "unknown",
-          "name": "EditorSyntaxProvider",
-          "source": "packages/editor/src/syntax/session.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/syntax/index.ts"
-        },
-        {
-          "kind": "unknown",
-          "name": "EditorSyntaxRange",
-          "source": "packages/editor/src/syntax/session.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/syntax/index.ts"
-        },
-        {
-          "kind": "unknown",
-          "name": "EditorSyntaxResult",
-          "source": "packages/editor/src/syntax/session.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/syntax/index.ts"
-        },
-        {
-          "kind": "unknown",
-          "name": "EditorSyntaxSession",
-          "source": "packages/editor/src/syntax/session.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/syntax/index.ts"
-        },
-        {
-          "kind": "unknown",
-          "name": "EditorSyntaxSessionOptions",
-          "source": "packages/editor/src/syntax/session.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/syntax/index.ts"
+          "name": "editorThemesEqual",
+          "source": "packages/editor/src/public/rendering.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "unknown",
@@ -1282,81 +922,63 @@
         },
         {
           "kind": "unknown",
-          "name": "FixedRowVirtualizer",
-          "source": "packages/editor/src/virtualization/fixedRowVirtualizer.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
-        },
-        {
-          "kind": "unknown",
-          "name": "FoldRange",
-          "source": "packages/editor/src/syntax/session.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/syntax/index.ts"
-        },
-        {
-          "kind": "unknown",
           "name": "forEachPieceTableTextChunk",
-          "source": "packages/editor/src/pieceTable/pieceTable.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/pieceTable/index.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "unknown",
           "name": "getPieceTableLength",
-          "source": "packages/editor/src/pieceTable/pieceTable.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/pieceTable/index.ts"
-        },
-        {
-          "kind": "unknown",
-          "name": "getPieceTableOriginalText",
-          "source": "packages/editor/src/pieceTable/pieceTable.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/pieceTable/index.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "unknown",
           "name": "getPieceTableText",
-          "source": "packages/editor/src/pieceTable/pieceTable.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/pieceTable/index.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "unknown",
           "name": "insertIntoPieceTable",
-          "source": "packages/editor/src/pieceTable/pieceTable.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/pieceTable/index.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "unknown",
           "name": "isEditorSyntaxLanguage",
-          "source": "packages/editor/src/syntax/session.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/syntax/index.ts"
+          "source": "packages/editor/src/public/syntax.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "unknown",
-          "name": "measureBrowserTextMetrics",
-          "source": "packages/editor/src/virtualization/browserMetrics.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
-        },
-        {
-          "kind": "unknown",
-          "name": "observeEditorMountTiming",
-          "source": "packages/editor/src/editor.ts",
+          "name": "mergeEditorThemes",
+          "source": "packages/editor/src/public/rendering.ts",
           "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "unknown",
           "name": "offsetToPoint",
-          "source": "packages/editor/src/pieceTable/pieceTable.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/pieceTable/index.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "parseMergeConflicts",
+          "source": "packages/editor/src/editor.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "unknown",
           "name": "pieceTableSnapshotsHaveSameText",
-          "source": "packages/editor/src/pieceTable/pieceTable.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/pieceTable/index.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "unknown",
           "name": "pointToOffset",
-          "source": "packages/editor/src/pieceTable/pieceTable.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/pieceTable/index.ts"
+          "source": "packages/editor/src/public/document.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "unknown",
@@ -1366,409 +988,295 @@
         },
         {
           "kind": "unknown",
-          "name": "resetEditorInstanceCount",
-          "source": "packages/editor/src/editor.ts",
-          "via": "packages/editor/src/index.ts"
-        },
-        {
-          "kind": "unknown",
           "name": "resolveAnchor",
-          "source": "packages/editor/src/pieceTable/pieceTable.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/pieceTable/index.ts"
-        },
-        {
-          "kind": "unknown",
-          "name": "resolveAnchorLinear",
-          "source": "packages/editor/src/pieceTable/pieceTable.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/pieceTable/index.ts"
-        },
-        {
-          "kind": "unknown",
-          "name": "setEditorSyntaxSessionFactory",
-          "source": "packages/editor/src/editor.ts",
+          "source": "packages/editor/src/public/document.ts",
           "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "unknown",
-          "name": "setHighlightRegistry",
+          "name": "resolveMergeConflict",
           "source": "packages/editor/src/editor.ts",
           "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "unknown",
           "name": "styleForTreeSitterCapture",
-          "source": "packages/editor/src/syntax/captures.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/syntax/index.ts"
+          "source": "packages/editor/src/public/syntax.ts",
+          "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "unknown",
           "name": "treeSitterCapturesToEditorTokens",
-          "source": "packages/editor/src/syntax/captures.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/syntax/index.ts"
-        },
-        {
-          "kind": "unknown",
-          "name": "VirtualizedTextView",
-          "source": "packages/editor/src/virtualization/virtualizedTextView.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/virtualization/index.ts"
-        },
-        {
-          "kind": "value",
-          "name": "applyEditorTheme",
-          "source": "packages/editor/src/theme.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/theme.ts"
-        },
-        {
-          "kind": "value",
-          "name": "applyTextToSelections",
-          "source": "packages/editor/src/selections.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/selections.ts"
-        },
-        {
-          "kind": "value",
-          "name": "asBlockPoint",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "value",
-          "name": "asTabPoint",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "value",
-          "name": "asWrapPoint",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "value",
-          "name": "backspaceSelections",
-          "source": "packages/editor/src/selections.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/selections.ts"
-        },
-        {
-          "kind": "value",
-          "name": "blockLaneCoversBufferRow",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "value",
-          "name": "blockPointToBufferPoint",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "value",
-          "name": "bufferColumnToVisualColumn",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "value",
-          "name": "bufferPointToFoldPoint",
-          "source": "packages/editor/src/foldMap.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/foldMap.ts"
-        },
-        {
-          "kind": "value",
-          "name": "bufferPointToTabPoint",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "value",
-          "name": "commitEditorHistory",
-          "source": "packages/editor/src/history.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/history.ts"
-        },
-        {
-          "kind": "value",
-          "name": "createAnchorFoldRanges",
-          "source": "packages/editor/src/foldMap.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/foldMap.ts"
-        },
-        {
-          "kind": "value",
-          "name": "createAnchorSelection",
-          "source": "packages/editor/src/selections.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/selections.ts"
-        },
-        {
-          "kind": "value",
-          "name": "createDisplayRows",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "value",
-          "name": "createDocumentSession",
-          "source": "packages/editor/src/documentSession.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/documentSession.ts"
-        },
-        {
-          "kind": "value",
-          "name": "createDocumentTextSnapshot",
-          "source": "packages/editor/src/documentTextSnapshot.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/documentTextSnapshot.ts"
-        },
-        {
-          "kind": "value",
-          "name": "createEditorHistory",
-          "source": "packages/editor/src/history.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/history.ts"
-        },
-        {
-          "kind": "value",
-          "name": "createFoldMap",
-          "source": "packages/editor/src/foldMap.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/foldMap.ts"
-        },
-        {
-          "kind": "value",
-          "name": "createMergeConflictDocumentText",
-          "source": "packages/editor/src/mergeConflicts.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/mergeConflicts.ts"
-        },
-        {
-          "kind": "value",
-          "name": "createMergeConflictPlugin",
-          "source": "packages/editor/src/mergeConflictPlugin.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/mergeConflictPlugin.ts"
-        },
-        {
-          "kind": "value",
-          "name": "createSelectionSet",
-          "source": "packages/editor/src/selections.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/selections.ts"
-        },
-        {
-          "kind": "value",
-          "name": "createStaticDocumentSession",
-          "source": "packages/editor/src/documentSession.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/documentSession.ts"
-        },
-        {
-          "kind": "value",
-          "name": "createStringTextSnapshot",
-          "source": "packages/editor/src/documentTextSnapshot.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/documentTextSnapshot.ts"
-        },
-        {
-          "kind": "value",
-          "name": "createWrapMap",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "value",
-          "name": "DEFAULT_TAB_SIZE",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "value",
-          "name": "defineLazyTextProperty",
-          "source": "packages/editor/src/documentTextSnapshot.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/documentTextSnapshot.ts"
-        },
-        {
-          "kind": "value",
-          "name": "deleteSelections",
-          "source": "packages/editor/src/selections.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/selections.ts"
-        },
-        {
-          "kind": "value",
-          "name": "documentSessionChangeTextSnapshot",
-          "source": "packages/editor/src/documentSession.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/documentSession.ts"
-        },
-        {
-          "kind": "value",
-          "name": "EDITOR_MERGE_CONFLICT_FEATURE_ID",
-          "source": "packages/editor/src/mergeConflictPlugin.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/mergeConflictPlugin.ts"
-        },
-        {
-          "kind": "value",
-          "name": "EDITOR_MINIMAP_FEATURE_ID",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
-        },
-        {
-          "kind": "value",
-          "name": "EditorPluginHost",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/plugins.ts"
-        },
-        {
-          "kind": "value",
-          "name": "editorThemesEqual",
-          "source": "packages/editor/src/theme.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/theme.ts"
-        },
-        {
-          "kind": "value",
-          "name": "foldPointToBufferPoint",
-          "source": "packages/editor/src/foldMap.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/foldMap.ts"
-        },
-        {
-          "kind": "value",
-          "name": "indentSelections",
-          "source": "packages/editor/src/selections.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/selections.ts"
-        },
-        {
-          "kind": "value",
-          "name": "invalidateFoldMapEdit",
-          "source": "packages/editor/src/foldMap.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/foldMap.ts"
-        },
-        {
-          "kind": "value",
-          "name": "isDocumentTextDisplayRow",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "value",
-          "name": "isInjectedTextDisplayRow",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "value",
-          "name": "markSelectionSetDirty",
-          "source": "packages/editor/src/selections.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/selections.ts"
-        },
-        {
-          "kind": "value",
-          "name": "mergeEditorThemes",
-          "source": "packages/editor/src/theme.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/theme.ts"
-        },
-        {
-          "kind": "value",
-          "name": "normalizeBlockLanes",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "value",
-          "name": "normalizeSelections",
-          "source": "packages/editor/src/selections.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/selections.ts"
-        },
-        {
-          "kind": "value",
-          "name": "normalizeSelectionSet",
-          "source": "packages/editor/src/selections.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/selections.ts"
-        },
-        {
-          "kind": "value",
-          "name": "normalizeTabSize",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "value",
-          "name": "outdentSelections",
-          "source": "packages/editor/src/selections.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/selections.ts"
-        },
-        {
-          "kind": "value",
-          "name": "parseMergeConflicts",
-          "source": "packages/editor/src/mergeConflicts.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/mergeConflicts.ts"
-        },
-        {
-          "kind": "value",
-          "name": "redoEditorHistory",
-          "source": "packages/editor/src/history.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/history.ts"
-        },
-        {
-          "kind": "value",
-          "name": "refreshFoldMap",
-          "source": "packages/editor/src/foldMap.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/foldMap.ts"
-        },
-        {
-          "kind": "value",
-          "name": "resolveMergeConflict",
-          "source": "packages/editor/src/mergeConflicts.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/mergeConflicts.ts"
-        },
-        {
-          "kind": "value",
-          "name": "resolveSelection",
-          "source": "packages/editor/src/selections.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/selections.ts"
-        },
-        {
-          "kind": "value",
-          "name": "SelectionGoal",
-          "source": "packages/editor/src/selections.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/selections.ts"
-        },
-        {
-          "kind": "value",
-          "name": "tabPointToBufferPoint",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "value",
-          "name": "tabPointToWrapPoint",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "value",
-          "name": "undoEditorHistory",
-          "source": "packages/editor/src/history.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/history.ts"
-        },
-        {
-          "kind": "value",
-          "name": "updateFoldMapForEdit",
-          "source": "packages/editor/src/foldMap.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/foldMap.ts"
-        },
-        {
-          "kind": "value",
-          "name": "visualColumnLength",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "value",
-          "name": "visualColumnToBufferColumn",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
-        },
-        {
-          "kind": "value",
-          "name": "withDocumentSessionChangeTimings",
-          "source": "packages/editor/src/documentSession.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/documentSession.ts"
-        },
-        {
-          "kind": "value",
-          "name": "wrapPointToTabPoint",
-          "source": "packages/editor/src/displayTransforms.ts",
-          "via": "packages/editor/src/index.ts -> packages/editor/src/displayTransforms.ts"
+          "source": "packages/editor/src/public/syntax.ts",
+          "via": "packages/editor/src/index.ts"
         }
       ],
       "source": "packages/editor/src/index.ts",
       "specifier": "."
+    },
+    {
+      "exports": [
+        {
+          "kind": "type",
+          "name": "PieceBufferId",
+          "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/debug.ts"
+        },
+        {
+          "kind": "type",
+          "name": "PieceTableSnapshot",
+          "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/debug.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "debugPieceTable",
+          "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/debug.ts"
+        }
+      ],
+      "source": "packages/editor/src/debug.ts",
+      "specifier": "./debug"
+    },
+    {
+      "exports": [
+        {
+          "kind": "type",
+          "name": "AnchorBias",
+          "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "type",
+          "name": "AnchorLiveness",
+          "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "type",
+          "name": "DocumentSession",
+          "source": "packages/editor/src/documentSession.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "type",
+          "name": "DocumentSessionApplyEditsOptions",
+          "source": "packages/editor/src/documentSession.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "type",
+          "name": "DocumentSessionChange",
+          "source": "packages/editor/src/documentSession.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "type",
+          "name": "DocumentSessionChangeKind",
+          "source": "packages/editor/src/documentSession.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "type",
+          "name": "DocumentSessionEditHistoryMode",
+          "source": "packages/editor/src/documentSession.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "type",
+          "name": "DocumentSessionEditSelection",
+          "source": "packages/editor/src/documentSession.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "type",
+          "name": "DocumentSessionSelectionOptions",
+          "source": "packages/editor/src/documentSession.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "type",
+          "name": "DocumentSessionSelectionRange",
+          "source": "packages/editor/src/documentSession.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "type",
+          "name": "DocumentTextSnapshot",
+          "source": "packages/editor/src/documentTextSnapshot.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorDocument",
+          "source": "packages/editor/src/tokens.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorTimingMeasurement",
+          "source": "packages/editor/src/documentSession.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "type",
+          "name": "PieceTableAnchor",
+          "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "type",
+          "name": "PieceTableEdit",
+          "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "type",
+          "name": "PieceTableSnapshot",
+          "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "type",
+          "name": "Point",
+          "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "type",
+          "name": "ResolvedAnchor",
+          "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "type",
+          "name": "TextEdit",
+          "source": "packages/editor/src/tokens.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "type",
+          "name": "TextSnapshot",
+          "source": "packages/editor/src/documentTextSnapshot.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "Anchor",
+          "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "anchorAfter",
+          "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "anchorAt",
+          "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "anchorBefore",
+          "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "applyBatchToPieceTable",
+          "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "createDocumentSession",
+          "source": "packages/editor/src/documentSession.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "createDocumentTextSnapshot",
+          "source": "packages/editor/src/documentTextSnapshot.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "createPieceTableSnapshot",
+          "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "createStaticDocumentSession",
+          "source": "packages/editor/src/documentSession.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "createStringTextSnapshot",
+          "source": "packages/editor/src/documentTextSnapshot.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "deleteFromPieceTable",
+          "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "forEachPieceTableTextChunk",
+          "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "getPieceTableLength",
+          "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "getPieceTableText",
+          "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "insertIntoPieceTable",
+          "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "offsetToPoint",
+          "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "pieceTableSnapshotsHaveSameText",
+          "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "pointToOffset",
+          "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "resolveAnchor",
+          "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/public/document.ts"
+        }
+      ],
+      "source": "packages/editor/src/public/document.ts",
+      "specifier": "./document"
     },
     {
       "exports": [
@@ -2392,6 +1900,444 @@
       "exports": [
         {
           "kind": "type",
+          "name": "EditorCommandHandler",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorDisposable",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorFeatureContribution",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorFeatureContributionContext",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorFeatureContributionProvider",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorGutterContribution",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorGutterRowContext",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorGutterWidthContext",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorHighlighterProvider",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorHighlighterSession",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorHighlighterSessionOptions",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorHighlightResult",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorInjectedTextRow",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorInjectedTextRowProvider",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorInjectedTextRowProviderContext",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorMinimapDecoration",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorMinimapDecorationPosition",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorMinimapFeature",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorMinimapSectionHeaderStyle",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorOverlaySide",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorPlugin",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorPluginContext",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorResolvedSelection",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSelectionRange",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorViewContribution",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorViewContributionContext",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorViewContributionProvider",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorViewContributionUpdateKind",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorViewportSnapshot",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorViewSnapshot",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorVisibleRowSnapshot",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "EDITOR_MINIMAP_FEATURE_ID",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        }
+      ],
+      "source": "packages/editor/src/public/extensions.ts",
+      "specifier": "./extensions"
+    },
+    {
+      "exports": [
+        {
+          "kind": "type",
+          "name": "AnchorSelection",
+          "source": "packages/editor/src/selections.ts",
+          "via": "packages/editor/src/internal.ts"
+        },
+        {
+          "kind": "type",
+          "name": "PieceTableAnchor",
+          "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/internal.ts"
+        },
+        {
+          "kind": "type",
+          "name": "SelectionSet",
+          "source": "packages/editor/src/selections.ts",
+          "via": "packages/editor/src/internal.ts"
+        },
+        {
+          "kind": "type",
+          "name": "VirtualizedTextViewState",
+          "source": "packages/editor/src/virtualization/index.ts",
+          "via": "packages/editor/src/internal.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "createAnchorSelection",
+          "source": "packages/editor/src/selections.ts",
+          "via": "packages/editor/src/internal.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "createSelectionSet",
+          "source": "packages/editor/src/selections.ts",
+          "via": "packages/editor/src/internal.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "defineLazyTextProperty",
+          "source": "packages/editor/src/documentTextSnapshot.ts",
+          "via": "packages/editor/src/internal.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "documentSessionChangeTextSnapshot",
+          "source": "packages/editor/src/documentSession.ts",
+          "via": "packages/editor/src/internal.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "normalizeSelectionSet",
+          "source": "packages/editor/src/selections.ts",
+          "via": "packages/editor/src/internal.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "resolveSelection",
+          "source": "packages/editor/src/selections.ts",
+          "via": "packages/editor/src/internal.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "VirtualizedTextView",
+          "source": "packages/editor/src/virtualization/index.ts",
+          "via": "packages/editor/src/internal.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "withDocumentSessionChangeTimings",
+          "source": "packages/editor/src/documentSession.ts",
+          "via": "packages/editor/src/internal.ts"
+        }
+      ],
+      "source": "packages/editor/src/internal.ts",
+      "specifier": "./internal"
+    },
+    {
+      "exports": [
+        {
+          "kind": "type",
+          "name": "BoundedSize",
+          "source": "packages/editor/src/editorBlocks.ts",
+          "via": "packages/editor/src/public/rendering.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorBlock",
+          "source": "packages/editor/src/editorBlocks.ts",
+          "via": "packages/editor/src/public/rendering.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorBlockAnchor",
+          "source": "packages/editor/src/editorBlocks.ts",
+          "via": "packages/editor/src/public/rendering.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorBlockHorizontalSurface",
+          "source": "packages/editor/src/editorBlocks.ts",
+          "via": "packages/editor/src/public/rendering.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorBlockMount",
+          "source": "packages/editor/src/editorBlocks.ts",
+          "via": "packages/editor/src/public/rendering.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorBlockMountContext",
+          "source": "packages/editor/src/editorBlocks.ts",
+          "via": "packages/editor/src/public/rendering.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorBlockProvider",
+          "source": "packages/editor/src/editorBlocks.ts",
+          "via": "packages/editor/src/public/rendering.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorBlockProviderContext",
+          "source": "packages/editor/src/editorBlocks.ts",
+          "via": "packages/editor/src/public/rendering.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorBlockSize",
+          "source": "packages/editor/src/editorBlocks.ts",
+          "via": "packages/editor/src/public/rendering.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorBlockSurfaceSlot",
+          "source": "packages/editor/src/editorBlocks.ts",
+          "via": "packages/editor/src/public/rendering.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorBlockVerticalSurface",
+          "source": "packages/editor/src/editorBlocks.ts",
+          "via": "packages/editor/src/public/rendering.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorCursorLineHighlightOptions",
+          "source": "packages/editor/src/virtualization/index.ts",
+          "via": "packages/editor/src/public/rendering.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSyntaxTheme",
+          "source": "packages/editor/src/theme.ts",
+          "via": "packages/editor/src/public/rendering.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSyntaxThemeColor",
+          "source": "packages/editor/src/theme.ts",
+          "via": "packages/editor/src/public/rendering.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorTheme",
+          "source": "packages/editor/src/theme.ts",
+          "via": "packages/editor/src/public/rendering.ts"
+        },
+        {
+          "kind": "type",
+          "name": "FixedSize",
+          "source": "packages/editor/src/editorBlocks.ts",
+          "via": "packages/editor/src/public/rendering.ts"
+        },
+        {
+          "kind": "type",
+          "name": "HiddenCharactersMode",
+          "source": "packages/editor/src/virtualization/index.ts",
+          "via": "packages/editor/src/public/rendering.ts"
+        },
+        {
+          "kind": "type",
+          "name": "MaxSize",
+          "source": "packages/editor/src/editorBlocks.ts",
+          "via": "packages/editor/src/public/rendering.ts"
+        },
+        {
+          "kind": "type",
+          "name": "MinSize",
+          "source": "packages/editor/src/editorBlocks.ts",
+          "via": "packages/editor/src/public/rendering.ts"
+        },
+        {
+          "kind": "type",
+          "name": "VirtualizedFoldMarker",
+          "source": "packages/editor/src/virtualization/index.ts",
+          "via": "packages/editor/src/public/rendering.ts"
+        },
+        {
+          "kind": "type",
+          "name": "VirtualizedTextHighlightRange",
+          "source": "packages/editor/src/virtualization/index.ts",
+          "via": "packages/editor/src/public/rendering.ts"
+        },
+        {
+          "kind": "type",
+          "name": "VirtualizedTextHighlightStyle",
+          "source": "packages/editor/src/virtualization/index.ts",
+          "via": "packages/editor/src/public/rendering.ts"
+        },
+        {
+          "kind": "type",
+          "name": "VirtualizedTextRowDecoration",
+          "source": "packages/editor/src/virtualization/index.ts",
+          "via": "packages/editor/src/public/rendering.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "applyEditorTheme",
+          "source": "packages/editor/src/theme.ts",
+          "via": "packages/editor/src/public/rendering.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "editorThemesEqual",
+          "source": "packages/editor/src/theme.ts",
+          "via": "packages/editor/src/public/rendering.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "mergeEditorThemes",
+          "source": "packages/editor/src/theme.ts",
+          "via": "packages/editor/src/public/rendering.ts"
+        }
+      ],
+      "source": "packages/editor/src/public/rendering.ts",
+      "specifier": "./rendering"
+    },
+    {
+      "exports": [
+        {
+          "kind": "type",
           "name": "CreateIncrementalTokenizerOptions",
           "source": "packages/editor/src/shiki/tokenizer.ts",
           "via": "packages/editor/src/shiki/index.ts"
@@ -2519,6 +2465,168 @@
       ],
       "source": "packages/editor/src/shiki/index.ts",
       "specifier": "./shiki"
+    },
+    {
+      "exports": [
+        {
+          "kind": "type",
+          "name": "BracketInfo",
+          "source": "packages/editor/src/syntax/index.ts",
+          "via": "packages/editor/src/public/syntax.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSyntaxCapture",
+          "source": "packages/editor/src/syntax/index.ts",
+          "via": "packages/editor/src/public/syntax.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSyntaxError",
+          "source": "packages/editor/src/syntax/index.ts",
+          "via": "packages/editor/src/public/syntax.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSyntaxInjection",
+          "source": "packages/editor/src/syntax/index.ts",
+          "via": "packages/editor/src/public/syntax.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSyntaxLanguageId",
+          "source": "packages/editor/src/syntax/index.ts",
+          "via": "packages/editor/src/public/syntax.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSyntaxProvider",
+          "source": "packages/editor/src/syntax/index.ts",
+          "via": "packages/editor/src/public/syntax.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSyntaxRange",
+          "source": "packages/editor/src/syntax/index.ts",
+          "via": "packages/editor/src/public/syntax.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSyntaxResult",
+          "source": "packages/editor/src/syntax/index.ts",
+          "via": "packages/editor/src/public/syntax.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSyntaxSession",
+          "source": "packages/editor/src/syntax/index.ts",
+          "via": "packages/editor/src/public/syntax.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSyntaxSessionOptions",
+          "source": "packages/editor/src/syntax/index.ts",
+          "via": "packages/editor/src/public/syntax.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorToken",
+          "source": "packages/editor/src/tokens.ts",
+          "via": "packages/editor/src/public/syntax.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorTokenStyle",
+          "source": "packages/editor/src/tokens.ts",
+          "via": "packages/editor/src/public/syntax.ts"
+        },
+        {
+          "kind": "type",
+          "name": "FoldRange",
+          "source": "packages/editor/src/syntax/index.ts",
+          "via": "packages/editor/src/public/syntax.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "createEditorSyntaxSession",
+          "source": "packages/editor/src/syntax/index.ts",
+          "via": "packages/editor/src/public/syntax.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "createEmptySyntaxResult",
+          "source": "packages/editor/src/syntax/index.ts",
+          "via": "packages/editor/src/public/syntax.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "createEmptySyntaxSession",
+          "source": "packages/editor/src/syntax/index.ts",
+          "via": "packages/editor/src/public/syntax.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "isEditorSyntaxLanguage",
+          "source": "packages/editor/src/syntax/index.ts",
+          "via": "packages/editor/src/public/syntax.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "styleForTreeSitterCapture",
+          "source": "packages/editor/src/syntax/index.ts",
+          "via": "packages/editor/src/public/syntax.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "treeSitterCapturesToEditorTokens",
+          "source": "packages/editor/src/syntax/index.ts",
+          "via": "packages/editor/src/public/syntax.ts"
+        }
+      ],
+      "source": "packages/editor/src/public/syntax.ts",
+      "specifier": "./syntax"
+    },
+    {
+      "exports": [
+        {
+          "kind": "type",
+          "name": "EditorPluginHostEvents",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/testing.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "EditorPluginHost",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/testing.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "observeEditorMountTiming",
+          "source": "packages/editor/src/editor.ts",
+          "via": "packages/editor/src/public/testing.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "resetEditorInstanceCount",
+          "source": "packages/editor/src/editor.ts",
+          "via": "packages/editor/src/public/testing.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "setEditorSyntaxSessionFactory",
+          "source": "packages/editor/src/editor.ts",
+          "via": "packages/editor/src/public/testing.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "setHighlightRegistry",
+          "source": "packages/editor/src/editor.ts",
+          "via": "packages/editor/src/public/testing.ts"
+        }
+      ],
+      "source": "packages/editor/src/public/testing.ts",
+      "specifier": "./testing"
     }
   ],
   "packageName": "@editor/core",

@@ -1,4 +1,5 @@
-import type { EditorInjectedTextRow, VirtualizedTextRowDecoration } from '@editor/core'
+import type { VirtualizedTextRowDecoration } from '@editor/core/rendering'
+import type { EditorInjectedTextRow } from '@editor/core/extensions'
 import type { DiffFile, DiffHunk, DiffHunkLine, DiffRenderRow } from './types'
 
 export type LiveDiffProjection = {

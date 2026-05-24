@@ -1,9 +1,9 @@
-import type { Editor } from "@editor/core/editor";
-import type { DiffTextFile, EditorDiffPlugin } from "@editor/diff";
-import type { TypeScriptLspDefinitionTarget } from "@editor/typescript-lsp";
-import type { Sidebar } from "./components/sidebar.ts";
-import type { StatusBar } from "./components/statusBar.ts";
-import type { TopBar } from "./components/topBar.ts";
+import type { Editor } from '@editor/core/editor'
+import type { DiffTextFile, EditorDiffPlugin } from '@editor/diff'
+import type { TypeScriptLspDefinitionTarget } from '@editor/typescript-lsp'
+import type { Sidebar } from './components/sidebar.ts'
+import type { StatusBar } from './components/statusBar.ts'
+import type { TopBar } from './components/topBar.ts'
 import {
   fetchRepositoryRef,
   fetchRepositorySource,
@@ -11,35 +11,35 @@ import {
   REPOSITORY_OWNER,
   type SourceFile,
   type SourceSnapshot,
-} from "./githubSource.ts";
-import { loadCachedSourceSnapshot, saveSourceSnapshotToCache } from "./sourceCache.ts";
-import { findSourceFile, firstSourceFile } from "./tree.ts";
+} from './githubSource.ts'
+import { loadCachedSourceSnapshot, saveSourceSnapshotToCache } from './sourceCache.ts'
+import { findSourceFile, firstSourceFile } from './tree.ts'
 
-const SELECTED_FILE_KEY = "editor-selected-file";
-const DEFAULT_SELECTED_FILE = "README.md";
+const SELECTED_FILE_KEY = 'editor-selected-file'
+const DEFAULT_SELECTED_FILE = 'README.md'
 
 type SourceWorkspace = {
-  setWorkspaceFiles(files: readonly Pick<SourceFile, "path" | "text">[]): void;
-  clearWorkspaceFiles(): void;
-};
+  setWorkspaceFiles(files: readonly Pick<SourceFile, 'path' | 'text'>[]): void
+  clearWorkspaceFiles(): void
+}
 
 type SourceViewHosts = {
-  showEditor(): void;
-  showDiff(): void;
-};
+  showEditor(): void
+  showDiff(): void
+}
 
 export class SourceController {
-  private currentSnapshot: SourceSnapshot | null = null;
-  private currentSelectedPath: string | undefined;
-  private isRefreshingSource = false;
-  private readonly topBar: TopBar;
-  private readonly sidebar: Sidebar;
-  private readonly statusBar: StatusBar;
-  private readonly editor: Editor;
-  private readonly sourceWorkspace: SourceWorkspace | null;
-  private readonly liveDiff: EditorDiffPlugin | null;
-  private readonly viewHosts: SourceViewHosts | null;
-  private activeView: "edit" | "diff" = "edit";
+  private currentSnapshot: SourceSnapshot | null = null
+  private currentSelectedPath: string | undefined
+  private isRefreshingSource = false
+  private readonly topBar: TopBar
+  private readonly sidebar: Sidebar
+  private readonly statusBar: StatusBar
+  private readonly editor: Editor
+  private readonly sourceWorkspace: SourceWorkspace | null
+  private readonly liveDiff: EditorDiffPlugin | null
+  private readonly viewHosts: SourceViewHosts | null
+  private activeView: 'edit' | 'diff' = 'edit'
 
   constructor(
     topBar: TopBar,
@@ -50,183 +50,183 @@ export class SourceController {
     liveDiff: EditorDiffPlugin | null = null,
     viewHosts: SourceViewHosts | null = null,
   ) {
-    this.topBar = topBar;
-    this.sidebar = sidebar;
-    this.statusBar = statusBar;
-    this.editor = editor;
-    this.sourceWorkspace = sourceWorkspace;
-    this.liveDiff = liveDiff;
-    this.viewHosts = viewHosts;
+    this.topBar = topBar
+    this.sidebar = sidebar
+    this.statusBar = statusBar
+    this.editor = editor
+    this.sourceWorkspace = sourceWorkspace
+    this.liveDiff = liveDiff
+    this.viewHosts = viewHosts
     this.topBar.setHandlers({
       onEditMode: () => this.showEditMode(),
       onDiffMode: () => this.showDiffMode(),
       onSplitDiff: () => undefined,
       onStackedDiff: () => undefined,
-    });
+    })
   }
 
   start(): void {
-    this.statusBar.clear();
-    this.topBar.setMessage("Loading cached source");
-    void this.loadCachedThenRefresh();
+    this.statusBar.clear()
+    this.topBar.setMessage('Loading cached source')
+    void this.loadCachedThenRefresh()
   }
 
   updateStatus(state = this.editor.getState()): void {
-    this.statusBar.update(this.currentSelectedPath, state);
+    this.statusBar.update(this.currentSelectedPath, state)
   }
 
   openDefinition(target: TypeScriptLspDefinitionTarget): boolean {
-    const snapshot = this.currentSnapshot;
-    if (!snapshot) return false;
+    const snapshot = this.currentSnapshot
+    if (!snapshot) return false
 
-    const file = findSourceFile(snapshot.files, target.path);
-    if (!file) return false;
+    const file = findSourceFile(snapshot.files, target.path)
+    if (!file) return false
 
-    this.displayFile(file, "auto");
-    const start = offsetForPosition(file.text, target.range.start);
-    const end = offsetForPosition(file.text, target.range.end);
-    this.editor.setSelection(start, end, start);
+    this.displayFile(file, 'auto')
+    const start = offsetForPosition(file.text, target.range.start)
+    const end = offsetForPosition(file.text, target.range.end)
+    this.editor.setSelection(start, end, start)
     void this.sidebar.renderSource(snapshot.files, this.displayFile, {
       selectedPath: file.path,
       preserveExpandedPaths: true,
-    });
-    return true;
+    })
+    return true
   }
 
   async refreshSource(): Promise<void> {
-    if (this.isRefreshingSource) return;
+    if (this.isRefreshingSource) return
 
-    this.isRefreshingSource = true;
-    this.updateToolbarState();
-    this.topBar.setMessage(`Fetching ${REPOSITORY_OWNER}/${REPOSITORY_NAME}`);
+    this.isRefreshingSource = true
+    this.updateToolbarState()
+    this.topBar.setMessage(`Fetching ${REPOSITORY_OWNER}/${REPOSITORY_NAME}`)
 
     try {
-      const sourceRef = await fetchRepositoryRef();
+      const sourceRef = await fetchRepositoryRef()
       if (this.currentSnapshot?.commitSha === sourceRef.commitSha) {
-        this.topBar.setRepositoryName(snapshotLabel(this.currentSnapshot));
-        return;
+        this.topBar.setRepositoryName(snapshotLabel(this.currentSnapshot))
+        return
       }
 
-      const snapshot = await fetchRepositorySource(sourceRef);
-      await persistSnapshot(snapshot);
+      const snapshot = await fetchRepositorySource(sourceRef)
+      await persistSnapshot(snapshot)
       await this.displaySnapshot(snapshot, {
         selectedPath: this.currentSelectedPath ?? storedSelectedPath(),
         preserveExpandedPaths: Boolean(this.currentSnapshot),
-      });
-      this.topBar.setRepositoryName(snapshotLabel(snapshot));
+      })
+      this.topBar.setRepositoryName(snapshotLabel(snapshot))
     } catch {
-      this.handleRefreshFailure();
+      this.handleRefreshFailure()
     } finally {
-      this.isRefreshingSource = false;
-      this.updateToolbarState();
+      this.isRefreshingSource = false
+      this.updateToolbarState()
     }
   }
 
   private async loadCachedThenRefresh(): Promise<void> {
-    const cached = await loadCachedSourceSnapshot();
+    const cached = await loadCachedSourceSnapshot()
 
     if (cached) {
       await this.displaySnapshot(cached, {
         selectedPath: storedSelectedPath(),
         preserveExpandedPaths: false,
-      });
-      this.topBar.setRepositoryName(`${snapshotLabel(cached)} cached`);
+      })
+      this.topBar.setRepositoryName(`${snapshotLabel(cached)} cached`)
     }
 
-    await this.refreshSource();
+    await this.refreshSource()
   }
 
   private async displaySnapshot(
     snapshot: SourceSnapshot,
     options: { readonly selectedPath?: string; readonly preserveExpandedPaths: boolean },
   ): Promise<void> {
-    const selectedFile = selectedFileForSnapshot(snapshot, options.selectedPath);
-    this.currentSnapshot = snapshot;
-    this.currentSelectedPath = selectedFile?.path;
-    this.sourceWorkspace?.setWorkspaceFiles(snapshot.files);
+    const selectedFile = selectedFileForSnapshot(snapshot, options.selectedPath)
+    this.currentSnapshot = snapshot
+    this.currentSelectedPath = selectedFile?.path
+    this.sourceWorkspace?.setWorkspaceFiles(snapshot.files)
 
     if (!selectedFile) {
-      this.clearActiveFile();
-      this.sidebar.clear();
-      return;
+      this.clearActiveFile()
+      this.sidebar.clear()
+      return
     }
 
     await this.sidebar.renderSource(snapshot.files, this.displayFile, {
       selectedPath: selectedFile.path,
       preserveExpandedPaths: options.preserveExpandedPaths,
-    });
+    })
   }
 
-  private readonly displayFile = (file: SourceFile, reason: "auto" | "user"): void => {
-    this.currentSelectedPath = file.path;
-    localStorage.setItem(SELECTED_FILE_KEY, file.path);
+  private readonly displayFile = (file: SourceFile, reason: 'auto' | 'user'): void => {
+    this.currentSelectedPath = file.path
+    localStorage.setItem(SELECTED_FILE_KEY, file.path)
     this.editor.openDocument({
       documentId: file.path,
       text: file.text,
       languageId: languageIdForFilePath(file.path),
-    });
-    if (this.activeView === "diff") this.configureCurrentLiveDiff();
-    if (reason === "user") this.editor.focus();
-    this.updateStatus();
-  };
+    })
+    if (this.activeView === 'diff') this.configureCurrentLiveDiff()
+    if (reason === 'user') this.editor.focus()
+    this.updateStatus()
+  }
 
   private showEditMode(): void {
-    this.activeView = "edit";
-    this.liveDiff?.setEnabled(false);
-    this.viewHosts?.showEditor();
-    this.topBar.setViewMode("edit");
-    this.topBar.setDiffControlsVisible(false);
-    this.editor.focus();
+    this.activeView = 'edit'
+    this.liveDiff?.setEnabled(false)
+    this.viewHosts?.showEditor()
+    this.topBar.setViewMode('edit')
+    this.topBar.setDiffControlsVisible(false)
+    this.editor.focus()
   }
 
   private showDiffMode(): void {
-    if (!this.configureCurrentLiveDiff()) return;
+    if (!this.configureCurrentLiveDiff()) return
 
-    this.activeView = "diff";
-    this.liveDiff?.setEnabled(true);
-    this.viewHosts?.showDiff();
-    this.topBar.setViewMode("diff");
-    this.topBar.setDiffControlsVisible(false);
-    this.editor.focus();
+    this.activeView = 'diff'
+    this.liveDiff?.setEnabled(true)
+    this.viewHosts?.showDiff()
+    this.topBar.setViewMode('diff')
+    this.topBar.setDiffControlsVisible(false)
+    this.editor.focus()
   }
 
   private configureCurrentLiveDiff(): boolean {
-    const liveDiff = this.liveDiff;
-    const file = this.currentFile();
-    if (!liveDiff || !file) return false;
+    const liveDiff = this.liveDiff
+    const file = this.currentFile()
+    if (!liveDiff || !file) return false
 
-    liveDiff.setBaseFile(diffBaseFile(file));
-    return true;
+    liveDiff.setBaseFile(diffBaseFile(file))
+    return true
   }
 
   private currentFile(): SourceFile | null {
-    const snapshot = this.currentSnapshot;
-    if (!snapshot || !this.currentSelectedPath) return null;
-    return findSourceFile(snapshot.files, this.currentSelectedPath);
+    const snapshot = this.currentSnapshot
+    if (!snapshot || !this.currentSelectedPath) return null
+    return findSourceFile(snapshot.files, this.currentSelectedPath)
   }
 
   private handleRefreshFailure(): void {
     if (this.currentSnapshot) {
-      this.topBar.setMessage("Using cached source; refresh failed");
-      return;
+      this.topBar.setMessage('Using cached source; refresh failed')
+      return
     }
 
-    this.topBar.setMessage("Failed to fetch source");
-    this.clearActiveFile();
-    this.sidebar.clear();
+    this.topBar.setMessage('Failed to fetch source')
+    this.clearActiveFile()
+    this.sidebar.clear()
   }
 
   private updateToolbarState(): void {
-    this.topBar.setBusyState(this.isRefreshingSource);
+    this.topBar.setBusyState(this.isRefreshingSource)
   }
 
   private clearActiveFile(): void {
-    this.currentSelectedPath = undefined;
-    this.sourceWorkspace?.clearWorkspaceFiles();
-    this.liveDiff?.setBaseFile(null);
-    this.liveDiff?.setEnabled(false);
-    this.editor.clearDocument();
-    this.updateStatus();
+    this.currentSelectedPath = undefined
+    this.sourceWorkspace?.clearWorkspaceFiles()
+    this.liveDiff?.setBaseFile(null)
+    this.liveDiff?.setEnabled(false)
+    this.editor.clearDocument()
+    this.updateStatus()
   }
 }
 
@@ -236,7 +236,7 @@ function diffBaseFile(file: SourceFile): DiffTextFile {
     text: file.text,
     languageId: languageIdForFilePath(file.path),
     objectId: file.sha,
-  };
+  }
 }
 
 function selectedFileForSnapshot(
@@ -247,63 +247,63 @@ function selectedFileForSnapshot(
     findSourceFile(snapshot.files, selectedPath) ??
     findSourceFile(snapshot.files, DEFAULT_SELECTED_FILE) ??
     firstSourceFile(snapshot.files)
-  );
+  )
 }
 
 async function persistSnapshot(snapshot: SourceSnapshot): Promise<void> {
   try {
-    await saveSourceSnapshotToCache(snapshot);
+    await saveSourceSnapshotToCache(snapshot)
   } catch {
-    return;
+    return
   }
 }
 
 function storedSelectedPath(): string | undefined {
-  return localStorage.getItem(SELECTED_FILE_KEY) ?? undefined;
+  return localStorage.getItem(SELECTED_FILE_KEY) ?? undefined
 }
 
 function snapshotLabel(snapshot: SourceSnapshot): string {
-  return `${snapshot.owner}/${snapshot.repo} @ ${snapshot.commitSha.slice(0, 7)}`;
+  return `${snapshot.owner}/${snapshot.repo} @ ${snapshot.commitSha.slice(0, 7)}`
 }
 
 function languageIdForFilePath(filePath: string): string | null {
-  const extension = extensionForFilePath(filePath);
-  if (!extension) return null;
+  const extension = extensionForFilePath(filePath)
+  if (!extension) return null
 
-  return LANGUAGE_BY_EXTENSION[extension] ?? null;
+  return LANGUAGE_BY_EXTENSION[extension] ?? null
 }
 
 function extensionForFilePath(filePath: string): string | null {
-  const dotIndex = filePath.lastIndexOf(".");
-  if (dotIndex === -1) return null;
+  const dotIndex = filePath.lastIndexOf('.')
+  if (dotIndex === -1) return null
 
-  return filePath.slice(dotIndex).toLowerCase();
+  return filePath.slice(dotIndex).toLowerCase()
 }
 
 function offsetForPosition(
   text: string,
   position: { readonly line: number; readonly character: number },
 ): number {
-  const lines = text.split("\n");
-  const line = Math.min(Math.max(0, position.line), Math.max(0, lines.length - 1));
-  let offset = 0;
-  for (let index = 0; index < line; index += 1) offset += (lines[index]?.length ?? 0) + 1;
-  return Math.min(text.length, offset + Math.max(0, position.character));
+  const lines = text.split('\n')
+  const line = Math.min(Math.max(0, position.line), Math.max(0, lines.length - 1))
+  let offset = 0
+  for (let index = 0; index < line; index += 1) offset += (lines[index]?.length ?? 0) + 1
+  return Math.min(text.length, offset + Math.max(0, position.character))
 }
 
 const LANGUAGE_BY_EXTENSION: Record<string, string> = {
-  ".cjs": "javascript",
-  ".css": "css",
-  ".cts": "typescript",
-  ".htm": "html",
-  ".html": "html",
-  ".js": "javascript",
-  ".json": "json",
-  ".jsx": "javascript",
-  ".markdown": "markdown",
-  ".md": "markdown",
-  ".mjs": "javascript",
-  ".mts": "typescript",
-  ".ts": "typescript",
-  ".tsx": "typescript",
-};
+  '.cjs': 'javascript',
+  '.css': 'css',
+  '.cts': 'typescript',
+  '.htm': 'html',
+  '.html': 'html',
+  '.js': 'javascript',
+  '.json': 'json',
+  '.jsx': 'javascript',
+  '.markdown': 'markdown',
+  '.md': 'markdown',
+  '.mjs': 'javascript',
+  '.mts': 'typescript',
+  '.ts': 'typescript',
+  '.tsx': 'typescript',
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { EditorGutterWidthContext } from '@editor/core'
+import type { EditorGutterWidthContext } from '@editor/core/extensions'
 import {
   createDiffGutterContribution,
   diffGutterIndicatorText,

@@ -1,10 +1,6 @@
-import type {
-  DocumentSessionChange,
-  EditorMinimapDecoration,
-  EditorToken,
-  EditorViewSnapshot,
-  TextEdit,
-} from '@editor/core'
+import type { DocumentSessionChange, TextEdit } from '@editor/core/document'
+import type { EditorToken } from '@editor/core/syntax'
+import type { EditorMinimapDecoration, EditorViewSnapshot } from '@editor/core/extensions'
 import { parseCssColor, RGBA_BLACK, RGBA_WHITE, transparent } from './color'
 import type {
   MinimapBaseStyles,

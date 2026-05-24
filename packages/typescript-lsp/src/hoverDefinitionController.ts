@@ -1,9 +1,9 @@
+import type { EditorTheme } from '@editor/core/rendering'
 import type {
-  EditorTheme,
   EditorViewContributionContext,
   EditorViewContributionUpdateKind,
   EditorViewSnapshot,
-} from '@editor/core'
+} from '@editor/core/extensions'
 import { lspPositionToOffset, offsetToLspPosition, type LspClient } from '@editor/lsp'
 import type * as lsp from 'vscode-languageserver-protocol'
 

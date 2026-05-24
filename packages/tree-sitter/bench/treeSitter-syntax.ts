@@ -6,7 +6,7 @@ import {
   createPieceTableSnapshot,
   type PieceTableSnapshot,
   type TextEdit,
-} from '@editor/core'
+} from '@editor/core/document'
 import { resolveTreeSitterLanguageContribution } from '../src'
 import { createTreeSitterEditPayload } from '../src/session'
 import {

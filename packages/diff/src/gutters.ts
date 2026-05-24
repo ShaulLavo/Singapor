@@ -1,4 +1,4 @@
-import type { EditorGutterContribution } from '@editor/core'
+import type { EditorGutterContribution } from '@editor/core/extensions'
 import type { DiffRenderRow } from './types'
 
 export type DiffGutterSide = 'old' | 'new' | 'stacked'

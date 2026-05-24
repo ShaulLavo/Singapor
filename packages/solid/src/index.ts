@@ -1,6 +1,5 @@
 import {
   Editor,
-  type DocumentSessionChange,
   type EditorChangeHandler,
   type EditorCommandContext,
   type EditorCommandId,
@@ -10,18 +9,19 @@ import {
   type EditorOpenDocumentOptions,
   type EditorOptions,
   type EditorRangeDecoration,
-  type EditorSelectionRevealTarget,
-  type EditorPlugin,
   type EditorScrollPosition,
+  type EditorSelectionRevealTarget,
   type EditorSetTextOptions,
   type EditorState,
-  type EditorSyntaxLanguageId,
-  type EditorViewContributionUpdateKind,
-  type EditorViewSnapshot,
-  type HiddenCharactersMode,
-  type EditorTheme,
-  type TextSnapshot,
-} from '@editor/core'
+} from '@editor/core/editor'
+import type { DocumentSessionChange, TextSnapshot } from '@editor/core/document'
+import type { EditorSyntaxLanguageId } from '@editor/core/syntax'
+import type { EditorTheme, HiddenCharactersMode } from '@editor/core/rendering'
+import type {
+  EditorPlugin,
+  EditorViewContributionUpdateKind,
+  EditorViewSnapshot,
+} from '@editor/core/extensions'
 import { batch, createEffect, createSignal, onCleanup, untrack, type Accessor } from 'solid-js'
 
 export type SolidEditorReactiveValue<T> = T | Accessor<T>

@@ -1,37 +1,37 @@
 interface FileSystemCreateWritableOptions {
-  keepExistingData?: boolean;
+  keepExistingData?: boolean
 }
 
 interface FileSystemGetDirectoryOptions {
-  create?: boolean;
+  create?: boolean
 }
 
 interface FileSystemGetFileOptions {
-  create?: boolean;
+  create?: boolean
 }
 
 interface FileSystemRemoveOptions {
-  recursive?: boolean;
+  recursive?: boolean
 }
 
 interface FileSystemWritableFileStream extends WritableStream {
-  write(data: BufferSource | Blob | string): Promise<void>;
-  close(): Promise<void>;
+  write(data: BufferSource | Blob | string): Promise<void>
+  close(): Promise<void>
 }
 
 interface FileSystemFileHandle {
-  createWritable(options?: FileSystemCreateWritableOptions): Promise<FileSystemWritableFileStream>;
+  createWritable(options?: FileSystemCreateWritableOptions): Promise<FileSystemWritableFileStream>
 }
 
 interface FileSystemDirectoryHandle {
   getDirectoryHandle(
     name: string,
     options?: FileSystemGetDirectoryOptions,
-  ): Promise<FileSystemDirectoryHandle>;
-  getFileHandle(name: string, options?: FileSystemGetFileOptions): Promise<FileSystemFileHandle>;
-  removeEntry(name: string, options?: FileSystemRemoveOptions): Promise<void>;
+  ): Promise<FileSystemDirectoryHandle>
+  getFileHandle(name: string, options?: FileSystemGetFileOptions): Promise<FileSystemFileHandle>
+  removeEntry(name: string, options?: FileSystemRemoveOptions): Promise<void>
 }
 
 interface StorageManager {
-  getDirectory(): Promise<FileSystemDirectoryHandle>;
+  getDirectory(): Promise<FileSystemDirectoryHandle>
 }

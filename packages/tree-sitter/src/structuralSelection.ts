@@ -1,12 +1,12 @@
+import type { PieceTableSnapshot } from '@editor/core/document'
 import {
   createAnchorSelection,
   createSelectionSet,
   normalizeSelectionSet,
+  type PieceTableAnchor,
   resolveSelection,
   type SelectionSet,
-  type PieceTableAnchor,
-  type PieceTableSnapshot,
-} from '@editor/core'
+} from '@editor/core/internal'
 import { selectWithTreeSitter } from './treeSitter/workerClient'
 import type {
   TreeSitterLanguageId,

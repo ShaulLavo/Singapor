@@ -1,4 +1,6 @@
-import { createDocumentSession, type Editor, type EditorResolvedSelection } from '@editor/core'
+import type { Editor } from '@editor/core/editor'
+import { createDocumentSession } from '@editor/core/document'
+import type { EditorResolvedSelection } from '@editor/core/extensions'
 import { act, createElement, useLayoutEffect, type ReactElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

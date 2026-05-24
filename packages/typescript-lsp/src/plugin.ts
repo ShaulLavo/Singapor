@@ -1,6 +1,6 @@
+import type { EditorCommandId } from '@editor/core/editor'
+import type { DocumentSessionChange } from '@editor/core/document'
 import type {
-  DocumentSessionChange,
-  EditorCommandId,
   EditorDisposable,
   EditorFeatureContribution,
   EditorFeatureContributionContext,
@@ -8,7 +8,7 @@ import type {
   EditorViewContributionContext,
   EditorViewContributionUpdateKind,
   EditorViewSnapshot,
-} from '@editor/core'
+} from '@editor/core/extensions'
 
 import {
   TYPESCRIPT_LSP_COMPLETION_EDIT_FEATURE_ID,

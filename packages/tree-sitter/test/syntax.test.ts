@@ -4,10 +4,9 @@ import {
   applyBatchToPieceTable,
   createDocumentSession,
   createPieceTableSnapshot,
-  EditorPluginHost,
-  styleForTreeSitterCapture,
-  treeSitterCapturesToEditorTokens,
-} from '@editor/core'
+} from '@editor/core/document'
+import { styleForTreeSitterCapture, treeSitterCapturesToEditorTokens } from '@editor/core/syntax'
+import { EditorPluginHost } from '@editor/core/testing'
 import {
   createTreeSitterLanguagePlugin,
   resolveTreeSitterLanguageAlias,

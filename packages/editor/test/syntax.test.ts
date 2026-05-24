@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { styleForTreeSitterCapture, treeSitterCapturesToEditorTokens } from '../src'
+import { styleForTreeSitterCapture, treeSitterCapturesToEditorTokens } from '../src/public/syntax'
 
 describe('syntax capture conversion', () => {
   it('maps known capture names to editor token styles', () => {

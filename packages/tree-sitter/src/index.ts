@@ -58,12 +58,8 @@ export {
   type TreeSitterSelectionExpansionState,
 } from './structuralSelection'
 
-import type {
-  EditorDisposable,
-  EditorPlugin,
-  EditorPluginContext,
-  EditorSyntaxProvider,
-} from '@editor/core'
+import type { EditorSyntaxProvider } from '@editor/core/syntax'
+import type { EditorDisposable, EditorPlugin, EditorPluginContext } from '@editor/core/extensions'
 import type {
   TreeSitterLanguageAssets,
   TreeSitterLanguageContribution,

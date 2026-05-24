@@ -15,7 +15,7 @@ import type {
   TreeSitterWorkerResponse,
   TreeSitterWorkerResult,
 } from './types'
-import type { PieceTableSnapshot } from '@editor/core'
+import type { PieceTableSnapshot } from '@editor/core/document'
 import { createTreeSitterSourceDescriptor, type TreeSitterSourceDescriptor } from './source'
 
 type PendingRequest = {
