@@ -1,17 +1,17 @@
-import { offsetToLspPosition } from "@editor/lsp/positions";
-import ts from "typescript";
-import type * as lsp from "vscode-languageserver-protocol";
+import { offsetToLspPosition } from '@editor/lsp/positions'
+import ts from 'typescript'
+import type * as lsp from 'vscode-languageserver-protocol'
 
-const WARNING = 2;
-const INFORMATION = 3;
-const HINT = 4;
+const WARNING = 2
+const INFORMATION = 3
+const HINT = 4
 
 export function tsDiagnosticToLspDiagnostic(
   diagnostic: ts.Diagnostic,
-  text = diagnostic.file?.text ?? "",
+  text = diagnostic.file?.text ?? '',
 ): lsp.Diagnostic {
-  const start = clampDiagnosticOffset(diagnostic.start ?? 0, text);
-  const end = clampDiagnosticOffset(start + (diagnostic.length ?? 0), text);
+  const start = clampDiagnosticOffset(diagnostic.start ?? 0, text)
+  const end = clampDiagnosticOffset(start + (diagnostic.length ?? 0), text)
 
   return {
     range: {
@@ -20,22 +20,22 @@ export function tsDiagnosticToLspDiagnostic(
     },
     severity: lspSeverityForTsDiagnostic(diagnostic),
     code: diagnostic.code,
-    source: "typescript",
+    source: 'typescript',
     message: tsDiagnosticMessageText(diagnostic),
-  };
+  }
 }
 
 export function tsDiagnosticMessageText(diagnostic: ts.Diagnostic): string {
-  return ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n");
+  return ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')
 }
 
 function lspSeverityForTsDiagnostic(diagnostic: ts.Diagnostic): lsp.DiagnosticSeverity {
-  if (diagnostic.category === ts.DiagnosticCategory.Warning) return WARNING;
-  if (diagnostic.category === ts.DiagnosticCategory.Suggestion) return HINT;
-  if (diagnostic.category === ts.DiagnosticCategory.Message) return INFORMATION;
-  return 1;
+  if (diagnostic.category === ts.DiagnosticCategory.Warning) return WARNING
+  if (diagnostic.category === ts.DiagnosticCategory.Suggestion) return HINT
+  if (diagnostic.category === ts.DiagnosticCategory.Message) return INFORMATION
+  return 1
 }
 
 function clampDiagnosticOffset(offset: number, text: string): number {
-  return Math.min(text.length, Math.max(0, offset));
+  return Math.min(text.length, Math.max(0, offset))
 }

@@ -170,7 +170,7 @@
   top: 0;
 }
 
-.editor-virtualized-row[data-editor-virtual-row-kind="block"] {
+.editor-virtualized-row[data-editor-virtual-row-kind='block'] {
   line-height: normal;
   white-space: normal;
 }
@@ -243,12 +243,12 @@
   white-space: pre;
 }
 
-.editor-virtualized-hidden-character-marker[data-editor-hidden-character="space"]::before {
-  content: "\00b7";
+.editor-virtualized-hidden-character-marker[data-editor-hidden-character='space']::before {
+  content: '\00b7';
 }
 
-.editor-virtualized-hidden-character-marker[data-editor-hidden-character="tab"]::before {
-  content: "\2192";
+.editor-virtualized-hidden-character-marker[data-editor-hidden-character='tab']::before {
+  content: '\2192';
 }
 
 .editor-virtualized-fold-placeholder {

@@ -9,7 +9,7 @@ export type {
   Point,
   RealAnchor,
   ResolvedAnchor,
-} from "./pieceTableTypes";
+} from './pieceTableTypes'
 
 export {
   Anchor,
@@ -31,4 +31,4 @@ export {
   pointToOffset,
   resolveAnchor,
   resolveAnchorLinear,
-} from "./pieceTable";
+} from './pieceTable'

@@ -1,19 +1,19 @@
-import { describe, expect, it } from "vitest";
-import type { Node, Query, Range as TreeSitterRange, Tree } from "web-tree-sitter";
+import { describe, expect, it } from 'vitest'
+import type { Node, Query, Range as TreeSitterRange, Tree } from 'web-tree-sitter'
 
 import {
   applyBatchToPieceTable,
   createPieceTableSnapshot,
   getPieceTableText,
   insertIntoPieceTable,
-} from "@editor/core";
+} from '@editor/core'
 import {
   createTreeSitterSourceDescriptor,
   readTreeSitterInputRange,
   resolveTreeSitterSourceDescriptor,
   type TreeSitterSourceCache,
-} from "../src/treeSitter/source.ts";
-import { __treeSitterWorkerInternalsForTests } from "../src/treeSitter/treeSitter.worker.ts";
+} from '../src/treeSitter/source.ts'
+import { __treeSitterWorkerInternalsForTests } from '../src/treeSitter/treeSitter.worker.ts'
 
 const {
   applyTextEdit,
@@ -25,192 +25,192 @@ const {
   collectTreeData,
   rangeSpan,
   readTreeSitterPieceTableInput,
-} = __treeSitterWorkerInternalsForTests;
+} = __treeSitterWorkerInternalsForTests
 
-describe("tree-sitter worker internals", () => {
-  it("applies text edits by replacing the old range", () => {
-    expect(applyTextEdit("const a = 1;", 6, 7, "answer")).toBe("const answer = 1;");
-    expect(applyTextEdit("abcdef", 2, 4, "")).toBe("abef");
-    expect(applyTextEdit("abef", 2, 2, "cd")).toBe("abcdef");
-  });
+describe('tree-sitter worker internals', () => {
+  it('applies text edits by replacing the old range', () => {
+    expect(applyTextEdit('const a = 1;', 6, 7, 'answer')).toBe('const answer = 1;')
+    expect(applyTextEdit('abcdef', 2, 4, '')).toBe('abef')
+    expect(applyTextEdit('abef', 2, 2, 'cd')).toBe('abcdef')
+  })
 
-  it("applies batch text edits from the original offsets", () => {
+  it('applies batch text edits from the original offsets', () => {
     expect(
-      applyTextEdits("ab\ncd", [
-        { from: 0, to: 1, text: "x" },
-        { from: 3, to: 5, text: "yz" },
+      applyTextEdits('ab\ncd', [
+        { from: 0, to: 1, text: 'x' },
+        { from: 3, to: 5, text: 'yz' },
       ]),
-    ).toBe("xb\nyz");
-  });
+    ).toBe('xb\nyz')
+  })
 
-  it("reads parser input from piece-table chunks without flattening", () => {
-    const snapshot = insertIntoPieceTable(createPieceTableSnapshot("a😀\n"), 4, "tail");
-    const descriptor = createTreeSitterSourceDescriptor(snapshot, { useSharedBuffers: false });
-    const input = resolveTreeSitterSourceDescriptor(new Map(), "doc", descriptor);
+  it('reads parser input from piece-table chunks without flattening', () => {
+    const snapshot = insertIntoPieceTable(createPieceTableSnapshot('a😀\n'), 4, 'tail')
+    const descriptor = createTreeSitterSourceDescriptor(snapshot, { useSharedBuffers: false })
+    const input = resolveTreeSitterSourceDescriptor(new Map(), 'doc', descriptor)
 
-    expect(input.chunks.length).toBeGreaterThan(1);
-    expect(readTreeSitterPieceTableInput(input, 0)).toBe("a😀\n");
-    expect(input.lastChunkIndex).toBe(0);
-    expect(readTreeSitterPieceTableInput(input, 4)).toBe("tail");
-    expect(input.lastChunkIndex).toBe(1);
-    expect(readTreeSitterPieceTableInput(input, snapshot.length)).toBeUndefined();
-  });
+    expect(input.chunks.length).toBeGreaterThan(1)
+    expect(readTreeSitterPieceTableInput(input, 0)).toBe('a😀\n')
+    expect(input.lastChunkIndex).toBe(0)
+    expect(readTreeSitterPieceTableInput(input, 4)).toBe('tail')
+    expect(input.lastChunkIndex).toBe(1)
+    expect(readTreeSitterPieceTableInput(input, snapshot.length)).toBeUndefined()
+  })
 
-  it("caps parser input reads to fit the web-tree-sitter UTF-16 callback buffer", () => {
-    const snapshot = createPieceTableSnapshot("a".repeat(10_000));
-    const descriptor = createTreeSitterSourceDescriptor(snapshot, { useSharedBuffers: false });
-    const input = resolveTreeSitterSourceDescriptor(new Map(), "doc", descriptor);
+  it('caps parser input reads to fit the web-tree-sitter UTF-16 callback buffer', () => {
+    const snapshot = createPieceTableSnapshot('a'.repeat(10_000))
+    const descriptor = createTreeSitterSourceDescriptor(snapshot, { useSharedBuffers: false })
+    const input = resolveTreeSitterSourceDescriptor(new Map(), 'doc', descriptor)
 
-    expect(readTreeSitterPieceTableInput(input, 0)).toHaveLength(4096);
-    expect(readTreeSitterPieceTableInput(input, 4096)).toHaveLength(4096);
-    expect(readTreeSitterPieceTableInput(input, 8192)).toHaveLength(1808);
-  });
+    expect(readTreeSitterPieceTableInput(input, 0)).toHaveLength(4096)
+    expect(readTreeSitterPieceTableInput(input, 4096)).toHaveLength(4096)
+    expect(readTreeSitterPieceTableInput(input, 8192)).toHaveLength(1808)
+  })
 
-  it("builds full descriptors with only unsent chunk payloads", () => {
-    const snapshot = createPieceTableSnapshot("const answer = 1;\n");
-    const first = createTreeSitterSourceDescriptor(snapshot, { useSharedBuffers: false });
-    const sent = new Set(first.chunks.map((chunk) => chunk.chunkId));
+  it('builds full descriptors with only unsent chunk payloads', () => {
+    const snapshot = createPieceTableSnapshot('const answer = 1;\n')
+    const first = createTreeSitterSourceDescriptor(snapshot, { useSharedBuffers: false })
+    const sent = new Set(first.chunks.map((chunk) => chunk.chunkId))
     const second = createTreeSitterSourceDescriptor(snapshot, {
       sentChunkIds: sent,
       useSharedBuffers: false,
-    });
+    })
 
-    expect(first.length).toBe(snapshot.length);
+    expect(first.length).toBe(snapshot.length)
     expect(first.pieces.map((piece) => piece.length).reduce((sum, length) => sum + length, 0)).toBe(
       snapshot.length,
-    );
-    expect(first.chunks.length).toBeGreaterThan(0);
-    expect(second.pieces).toEqual(first.pieces);
-    expect(second.chunks).toEqual([]);
-  });
+    )
+    expect(first.chunks.length).toBeGreaterThan(0)
+    expect(second.pieces).toEqual(first.pieces)
+    expect(second.chunks).toEqual([])
+  })
 
-  it("sends only new chunks after edits while preserving current ordered spans", () => {
-    const previous = createPieceTableSnapshot("ab\ncd");
-    const first = createTreeSitterSourceDescriptor(previous, { useSharedBuffers: false });
-    const sent = new Set(first.chunks.map((chunk) => chunk.chunkId));
-    const next = applyBatchToPieceTable(previous, [{ from: 3, to: 5, text: "xyz" }]);
+  it('sends only new chunks after edits while preserving current ordered spans', () => {
+    const previous = createPieceTableSnapshot('ab\ncd')
+    const first = createTreeSitterSourceDescriptor(previous, { useSharedBuffers: false })
+    const sent = new Set(first.chunks.map((chunk) => chunk.chunkId))
+    const next = applyBatchToPieceTable(previous, [{ from: 3, to: 5, text: 'xyz' }])
     const edited = createTreeSitterSourceDescriptor(next, {
       sentChunkIds: sent,
       useSharedBuffers: false,
-    });
-    const input = resolveTreeSitterSourceDescriptor(cacheWith("doc", first), "doc", edited);
+    })
+    const input = resolveTreeSitterSourceDescriptor(cacheWith('doc', first), 'doc', edited)
 
-    expect(edited.length).toBe(next.length);
-    expect(edited.chunks).toHaveLength(1);
-    expect(readTreeSitterInputRange(input, 0, next.length)).toBe(getPieceTableText(next));
-  });
+    expect(edited.length).toBe(next.length)
+    expect(edited.chunks).toHaveLength(1)
+    expect(readTreeSitterInputRange(input, 0, next.length)).toBe(getPieceTableText(next))
+  })
 
-  it("reads string and shared UTF-16 source chunks across piece boundaries", () => {
-    const snapshot = insertIntoPieceTable(createPieceTableSnapshot("a😀\n"), 4, "tail");
+  it('reads string and shared UTF-16 source chunks across piece boundaries', () => {
+    const snapshot = insertIntoPieceTable(createPieceTableSnapshot('a😀\n'), 4, 'tail')
     const stringInput = resolveTreeSitterSourceDescriptor(
       new Map(),
-      "strings",
+      'strings',
       createTreeSitterSourceDescriptor(snapshot, { useSharedBuffers: false }),
-    );
+    )
     const sharedInput = resolveTreeSitterSourceDescriptor(
       new Map(),
-      "shared",
+      'shared',
       createTreeSitterSourceDescriptor(snapshot, { useSharedBuffers: true }),
-    );
+    )
 
-    expect(readTreeSitterInputRange(stringInput, 0, snapshot.length)).toBe("a😀\ntail");
-    expect(readTreeSitterInputRange(sharedInput, 0, snapshot.length)).toBe("a😀\ntail");
-    expect(readTreeSitterPieceTableInput(sharedInput, 1)).toBe("😀\n");
-  });
+    expect(readTreeSitterInputRange(stringInput, 0, snapshot.length)).toBe('a😀\ntail')
+    expect(readTreeSitterInputRange(sharedInput, 0, snapshot.length)).toBe('a😀\ntail')
+    expect(readTreeSitterPieceTableInput(sharedInput, 1)).toBe('😀\n')
+  })
 
-  it("resolves empty descriptors", () => {
-    const snapshot = createPieceTableSnapshot("");
-    const descriptor = createTreeSitterSourceDescriptor(snapshot, { useSharedBuffers: false });
-    const input = resolveTreeSitterSourceDescriptor(new Map(), "empty", descriptor);
+  it('resolves empty descriptors', () => {
+    const snapshot = createPieceTableSnapshot('')
+    const descriptor = createTreeSitterSourceDescriptor(snapshot, { useSharedBuffers: false })
+    const input = resolveTreeSitterSourceDescriptor(new Map(), 'empty', descriptor)
 
-    expect(descriptor).toEqual({ length: 0, pieces: [], chunks: [] });
-    expect(readTreeSitterPieceTableInput(input, 0)).toBeUndefined();
-  });
+    expect(descriptor).toEqual({ length: 0, pieces: [], chunks: [] })
+    expect(readTreeSitterPieceTableInput(input, 0)).toBeUndefined()
+  })
 
-  it("tracks bracket depth while walking open and close nodes", () => {
-    const stack: { char: string; index: number }[] = [];
+  it('tracks bracket depth while walking open and close nodes', () => {
+    const stack: { char: string; index: number }[] = []
 
-    expect(collectBracket(node("(", 0), stack)).toEqual({ index: 0, char: "(", depth: 1 });
-    expect(collectBracket(node("{", 1), stack)).toEqual({ index: 1, char: "{", depth: 2 });
-    expect(collectBracket(node("}", 2), stack)).toEqual({ index: 2, char: "}", depth: 2 });
-    expect(collectBracket(node(")", 3), stack)).toEqual({ index: 3, char: ")", depth: 1 });
-    expect(stack).toEqual([]);
-  });
+    expect(collectBracket(node('(', 0), stack)).toEqual({ index: 0, char: '(', depth: 1 })
+    expect(collectBracket(node('{', 1), stack)).toEqual({ index: 1, char: '{', depth: 2 })
+    expect(collectBracket(node('}', 2), stack)).toEqual({ index: 2, char: '}', depth: 2 })
+    expect(collectBracket(node(')', 3), stack)).toEqual({ index: 3, char: ')', depth: 1 })
+    expect(stack).toEqual([])
+  })
 
-  it("reports tree-sitter error and missing nodes", () => {
-    expect(collectError(node("ERROR", 4, 9, { isError: true }))).toEqual({
+  it('reports tree-sitter error and missing nodes', () => {
+    expect(collectError(node('ERROR', 4, 9, { isError: true }))).toEqual({
       startIndex: 4,
       endIndex: 9,
       isMissing: false,
-      message: "ERROR",
-    });
+      message: 'ERROR',
+    })
 
-    expect(collectError(node("identifier", 10, 10, { isMissing: true }))).toEqual({
+    expect(collectError(node('identifier', 10, 10, { isMissing: true }))).toEqual({
       startIndex: 10,
       endIndex: 10,
       isMissing: true,
-      message: "identifier",
-    });
+      message: 'identifier',
+    })
 
-    expect(collectError(node("identifier", 0, 10))).toBeNull();
-  });
+    expect(collectError(node('identifier', 0, 10))).toBeNull()
+  })
 
-  it("walks deeply nested trees without recursive stack overflow", () => {
-    const root = nestedNode(12_000);
+  it('walks deeply nested trees without recursive stack overflow', () => {
+    const root = nestedNode(12_000)
 
-    expect(collectTreeData(fakeTree(root)).errors).toHaveLength(1);
-  });
+    expect(collectTreeData(fakeTree(root)).errors).toHaveLength(1)
+  })
 
-  it("appends large worker result arrays without spreading call arguments", () => {
-    const items = Array.from({ length: 200_000 }, (_, index) => index);
-    const target: number[] = [];
+  it('appends large worker result arrays without spreading call arguments', () => {
+    const items = Array.from({ length: 200_000 }, (_, index) => index)
+    const target: number[] = []
 
-    appendItems(target, items);
+    appendItems(target, items)
 
-    expect(target).toHaveLength(items.length);
-    expect(target.at(-1)).toBe(199_999);
-  });
+    expect(target).toHaveLength(items.length)
+    expect(target.at(-1)).toBe(199_999)
+  })
 
-  it("spans large injection range arrays without spreading call arguments", () => {
+  it('spans large injection range arrays without spreading call arguments', () => {
     const ranges = Array.from({ length: 200_000 }, (_, index) =>
       treeSitterRange(index * 2, index * 2 + 1),
-    );
+    )
 
-    expect(rangeSpan(ranges)).toEqual({ startIndex: 0, endIndex: 399_999 });
-  });
+    expect(rangeSpan(ranges)).toEqual({ startIndex: 0, endIndex: 399_999 })
+  })
 
-  it("collects range highlights from captures that intersect the visible range", () => {
-    const highlightedNode = node("identifier", 75, 82);
+  it('collects range highlights from captures that intersect the visible range', () => {
+    const highlightedNode = node('identifier', 75, 82)
     const query = {
       matches: () => [],
-      captures: (_root: Node, options?: NonNullable<Parameters<Query["captures"]>[1]>) => {
-        expect(options?.startIndex).toBe(140);
-        expect(options?.endIndex).toBe(180);
-        return [{ name: "variable", node: highlightedNode }];
+      captures: (_root: Node, options?: NonNullable<Parameters<Query['captures']>[1]>) => {
+        expect(options?.startIndex).toBe(140)
+        expect(options?.endIndex).toBe(180)
+        return [{ name: 'variable', node: highlightedNode }]
       },
-    } as unknown as Query;
+    } as unknown as Query
     const runtime = {
       descriptor: {
-        id: "typescript",
+        id: 'typescript',
         extensions: [],
         aliases: [],
-        wasmUrl: "test.wasm",
-        highlightQuerySource: "(identifier) @variable",
+        wasmUrl: 'test.wasm',
+        highlightQuerySource: '(identifier) @variable',
       },
       language: {},
       parser: {},
       highlightQuery: query,
       foldQuery: null,
       injectionQuery: null,
-    } as unknown as Parameters<typeof collectCaptures>[1];
+    } as unknown as Parameters<typeof collectCaptures>[1]
     const context = {
       startedAt: globalThis.performance?.now() ?? Date.now(),
       budgetMs: 1_000,
       flag: null,
-    } as Parameters<typeof collectCaptures>[2];
+    } as Parameters<typeof collectCaptures>[2]
 
     expect(
-      collectCaptures(fakeTree(node("program", 0, 100)), runtime, context, {
+      collectCaptures(fakeTree(node('program', 0, 100)), runtime, context, {
         startIndex: 70,
         endIndex: 90,
       }),
@@ -218,31 +218,31 @@ describe("tree-sitter worker internals", () => {
       {
         startIndex: 75,
         endIndex: 82,
-        captureName: "variable",
-        languageId: "typescript",
+        captureName: 'variable',
+        languageId: 'typescript',
       },
-    ]);
-  });
-});
+    ])
+  })
+})
 
 function cacheWith(
   documentId: string,
   descriptor: ReturnType<typeof createTreeSitterSourceDescriptor>,
 ): TreeSitterSourceCache {
-  const cache: TreeSitterSourceCache = new Map();
-  resolveTreeSitterSourceDescriptor(cache, documentId, descriptor);
-  return cache;
+  const cache: TreeSitterSourceCache = new Map()
+  resolveTreeSitterSourceDescriptor(cache, documentId, descriptor)
+  return cache
 }
 
 type TestNode = Node & {
-  readonly children: readonly TestNode[];
-};
+  readonly children: readonly TestNode[]
+}
 
 function node(
   type: string,
   startIndex: number,
   endIndex = startIndex + 1,
-  flags: Partial<Pick<Node, "isError" | "isMissing">> = {},
+  flags: Partial<Pick<Node, 'isError' | 'isMissing'>> = {},
 ): TestNode {
   return {
     children: [],
@@ -251,26 +251,26 @@ function node(
     endIndex,
     isError: flags.isError ?? false,
     isMissing: flags.isMissing ?? false,
-  } as unknown as TestNode;
+  } as unknown as TestNode
 }
 
 function nestedNode(depth: number): TestNode {
-  let current = node("ERROR", depth, depth + 1, { isError: true });
+  let current = node('ERROR', depth, depth + 1, { isError: true })
   for (let index = depth - 1; index >= 0; index -= 1) {
     current = {
-      ...node("node", index, depth + 1),
+      ...node('node', index, depth + 1),
       children: [current],
-    } as unknown as TestNode;
+    } as unknown as TestNode
   }
 
-  return current;
+  return current
 }
 
 function fakeTree(root: TestNode): Tree {
   return {
     rootNode: root,
     walk: () => new FakeTreeCursor(root),
-  } as unknown as Tree;
+  } as unknown as Tree
 }
 
 function treeSitterRange(startIndex: number, endIndex: number): TreeSitterRange {
@@ -279,64 +279,64 @@ function treeSitterRange(startIndex: number, endIndex: number): TreeSitterRange 
     endPosition: { column: endIndex, row: 0 },
     startIndex,
     startPosition: { column: startIndex, row: 0 },
-  };
+  }
 }
 
 class FakeTreeCursor {
-  private readonly path: { node: TestNode; siblings: readonly TestNode[]; index: number }[];
+  private readonly path: { node: TestNode; siblings: readonly TestNode[]; index: number }[]
 
   public constructor(root: TestNode) {
-    this.path = [{ node: root, siblings: [root], index: 0 }];
+    this.path = [{ node: root, siblings: [root], index: 0 }]
   }
 
   public get nodeType(): string {
-    return this.current.node.type;
+    return this.current.node.type
   }
 
   public get nodeIsMissing(): boolean {
-    return this.current.node.isMissing;
+    return this.current.node.isMissing
   }
 
   public get startIndex(): number {
-    return this.current.node.startIndex;
+    return this.current.node.startIndex
   }
 
   public get endIndex(): number {
-    return this.current.node.endIndex;
+    return this.current.node.endIndex
   }
 
   public gotoFirstChild(): boolean {
-    const children = this.current.node.children;
-    if (children.length === 0) return false;
+    const children = this.current.node.children
+    if (children.length === 0) return false
 
-    this.path.push({ node: children[0]!, siblings: children, index: 0 });
-    return true;
+    this.path.push({ node: children[0]!, siblings: children, index: 0 })
+    return true
   }
 
   public gotoNextSibling(): boolean {
-    const current = this.current;
-    const index = current.index + 1;
-    const node = current.siblings[index];
-    if (!node) return false;
+    const current = this.current
+    const index = current.index + 1
+    const node = current.siblings[index]
+    if (!node) return false
 
-    this.path[this.path.length - 1] = { node, siblings: current.siblings, index };
-    return true;
+    this.path[this.path.length - 1] = { node, siblings: current.siblings, index }
+    return true
   }
 
   public gotoParent(): boolean {
-    if (this.path.length <= 1) return false;
+    if (this.path.length <= 1) return false
 
-    this.path.pop();
-    return true;
+    this.path.pop()
+    return true
   }
 
   public delete(): void {
-    this.path.length = 0;
+    this.path.length = 0
   }
 
   private get current(): { node: TestNode; siblings: readonly TestNode[]; index: number } {
-    const current = this.path[this.path.length - 1];
-    if (!current) throw new Error("Cursor is disposed");
-    return current;
+    const current = this.path[this.path.length - 1]
+    if (!current) throw new Error('Cursor is disposed')
+    return current
   }
 }

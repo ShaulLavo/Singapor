@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { detectPlatform } from "@tanstack/hotkeys";
-import { createEditorFindPlugin } from "../../find/src/index.ts";
-import { createFoldGutterPlugin, createLineGutterPlugin } from "../../gutters/src/index.ts";
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { detectPlatform } from '@tanstack/hotkeys'
+import { createEditorFindPlugin } from '../../find/src/index.ts'
+import { createFoldGutterPlugin, createLineGutterPlugin } from '../../gutters/src/index.ts'
 import {
   createDocumentSession,
   createMergeConflictPlugin,
@@ -28,40 +28,40 @@ import {
   type EditorSyntaxRange,
   type EditorSyntaxSession,
   type EditorSyntaxSessionOptions,
-} from "../src";
+} from '../src'
 
 // Mock HighlightRegistry backed by a Map, used to assert highlight state.
-const highlightsMap = new Map<string, Highlight>();
+const highlightsMap = new Map<string, Highlight>()
 const mockRegistry = {
   set: (name: string, highlight: Highlight) => {
-    highlightsMap.set(name, highlight);
+    highlightsMap.set(name, highlight)
   },
   delete: (name: string) => highlightsMap.delete(name),
-};
+}
 
 // happy-dom doesn't provide the Highlight constructor, so we polyfill it.
 class MockHighlight extends Set<Range> {}
 
 type Deferred<T> = {
-  readonly promise: Promise<T>;
-  resolve(value: T): void;
-  reject(error: unknown): void;
-};
+  readonly promise: Promise<T>
+  resolve(value: T): void
+  reject(error: unknown): void
+}
 
 function createDeferred<T>(): Deferred<T> {
-  let resolve!: (value: T) => void;
-  let reject!: (error: unknown) => void;
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
   const promise = new Promise<T>((promiseResolve, promiseReject) => {
-    resolve = promiseResolve;
-    reject = promiseReject;
-  });
+    resolve = promiseResolve
+    reject = promiseReject
+  })
 
-  return { promise, resolve, reject };
+  return { promise, resolve, reject }
 }
 
 function createSyntaxResult(
-  tokens = [{ start: 0, end: 5, style: { color: "#ff0000" } }],
-  folds: EditorSyntaxResult["folds"] = [],
+  tokens = [{ start: 0, end: 5, style: { color: '#ff0000' } }],
+  folds: EditorSyntaxResult['folds'] = [],
 ) {
   return {
     captures: [],
@@ -70,7 +70,7 @@ function createSyntaxResult(
     errors: [],
     injections: [],
     tokens,
-  } satisfies EditorSyntaxResult;
+  } satisfies EditorSyntaxResult
 }
 
 function createMockSyntaxSession(
@@ -84,15 +84,15 @@ function createMockSyntaxSession(
     getSnapshotVersion: () => 0,
     dispose: () => undefined,
     ...overrides,
-  };
+  }
 }
 
 function createHighlightResult(
-  tokens = [{ start: 0, end: 5, style: { color: "#00ff00" } }],
+  tokens = [{ start: 0, end: 5, style: { color: '#00ff00' } }],
   theme?: EditorTheme | null,
 ): EditorHighlightResult {
-  if (theme === undefined) return { tokens };
-  return { tokens, theme };
+  if (theme === undefined) return { tokens }
+  return { tokens, theme }
 }
 
 function createMockHighlighterSession(
@@ -103,7 +103,7 @@ function createMockHighlighterSession(
     applyChange: async () => createHighlightResult(),
     dispose: () => undefined,
     ...overrides,
-  };
+  }
 }
 
 function createHighlighterPlugin(
@@ -114,11 +114,11 @@ function createHighlighterPlugin(
     activate: (context) => {
       const provider = {
         createSession: () => session,
-      };
-      if (!options.loadTheme) return context.registerHighlighter(provider);
-      return context.registerHighlighter({ ...provider, loadTheme: options.loadTheme });
+      }
+      if (!options.loadTheme) return context.registerHighlighter(provider)
+      return context.registerHighlighter({ ...provider, loadTheme: options.loadTheme })
     },
-  };
+  }
 }
 
 function createViewContributionPlugin(events: ViewContributionEvent[]): EditorPlugin {
@@ -127,123 +127,123 @@ function createViewContributionPlugin(events: ViewContributionEvent[]): EditorPl
       context.registerViewContribution({
         createContribution: () => ({
           update: (snapshot, kind, change) => {
-            events.push({ kind, snapshot, changeKind: change?.kind ?? null });
+            events.push({ kind, snapshot, changeKind: change?.kind ?? null })
           },
           dispose: () => {
-            events.push({ kind: "dispose", snapshot: null, changeKind: null });
+            events.push({ kind: 'dispose', snapshot: null, changeKind: null })
           },
         }),
       }),
-  };
+  }
 }
 
 function requireViewContributionContext(
   context: EditorViewContributionContext | null,
 ): EditorViewContributionContext {
-  if (!context) throw new Error("missing view contribution context");
-  return context;
+  if (!context) throw new Error('missing view contribution context')
+  return context
 }
 
 function createTestLanguagePlugin(): EditorPlugin {
   return {
-    name: "test-language-placeholder",
+    name: 'test-language-placeholder',
     activate: () => undefined,
-  };
+  }
 }
 
 function withTestLanguagePlugins(...plugins: readonly EditorPlugin[]): readonly EditorPlugin[] {
-  return [createTestLanguagePlugin(), createEditorFindPlugin(), ...plugins];
+  return [createTestLanguagePlugin(), createEditorFindPlugin(), ...plugins]
 }
 
 function withTestGutterPlugins(...plugins: readonly EditorPlugin[]): readonly EditorPlugin[] {
-  return withTestLanguagePlugins(createLineGutterPlugin(), createFoldGutterPlugin(), ...plugins);
+  return withTestLanguagePlugins(createLineGutterPlugin(), createFoldGutterPlugin(), ...plugins)
 }
 
 type ViewContributionEvent = {
-  readonly kind: EditorViewContributionUpdateKind | "dispose";
-  readonly snapshot: EditorViewSnapshot | null;
-  readonly changeKind: DocumentSessionChange["kind"] | null;
-};
+  readonly kind: EditorViewContributionUpdateKind | 'dispose'
+  readonly snapshot: EditorViewSnapshot | null
+  readonly changeKind: DocumentSessionChange['kind'] | null
+}
 
 class MockResizeObserver implements ResizeObserver {
-  static instances: MockResizeObserver[] = [];
+  static instances: MockResizeObserver[] = []
 
-  readonly callback: ResizeObserverCallback;
-  readonly observed = new Set<Element>();
+  readonly callback: ResizeObserverCallback
+  readonly observed = new Set<Element>()
 
   constructor(callback: ResizeObserverCallback) {
-    this.callback = callback;
-    MockResizeObserver.instances.push(this);
+    this.callback = callback
+    MockResizeObserver.instances.push(this)
   }
 
   observe(target: Element): void {
-    this.observed.add(target);
+    this.observed.add(target)
   }
 
   unobserve(target: Element): void {
-    this.observed.delete(target);
+    this.observed.delete(target)
   }
 
   disconnect(): void {
-    this.observed.clear();
+    this.observed.clear()
   }
 
   emit(target: Element, size: { readonly height?: number; readonly width?: number }): void {
-    const height = size.height ?? 0;
-    const width = size.width ?? 0;
-    this.callback([resizeObserverEntry(target, width, height)], this);
+    const height = size.height ?? 0
+    const width = size.width ?? 0
+    this.callback([resizeObserverEntry(target, width, height)], this)
   }
 }
 
 async function flushMicrotasks(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
+  await Promise.resolve()
+  await Promise.resolve()
 }
 
 async function flushTimers(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
 async function flushSyntaxDebounce(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 160));
-  await flushMicrotasks();
+  await new Promise((resolve) => setTimeout(resolve, 160))
+  await flushMicrotasks()
 }
 
 function createInsertEvent(data: string): InputEvent {
-  return new InputEvent("beforeinput", {
+  return new InputEvent('beforeinput', {
     bubbles: true,
     cancelable: true,
     data,
-    inputType: "insertText",
-  });
+    inputType: 'insertText',
+  })
 }
 
 function createLineBreakEvent(): InputEvent {
-  return new InputEvent("beforeinput", {
+  return new InputEvent('beforeinput', {
     bubbles: true,
     cancelable: true,
-    inputType: "insertLineBreak",
-  });
+    inputType: 'insertLineBreak',
+  })
 }
 
 function editorRoot(): HTMLElement {
-  return document.querySelector(".editor-virtualized") as HTMLElement;
+  return document.querySelector('.editor-virtualized') as HTMLElement
 }
 
 function hiddenCharacterKinds(): string[] {
   return [
-    ...document.querySelectorAll<HTMLElement>(".editor-virtualized-hidden-character-marker"),
-  ].map((marker) => marker.dataset.editorHiddenCharacter!);
+    ...document.querySelectorAll<HTMLElement>('.editor-virtualized-hidden-character-marker'),
+  ].map((marker) => marker.dataset.editorHiddenCharacter!)
 }
 
 function blockSurfaceTexts(): string[] {
-  return [...document.querySelectorAll<HTMLElement>("[data-test-block-surface]")].map(
-    (surface) => surface.textContent ?? "",
-  );
+  return [...document.querySelectorAll<HTMLElement>('[data-test-block-surface]')].map(
+    (surface) => surface.textContent ?? '',
+  )
 }
 
 function blockSurfaceElements(): HTMLElement[] {
-  return [...document.querySelectorAll<HTMLElement>("[data-test-block-surface]")];
+  return [...document.querySelectorAll<HTMLElement>('[data-test-block-surface]')]
 }
 
 function resizeObserverEntry(target: Element, width: number, height: number): ResizeObserverEntry {
@@ -263,7 +263,7 @@ function resizeObserverEntry(target: Element, width: number, height: number): Re
     contentBoxSize: [{ inlineSize: width, blockSize: height }],
     borderBoxSize: [{ inlineSize: width, blockSize: height }],
     devicePixelContentBoxSize: [{ inlineSize: width, blockSize: height }],
-  };
+  }
 }
 
 function blockFixture(id: string, anchor: EditorBlockAnchor) {
@@ -273,169 +273,169 @@ function blockFixture(id: string, anchor: EditorBlockAnchor) {
     top: {
       height: { px: 24 },
       mount: (container, context) => {
-        container.dataset.testBlockSurface = context.surface;
-        container.textContent = context.blockId;
+        container.dataset.testBlockSurface = context.surface
+        container.textContent = context.blockId
       },
     },
-  } satisfies EditorBlock;
+  } satisfies EditorBlock
 }
 
 function rowTextNode(row = 0): Text {
-  const element = document.querySelector(`[data-editor-virtual-row="${row}"]`);
-  const walker = document.createTreeWalker(element!, NodeFilter.SHOW_TEXT);
-  return walker.nextNode() as Text;
+  const element = document.querySelector(`[data-editor-virtual-row="${row}"]`)
+  const walker = document.createTreeWalker(element!, NodeFilter.SHOW_TEXT)
+  return walker.nextNode() as Text
 }
 
 function setCollapsedDomSelection(offset: number): void {
-  const range = document.createRange();
-  const textNode = rowTextNode();
-  range.setStart(textNode, offset);
-  range.setEnd(textNode, offset);
+  const range = document.createRange()
+  const textNode = rowTextNode()
+  range.setStart(textNode, offset)
+  range.setEnd(textNode, offset)
 
-  const selection = window.getSelection()!;
-  selection.removeAllRanges();
-  selection.addRange(range);
-  editorRoot().dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+  const selection = window.getSelection()!
+  selection.removeAllRanges()
+  selection.addRange(range)
+  editorRoot().dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
 }
 
 function editorInput(): HTMLTextAreaElement {
-  return document.querySelector(".editor-virtualized-input") as HTMLTextAreaElement;
+  return document.querySelector('.editor-virtualized-input') as HTMLTextAreaElement
 }
 
 function dispatchEditorKey(key: string, init: KeyboardEventInit = {}): KeyboardEvent {
-  const event = new KeyboardEvent("keydown", {
+  const event = new KeyboardEvent('keydown', {
     bubbles: true,
     cancelable: true,
     key,
     ...init,
-  });
-  editorRoot().dispatchEvent(event);
-  return event;
+  })
+  editorRoot().dispatchEvent(event)
+  return event
 }
 
 function dispatchInputKey(key: string, init: KeyboardEventInit = {}): KeyboardEvent {
-  const event = new KeyboardEvent("keydown", {
+  const event = new KeyboardEvent('keydown', {
     bubbles: true,
     cancelable: true,
     key,
     ...init,
-  });
-  editorInput().dispatchEvent(event);
-  return event;
+  })
+  editorInput().dispatchEvent(event)
+  return event
 }
 
 function createPasteEvent(text: string): ClipboardEvent {
   const clipboardData = {
-    getData: (format: string): string => (format === "text/plain" ? text : ""),
+    getData: (format: string): string => (format === 'text/plain' ? text : ''),
     setData: () => undefined,
-  };
-  const event = new Event("paste", { bubbles: true, cancelable: true }) as ClipboardEvent;
-  Object.defineProperty(event, "clipboardData", { configurable: true, value: clipboardData });
-  return event;
+  }
+  const event = new Event('paste', { bubbles: true, cancelable: true }) as ClipboardEvent
+  Object.defineProperty(event, 'clipboardData', { configurable: true, value: clipboardData })
+  return event
 }
 
 function createCopyEvent(): {
-  readonly event: ClipboardEvent;
-  readonly formatCount: () => number;
-  readonly getText: () => string;
+  readonly event: ClipboardEvent
+  readonly formatCount: () => number
+  readonly getText: () => string
 } {
-  const values = new Map<string, string>();
+  const values = new Map<string, string>()
   const clipboardData = {
-    getData: (format: string): string => values.get(format) ?? "",
+    getData: (format: string): string => values.get(format) ?? '',
     setData: (format: string, value: string): void => {
-      values.set(format, value);
+      values.set(format, value)
     },
-  };
-  const event = new Event("copy", { bubbles: true, cancelable: true }) as ClipboardEvent;
-  Object.defineProperty(event, "clipboardData", { configurable: true, value: clipboardData });
+  }
+  const event = new Event('copy', { bubbles: true, cancelable: true }) as ClipboardEvent
+  Object.defineProperty(event, 'clipboardData', { configurable: true, value: clipboardData })
 
   return {
     event,
     formatCount: () => values.size,
-    getText: () => values.get("text/plain") ?? "",
-  };
+    getText: () => values.get('text/plain') ?? '',
+  }
 }
 
 function spyOnNativeSelection() {
-  const selection = window.getSelection()!;
-  const addRange = vi.spyOn(selection, "addRange");
-  const removeAllRanges = vi.spyOn(selection, "removeAllRanges");
+  const selection = window.getSelection()!
+  const addRange = vi.spyOn(selection, 'addRange')
+  const removeAllRanges = vi.spyOn(selection, 'removeAllRanges')
 
   return {
     addRange,
     removeAllRanges,
     restore: () => {
-      addRange.mockRestore();
-      removeAllRanges.mockRestore();
+      addRange.mockRestore()
+      removeAllRanges.mockRestore()
     },
-  };
+  }
 }
 
 function primaryModifier(): KeyboardEventInit {
-  return detectPlatform() === "mac" ? { metaKey: true } : { ctrlKey: true };
+  return detectPlatform() === 'mac' ? { metaKey: true } : { ctrlKey: true }
 }
 
 function wordNavigationModifier(): KeyboardEventInit {
-  return detectPlatform() === "mac" ? { altKey: true } : { ctrlKey: true };
+  return detectPlatform() === 'mac' ? { altKey: true } : { ctrlKey: true }
 }
 
 function resolvedSelectionRanges(session: ReturnType<typeof createDocumentSession>): readonly {
-  readonly anchor: number;
-  readonly head: number;
-  readonly start: number;
-  readonly end: number;
+  readonly anchor: number
+  readonly head: number
+  readonly start: number
+  readonly end: number
 }[] {
   return session.getSelections().selections.map((selection) => {
-    const resolved = resolveSelection(session.getSnapshot(), selection);
+    const resolved = resolveSelection(session.getSnapshot(), selection)
     return {
       anchor: resolved.anchorOffset,
       head: resolved.headOffset,
       start: resolved.startOffset,
       end: resolved.endOffset,
-    };
-  });
+    }
+  })
 }
 
 function tokenHighlights(): Highlight[] {
   return [...highlightsMap]
-    .filter(([name]) => name.includes("-token-"))
-    .map(([, highlight]) => highlight);
+    .filter(([name]) => name.includes('-token-'))
+    .map(([, highlight]) => highlight)
 }
 
 function tokenHighlightRanges(): AbstractRange[] {
-  return tokenHighlights().flatMap((highlight) => [...highlight]);
+  return tokenHighlights().flatMap((highlight) => [...highlight])
 }
 
 function tokenSnapshotFromLastEvent(events: readonly ViewContributionEvent[]) {
-  return events.findLast((event) => event.kind === "tokens")?.snapshot?.tokens ?? [];
+  return events.findLast((event) => event.kind === 'tokens')?.snapshot?.tokens ?? []
 }
 
 function latestFoldMarkers(events: readonly ViewContributionEvent[]) {
-  return events.findLast((event) => event.snapshot)?.snapshot?.foldMarkers ?? [];
+  return events.findLast((event) => event.snapshot)?.snapshot?.foldMarkers ?? []
 }
 
 function rangeLength(range: EditorSyntaxRange | undefined): number {
-  return range ? range.endIndex - range.startIndex : 0;
+  return range ? range.endIndex - range.startIndex : 0
 }
 
 function hasLongSyntaxRange(ranges: readonly EditorSyntaxRange[]): boolean {
-  return ranges.some((range) => rangeLength(range) > 200_000);
+  return ranges.some((range) => rangeLength(range) > 200_000)
 }
 
 function selectionRanges(): HTMLElement[] {
-  return [...document.querySelectorAll<HTMLElement>(".editor-virtualized-selection-range")];
+  return [...document.querySelectorAll<HTMLElement>('.editor-virtualized-selection-range')]
 }
 
 function rowsContainingText(text: string): HTMLElement[] {
-  return [...document.querySelectorAll<HTMLElement>("[data-editor-virtual-row]")].filter((row) =>
+  return [...document.querySelectorAll<HTMLElement>('[data-editor-virtual-row]')].filter((row) =>
     row.textContent?.includes(text),
-  );
+  )
 }
 
 function foldToggle(): HTMLButtonElement {
   return document.querySelector(
-    ".editor-virtualized-fold-toggle:not([hidden])",
-  ) as HTMLButtonElement;
+    '.editor-virtualized-fold-toggle:not([hidden])',
+  ) as HTMLButtonElement
 }
 
 function mockEditorViewport(
@@ -444,9 +444,9 @@ function mockEditorViewport(
   height: number,
   scrollHeight = 200,
 ): void {
-  Object.defineProperty(element, "clientHeight", { configurable: true, value: height });
-  Object.defineProperty(element, "scrollHeight", { configurable: true, value: scrollHeight });
-  Object.defineProperty(element, "getBoundingClientRect", {
+  Object.defineProperty(element, 'clientHeight', { configurable: true, value: height })
+  Object.defineProperty(element, 'scrollHeight', { configurable: true, value: scrollHeight })
+  Object.defineProperty(element, 'getBoundingClientRect', {
     configurable: true,
     value: () => ({
       bottom: height,
@@ -459,42 +459,42 @@ function mockEditorViewport(
       y: 0,
       toJSON: () => ({}),
     }),
-  });
+  })
 }
 
 type ScrollMetricProperty =
-  | "clientHeight"
-  | "clientWidth"
-  | "scrollHeight"
-  | "scrollLeft"
-  | "scrollTop"
-  | "scrollWidth";
+  | 'clientHeight'
+  | 'clientWidth'
+  | 'scrollHeight'
+  | 'scrollLeft'
+  | 'scrollTop'
+  | 'scrollWidth'
 
 function withThrowingScrollMetricReads(element: HTMLElement, callback: () => void): void {
   const descriptors: Record<ScrollMetricProperty, PropertyDescriptor | undefined> = {
-    clientHeight: Object.getOwnPropertyDescriptor(element, "clientHeight"),
-    clientWidth: Object.getOwnPropertyDescriptor(element, "clientWidth"),
-    scrollHeight: Object.getOwnPropertyDescriptor(element, "scrollHeight"),
-    scrollLeft: Object.getOwnPropertyDescriptor(element, "scrollLeft"),
-    scrollTop: Object.getOwnPropertyDescriptor(element, "scrollTop"),
-    scrollWidth: Object.getOwnPropertyDescriptor(element, "scrollWidth"),
-  };
-  defineThrowingElementProperty(element, "clientHeight");
-  defineThrowingElementProperty(element, "clientWidth");
-  defineThrowingElementProperty(element, "scrollHeight");
-  defineThrowingElementProperty(element, "scrollLeft");
-  defineThrowingElementProperty(element, "scrollTop");
-  defineThrowingElementProperty(element, "scrollWidth");
+    clientHeight: Object.getOwnPropertyDescriptor(element, 'clientHeight'),
+    clientWidth: Object.getOwnPropertyDescriptor(element, 'clientWidth'),
+    scrollHeight: Object.getOwnPropertyDescriptor(element, 'scrollHeight'),
+    scrollLeft: Object.getOwnPropertyDescriptor(element, 'scrollLeft'),
+    scrollTop: Object.getOwnPropertyDescriptor(element, 'scrollTop'),
+    scrollWidth: Object.getOwnPropertyDescriptor(element, 'scrollWidth'),
+  }
+  defineThrowingElementProperty(element, 'clientHeight')
+  defineThrowingElementProperty(element, 'clientWidth')
+  defineThrowingElementProperty(element, 'scrollHeight')
+  defineThrowingElementProperty(element, 'scrollLeft')
+  defineThrowingElementProperty(element, 'scrollTop')
+  defineThrowingElementProperty(element, 'scrollWidth')
 
   try {
-    callback();
+    callback()
   } finally {
-    restoreElementProperty(element, "clientHeight", descriptors.clientHeight);
-    restoreElementProperty(element, "clientWidth", descriptors.clientWidth);
-    restoreElementProperty(element, "scrollHeight", descriptors.scrollHeight);
-    restoreElementProperty(element, "scrollLeft", descriptors.scrollLeft);
-    restoreElementProperty(element, "scrollTop", descriptors.scrollTop);
-    restoreElementProperty(element, "scrollWidth", descriptors.scrollWidth);
+    restoreElementProperty(element, 'clientHeight', descriptors.clientHeight)
+    restoreElementProperty(element, 'clientWidth', descriptors.clientWidth)
+    restoreElementProperty(element, 'scrollHeight', descriptors.scrollHeight)
+    restoreElementProperty(element, 'scrollLeft', descriptors.scrollLeft)
+    restoreElementProperty(element, 'scrollTop', descriptors.scrollTop)
+    restoreElementProperty(element, 'scrollWidth', descriptors.scrollWidth)
   }
 }
 
@@ -502,10 +502,10 @@ function defineThrowingElementProperty(element: HTMLElement, property: ScrollMet
   Object.defineProperty(element, property, {
     configurable: true,
     get: () => {
-      throw new Error(`unexpected ${property} read`);
+      throw new Error(`unexpected ${property} read`)
     },
     set: () => undefined,
-  });
+  })
 }
 
 function restoreElementProperty(
@@ -514,1304 +514,1320 @@ function restoreElementProperty(
   descriptor: PropertyDescriptor | undefined,
 ): void {
   if (!descriptor) {
-    Reflect.deleteProperty(element, property);
-    return;
+    Reflect.deleteProperty(element, property)
+    return
   }
 
-  Object.defineProperty(element, property, descriptor);
+  Object.defineProperty(element, property, descriptor)
 }
 
 function trackScrollTopWrites(element: HTMLElement): {
-  readonly values: readonly number[];
-  restore(): void;
+  readonly values: readonly number[]
+  restore(): void
 } {
-  const descriptor = Object.getOwnPropertyDescriptor(element, "scrollTop");
-  const values: number[] = [];
-  let scrollTop = element.scrollTop;
-  Object.defineProperty(element, "scrollTop", {
+  const descriptor = Object.getOwnPropertyDescriptor(element, 'scrollTop')
+  const values: number[] = []
+  let scrollTop = element.scrollTop
+  Object.defineProperty(element, 'scrollTop', {
     configurable: true,
     get: () => scrollTop,
     set: (value: number) => {
-      values.push(value);
-      scrollTop = value;
+      values.push(value)
+      scrollTop = value
     },
-  });
+  })
 
   return {
     values,
-    restore: () => restoreElementProperty(element, "scrollTop", descriptor),
-  };
+    restore: () => restoreElementProperty(element, 'scrollTop', descriptor),
+  }
 }
 
-describe("Editor", () => {
-  let container: HTMLElement;
-  let editor: Editor;
+describe('Editor', () => {
+  let container: HTMLElement
+  let editor: Editor
 
   beforeEach(() => {
-    highlightsMap.clear();
+    highlightsMap.clear()
     // @ts-expect-error — polyfilling Highlight constructor for tests
-    globalThis.Highlight = MockHighlight;
-    setHighlightRegistry(mockRegistry);
-    resetEditorInstanceCount();
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    editor = new Editor(container, { plugins: withTestLanguagePlugins() });
-  });
+    globalThis.Highlight = MockHighlight
+    setHighlightRegistry(mockRegistry)
+    resetEditorInstanceCount()
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    editor = new Editor(container, { plugins: withTestLanguagePlugins() })
+  })
 
   afterEach(() => {
-    editor.dispose();
-    container.remove();
-    setHighlightRegistry(undefined);
-    setEditorSyntaxSessionFactory(undefined);
-  });
+    editor.dispose()
+    container.remove()
+    setHighlightRegistry(undefined)
+    setEditorSyntaxSessionFactory(undefined)
+  })
 
-  describe("constructor", () => {
-    it("creates anonymous initial text without notifying a change", () => {
-      const states: EditorState[] = [];
-      editor.dispose();
+  describe('constructor', () => {
+    it('creates anonymous initial text without notifying a change', () => {
+      const states: EditorState[] = []
+      editor.dispose()
 
       editor = new Editor(container, {
-        defaultText: "abc",
+        defaultText: 'abc',
         onChange: (state) => states.push(state),
-      });
+      })
 
-      expect(editor.getText()).toBe("abc");
-      expect(editorRoot().textContent).toBe("abc");
+      expect(editor.getText()).toBe('abc')
+      expect(editorRoot().textContent).toBe('abc')
       expect(editor.getState()).toMatchObject({
         documentId: null,
         languageId: null,
         length: 3,
         canUndo: false,
         canRedo: false,
-      });
-      expect(states).toHaveLength(0);
-    });
+      })
+      expect(states).toHaveLength(0)
+    })
 
-    it("treats empty defaultText as an editable anonymous buffer", () => {
-      editor.dispose();
-      editor = new Editor(container, { defaultText: "" });
+    it('treats empty defaultText as an editable anonymous buffer', () => {
+      editor.dispose()
+      editor = new Editor(container, { defaultText: '' })
 
       editorRoot().dispatchEvent(
-        new InputEvent("beforeinput", {
+        new InputEvent('beforeinput', {
           bubbles: true,
           cancelable: true,
-          data: "x",
-          inputType: "insertText",
+          data: 'x',
+          inputType: 'insertText',
         }),
-      );
+      )
 
-      expect(editor.getText()).toBe("x");
+      expect(editor.getText()).toBe('x')
       expect(editor.getState()).toMatchObject({
         documentId: null,
         length: 1,
         canUndo: true,
-      });
-    });
+      })
+    })
 
-    it("forwards hidden character mode to the text view", () => {
-      editor.dispose();
+    it('forwards hidden character mode to the text view', () => {
+      editor.dispose()
       editor = new Editor(container, {
-        defaultText: "a b\tc",
-        hiddenCharacters: "show",
-      });
+        defaultText: 'a b\tc',
+        hiddenCharacters: 'show',
+      })
 
-      expect(hiddenCharacterKinds()).toEqual(["space", "tab"]);
-      expect(editorRoot().textContent).toBe("a b\tc");
-    });
+      expect(hiddenCharacterKinds()).toEqual(['space', 'tab'])
+      expect(editorRoot().textContent).toBe('a b\tc')
+    })
 
-    it("uses the larger default line height", () => {
-      expect(editorRoot().style.getPropertyValue("--editor-row-height")).toBe("24px");
-    });
+    it('uses the larger default line height', () => {
+      expect(editorRoot().style.getPropertyValue('--editor-row-height')).toBe('24px')
+    })
 
-    it("forwards configured line height to the text view", () => {
-      editor.dispose();
+    it('forwards configured line height to the text view', () => {
+      editor.dispose()
       editor = new Editor(container, {
-        defaultText: "a\nb",
+        defaultText: 'a\nb',
         lineHeight: 26,
-      });
+      })
 
-      expect(editorRoot().style.getPropertyValue("--editor-row-height")).toBe("26px");
-    });
+      expect(editorRoot().style.getPropertyValue('--editor-row-height')).toBe('26px')
+    })
 
-    it("applies configured theme variables for Tree-sitter capture themes", () => {
-      editor.dispose();
+    it('applies configured theme variables for Tree-sitter capture themes', () => {
+      editor.dispose()
       editor = new Editor(container, {
         plugins: withTestLanguagePlugins(),
         theme: {
-          backgroundColor: "#ffffff",
-          foregroundColor: "#24292e",
-          gutterForegroundColor: "#1b1f234d",
-          caretColor: "#044289",
-          syntax: { keywordDeclaration: "#d73a49", string: "#032f62" },
+          backgroundColor: '#ffffff',
+          foregroundColor: '#24292e',
+          gutterForegroundColor: '#1b1f234d',
+          caretColor: '#044289',
+          syntax: { keywordDeclaration: '#d73a49', string: '#032f62' },
         },
-      });
+      })
 
-      const root = editorRoot();
-      expect(root.style.getPropertyValue("--editor-background")).toBe("#ffffff");
-      expect(root.style.getPropertyValue("--editor-foreground")).toBe("#24292e");
-      expect(root.style.getPropertyValue("--editor-gutter-foreground")).toBe("#1b1f234d");
-      expect(root.style.getPropertyValue("--editor-caret-color")).toBe("#044289");
-      expect(root.style.getPropertyValue("--editor-syntax-keyword-declaration")).toBe("#d73a49");
-      expect(root.style.getPropertyValue("--editor-syntax-string")).toBe("#032f62");
-    });
-  });
+      const root = editorRoot()
+      expect(root.style.getPropertyValue('--editor-background')).toBe('#ffffff')
+      expect(root.style.getPropertyValue('--editor-foreground')).toBe('#24292e')
+      expect(root.style.getPropertyValue('--editor-gutter-foreground')).toBe('#1b1f234d')
+      expect(root.style.getPropertyValue('--editor-caret-color')).toBe('#044289')
+      expect(root.style.getPropertyValue('--editor-syntax-keyword-declaration')).toBe('#d73a49')
+      expect(root.style.getPropertyValue('--editor-syntax-string')).toBe('#032f62')
+    })
+  })
 
-  describe("setTheme", () => {
-    it("updates and clears configured editor theme variables", () => {
-      editor.setTheme({ backgroundColor: "#ffffff", foregroundColor: "#24292e" });
+  describe('setTheme', () => {
+    it('updates and clears configured editor theme variables', () => {
+      editor.setTheme({ backgroundColor: '#ffffff', foregroundColor: '#24292e' })
 
-      expect(editorRoot().style.getPropertyValue("--editor-background")).toBe("#ffffff");
-      expect(editorRoot().style.getPropertyValue("--editor-foreground")).toBe("#24292e");
+      expect(editorRoot().style.getPropertyValue('--editor-background')).toBe('#ffffff')
+      expect(editorRoot().style.getPropertyValue('--editor-foreground')).toBe('#24292e')
 
-      editor.setTheme(null);
+      editor.setTheme(null)
 
-      expect(editorRoot().style.getPropertyValue("--editor-background")).toBe("");
-      expect(editorRoot().style.getPropertyValue("--editor-foreground")).toBe("");
-    });
+      expect(editorRoot().style.getPropertyValue('--editor-background')).toBe('')
+      expect(editorRoot().style.getPropertyValue('--editor-foreground')).toBe('')
+    })
 
-    it("does not reload highlighter sessions when the configured theme is unchanged", async () => {
-      const theme = { backgroundColor: "#ffffff", foregroundColor: "#24292e" };
-      const refresh = vi.fn(async () => createHighlightResult());
-      const dispose = vi.fn();
-      const highlighter = createMockHighlighterSession({ dispose, refresh });
-      editor.dispose();
+    it('does not reload highlighter sessions when the configured theme is unchanged', async () => {
+      const theme = { backgroundColor: '#ffffff', foregroundColor: '#24292e' }
+      const refresh = vi.fn(async () => createHighlightResult())
+      const dispose = vi.fn()
+      const highlighter = createMockHighlighterSession({ dispose, refresh })
+      editor.dispose()
       editor = new Editor(container, {
         plugins: withTestLanguagePlugins(createHighlighterPlugin(highlighter)),
         theme,
-      });
-      setEditorSyntaxSessionFactory(() => createMockSyntaxSession());
+      })
+      setEditorSyntaxSessionFactory(() => createMockSyntaxSession())
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
-        text: "const a = 1;",
-      });
-      await flushMicrotasks();
-      editor.setTheme(theme);
-      await flushMicrotasks();
+        documentId: 'main.ts',
+        languageId: 'typescript',
+        text: 'const a = 1;',
+      })
+      await flushMicrotasks()
+      editor.setTheme(theme)
+      await flushMicrotasks()
 
-      expect(refresh).toHaveBeenCalledTimes(1);
-      expect(dispose).not.toHaveBeenCalled();
-    });
+      expect(refresh).toHaveBeenCalledTimes(1)
+      expect(dispose).not.toHaveBeenCalled()
+    })
 
-    it("does not reload highlighter sessions when only the configured theme changes", async () => {
-      const refresh = vi.fn(async () => createHighlightResult());
-      const dispose = vi.fn();
-      const highlighter = createMockHighlighterSession({ dispose, refresh });
-      editor.dispose();
+    it('does not reload highlighter sessions when only the configured theme changes', async () => {
+      const refresh = vi.fn(async () => createHighlightResult())
+      const dispose = vi.fn()
+      const highlighter = createMockHighlighterSession({ dispose, refresh })
+      editor.dispose()
       editor = new Editor(container, {
         plugins: withTestLanguagePlugins(createHighlighterPlugin(highlighter)),
-        theme: { backgroundColor: "#ffffff" },
-      });
-      setEditorSyntaxSessionFactory(() => createMockSyntaxSession());
+        theme: { backgroundColor: '#ffffff' },
+      })
+      setEditorSyntaxSessionFactory(() => createMockSyntaxSession())
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
-        text: "const a = 1;",
-      });
-      await flushMicrotasks();
-      editor.setTheme({ backgroundColor: "#101010" });
-      await flushMicrotasks();
+        documentId: 'main.ts',
+        languageId: 'typescript',
+        text: 'const a = 1;',
+      })
+      await flushMicrotasks()
+      editor.setTheme({ backgroundColor: '#101010' })
+      await flushMicrotasks()
 
-      expect(refresh).toHaveBeenCalledTimes(1);
-      expect(dispose).not.toHaveBeenCalled();
-      expect(editorRoot().style.getPropertyValue("--editor-background")).toBe("#101010");
-    });
-  });
+      expect(refresh).toHaveBeenCalledTimes(1)
+      expect(dispose).not.toHaveBeenCalled()
+      expect(editorRoot().style.getPropertyValue('--editor-background')).toBe('#101010')
+    })
+  })
 
-  describe("setLineHeight", () => {
-    it("updates the text view line height", () => {
-      editor.setLineHeight(28);
+  describe('setLineHeight', () => {
+    it('updates the text view line height', () => {
+      editor.setLineHeight(28)
 
-      expect(editorRoot().style.getPropertyValue("--editor-row-height")).toBe("28px");
-    });
-  });
+      expect(editorRoot().style.getPropertyValue('--editor-row-height')).toBe('28px')
+    })
+  })
 
-  describe("setHiddenCharacters", () => {
-    it("updates hidden character rendering for mounted rows", () => {
-      editor.setText("a b\tc");
+  describe('setHiddenCharacters', () => {
+    it('updates hidden character rendering for mounted rows', () => {
+      editor.setText('a b\tc')
 
-      expect(hiddenCharacterKinds()).toEqual([]);
+      expect(hiddenCharacterKinds()).toEqual([])
 
-      editor.setHiddenCharacters("show");
+      editor.setHiddenCharacters('show')
 
-      expect(hiddenCharacterKinds()).toEqual(["space", "tab"]);
+      expect(hiddenCharacterKinds()).toEqual(['space', 'tab'])
 
-      editor.setHiddenCharacters("hidden");
+      editor.setHiddenCharacters('hidden')
 
-      expect(hiddenCharacterKinds()).toEqual([]);
-      expect(editorRoot().textContent).toBe("a b\tc");
-    });
-  });
+      expect(hiddenCharacterKinds()).toEqual([])
+      expect(editorRoot().textContent).toBe('a b\tc')
+    })
+  })
 
-  describe("setSelection", () => {
-    it("reveals the selection by default", () => {
-      const root = editorRoot();
-      const text = Array.from({ length: 80 }, (_value, index) => `line ${index}`).join("\n");
-      mockEditorViewport(root, 80, 40, 2_000);
-      editor.setText(text);
-      editor.setSelection(0);
-      root.scrollTop = 0;
+  describe('setSelection', () => {
+    it('reveals the selection by default', () => {
+      const root = editorRoot()
+      const text = Array.from({ length: 80 }, (_value, index) => `line ${index}`).join('\n')
+      mockEditorViewport(root, 80, 40, 2_000)
+      editor.setText(text)
+      editor.setSelection(0)
+      root.scrollTop = 0
 
-      editor.setSelection(text.length);
+      editor.setSelection(text.length)
 
-      expect(root.scrollTop).toBeGreaterThan(0);
-    });
+      expect(root.scrollTop).toBeGreaterThan(0)
+    })
 
-    it("can update selection without revealing it", () => {
-      const root = editorRoot();
-      const text = Array.from({ length: 80 }, (_value, index) => `line ${index}`).join("\n");
-      mockEditorViewport(root, 80, 40, 2_000);
-      editor.setText(text);
-      editor.setSelection(0);
-      root.scrollTop = 0;
+    it('can update selection without revealing it', () => {
+      const root = editorRoot()
+      const text = Array.from({ length: 80 }, (_value, index) => `line ${index}`).join('\n')
+      mockEditorViewport(root, 80, 40, 2_000)
+      editor.setText(text)
+      editor.setSelection(0)
+      root.scrollTop = 0
 
-      editor.setSelection(text.length, text.length, { reveal: false });
+      editor.setSelection(text.length, text.length, { reveal: false })
 
-      expect(editor.getState().cursor).toEqual({ row: 79, column: 7 });
-      expect(root.scrollTop).toBe(0);
-    });
-  });
+      expect(editor.getState().cursor).toEqual({ row: 79, column: 7 })
+      expect(root.scrollTop).toBe(0)
+    })
+  })
 
-  describe("readonly and static documents", () => {
-    it("blocks user and programmatic edits while preserving selection and copy", async () => {
-      editor.dispose();
+  describe('readonly and static documents', () => {
+    it('blocks user and programmatic edits while preserving selection and copy', async () => {
+      editor.dispose()
       editor = new Editor(container, {
-        defaultText: "alpha",
-        editability: "readonly",
-      });
+        defaultText: 'alpha',
+        editability: 'readonly',
+      })
 
-      const inputEvent = createInsertEvent("!");
-      editorRoot().dispatchEvent(inputEvent);
-      editor.edit({ from: 5, to: 5, text: "?" });
-      editor.dispatchCommand("deleteBackward");
-      editorRoot().dispatchEvent(createPasteEvent(" pasted"));
-      dispatchEditorKey("x");
-      await flushTimers();
+      const inputEvent = createInsertEvent('!')
+      editorRoot().dispatchEvent(inputEvent)
+      editor.edit({ from: 5, to: 5, text: '?' })
+      editor.dispatchCommand('deleteBackward')
+      editorRoot().dispatchEvent(createPasteEvent(' pasted'))
+      dispatchEditorKey('x')
+      await flushTimers()
 
-      expect(inputEvent.defaultPrevented).toBe(true);
-      expect(editor.getText()).toBe("alpha");
+      expect(inputEvent.defaultPrevented).toBe(true)
+      expect(editor.getText()).toBe('alpha')
       expect(editor.getState()).toMatchObject({
-        editability: "readonly",
-        documentMode: "session",
+        editability: 'readonly',
+        documentMode: 'session',
         canUndo: false,
         isDirty: false,
-      });
+      })
 
-      editor.setSelection(0, 5);
-      const copy = createCopyEvent();
-      editorRoot().dispatchEvent(copy.event);
+      editor.setSelection(0, 5)
+      const copy = createCopyEvent()
+      editorRoot().dispatchEvent(copy.event)
 
-      expect(copy.getText()).toBe("alpha");
-    });
+      expect(copy.getText()).toBe('alpha')
+    })
 
-    it("renders setSelection with custom geometry without DOM selection sync", () => {
-      editor.dispose();
+    it('renders setSelection with custom geometry without DOM selection sync', () => {
+      editor.dispose()
       editor = new Editor(container, {
-        defaultText: "alpha beta",
-        selectionSyncMode: "none",
-      });
-      const nativeSelection = spyOnNativeSelection();
+        defaultText: 'alpha beta',
+        selectionSyncMode: 'none',
+      })
+      const nativeSelection = spyOnNativeSelection()
 
       try {
-        editor.setSelection(0, 5);
+        editor.setSelection(0, 5)
 
-        expect(selectionRanges()).toHaveLength(1);
-        expect(nativeSelection.addRange).not.toHaveBeenCalled();
-        expect(nativeSelection.removeAllRanges).not.toHaveBeenCalled();
+        expect(selectionRanges()).toHaveLength(1)
+        expect(nativeSelection.addRange).not.toHaveBeenCalled()
+        expect(nativeSelection.removeAllRanges).not.toHaveBeenCalled()
       } finally {
-        nativeSelection.restore();
+        nativeSelection.restore()
       }
-    });
+    })
 
-    it("opens and attaches documents with selection sync disabled", () => {
-      editor.dispose();
-      editor = new Editor(container, { selectionSyncMode: "none" });
-      const nativeSelection = spyOnNativeSelection();
+    it('opens and attaches documents with selection sync disabled', () => {
+      editor.dispose()
+      editor = new Editor(container, { selectionSyncMode: 'none' })
+      const nativeSelection = spyOnNativeSelection()
 
       try {
         editor.openDocument({
-          documentId: "open.txt",
-          text: "open",
-        });
-        editor.attachSession(createDocumentSession("attached"));
-        editor.setText("reset");
+          documentId: 'open.txt',
+          text: 'open',
+        })
+        editor.attachSession(createDocumentSession('attached'))
+        editor.setText('reset')
 
-        expect(nativeSelection.addRange).not.toHaveBeenCalled();
-        expect(nativeSelection.removeAllRanges).not.toHaveBeenCalled();
+        expect(nativeSelection.addRange).not.toHaveBeenCalled()
+        expect(nativeSelection.removeAllRanges).not.toHaveBeenCalled()
       } finally {
-        nativeSelection.restore();
+        nativeSelection.restore()
       }
-    });
+    })
 
-    it("copies editor-managed selections without a native DOM selection", () => {
-      editor.dispose();
+    it('copies editor-managed selections without a native DOM selection', () => {
+      editor.dispose()
       editor = new Editor(container, {
-        defaultText: "alpha beta",
-        selectionSyncMode: "none",
-      });
-      window.getSelection()?.removeAllRanges();
+        defaultText: 'alpha beta',
+        selectionSyncMode: 'none',
+      })
+      window.getSelection()?.removeAllRanges()
 
-      editor.setSelection(0, 5);
+      editor.setSelection(0, 5)
 
-      expect(window.getSelection()?.rangeCount).toBe(0);
-      const copy = createCopyEvent();
-      editorRoot().dispatchEvent(copy.event);
+      expect(window.getSelection()?.rangeCount).toBe(0)
+      const copy = createCopyEvent()
+      editorRoot().dispatchEvent(copy.event)
 
-      expect(copy.getText()).toBe("alpha");
-      expect(copy.event.defaultPrevented).toBe(true);
-    });
+      expect(copy.getText()).toBe('alpha')
+      expect(copy.event.defaultPrevented).toBe(true)
+    })
 
-    it("opens static documents without undo, dirty state, or write behavior", () => {
+    it('opens static documents without undo, dirty state, or write behavior', () => {
       editor.openDocument({
-        documentId: "excerpt.ts",
-        documentMode: "static",
-        text: "const value = 1",
-      });
+        documentId: 'excerpt.ts',
+        documentMode: 'static',
+        text: 'const value = 1',
+      })
 
-      editor.edit({ from: 0, to: 5, text: "let" });
-      editor.dispatchCommand("undo");
-      editor.dispatchCommand("indentSelection");
+      editor.edit({ from: 0, to: 5, text: 'let' })
+      editor.dispatchCommand('undo')
+      editor.dispatchCommand('indentSelection')
 
-      expect(editor.getText()).toBe("const value = 1");
+      expect(editor.getText()).toBe('const value = 1')
       expect(editor.getState()).toMatchObject({
-        documentId: "excerpt.ts",
-        documentMode: "static",
-        editability: "editable",
+        documentId: 'excerpt.ts',
+        documentMode: 'static',
+        editability: 'editable',
         canUndo: false,
         canRedo: false,
         isDirty: false,
-      });
-    });
+      })
+    })
 
-    it("does not move focus out of external inputs when opening background documents", () => {
-      const input = document.createElement("input");
-      document.body.append(input);
-      input.focus();
+    it('does not move focus out of external inputs when opening background documents', () => {
+      const input = document.createElement('input')
+      document.body.append(input)
+      input.focus()
 
       editor.openDocument({
-        documentId: "excerpt.ts",
-        documentMode: "static",
-        text: "const value = 1",
-      });
+        documentId: 'excerpt.ts',
+        documentMode: 'static',
+        text: 'const value = 1',
+      })
 
-      expect(document.activeElement).toBe(input);
+      expect(document.activeElement).toBe(input)
 
-      input.remove();
-    });
+      input.remove()
+    })
 
-    it("updates editability after construction", () => {
-      editor.setText("abc");
-      editor.setEditability("readonly");
+    it('updates editability after construction', () => {
+      editor.setText('abc')
+      editor.setEditability('readonly')
 
-      editor.edit({ from: 3, to: 3, text: "!" });
+      editor.edit({ from: 3, to: 3, text: '!' })
 
-      expect(editor.getText()).toBe("abc");
-      expect(editor.getState().editability).toBe("readonly");
+      expect(editor.getText()).toBe('abc')
+      expect(editor.getState().editability).toBe('readonly')
 
-      editor.setEditability("editable");
-      editor.edit({ from: 3, to: 3, text: "!" });
+      editor.setEditability('editable')
+      editor.edit({ from: 3, to: 3, text: '!' })
 
-      expect(editor.getText()).toBe("abc!");
-    });
-  });
+      expect(editor.getText()).toBe('abc!')
+    })
+  })
 
-  describe("range decorations", () => {
-    it("registers and clears semantic range highlights", () => {
-      editor.openDocument({ documentId: "main.ts", text: "alpha beta gamma" });
+  describe('range decorations', () => {
+    it('registers and clears semantic range highlights', () => {
+      editor.openDocument({ documentId: 'main.ts', text: 'alpha beta gamma' })
 
       editor.setRangeDecorations([
         {
           start: 6,
           end: 10,
-          className: "search-result-match",
+          className: 'search-result-match',
           style: {
-            backgroundColor: "yellow",
-            color: "black",
-            textDecoration: "underline",
+            backgroundColor: 'yellow',
+            color: 'black',
+            textDecoration: 'underline',
           },
         },
-      ]);
+      ])
 
-      const entry = [...highlightsMap].find(([name]) => name.includes("search-result-match"));
-      const styleText = [...document.head.querySelectorAll("style")]
-        .map((style) => style.textContent ?? "")
-        .join("\n");
+      const entry = [...highlightsMap].find(([name]) => name.includes('search-result-match'))
+      const styleText = [...document.head.querySelectorAll('style')]
+        .map((style) => style.textContent ?? '')
+        .join('\n')
 
-      expect(entry?.[1].size).toBe(1);
-      expect(styleText).toContain("background-color: yellow");
-      expect(styleText).toContain("color: black");
-      expect(styleText).toContain("text-decoration: underline");
+      expect(entry?.[1].size).toBe(1)
+      expect(styleText).toContain('background-color: yellow')
+      expect(styleText).toContain('color: black')
+      expect(styleText).toContain('text-decoration: underline')
 
-      editor.setRangeDecorations([]);
+      editor.setRangeDecorations([])
 
-      expect([...highlightsMap.keys()].some((name) => name.includes("search-result-match"))).toBe(
+      expect([...highlightsMap.keys()].some((name) => name.includes('search-result-match'))).toBe(
         false,
-      );
-    });
+      )
+    })
 
-    it("updates semantic range highlights in place", () => {
-      editor.openDocument({ documentId: "main.ts", text: "alpha beta gamma" });
+    it('updates semantic range highlights in place', () => {
+      editor.openDocument({ documentId: 'main.ts', text: 'alpha beta gamma' })
 
       editor.setRangeDecorations([
         {
           start: 6,
           end: 10,
-          className: "search-result-match",
-          style: { backgroundColor: "yellow" },
+          className: 'search-result-match',
+          style: { backgroundColor: 'yellow' },
         },
-      ]);
+      ])
 
-      const firstEntry = [...highlightsMap].find(([name]) => name.includes("search-result-match"));
+      const firstEntry = [...highlightsMap].find(([name]) => name.includes('search-result-match'))
       editor.setRangeDecorations([
         {
           start: 6,
           end: 10,
-          className: "search-result-match",
-          style: { backgroundColor: "yellow" },
+          className: 'search-result-match',
+          style: { backgroundColor: 'yellow' },
         },
-      ]);
-      const secondEntry = [...highlightsMap].find(([name]) => name.includes("search-result-match"));
+      ])
+      const secondEntry = [...highlightsMap].find(([name]) => name.includes('search-result-match'))
 
-      expect(secondEntry?.[1]).toBe(firstEntry?.[1]);
+      expect(secondEntry?.[1]).toBe(firstEntry?.[1])
 
       editor.setRangeDecorations([
         {
           start: 11,
           end: 16,
-          className: "search-result-match",
-          style: { backgroundColor: "yellow" },
+          className: 'search-result-match',
+          style: { backgroundColor: 'yellow' },
         },
-      ]);
-      const thirdEntry = [...highlightsMap].find(([name]) => name.includes("search-result-match"));
+      ])
+      const thirdEntry = [...highlightsMap].find(([name]) => name.includes('search-result-match'))
 
-      expect(thirdEntry?.[1]).toBe(secondEntry?.[1]);
-      expect(thirdEntry?.[1].size).toBe(1);
+      expect(thirdEntry?.[1]).toBe(secondEntry?.[1])
+      expect(thirdEntry?.[1].size).toBe(1)
 
       editor.setRangeDecorations([
         {
           start: 11,
           end: 16,
-          className: "search-result-match",
-          style: { backgroundColor: "orange" },
+          className: 'search-result-match',
+          style: { backgroundColor: 'orange' },
         },
-      ]);
-      const fourthEntry = [...highlightsMap].find(([name]) => name.includes("search-result-match"));
-      const styleText = [...document.head.querySelectorAll("style")]
-        .map((style) => style.textContent ?? "")
-        .join("\n");
+      ])
+      const fourthEntry = [...highlightsMap].find(([name]) => name.includes('search-result-match'))
+      const styleText = [...document.head.querySelectorAll('style')]
+        .map((style) => style.textContent ?? '')
+        .join('\n')
 
-      expect(fourthEntry?.[1]).toBe(thirdEntry?.[1]);
-      expect(styleText).toContain("background-color: orange");
-    });
+      expect(fourthEntry?.[1]).toBe(thirdEntry?.[1])
+      expect(styleText).toContain('background-color: orange')
+    })
 
-    it("updates appended semantic range highlights without replacing registry entries", () => {
-      editor.openDocument({ documentId: "main.ts", text: "alpha beta gamma" });
+    it('updates appended semantic range highlights without replacing registry entries', () => {
+      editor.openDocument({ documentId: 'main.ts', text: 'alpha beta gamma' })
 
       editor.setRangeDecorations([
         {
           start: 0,
           end: 5,
-          className: "search-result-match",
-          style: { backgroundColor: "yellow" },
+          className: 'search-result-match',
+          style: { backgroundColor: 'yellow' },
         },
-      ]);
+      ])
 
-      const firstEntry = [...highlightsMap].find(([name]) => name.includes("search-result-match"));
+      const firstEntry = [...highlightsMap].find(([name]) => name.includes('search-result-match'))
 
       editor.setRangeDecorations([
         {
           start: 0,
           end: 5,
-          className: "search-result-match",
-          style: { backgroundColor: "yellow" },
+          className: 'search-result-match',
+          style: { backgroundColor: 'yellow' },
         },
         {
           start: 6,
           end: 10,
-          className: "search-result-match",
-          style: { backgroundColor: "yellow" },
+          className: 'search-result-match',
+          style: { backgroundColor: 'yellow' },
         },
-      ]);
+      ])
 
-      const secondEntry = [...highlightsMap].find(([name]) => name.includes("search-result-match"));
+      const secondEntry = [...highlightsMap].find(([name]) => name.includes('search-result-match'))
 
-      expect(secondEntry?.[1]).toBe(firstEntry?.[1]);
-      expect(secondEntry?.[1].size).toBe(2);
-    });
+      expect(secondEntry?.[1]).toBe(firstEntry?.[1])
+      expect(secondEntry?.[1].size).toBe(2)
+    })
 
-    it("batches equivalent semantic range highlights into one registry entry", () => {
-      editor.openDocument({ documentId: "main.ts", text: "alpha beta gamma" });
+    it('batches equivalent semantic range highlights into one registry entry', () => {
+      editor.openDocument({ documentId: 'main.ts', text: 'alpha beta gamma' })
 
       editor.setRangeDecorations([
         {
           start: 0,
           end: 5,
-          className: "search-result-match",
-          style: { backgroundColor: "yellow" },
+          className: 'search-result-match',
+          style: { backgroundColor: 'yellow' },
         },
         {
           start: 6,
           end: 10,
-          className: "search-result-match",
-          style: { backgroundColor: "yellow" },
+          className: 'search-result-match',
+          style: { backgroundColor: 'yellow' },
         },
-      ]);
+      ])
 
-      const entries = [...highlightsMap].filter(([name]) => name.includes("search-result-match"));
+      const entries = [...highlightsMap].filter(([name]) => name.includes('search-result-match'))
 
-      expect(entries).toHaveLength(1);
-      expect(entries[0]?.[1].size).toBe(2);
-    });
+      expect(entries).toHaveLength(1)
+      expect(entries[0]?.[1].size).toBe(2)
+    })
 
-    it("defers constructor range highlights until text is available", () => {
-      editor.dispose();
+    it('defers constructor range highlights until text is available', () => {
+      editor.dispose()
       editor = new Editor(container, {
         rangeDecorations: [
           {
             start: 0,
             end: 5,
-            className: "search-result-match",
-            style: { backgroundColor: "yellow" },
+            className: 'search-result-match',
+            style: { backgroundColor: 'yellow' },
           },
         ],
-      });
+      })
 
-      expect([...highlightsMap.keys()].some((name) => name.includes("search-result-match"))).toBe(
+      expect([...highlightsMap.keys()].some((name) => name.includes('search-result-match'))).toBe(
         false,
-      );
+      )
 
-      editor.openDocument({ documentId: "main.ts", text: "alpha beta gamma" });
+      editor.openDocument({ documentId: 'main.ts', text: 'alpha beta gamma' })
 
-      const entry = [...highlightsMap].find(([name]) => name.includes("search-result-match"));
-      expect(entry?.[1].size).toBe(1);
-    });
-  });
+      const entry = [...highlightsMap].find(([name]) => name.includes('search-result-match'))
+      expect(entry?.[1].size).toBe(1)
+    })
+  })
 
-  describe("setContent", () => {
-    it("sets the text content", () => {
-      editor.setContent("hello world");
-      expect(editorRoot().textContent).toBe("hello world");
-    });
+  describe('setContent', () => {
+    it('sets the text content', () => {
+      editor.setContent('hello world')
+      expect(editorRoot().textContent).toBe('hello world')
+    })
 
-    it("clears highlights when setting content", () => {
-      editor.setContent("const x = 1");
-      editor.setTokens([{ start: 0, end: 5, style: { color: "#ff0000" } }]);
-      expect(highlightsMap.size).toBeGreaterThan(0);
+    it('clears highlights when setting content', () => {
+      editor.setContent('const x = 1')
+      editor.setTokens([{ start: 0, end: 5, style: { color: '#ff0000' } }])
+      expect(highlightsMap.size).toBeGreaterThan(0)
 
-      editor.setContent("new content");
-      expect(highlightsMap.size).toBe(0);
-    });
-  });
+      editor.setContent('new content')
+      expect(highlightsMap.size).toBe(0)
+    })
+  })
 
-  describe("merge conflicts", () => {
-    it("reports conflict marker regions in the current document", () => {
-      editor.setText(["<<<<<<< HEAD", "ours", "=======", "theirs", ">>>>>>> branch"].join("\n"));
+  describe('merge conflicts', () => {
+    it('reports conflict marker regions in the current document', () => {
+      editor.setText(['<<<<<<< HEAD', 'ours', '=======', 'theirs', '>>>>>>> branch'].join('\n'))
 
-      const conflicts = editor.getMergeConflicts();
+      const conflicts = editor.getMergeConflicts()
 
-      expect(conflicts).toHaveLength(1);
+      expect(conflicts).toHaveLength(1)
       expect(conflicts[0]).toMatchObject({
-        oursLabel: "HEAD",
-        theirsLabel: "branch",
-      });
-    });
+        oursLabel: 'HEAD',
+        theirsLabel: 'branch',
+      })
+    })
 
-    it("resolves a conflict through the normal editor edit path", () => {
+    it('resolves a conflict through the normal editor edit path', () => {
       editor.setText(
-        ["before", "<<<<<<< HEAD", "ours", "=======", "theirs", ">>>>>>> branch"].join("\n"),
-      );
+        ['before', '<<<<<<< HEAD', 'ours', '=======', 'theirs', '>>>>>>> branch'].join('\n'),
+      )
 
-      expect(editor.resolveMergeConflict(0, "theirs")).toBe(true);
+      expect(editor.resolveMergeConflict(0, 'theirs')).toBe(true)
 
-      expect(editor.getText()).toBe("before\ntheirs\n");
-      expect(editor.getMergeConflicts()).toEqual([]);
-      expect(editor.getState().canUndo).toBe(true);
-    });
+      expect(editor.getText()).toBe('before\ntheirs\n')
+      expect(editor.getMergeConflicts()).toEqual([])
+      expect(editor.getState().canUndo).toBe(true)
+    })
 
-    it("returns false for absent conflicts or absent base sections", () => {
-      editor.setText(["<<<<<<< HEAD", "ours", "=======", "theirs", ">>>>>>> branch"].join("\n"));
+    it('returns false for absent conflicts or absent base sections', () => {
+      editor.setText(['<<<<<<< HEAD', 'ours', '=======', 'theirs', '>>>>>>> branch'].join('\n'))
 
-      expect(editor.resolveMergeConflict(2, "ours")).toBe(false);
-      expect(editor.resolveMergeConflict(0, "base")).toBe(false);
-      expect(editor.getMergeConflicts()).toHaveLength(1);
-    });
+      expect(editor.resolveMergeConflict(2, 'ours')).toBe(false)
+      expect(editor.resolveMergeConflict(0, 'base')).toBe(false)
+      expect(editor.getMergeConflicts()).toHaveLength(1)
+    })
 
-    it("renders conflict action rows that resolve the current conflict", () => {
-      editor.dispose();
-      container.textContent = "";
+    it('renders conflict action rows that resolve the current conflict', () => {
+      editor.dispose()
+      container.textContent = ''
       editor = new Editor(container, {
         plugins: withTestLanguagePlugins(createMergeConflictPlugin()),
-      });
-      editor.setText(["<<<<<<< HEAD", "ours", "=======", "theirs", ">>>>>>> branch"].join("\n"));
+      })
+      editor.setText(['<<<<<<< HEAD', 'ours', '=======', 'theirs', '>>>>>>> branch'].join('\n'))
 
       const actions = [
-        ...container.querySelectorAll<HTMLButtonElement>(".editor-merge-conflict-action"),
-      ];
+        ...container.querySelectorAll<HTMLButtonElement>('.editor-merge-conflict-action'),
+      ]
 
       expect(actions.map((action) => action.textContent)).toEqual([
-        "Use HEAD",
-        "Use branch",
-        "Use Both",
-      ]);
+        'Use HEAD',
+        'Use branch',
+        'Use Both',
+      ])
       expect(actions.map((action) => action.title)).toEqual([
-        "Use HEAD",
-        "Use branch",
-        "Use both local and remote changes",
-      ]);
+        'Use HEAD',
+        'Use branch',
+        'Use both local and remote changes',
+      ])
 
-      actions[1]!.click();
+      actions[1]!.click()
 
-      expect(editor.getText()).toBe("theirs\n");
-      expect(container.querySelector(".editor-merge-conflict-actions")).toBeNull();
-    });
-  });
+      expect(editor.getText()).toBe('theirs\n')
+      expect(container.querySelector('.editor-merge-conflict-actions')).toBeNull()
+    })
+  })
 
-  describe("setTokens", () => {
-    it("creates highlights for tokens", () => {
-      editor.setContent("const x = 1");
+  describe('setTokens', () => {
+    it('creates highlights for tokens', () => {
+      editor.setContent('const x = 1')
       editor.setTokens([
-        { start: 0, end: 5, style: { color: "#ff0000" } },
-        { start: 6, end: 7, style: { color: "#00ff00" } },
-      ]);
+        { start: 0, end: 5, style: { color: '#ff0000' } },
+        { start: 6, end: 7, style: { color: '#00ff00' } },
+      ])
 
-      expect(highlightsMap.size).toBe(2);
-    });
+      expect(highlightsMap.size).toBe(2)
+    })
 
-    it("groups tokens with the same style", () => {
-      editor.setContent("const x = 1");
+    it('groups tokens with the same style', () => {
+      editor.setContent('const x = 1')
       editor.setTokens([
-        { start: 0, end: 5, style: { color: "#ff0000" } },
-        { start: 10, end: 11, style: { color: "#ff0000" } },
-      ]);
+        { start: 0, end: 5, style: { color: '#ff0000' } },
+        { start: 10, end: 11, style: { color: '#ff0000' } },
+      ])
 
       // Same color → same group → only 1 highlight entry
-      expect(highlightsMap.size).toBe(1);
-    });
+      expect(highlightsMap.size).toBe(1)
+    })
 
-    it("skips tokens with no style", () => {
-      editor.setContent("hello");
-      editor.setTokens([{ start: 0, end: 5, style: {} }]);
-      expect(highlightsMap.size).toBe(0);
-    });
+    it('skips tokens with no style', () => {
+      editor.setContent('hello')
+      editor.setTokens([{ start: 0, end: 5, style: {} }])
+      expect(highlightsMap.size).toBe(0)
+    })
 
-    it("does nothing for empty text", () => {
-      editor.setContent("");
-      editor.setTokens([{ start: 0, end: 5, style: { color: "#ff0000" } }]);
-      expect(highlightsMap.size).toBe(0);
-    });
-  });
+    it('does nothing for empty text', () => {
+      editor.setContent('')
+      editor.setTokens([{ start: 0, end: 5, style: { color: '#ff0000' } }])
+      expect(highlightsMap.size).toBe(0)
+    })
+  })
 
-  describe("view contribution plugins", () => {
-    it("receives document, token, selection, and content updates", () => {
-      const events: ViewContributionEvent[] = [];
-      editor.dispose();
-      editor = new Editor(container, { plugins: [createViewContributionPlugin(events)] });
+  describe('view contribution plugins', () => {
+    it('receives document, token, selection, and content updates', () => {
+      const events: ViewContributionEvent[] = []
+      editor.dispose()
+      editor = new Editor(container, { plugins: [createViewContributionPlugin(events)] })
 
-      editor.openDocument({ documentId: "test.ts", text: "const a = 1;" });
-      editor.setTokens([{ start: 0, end: 5, style: { color: "#ff0000" } }]);
-      editorRoot().dispatchEvent(createInsertEvent("!"));
+      editor.openDocument({ documentId: 'test.ts', text: 'const a = 1;' })
+      editor.setTokens([{ start: 0, end: 5, style: { color: '#ff0000' } }])
+      editorRoot().dispatchEvent(createInsertEvent('!'))
 
-      expect(events.some((event) => event.kind === "document")).toBe(true);
-      expect(events.some((event) => event.kind === "tokens")).toBe(true);
-      expect(events.some((event) => event.kind === "selection")).toBe(true);
-      expect(events.some((event) => event.kind === "content" && event.changeKind === "edit")).toBe(
+      expect(events.some((event) => event.kind === 'document')).toBe(true)
+      expect(events.some((event) => event.kind === 'tokens')).toBe(true)
+      expect(events.some((event) => event.kind === 'selection')).toBe(true)
+      expect(events.some((event) => event.kind === 'content' && event.changeKind === 'edit')).toBe(
         true,
-      );
-      expect(events.at(-1)?.snapshot?.text).toBe("const a = 1;!");
-    });
+      )
+      expect(events.at(-1)?.snapshot?.text).toBe('const a = 1;!')
+    })
 
-    it("uses cached scroll metrics when creating snapshots", () => {
-      const events: ViewContributionEvent[] = [];
-      editor.dispose();
-      editor = new Editor(container, { plugins: [createViewContributionPlugin(events)] });
+    it('increments snapshot textVersion for text edits', () => {
+      const events: ViewContributionEvent[] = []
+      editor.dispose()
+      editor = new Editor(container, { plugins: [createViewContributionPlugin(events)] })
+
+      editor.openDocument({ documentId: 'test.ts', text: 'const a = 1;' })
+      const openVersion = events.at(-1)?.snapshot?.textVersion
+      editorRoot().dispatchEvent(createInsertEvent('!'))
+      const contentEvent = events.findLast(
+        (event) => event.kind === 'content' && event.changeKind === 'edit',
+      )
+
+      expect(openVersion).toBeTypeOf('number')
+      expect(contentEvent?.snapshot?.textVersion).toBeGreaterThan(openVersion!)
+    })
+
+    it('uses cached scroll metrics when creating snapshots', () => {
+      const events: ViewContributionEvent[] = []
+      editor.dispose()
+      editor = new Editor(container, { plugins: [createViewContributionPlugin(events)] })
 
       withThrowingScrollMetricReads(editorRoot(), () => {
-        editor.openDocument({ documentId: "test.ts", text: "const a = 1;" });
-      });
+        editor.openDocument({ documentId: 'test.ts', text: 'const a = 1;' })
+      })
 
-      expect(events.at(-1)?.snapshot?.viewport.scrollTop).toBe(0);
-      expect(events.at(-1)?.snapshot?.viewport.scrollLeft).toBe(0);
-      expect(events.at(-1)?.snapshot?.viewport.scrollHeight).toBeGreaterThan(0);
-      expect(events.at(-1)?.snapshot?.viewport.scrollWidth).toBeGreaterThan(0);
-      expect(events.at(-1)?.snapshot?.viewport.clientHeight).toBe(0);
-      expect(events.at(-1)?.snapshot?.viewport.clientWidth).toBe(0);
-    });
+      expect(events.at(-1)?.snapshot?.viewport.scrollTop).toBe(0)
+      expect(events.at(-1)?.snapshot?.viewport.scrollLeft).toBe(0)
+      expect(events.at(-1)?.snapshot?.viewport.scrollHeight).toBeGreaterThan(0)
+      expect(events.at(-1)?.snapshot?.viewport.scrollWidth).toBeGreaterThan(0)
+      expect(events.at(-1)?.snapshot?.viewport.clientHeight).toBe(0)
+      expect(events.at(-1)?.snapshot?.viewport.clientWidth).toBe(0)
+    })
 
-    it("does not write scrollTop when opening an initial document at the cached origin", () => {
-      const scrollTopWrites = trackScrollTopWrites(editorRoot());
+    it('does not write scrollTop when opening an initial document at the cached origin', () => {
+      const scrollTopWrites = trackScrollTopWrites(editorRoot())
 
       try {
-        editor.openDocument({ documentId: "test.ts", text: "const a = 1;" });
+        editor.openDocument({ documentId: 'test.ts', text: 'const a = 1;' })
       } finally {
-        scrollTopWrites.restore();
+        scrollTopWrites.restore()
       }
 
-      expect(scrollTopWrites.values).toHaveLength(0);
-      expect(editor.getScrollPosition()).toEqual({ top: 0, left: 0 });
-    });
+      expect(scrollTopWrites.values).toHaveLength(0)
+      expect(editor.getScrollPosition()).toEqual({ top: 0, left: 0 })
+    })
 
-    it("resets scroll when opening a new document without an explicit position", () => {
-      const events: ViewContributionEvent[] = [];
-      editor.dispose();
-      editor = new Editor(container, { plugins: [createViewContributionPlugin(events)] });
+    it('resets scroll when opening a new document without an explicit position', () => {
+      const events: ViewContributionEvent[] = []
+      editor.dispose()
+      editor = new Editor(container, { plugins: [createViewContributionPlugin(events)] })
 
       editor.openDocument({
-        documentId: "large.txt",
-        text: Array.from({ length: 200 }, (_value, index) => `line ${index}`).join("\n"),
+        documentId: 'large.txt',
+        text: Array.from({ length: 200 }, (_value, index) => `line ${index}`).join('\n'),
         scrollPosition: { top: 120 },
-      });
+      })
 
-      editor.openDocument({ documentId: "small.txt", text: "short" });
+      editor.openDocument({ documentId: 'small.txt', text: 'short' })
 
-      expect(editorRoot().scrollTop).toBe(0);
-      expect(editor.getScrollPosition()).toEqual({ top: 0, left: 0 });
-      expect(events.at(-1)?.snapshot?.viewport.scrollTop).toBe(0);
-    });
+      expect(editorRoot().scrollTop).toBe(0)
+      expect(editor.getScrollPosition()).toEqual({ top: 0, left: 0 })
+      expect(events.at(-1)?.snapshot?.viewport.scrollTop).toBe(0)
+    })
 
-    it("accepts an initial scroll position when opening a document", () => {
-      const text = Array.from({ length: 200 }, (_value, index) => `line ${index}`).join("\n");
+    it('accepts an initial scroll position when opening a document', () => {
+      const text = Array.from({ length: 200 }, (_value, index) => `line ${index}`).join('\n')
 
       editor.openDocument({
-        documentId: "large.txt",
+        documentId: 'large.txt',
         text,
         scrollPosition: { top: 120 },
-      });
+      })
 
-      expect(editorRoot().scrollTop).toBe(120);
-      expect(editor.getScrollPosition()).toEqual({ top: 120, left: 0 });
-    });
+      expect(editorRoot().scrollTop).toBe(120)
+      expect(editor.getScrollPosition()).toEqual({ top: 120, left: 0 })
+    })
 
-    it("preserves and clamps scroll when replacing text", () => {
+    it('preserves and clamps scroll when replacing text', () => {
       editor.openDocument({
-        documentId: "large.txt",
-        text: Array.from({ length: 200 }, (_value, index) => `line ${index}`).join("\n"),
+        documentId: 'large.txt',
+        text: Array.from({ length: 200 }, (_value, index) => `line ${index}`).join('\n'),
         scrollPosition: { top: 120 },
-      });
+      })
 
-      editor.setText("short");
+      editor.setText('short')
 
-      expect(editorRoot().scrollTop).toBeLessThan(120);
-      expect(editor.getScrollPosition()).toEqual({ top: editorRoot().scrollTop, left: 0 });
-    });
+      expect(editorRoot().scrollTop).toBeLessThan(120)
+      expect(editor.getScrollPosition()).toEqual({ top: editorRoot().scrollTop, left: 0 })
+    })
 
-    it("uses cached line starts when reserving overlay width", () => {
-      let contributionContext: EditorViewContributionContext | null = null;
+    it('uses cached line starts when reserving overlay width', () => {
+      let contributionContext: EditorViewContributionContext | null = null
       const plugin: EditorPlugin = {
         activate: (context) =>
           context.registerViewContribution({
             createContribution: (context) => {
-              contributionContext = context;
+              contributionContext = context
               return {
                 update: () => undefined,
                 dispose: () => undefined,
-              };
+              }
             },
           }),
-      };
-      editor.dispose();
-      editor = new Editor(container, { plugins: [plugin] });
+      }
+      editor.dispose()
+      editor = new Editor(container, { plugins: [plugin] })
 
-      const text = Array.from({ length: 10_000 }, (_, row) => `line ${row}`).join("\n");
-      editor.openDocument({ documentId: "long.txt", text });
-      const context = requireViewContributionContext(contributionContext);
+      const text = Array.from({ length: 10_000 }, (_, row) => `line ${row}`).join('\n')
+      editor.openDocument({ documentId: 'long.txt', text })
+      const context = requireViewContributionContext(contributionContext)
 
-      const originalIndexOf = String.prototype.indexOf;
-      let lineStartScans = 0;
+      const originalIndexOf = String.prototype.indexOf
+      let lineStartScans = 0
       String.prototype.indexOf = function indexOfSpy(
         this: string,
         searchString: string,
         position?: number,
       ): number {
-        if (String(this) === text && searchString === "\n") lineStartScans += 1;
-        return originalIndexOf.call(this, searchString, position);
-      };
-
-      try {
-        context.reserveOverlayWidth("right", 120);
-      } finally {
-        String.prototype.indexOf = originalIndexOf;
+        if (String(this) === text && searchString === '\n') lineStartScans += 1
+        return originalIndexOf.call(this, searchString, position)
       }
 
-      expect(lineStartScans).toBe(0);
-    });
+      try {
+        context.reserveOverlayWidth('right', 120)
+      } finally {
+        String.prototype.indexOf = originalIndexOf
+      }
 
-    it("skips layout updates for unchanged overlay reservations", () => {
-      const events: EditorViewContributionUpdateKind[] = [];
-      let contributionContext: EditorViewContributionContext | null = null;
+      expect(lineStartScans).toBe(0)
+    })
+
+    it('skips layout updates for unchanged overlay reservations', () => {
+      const events: EditorViewContributionUpdateKind[] = []
+      let contributionContext: EditorViewContributionContext | null = null
       const plugin: EditorPlugin = {
         activate: (context) =>
           context.registerViewContribution({
             createContribution: (context) => {
-              contributionContext = context;
+              contributionContext = context
               return {
                 update: (_snapshot, kind) => {
-                  events.push(kind);
+                  events.push(kind)
                 },
                 dispose: () => undefined,
-              };
+              }
             },
           }),
-      };
-      editor.dispose();
-      editor = new Editor(container, { plugins: [plugin] });
-      const context = requireViewContributionContext(contributionContext);
+      }
+      editor.dispose()
+      editor = new Editor(container, { plugins: [plugin] })
+      const context = requireViewContributionContext(contributionContext)
 
-      context.reserveOverlayWidth("right", 80);
-      context.reserveOverlayWidth("right", 80);
+      context.reserveOverlayWidth('right', 80)
+      context.reserveOverlayWidth('right', 80)
 
-      expect(events.filter((kind) => kind === "layout")).toHaveLength(1);
-    });
+      expect(events.filter((kind) => kind === 'layout')).toHaveLength(1)
+    })
 
-    it("coalesces overlay reservations triggered during contribution updates", () => {
-      const events: EditorViewContributionUpdateKind[] = [];
-      let contributionContext: EditorViewContributionContext | null = null;
+    it('coalesces overlay reservations triggered during contribution updates', () => {
+      const events: EditorViewContributionUpdateKind[] = []
+      let contributionContext: EditorViewContributionContext | null = null
       const plugin: EditorPlugin = {
         activate: (context) =>
           context.registerViewContribution({
             createContribution: (context) => {
-              contributionContext = context;
+              contributionContext = context
               return {
                 update: (_snapshot, kind) => {
-                  events.push(kind);
-                  if (events.length > 8) throw new Error("recursive contribution update");
+                  events.push(kind)
+                  if (events.length > 8) throw new Error('recursive contribution update')
                   requireViewContributionContext(contributionContext).reserveOverlayWidth(
-                    "right",
+                    'right',
                     80 + events.length,
-                  );
+                  )
                 },
                 dispose: () => undefined,
-              };
+              }
             },
           }),
-      };
-      editor.dispose();
-      editor = new Editor(container, { plugins: [plugin] });
+      }
+      editor.dispose()
+      editor = new Editor(container, { plugins: [plugin] })
 
-      editor.setContent("abc");
+      editor.setContent('abc')
 
-      expect(events).toEqual(["viewport", "layout", "tokens", "layout", "content", "layout"]);
-    });
+      expect(events).toEqual(['viewport', 'layout', 'tokens', 'layout', 'content', 'layout'])
+    })
 
-    it("disposes view contributions with the editor", () => {
-      const events: ViewContributionEvent[] = [];
-      editor.dispose();
-      editor = new Editor(container, { plugins: [createViewContributionPlugin(events)] });
+    it('disposes view contributions with the editor', () => {
+      const events: ViewContributionEvent[] = []
+      editor.dispose()
+      editor = new Editor(container, { plugins: [createViewContributionPlugin(events)] })
 
-      editor.dispose();
+      editor.dispose()
 
-      expect(events.at(-1)?.kind).toBe("dispose");
-    });
-  });
+      expect(events.at(-1)?.kind).toBe('dispose')
+    })
+  })
 
-  describe("editor block provider plugins", () => {
-    it("mounts fixed top and bottom block surfaces in the editor layout", () => {
-      const events: ViewContributionEvent[] = [];
-      const mounted: string[] = [];
-      let providerContext: EditorBlockProviderContext | null = null;
+  describe('editor block provider plugins', () => {
+    it('mounts fixed top and bottom block surfaces in the editor layout', () => {
+      const events: ViewContributionEvent[] = []
+      const mounted: string[] = []
+      let providerContext: EditorBlockProviderContext | null = null
       const plugin: EditorPlugin = {
         activate: (context) =>
           context.registerBlockProvider({
             getBlocks: (context) => {
-              providerContext = context;
+              providerContext = context
               return [
                 {
-                  id: "file",
+                  id: 'file',
                   anchor: { row: 0 },
                   top: {
                     height: { px: 30 },
                     mount: (container, context) => {
-                      mounted.push(`${context.surface}:${context.documentId}:${context.text}`);
-                      container.dataset.testBlockSurface = context.surface;
-                      container.textContent = `${context.surface}:${context.blockId}`;
+                      mounted.push(`${context.surface}:${context.documentId}:${context.text}`)
+                      container.dataset.testBlockSurface = context.surface
+                      container.textContent = `${context.surface}:${context.blockId}`
                     },
                   },
                 },
                 {
-                  id: "range",
+                  id: 'range',
                   anchor: { startRow: 0, endRow: 1 },
                   bottom: {
                     height: { px: 26 },
                     mount: (container, context) => {
-                      mounted.push(`${context.surface}:${context.documentId}:${context.text}`);
-                      container.dataset.testBlockSurface = context.surface;
-                      container.textContent = `${context.surface}:${context.blockId}`;
+                      mounted.push(`${context.surface}:${context.documentId}:${context.text}`)
+                      container.dataset.testBlockSurface = context.surface
+                      container.textContent = `${context.surface}:${context.blockId}`
                     },
                   },
                 },
-              ];
+              ]
             },
           }),
-      };
-      editor.dispose();
+      }
+      editor.dispose()
       editor = new Editor(container, {
         lineHeight: 20,
         plugins: [plugin, createViewContributionPlugin(events)],
-      });
+      })
 
-      editor.openDocument({ documentId: "doc.txt", text: "one\ntwo" });
+      editor.openDocument({ documentId: 'doc.txt', text: 'one\ntwo' })
 
-      const snapshot = events.at(-1)?.snapshot;
+      const snapshot = events.at(-1)?.snapshot
       expect(providerContext).toMatchObject({
-        documentId: "doc.txt",
+        documentId: 'doc.txt',
         lineCount: 2,
-        text: "one\ntwo",
-      });
-      expect(mounted).toEqual(["top:doc.txt:one\ntwo", "bottom:doc.txt:one\ntwo"]);
-      expect(blockSurfaceTexts()).toEqual(["top:file", "bottom:range"]);
-      expect(snapshot?.totalHeight).toBe(96);
+        text: 'one\ntwo',
+      })
+      expect(mounted).toEqual(['top:doc.txt:one\ntwo', 'bottom:doc.txt:one\ntwo'])
+      expect(blockSurfaceTexts()).toEqual(['top:file', 'bottom:range'])
+      expect(snapshot?.totalHeight).toBe(96)
       expect(snapshot?.visibleRows.map((row) => row.kind)).toEqual([
-        "block",
-        "text",
-        "text",
-        "block",
-      ]);
-    });
+        'block',
+        'text',
+        'text',
+        'block',
+      ])
+    })
 
-    it("updates measured block row heights from ResizeObserver and clamps bounds", async () => {
-      const originalResizeObserver = globalThis.ResizeObserver;
-      globalThis.ResizeObserver = MockResizeObserver;
-      MockResizeObserver.instances = [];
+    it('updates measured block row heights from ResizeObserver and clamps bounds', async () => {
+      const originalResizeObserver = globalThis.ResizeObserver
+      globalThis.ResizeObserver = MockResizeObserver
+      MockResizeObserver.instances = []
 
       try {
-        const events: ViewContributionEvent[] = [];
+        const events: ViewContributionEvent[] = []
         const plugin: EditorPlugin = {
           activate: (context) =>
             context.registerBlockProvider({
               getBlocks: () => [
                 {
-                  id: "output",
+                  id: 'output',
                   anchor: { row: 0 },
                   bottom: {
                     height: { minPx: 24, maxPx: 56 },
                     mount: (container, context) => {
-                      container.dataset.testBlockSurface = context.surface;
-                      container.textContent = context.blockId;
+                      container.dataset.testBlockSurface = context.surface
+                      container.textContent = context.blockId
                     },
                   },
                 },
               ],
             }),
-        };
-        editor.dispose();
+        }
+        editor.dispose()
         editor = new Editor(container, {
           lineHeight: 20,
           plugins: [plugin, createViewContributionPlugin(events)],
-        });
+        })
 
-        editor.openDocument({ documentId: "doc.txt", text: "one\ntwo" });
-        expect(events.at(-1)?.snapshot?.totalHeight).toBe(64);
+        editor.openDocument({ documentId: 'doc.txt', text: 'one\ntwo' })
+        expect(events.at(-1)?.snapshot?.totalHeight).toBe(64)
 
-        const surface = blockSurfaceElements()[0]!;
+        const surface = blockSurfaceElements()[0]!
         const observer = MockResizeObserver.instances.find((observer) =>
           observer.observed.has(surface),
-        )!;
-        observer.emit(surface, { height: 72 });
-        await flushTimers();
+        )!
+        observer.emit(surface, { height: 72 })
+        await flushTimers()
 
-        expect(events.at(-1)?.snapshot?.totalHeight).toBe(96);
-        expect(events.at(-1)?.snapshot?.visibleRows.map((row) => row.height)).toEqual([20, 56, 20]);
+        expect(events.at(-1)?.snapshot?.totalHeight).toBe(96)
+        expect(events.at(-1)?.snapshot?.visibleRows.map((row) => row.height)).toEqual([20, 56, 20])
 
-        observer.emit(surface, { height: 10 });
-        await flushTimers();
+        observer.emit(surface, { height: 10 })
+        await flushTimers()
 
-        expect(events.at(-1)?.snapshot?.totalHeight).toBe(64);
-        expect(events.at(-1)?.snapshot?.visibleRows.map((row) => row.height)).toEqual([20, 24, 20]);
+        expect(events.at(-1)?.snapshot?.totalHeight).toBe(64)
+        expect(events.at(-1)?.snapshot?.visibleRows.map((row) => row.height)).toEqual([20, 24, 20])
       } finally {
-        globalThis.ResizeObserver = originalResizeObserver;
+        globalThis.ResizeObserver = originalResizeObserver
       }
-    });
+    })
 
-    it("remeasures block rows without remounting their DOM", async () => {
-      let mountCount = 0;
-      let disposeCount = 0;
-      let measuredHeight = 36;
-      let blockContext: EditorBlockMountContext | null = null;
-      const events: ViewContributionEvent[] = [];
+    it('remeasures block rows without remounting their DOM', async () => {
+      let mountCount = 0
+      let disposeCount = 0
+      let measuredHeight = 36
+      let blockContext: EditorBlockMountContext | null = null
+      const events: ViewContributionEvent[] = []
       const plugin: EditorPlugin = {
         activate: (context) =>
           context.registerBlockProvider({
             getBlocks: () => [
               {
-                id: "output",
+                id: 'output',
                 anchor: { row: 0 },
                 bottom: {
                   height: { minPx: 20, maxPx: 80 },
                   mount: (container, context) => {
-                    mountCount += 1;
-                    blockContext = context;
-                    container.dataset.testBlockSurface = context.surface;
-                    container.textContent = context.blockId;
+                    mountCount += 1
+                    blockContext = context
+                    container.dataset.testBlockSurface = context.surface
+                    container.textContent = context.blockId
                     container.getBoundingClientRect = () =>
-                      ({ height: measuredHeight, width: 0 }) as DOMRect;
+                      ({ height: measuredHeight, width: 0 }) as DOMRect
                     return {
                       dispose: () => {
-                        disposeCount += 1;
+                        disposeCount += 1
                       },
-                    };
+                    }
                   },
                 },
               },
             ],
           }),
-      };
-      editor.dispose();
+      }
+      editor.dispose()
       editor = new Editor(container, {
         lineHeight: 20,
         plugins: [plugin, createViewContributionPlugin(events)],
-      });
+      })
 
-      editor.openDocument({ documentId: "doc.txt", text: "one\ntwo" });
-      await flushTimers();
+      editor.openDocument({ documentId: 'doc.txt', text: 'one\ntwo' })
+      await flushTimers()
 
-      expect(events.at(-1)?.snapshot?.totalHeight).toBe(76);
+      expect(events.at(-1)?.snapshot?.totalHeight).toBe(76)
 
-      measuredHeight = 52;
-      blockContext?.requestMeasure();
-      await flushTimers();
+      measuredHeight = 52
+      blockContext?.requestMeasure()
+      await flushTimers()
 
-      expect(mountCount).toBe(1);
-      expect(disposeCount).toBe(0);
-      expect(blockSurfaceTexts()).toEqual(["output"]);
-      expect(events.at(-1)?.snapshot?.totalHeight).toBe(92);
-    });
+      expect(mountCount).toBe(1)
+      expect(disposeCount).toBe(0)
+      expect(blockSurfaceTexts()).toEqual(['output'])
+      expect(events.at(-1)?.snapshot?.totalHeight).toBe(92)
+    })
 
-    it("mounts fixed left and right block surfaces beside anchored text ranges", () => {
-      const mounted: string[] = [];
+    it('mounts fixed left and right block surfaces beside anchored text ranges', () => {
+      const mounted: string[] = []
       const plugin: EditorPlugin = {
         activate: (context) =>
           context.registerBlockProvider({
             getBlocks: () => [
               {
-                id: "cell",
+                id: 'cell',
                 anchor: { startRow: 0, endRow: 1 },
                 left: {
                   width: { px: 28 },
                   mount: (container, context) => {
-                    mounted.push(`${context.surface}:${context.documentId}:${context.text}`);
-                    container.dataset.testBlockSurface = context.surface;
-                    container.textContent = `${context.surface}:${context.blockId}`;
+                    mounted.push(`${context.surface}:${context.documentId}:${context.text}`)
+                    container.dataset.testBlockSurface = context.surface
+                    container.textContent = `${context.surface}:${context.blockId}`
                   },
                 },
                 right: {
                   width: { px: 18 },
                   mount: (container, context) => {
-                    mounted.push(`${context.surface}:${context.documentId}:${context.text}`);
-                    container.dataset.testBlockSurface = context.surface;
-                    container.textContent = `${context.surface}:${context.blockId}`;
+                    mounted.push(`${context.surface}:${context.documentId}:${context.text}`)
+                    container.dataset.testBlockSurface = context.surface
+                    container.textContent = `${context.surface}:${context.blockId}`
                   },
                 },
               },
             ],
           }),
-      };
-      editor.dispose();
-      editor = new Editor(container, { lineHeight: 20, plugins: [plugin] });
+      }
+      editor.dispose()
+      editor = new Editor(container, { lineHeight: 20, plugins: [plugin] })
 
-      editor.openDocument({ documentId: "doc.txt", text: "one\ntwo\nthree" });
+      editor.openDocument({ documentId: 'doc.txt', text: 'one\ntwo\nthree' })
 
-      const firstRow = document.querySelector<HTMLElement>('[data-editor-virtual-row="0"]');
-      const secondRow = document.querySelector<HTMLElement>('[data-editor-virtual-row="1"]');
-      const thirdRow = document.querySelector<HTMLElement>('[data-editor-virtual-row="2"]');
-      expect(mounted).toEqual(["left:doc.txt:one\ntwo\nthree", "right:doc.txt:one\ntwo\nthree"]);
-      expect(blockSurfaceTexts()).toEqual(["left:cell", "right:cell"]);
-      expect(firstRow?.style.paddingLeft).toBe("28px");
-      expect(firstRow?.style.paddingRight).toBe("18px");
-      expect(secondRow?.style.paddingLeft).toBe("28px");
-      expect(thirdRow?.style.paddingLeft).toBe("");
-    });
+      const firstRow = document.querySelector<HTMLElement>('[data-editor-virtual-row="0"]')
+      const secondRow = document.querySelector<HTMLElement>('[data-editor-virtual-row="1"]')
+      const thirdRow = document.querySelector<HTMLElement>('[data-editor-virtual-row="2"]')
+      expect(mounted).toEqual(['left:doc.txt:one\ntwo\nthree', 'right:doc.txt:one\ntwo\nthree'])
+      expect(blockSurfaceTexts()).toEqual(['left:cell', 'right:cell'])
+      expect(firstRow?.style.paddingLeft).toBe('28px')
+      expect(firstRow?.style.paddingRight).toBe('18px')
+      expect(secondRow?.style.paddingLeft).toBe('28px')
+      expect(thirdRow?.style.paddingLeft).toBe('')
+    })
 
-    it("composes notebook-shaped top, bottom, left, and right surfaces on one block", async () => {
-      let outputHeight = 86;
-      let outputContext: EditorBlockMountContext | null = null;
-      const events: ViewContributionEvent[] = [];
-      const mounted: string[] = [];
+    it('composes notebook-shaped top, bottom, left, and right surfaces on one block', async () => {
+      let outputHeight = 86
+      let outputContext: EditorBlockMountContext | null = null
+      const events: ViewContributionEvent[] = []
+      const mounted: string[] = []
       const plugin: EditorPlugin = {
         activate: (context) =>
           context.registerBlockProvider({
             getBlocks: () => [
               {
-                id: "cell:one",
+                id: 'cell:one',
                 anchor: { startRow: 1, endRow: 2 },
                 top: {
                   height: { px: 34 },
                   mount: (container, context) => {
-                    mounted.push(`${context.surface}:${context.blockId}:${context.documentId}`);
-                    container.dataset.testBlockSurface = context.surface;
-                    container.textContent = "toolbar";
+                    mounted.push(`${context.surface}:${context.blockId}:${context.documentId}`)
+                    container.dataset.testBlockSurface = context.surface
+                    container.textContent = 'toolbar'
                   },
                 },
                 bottom: {
                   height: { minPx: 48, maxPx: 96 },
                   mount: (container, context) => {
-                    outputContext = context;
-                    mounted.push(`${context.surface}:${context.blockId}:${context.documentId}`);
-                    container.dataset.testBlockSurface = context.surface;
-                    container.textContent = "output";
+                    outputContext = context
+                    mounted.push(`${context.surface}:${context.blockId}:${context.documentId}`)
+                    container.dataset.testBlockSurface = context.surface
+                    container.textContent = 'output'
                     container.getBoundingClientRect = () =>
-                      ({ height: outputHeight, width: 0 }) as DOMRect;
+                      ({ height: outputHeight, width: 0 }) as DOMRect
                   },
                 },
                 left: {
                   width: { px: 40 },
                   mount: (container, context) => {
-                    mounted.push(`${context.surface}:${context.blockId}:${context.documentId}`);
-                    container.dataset.testBlockSurface = context.surface;
-                    container.textContent = "run";
+                    mounted.push(`${context.surface}:${context.blockId}:${context.documentId}`)
+                    container.dataset.testBlockSurface = context.surface
+                    container.textContent = 'run'
                   },
                 },
                 right: {
                   width: { px: 24 },
                   mount: (container, context) => {
-                    mounted.push(`${context.surface}:${context.blockId}:${context.documentId}`);
-                    container.dataset.testBlockSurface = context.surface;
-                    container.textContent = "metadata";
+                    mounted.push(`${context.surface}:${context.blockId}:${context.documentId}`)
+                    container.dataset.testBlockSurface = context.surface
+                    container.textContent = 'metadata'
                   },
                 },
               },
             ],
           }),
-      };
-      editor.dispose();
+      }
+      editor.dispose()
       editor = new Editor(container, {
         lineHeight: 20,
         plugins: [plugin, createViewContributionPlugin(events)],
-      });
+      })
 
       editor.openDocument({
-        documentId: "notebook.md",
-        text: "intro\ncode 1\ncode 2\noutro",
-      });
-      await flushTimers();
+        documentId: 'notebook.md',
+        text: 'intro\ncode 1\ncode 2\noutro',
+      })
+      await flushTimers()
 
-      const snapshot = events.at(-1)?.snapshot;
-      const codeRows = rowsContainingText("code ");
+      const snapshot = events.at(-1)?.snapshot
+      const codeRows = rowsContainingText('code ')
       expect(new Set(mounted)).toEqual(
         new Set([
-          "top:cell:one:notebook.md",
-          "bottom:cell:one:notebook.md",
-          "left:cell:one:notebook.md",
-          "right:cell:one:notebook.md",
+          'top:cell:one:notebook.md',
+          'bottom:cell:one:notebook.md',
+          'left:cell:one:notebook.md',
+          'right:cell:one:notebook.md',
         ]),
-      );
-      expect(blockSurfaceTexts().toSorted()).toEqual(["metadata", "output", "run", "toolbar"]);
+      )
+      expect(blockSurfaceTexts().toSorted()).toEqual(['metadata', 'output', 'run', 'toolbar'])
       expect(snapshot?.visibleRows.map((row) => row.kind)).toEqual([
-        "text",
-        "block",
-        "text",
-        "text",
-        "block",
-        "text",
-      ]);
+        'text',
+        'block',
+        'text',
+        'text',
+        'block',
+        'text',
+      ])
       expect(
-        snapshot?.visibleRows.filter((row) => row.kind === "block").map((row) => row.height),
-      ).toEqual([34, 86]);
-      expect(snapshot?.totalHeight).toBe(200);
-      expect(codeRows.map((row) => row.style.paddingLeft)).toEqual(["40px", "40px"]);
-      expect(codeRows.map((row) => row.style.paddingRight)).toEqual(["24px", "24px"]);
+        snapshot?.visibleRows.filter((row) => row.kind === 'block').map((row) => row.height),
+      ).toEqual([34, 86])
+      expect(snapshot?.totalHeight).toBe(200)
+      expect(codeRows.map((row) => row.style.paddingLeft)).toEqual(['40px', '40px'])
+      expect(codeRows.map((row) => row.style.paddingRight)).toEqual(['24px', '24px'])
 
-      outputHeight = 128;
-      outputContext?.requestMeasure();
-      await flushTimers();
+      outputHeight = 128
+      outputContext?.requestMeasure()
+      await flushTimers()
 
       expect(
         events
           .at(-1)
-          ?.snapshot?.visibleRows.filter((row) => row.kind === "block")
+          ?.snapshot?.visibleRows.filter((row) => row.kind === 'block')
           .map((row) => row.height),
-      ).toEqual([34, 96]);
-      expect(events.at(-1)?.snapshot?.totalHeight).toBe(210);
-    });
+      ).toEqual([34, 96])
+      expect(events.at(-1)?.snapshot?.totalHeight).toBe(210)
+    })
 
-    it("remeasures horizontal block lanes and clamps their reserved width", async () => {
-      let measuredWidth = 34;
-      let blockContext: EditorBlockMountContext | null = null;
+    it('remeasures horizontal block lanes and clamps their reserved width', async () => {
+      let measuredWidth = 34
+      let blockContext: EditorBlockMountContext | null = null
       const plugin: EditorPlugin = {
         activate: (context) =>
           context.registerBlockProvider({
             getBlocks: () => [
               {
-                id: "cell",
+                id: 'cell',
                 anchor: { startRow: 0, endRow: 1 },
                 left: {
                   width: { minPx: 16, maxPx: 32 },
                   mount: (container, context) => {
-                    blockContext = context;
-                    container.dataset.testBlockSurface = context.surface;
-                    container.textContent = context.blockId;
+                    blockContext = context
+                    container.dataset.testBlockSurface = context.surface
+                    container.textContent = context.blockId
                     container.getBoundingClientRect = () =>
-                      ({ height: 0, width: measuredWidth }) as DOMRect;
+                      ({ height: 0, width: measuredWidth }) as DOMRect
                   },
                 },
               },
             ],
           }),
-      };
-      editor.dispose();
-      editor = new Editor(container, { lineHeight: 20, plugins: [plugin] });
+      }
+      editor.dispose()
+      editor = new Editor(container, { lineHeight: 20, plugins: [plugin] })
 
-      editor.openDocument({ documentId: "doc.txt", text: "one\ntwo\nthree" });
-      await flushTimers();
+      editor.openDocument({ documentId: 'doc.txt', text: 'one\ntwo\nthree' })
+      await flushTimers()
 
-      const firstRow = document.querySelector<HTMLElement>('[data-editor-virtual-row="0"]');
-      const thirdRow = document.querySelector<HTMLElement>('[data-editor-virtual-row="2"]');
-      expect(firstRow?.style.paddingLeft).toBe("32px");
-      expect(thirdRow?.style.paddingLeft).toBe("");
+      const firstRow = document.querySelector<HTMLElement>('[data-editor-virtual-row="0"]')
+      const thirdRow = document.querySelector<HTMLElement>('[data-editor-virtual-row="2"]')
+      expect(firstRow?.style.paddingLeft).toBe('32px')
+      expect(thirdRow?.style.paddingLeft).toBe('')
 
-      measuredWidth = 12;
-      blockContext?.requestMeasure();
-      await flushTimers();
+      measuredWidth = 12
+      blockContext?.requestMeasure()
+      await flushTimers()
 
-      expect(firstRow?.style.paddingLeft).toBe("16px");
-      expect(blockSurfaceTexts()).toEqual(["cell"]);
-    });
+      expect(firstRow?.style.paddingLeft).toBe('16px')
+      expect(blockSurfaceTexts()).toEqual(['cell'])
+    })
 
-    it("disposes mounted block surfaces when providers are removed", () => {
-      const disposed: string[] = [];
-      let invalidationDisposed = false;
+    it('disposes mounted block surfaces when providers are removed', () => {
+      const disposed: string[] = []
+      let invalidationDisposed = false
       const plugin: EditorPlugin = {
         activate: (context) =>
           context.registerBlockProvider({
             getBlocks: () => [
               {
-                id: "file",
+                id: 'file',
                 anchor: { row: 0 },
                 top: {
                   height: { px: 24 },
                   mount: (container, context) => {
-                    container.dataset.testBlockSurface = context.surface;
-                    container.textContent = context.blockId;
+                    container.dataset.testBlockSurface = context.surface
+                    container.textContent = context.blockId
                     return {
                       dispose: () => disposed.push(context.blockId),
-                    };
+                    }
                   },
                 },
               },
             ],
             onDidChangeBlocks: () => ({
               dispose: () => {
-                invalidationDisposed = true;
+                invalidationDisposed = true
               },
             }),
           }),
-      };
-      editor.dispose();
-      editor = new Editor(container, { defaultText: "one\ntwo", plugins: [plugin] });
+      }
+      editor.dispose()
+      editor = new Editor(container, { defaultText: 'one\ntwo', plugins: [plugin] })
 
-      expect(blockSurfaceTexts()).toEqual(["file"]);
+      expect(blockSurfaceTexts()).toEqual(['file'])
 
-      editor.setPlugins([]);
+      editor.setPlugins([])
 
-      expect(disposed).toEqual(["file"]);
-      expect(invalidationDisposed).toBe(true);
-      expect(blockSurfaceTexts()).toEqual([]);
-    });
+      expect(disposed).toEqual(['file'])
+      expect(invalidationDisposed).toBe(true)
+      expect(blockSurfaceTexts()).toEqual([])
+    })
 
-    it("recomputes block rows when a provider invalidates", () => {
-      let listener: () => void = () => undefined;
-      let blockId = "first";
-      const disposed: string[] = [];
+    it('recomputes block rows when a provider invalidates', () => {
+      let listener: () => void = () => undefined
+      let blockId = 'first'
+      const disposed: string[] = []
       const plugin: EditorPlugin = {
         activate: (context) =>
           context.registerBlockProvider({
@@ -1822,1099 +1838,1098 @@ describe("Editor", () => {
                 top: {
                   height: { px: 24 },
                   mount: (container, context) => {
-                    container.dataset.testBlockSurface = context.surface;
-                    container.textContent = context.blockId;
+                    container.dataset.testBlockSurface = context.surface
+                    container.textContent = context.blockId
                     return {
                       dispose: () => disposed.push(context.blockId),
-                    };
+                    }
                   },
                 },
               },
             ],
             onDidChangeBlocks: (nextListener) => {
-              listener = nextListener;
-              return { dispose: () => undefined };
+              listener = nextListener
+              return { dispose: () => undefined }
             },
           }),
-      };
-      editor.dispose();
-      editor = new Editor(container, { defaultText: "one\ntwo", plugins: [plugin] });
+      }
+      editor.dispose()
+      editor = new Editor(container, { defaultText: 'one\ntwo', plugins: [plugin] })
 
-      blockId = "second";
-      listener();
+      blockId = 'second'
+      listener()
 
-      expect(disposed).toEqual(["first"]);
-      expect(blockSurfaceTexts()).toEqual(["second"]);
-    });
+      expect(disposed).toEqual(['first'])
+      expect(blockSurfaceTexts()).toEqual(['second'])
+    })
 
-    it("ignores blocks with invalid ids or anchors", () => {
+    it('ignores blocks with invalid ids or anchors', () => {
       const plugin: EditorPlugin = {
         activate: (context) =>
           context.registerBlockProvider({
             getBlocks: () => [
-              blockFixture("", { row: 0 }),
-              blockFixture("negative", { row: -1 }),
-              blockFixture("past-end", { row: 2 }),
-              blockFixture("fractional", { row: 0.5 }),
-              blockFixture("reversed", { startRow: 1, endRow: 0 }),
-              blockFixture("valid", { row: 1 }),
+              blockFixture('', { row: 0 }),
+              blockFixture('negative', { row: -1 }),
+              blockFixture('past-end', { row: 2 }),
+              blockFixture('fractional', { row: 0.5 }),
+              blockFixture('reversed', { startRow: 1, endRow: 0 }),
+              blockFixture('valid', { row: 1 }),
             ],
           }),
-      };
-      editor.dispose();
-      editor = new Editor(container, { defaultText: "one\ntwo", plugins: [plugin] });
+      }
+      editor.dispose()
+      editor = new Editor(container, { defaultText: 'one\ntwo', plugins: [plugin] })
 
-      expect(blockSurfaceTexts()).toEqual(["valid"]);
-    });
+      expect(blockSurfaceTexts()).toEqual(['valid'])
+    })
 
-    it("mounts blocks for readonly and editable documents", () => {
+    it('mounts blocks for readonly and editable documents', () => {
       const plugin: EditorPlugin = {
         activate: (context) =>
           context.registerBlockProvider({
             getBlocks: (providerContext) => [
               {
-                id: "header",
+                id: 'header',
                 anchor: { row: 0 },
                 top: {
                   height: { px: 24 },
                   mount: (container, context) => {
-                    container.dataset.testBlockSurface = context.surface;
-                    container.textContent = `${context.documentId}:${providerContext.text}`;
+                    container.dataset.testBlockSurface = context.surface
+                    container.textContent = `${context.documentId}:${providerContext.text}`
                   },
                 },
               },
             ],
           }),
-      };
-      editor.dispose();
+      }
+      editor.dispose()
       editor = new Editor(container, {
-        editability: "readonly",
+        editability: 'readonly',
         plugins: [plugin],
-      });
+      })
 
-      editor.openDocument({ documentId: "readonly.txt", text: "alpha" });
-      editor.edit({ from: 5, to: 5, text: "!" });
+      editor.openDocument({ documentId: 'readonly.txt', text: 'alpha' })
+      editor.edit({ from: 5, to: 5, text: '!' })
 
-      expect(editor.getState().editability).toBe("readonly");
-      expect(editor.getText()).toBe("alpha");
-      expect(blockSurfaceTexts()).toEqual(["readonly.txt:alpha"]);
+      expect(editor.getState().editability).toBe('readonly')
+      expect(editor.getText()).toBe('alpha')
+      expect(blockSurfaceTexts()).toEqual(['readonly.txt:alpha'])
 
-      editor.dispose();
+      editor.dispose()
       editor = new Editor(container, {
-        editability: "editable",
+        editability: 'editable',
         plugins: [plugin],
-      });
+      })
 
-      editor.openDocument({ documentId: "editable.txt", text: "beta" });
-      editor.edit({ from: 4, to: 4, text: "!" });
+      editor.openDocument({ documentId: 'editable.txt', text: 'beta' })
+      editor.edit({ from: 4, to: 4, text: '!' })
 
-      expect(editor.getState().editability).toBe("editable");
-      expect(editor.getText()).toBe("beta!");
-      expect(blockSurfaceTexts()).toEqual(["editable.txt:beta!"]);
-    });
-  });
+      expect(editor.getState().editability).toBe('editable')
+      expect(editor.getText()).toBe('beta!')
+      expect(blockSurfaceTexts()).toEqual(['editable.txt:beta!'])
+    })
+  })
 
-  describe("editor feature plugins", () => {
-    it("registers editor commands and receives document changes", () => {
-      let commandCalls = 0;
-      const changes: (DocumentSessionChange["kind"] | null)[] = [];
+  describe('editor feature plugins', () => {
+    it('registers editor commands and receives document changes', () => {
+      let commandCalls = 0
+      const changes: (DocumentSessionChange['kind'] | null)[] = []
       const plugin: EditorPlugin = {
         activate: (context) =>
           context.registerEditorFeatureContribution({
             createContribution: (context) => {
-              const command = context.registerCommand("findNext", () => {
-                commandCalls += 1;
-                return true;
-              });
+              const command = context.registerCommand('findNext', () => {
+                commandCalls += 1
+                return true
+              })
               return {
                 handleEditorChange: (change) => changes.push(change?.kind ?? null),
                 dispose: () => command.dispose(),
-              };
+              }
             },
           }),
-      };
+      }
 
-      editor.dispose();
-      editor = new Editor(container, { plugins: [plugin] });
+      editor.dispose()
+      editor = new Editor(container, { plugins: [plugin] })
 
-      expect(editor.dispatchCommand("findNext")).toBe(true);
-      editor.setText("abc");
+      expect(editor.dispatchCommand('findNext')).toBe(true)
+      editor.setText('abc')
 
-      expect(commandCalls).toBe(1);
-      expect(changes).toContain(null);
-    });
+      expect(commandCalls).toBe(1)
+      expect(changes).toContain(null)
+    })
 
-    it("defers rapid text feature notifications while public changes stay immediate", () => {
-      vi.useFakeTimers();
-      const featureTexts: string[] = [];
-      const publicTexts: string[] = [];
+    it('defers rapid text feature notifications while public changes stay immediate', () => {
+      vi.useFakeTimers()
+      const featureTexts: string[] = []
+      const publicTexts: string[] = []
       const plugin: EditorPlugin = {
         activate: (context) =>
           context.registerEditorFeatureContribution({
             createContribution: () => ({
               handleEditorChange: (change) => {
-                if (change?.kind === "edit") featureTexts.push(change.text);
+                if (change?.kind === 'edit') featureTexts.push(change.text)
               },
               dispose: () => undefined,
             }),
           }),
-      };
+      }
 
       try {
-        editor.dispose();
+        editor.dispose()
         editor = new Editor(container, {
           plugins: [plugin],
           onChange: () => publicTexts.push(editor.getText()),
-        });
-        editor.setText("a");
-        featureTexts.length = 0;
-        publicTexts.length = 0;
+        })
+        editor.setText('a')
+        featureTexts.length = 0
+        publicTexts.length = 0
 
-        editorRoot().dispatchEvent(createInsertEvent("!"));
+        editorRoot().dispatchEvent(createInsertEvent('!'))
 
-        expect(editor.getText()).toBe("a!");
-        expect(publicTexts).toEqual(["a!"]);
-        expect(featureTexts).toEqual([]);
+        expect(editor.getText()).toBe('a!')
+        expect(publicTexts).toEqual(['a!'])
+        expect(featureTexts).toEqual([])
 
-        vi.advanceTimersByTime(149);
-        expect(featureTexts).toEqual([]);
+        vi.advanceTimersByTime(149)
+        expect(featureTexts).toEqual([])
 
-        vi.advanceTimersByTime(1);
-        expect(featureTexts).toEqual(["a!"]);
+        vi.advanceTimersByTime(1)
+        expect(featureTexts).toEqual(['a!'])
       } finally {
-        vi.useRealTimers();
+        vi.useRealTimers()
       }
-    });
+    })
 
-    it("coalesces rapid text feature notifications to the latest edit", () => {
-      vi.useFakeTimers();
-      const featureTexts: string[] = [];
+    it('coalesces rapid text feature notifications to the latest edit', () => {
+      vi.useFakeTimers()
+      const featureTexts: string[] = []
       const plugin: EditorPlugin = {
         activate: (context) =>
           context.registerEditorFeatureContribution({
             createContribution: () => ({
               handleEditorChange: (change) => {
-                if (change?.kind === "edit") featureTexts.push(change.text);
+                if (change?.kind === 'edit') featureTexts.push(change.text)
               },
               dispose: () => undefined,
             }),
           }),
-      };
+      }
 
       try {
-        editor.dispose();
-        editor = new Editor(container, { plugins: [plugin] });
-        editor.setText("a");
-        featureTexts.length = 0;
+        editor.dispose()
+        editor = new Editor(container, { plugins: [plugin] })
+        editor.setText('a')
+        featureTexts.length = 0
 
-        editorRoot().dispatchEvent(createInsertEvent("!"));
-        editorRoot().dispatchEvent(createInsertEvent("?"));
+        editorRoot().dispatchEvent(createInsertEvent('!'))
+        editorRoot().dispatchEvent(createInsertEvent('?'))
 
-        expect(editor.getText()).toBe("a!?");
-        vi.advanceTimersByTime(150);
-        expect(featureTexts).toEqual(["a!?"]);
+        expect(editor.getText()).toBe('a!?')
+        vi.advanceTimersByTime(150)
+        expect(featureTexts).toEqual(['a!?'])
       } finally {
-        vi.useRealTimers();
+        vi.useRealTimers()
       }
-    });
+    })
 
-    it("composes source-keyed row decorations without clobbering other sources", () => {
-      let featureContext: EditorFeatureContributionContext | null = null;
+    it('composes source-keyed row decorations without clobbering other sources', () => {
+      let featureContext: EditorFeatureContributionContext | null = null
       const plugin: EditorPlugin = {
         activate: (context) =>
           context.registerEditorFeatureContribution({
             createContribution: (context) => {
-              featureContext = context;
-              return { dispose: () => undefined };
+              featureContext = context
+              return { dispose: () => undefined }
             },
           }),
-      };
+      }
 
-      editor.dispose();
-      editor = new Editor(container, { defaultText: "one\ntwo", plugins: [plugin] });
+      editor.dispose()
+      editor = new Editor(container, { defaultText: 'one\ntwo', plugins: [plugin] })
 
       featureContext?.setRowDecorations(
-        "first",
-        new Map([[0, { className: "first-row", gutterClassName: "first-gutter" }]]),
-      );
+        'first',
+        new Map([[0, { className: 'first-row', gutterClassName: 'first-gutter' }]]),
+      )
       featureContext?.setRowDecorations(
-        "second",
+        'second',
         new Map([
-          [0, { className: "second-row", gutterClassName: "second-gutter" }],
-          [1, { className: "third-row" }],
+          [0, { className: 'second-row', gutterClassName: 'second-gutter' }],
+          [1, { className: 'third-row' }],
         ]),
-      );
+      )
 
-      const firstRow = container.querySelector<HTMLElement>('[data-editor-virtual-row="0"]');
-      expect(firstRow?.className).toContain("first-row");
-      expect(firstRow?.className).toContain("second-row");
+      const firstRow = container.querySelector<HTMLElement>('[data-editor-virtual-row="0"]')
+      expect(firstRow?.className).toContain('first-row')
+      expect(firstRow?.className).toContain('second-row')
 
-      featureContext?.clearRowDecorations("first");
+      featureContext?.clearRowDecorations('first')
 
-      expect(firstRow?.className).not.toContain("first-row");
-      expect(firstRow?.className).toContain("second-row");
+      expect(firstRow?.className).not.toContain('first-row')
+      expect(firstRow?.className).toContain('second-row')
       expect(container.querySelector('[data-editor-virtual-row="1"]')?.className).toContain(
-        "third-row",
-      );
-    });
-  });
+        'third-row',
+      )
+    })
+  })
 
-  describe("applyEdit", () => {
-    it("shifts tokens after the edit region", () => {
-      editor.setContent("abcdef");
-      editor.setTokens([{ start: 4, end: 6, style: { color: "#ff0000" } }]);
+  describe('applyEdit', () => {
+    it('shifts tokens after the edit region', () => {
+      editor.setContent('abcdef')
+      editor.setTokens([{ start: 4, end: 6, style: { color: '#ff0000' } }])
 
       // Insert "XX" at position 0 → delta = +2
-      editor.applyEdit({ from: 0, to: 0, text: "XX" }, [
-        { start: 6, end: 8, style: { color: "#ff0000" } },
-      ]);
+      editor.applyEdit({ from: 0, to: 0, text: 'XX' }, [
+        { start: 6, end: 8, style: { color: '#ff0000' } },
+      ])
 
-      expect(editorRoot().textContent).toBe("XXabcdef");
-    });
+      expect(editorRoot().textContent).toBe('XXabcdef')
+    })
 
-    it("removes tokens overlapping the edit region", () => {
-      editor.setContent("abcdef");
-      editor.setTokens([{ start: 2, end: 4, style: { color: "#ff0000" } }]);
-      expect(highlightsMap.size).toBe(1);
+    it('removes tokens overlapping the edit region', () => {
+      editor.setContent('abcdef')
+      editor.setTokens([{ start: 2, end: 4, style: { color: '#ff0000' } }])
+      expect(highlightsMap.size).toBe(1)
 
       // Replace "cd" at positions 2-4 with "XY"
       editor.applyEdit(
-        { from: 2, to: 4, text: "XY" },
+        { from: 2, to: 4, text: 'XY' },
         [], // No replacement tokens
-      );
+      )
 
       // The overlapping token should be removed, group cleaned up
-      expect(highlightsMap.size).toBe(0);
-    });
+      expect(highlightsMap.size).toBe(0)
+    })
 
-    it("preserves tokens before the edit region", () => {
-      editor.setContent("abcdef");
+    it('preserves tokens before the edit region', () => {
+      editor.setContent('abcdef')
       editor.setTokens([
-        { start: 0, end: 2, style: { color: "#ff0000" } },
-        { start: 4, end: 6, style: { color: "#00ff00" } },
-      ]);
+        { start: 0, end: 2, style: { color: '#ff0000' } },
+        { start: 4, end: 6, style: { color: '#00ff00' } },
+      ])
 
       // Edit in the middle (positions 2-4)
-      editor.applyEdit({ from: 2, to: 4, text: "XX" }, [
-        { start: 2, end: 4, style: { color: "#0000ff" } },
-      ]);
+      editor.applyEdit({ from: 2, to: 4, text: 'XX' }, [
+        { start: 2, end: 4, style: { color: '#0000ff' } },
+      ])
 
       // Token at 0-2 should be untouched, so its group persists
-      expect(highlightsMap.size).toBeGreaterThanOrEqual(1);
-    });
+      expect(highlightsMap.size).toBeGreaterThanOrEqual(1)
+    })
 
-    it("adds new tokens for the edit region", () => {
-      editor.setContent("abcdef");
-      editor.setTokens([]);
+    it('adds new tokens for the edit region', () => {
+      editor.setContent('abcdef')
+      editor.setTokens([])
 
-      editor.applyEdit({ from: 2, to: 4, text: "XY" }, [
-        { start: 2, end: 4, style: { color: "#ff0000" } },
-      ]);
+      editor.applyEdit({ from: 2, to: 4, text: 'XY' }, [
+        { start: 2, end: 4, style: { color: '#ff0000' } },
+      ])
 
-      expect(highlightsMap.size).toBe(1);
-    });
+      expect(highlightsMap.size).toBe(1)
+    })
 
-    it("updates text content correctly", () => {
-      editor.setContent("hello world");
-      editor.applyEdit({ from: 5, to: 5, text: " beautiful" }, []);
-      expect(editorRoot().textContent).toBe("hello beautiful world");
-    });
-  });
+    it('updates text content correctly', () => {
+      editor.setContent('hello world')
+      editor.applyEdit({ from: 5, to: 5, text: ' beautiful' }, [])
+      expect(editorRoot().textContent).toBe('hello beautiful world')
+    })
+  })
 
-  describe("attachSession", () => {
-    it("attaches document identity, language, scroll, and dirty state", () => {
-      const session = createDocumentSession("abc");
+  describe('attachSession', () => {
+    it('attaches document identity, language, scroll, and dirty state', () => {
+      const session = createDocumentSession('abc')
 
       editor.attachSession(session, {
-        documentId: "note.ts",
-        languageId: "typescript",
+        documentId: 'note.ts',
+        languageId: 'typescript',
         scrollPosition: { top: 12, left: 4 },
-      });
+      })
 
       expect(editor.getState()).toMatchObject({
-        documentId: "note.ts",
-        languageId: "typescript",
+        documentId: 'note.ts',
+        languageId: 'typescript',
         isDirty: false,
-      });
-      expect(editor.getScrollPosition()).toEqual({ top: 12, left: 4 });
-    });
+      })
+      expect(editor.getScrollPosition()).toEqual({ top: 12, left: 4 })
+    })
 
-    it("focuses the real input surface", () => {
-      const session = createDocumentSession("abc");
-      editor.attachSession(session);
+    it('focuses the real input surface', () => {
+      const session = createDocumentSession('abc')
+      editor.attachSession(session)
 
-      editor.focus();
+      editor.focus()
 
-      expect(document.activeElement).toBe(editorInput());
-    });
+      expect(document.activeElement).toBe(editorInput())
+    })
 
-    it("preserves the viewport when focusing the real input surface", () => {
-      const root = editorRoot();
-      const session = createDocumentSession("abc");
-      editor.attachSession(session);
-      root.scrollTop = 120;
-      root.scrollLeft = 16;
-      vi.spyOn(editorInput(), "setSelectionRange").mockImplementation(() => {
-        root.scrollTop = 0;
-        root.scrollLeft = 0;
-      });
+    it('preserves the viewport when focusing the real input surface', () => {
+      const root = editorRoot()
+      const session = createDocumentSession('abc')
+      editor.attachSession(session)
+      root.scrollTop = 120
+      root.scrollLeft = 16
+      vi.spyOn(editorInput(), 'setSelectionRange').mockImplementation(() => {
+        root.scrollTop = 0
+        root.scrollLeft = 0
+      })
 
-      editor.focus();
+      editor.focus()
 
-      expect(root.scrollTop).toBe(120);
-      expect(root.scrollLeft).toBe(16);
-    });
+      expect(root.scrollTop).toBe(120)
+      expect(root.scrollLeft).toBe(16)
+    })
 
-    it("routes text input through a document session", () => {
-      const session = createDocumentSession("abc");
-      editor.attachSession(session);
+    it('routes text input through a document session', () => {
+      const session = createDocumentSession('abc')
+      editor.attachSession(session)
 
-      const event = new InputEvent("beforeinput", {
+      const event = new InputEvent('beforeinput', {
         bubbles: true,
         cancelable: true,
-        data: "!",
-        inputType: "insertText",
-      });
-      editorRoot().dispatchEvent(event);
+        data: '!',
+        inputType: 'insertText',
+      })
+      editorRoot().dispatchEvent(event)
 
-      expect(session.getText()).toBe("abc!");
-      expect(editorRoot().textContent).toBe("abc!");
-    });
+      expect(session.getText()).toBe('abc!')
+      expect(editorRoot().textContent).toBe('abc!')
+    })
 
-    it("routes real input-surface events through a document session", () => {
-      const session = createDocumentSession("abc");
-      editor.attachSession(session);
+    it('routes real input-surface events through a document session', () => {
+      const session = createDocumentSession('abc')
+      editor.attachSession(session)
 
-      editorInput().dispatchEvent(createInsertEvent("!"));
+      editorInput().dispatchEvent(createInsertEvent('!'))
 
-      expect(session.getText()).toBe("abc!");
-      expect(editor.getText()).toBe("abc!");
-    });
+      expect(session.getText()).toBe('abc!')
+      expect(editor.getText()).toBe('abc!')
+    })
 
-    it("lets native beforeinput cancel the focused keydown fallback", async () => {
-      const changes: DocumentSessionChange[] = [];
-      editor.dispose();
+    it('lets native beforeinput cancel the focused keydown fallback', async () => {
+      const changes: DocumentSessionChange[] = []
+      editor.dispose()
       editor = new Editor(container, {
         plugins: withTestLanguagePlugins(),
         onChange: (_state, change) => {
-          if (change) changes.push(change);
+          if (change) changes.push(change)
         },
-      });
-      const session = createDocumentSession("abc");
-      editor.attachSession(session);
-      editor.focus();
+      })
+      const session = createDocumentSession('abc')
+      editor.attachSession(session)
+      editor.focus()
 
-      const keydown = dispatchInputKey("X");
-      editorInput().dispatchEvent(createInsertEvent("X"));
-      await flushTimers();
+      const keydown = dispatchInputKey('X')
+      editorInput().dispatchEvent(createInsertEvent('X'))
+      await flushTimers()
 
-      const timingNames = changes.flatMap((change) => change.timings.map(({ name }) => name));
-      expect(keydown.defaultPrevented).toBe(false);
-      expect(session.getText()).toBe("abcX");
-      expect(editor.getText()).toBe("abcX");
-      expect(timingNames).toContain("input.beforeinput");
-      expect(timingNames).not.toContain("input.keydownFallback");
-    });
+      const timingNames = changes.flatMap((change) => change.timings.map(({ name }) => name))
+      expect(keydown.defaultPrevented).toBe(false)
+      expect(session.getText()).toBe('abcX')
+      expect(editor.getText()).toBe('abcX')
+      expect(timingNames).toContain('input.beforeinput')
+      expect(timingNames).not.toContain('input.keydownFallback')
+    })
 
-    it("falls back to keydown text when native beforeinput never arrives", async () => {
-      const session = createDocumentSession("abc");
-      editor.attachSession(session);
-      editor.focus();
+    it('falls back to keydown text when native beforeinput never arrives', async () => {
+      const session = createDocumentSession('abc')
+      editor.attachSession(session)
+      editor.focus()
 
-      dispatchInputKey("X");
-      await flushTimers();
+      dispatchInputKey('X')
+      await flushTimers()
 
-      expect(session.getText()).toBe("abcX");
-      expect(editor.getText()).toBe("abcX");
-    });
+      expect(session.getText()).toBe('abcX')
+      expect(editor.getText()).toBe('abcX')
+    })
 
-    it("applies focused keydown text synchronously after native input is missing", async () => {
-      const session = createDocumentSession("abc");
-      editor.attachSession(session);
-      editor.focus();
+    it('applies focused keydown text synchronously after native input is missing', async () => {
+      const session = createDocumentSession('abc')
+      editor.attachSession(session)
+      editor.focus()
 
-      dispatchInputKey("X");
-      await flushTimers();
+      dispatchInputKey('X')
+      await flushTimers()
 
-      const event = dispatchInputKey("Y");
+      const event = dispatchInputKey('Y')
 
-      expect(event.defaultPrevented).toBe(true);
-      expect(session.getText()).toBe("abcXY");
-      expect(editor.getText()).toBe("abcXY");
-      await flushTimers();
-      expect(session.getText()).toBe("abcXY");
-      expect(editor.getText()).toBe("abcXY");
-    });
+      expect(event.defaultPrevented).toBe(true)
+      expect(session.getText()).toBe('abcXY')
+      expect(editor.getText()).toBe('abcXY')
+      await flushTimers()
+      expect(session.getText()).toBe('abcXY')
+      expect(editor.getText()).toBe('abcXY')
+    })
 
-    it("coalesces rapid focused keydown fallback text into one change", async () => {
-      const changes: DocumentSessionChange[] = [];
-      editor.dispose();
+    it('coalesces rapid focused keydown fallback text into one change', async () => {
+      const changes: DocumentSessionChange[] = []
+      editor.dispose()
       editor = new Editor(container, {
         plugins: withTestLanguagePlugins(),
         onChange: (_state, change) => {
-          if (change) changes.push(change);
+          if (change) changes.push(change)
         },
-      });
-      const session = createDocumentSession("abc");
-      editor.attachSession(session);
-      editor.focus();
+      })
+      const session = createDocumentSession('abc')
+      editor.attachSession(session)
+      editor.focus()
 
-      dispatchInputKey("X");
-      dispatchInputKey("Y");
-      dispatchInputKey("Z");
-      await flushTimers();
+      dispatchInputKey('X')
+      dispatchInputKey('Y')
+      dispatchInputKey('Z')
+      await flushTimers()
 
       const fallbackChanges = changes.filter((change) =>
-        change.timings.some(({ name }) => name === "input.keydownFallback"),
-      );
-      expect(session.getText()).toBe("abcXYZ");
-      expect(editor.getText()).toBe("abcXYZ");
-      expect(fallbackChanges).toHaveLength(1);
-    });
+        change.timings.some(({ name }) => name === 'input.keydownFallback'),
+      )
+      expect(session.getText()).toBe('abcXYZ')
+      expect(editor.getText()).toBe('abcXYZ')
+      expect(fallbackChanges).toHaveLength(1)
+    })
 
-    it("prevents browser scroll defaults when Space uses keydown fallback", async () => {
-      const session = createDocumentSession("abc");
-      editor.attachSession(session);
+    it('prevents browser scroll defaults when Space uses keydown fallback', async () => {
+      const session = createDocumentSession('abc')
+      editor.attachSession(session)
 
-      const event = dispatchEditorKey(" ");
-      expect(event.defaultPrevented).toBe(true);
-      expect(session.getText()).toBe("abc ");
-      expect(editor.getText()).toBe("abc ");
-      await flushTimers();
+      const event = dispatchEditorKey(' ')
+      expect(event.defaultPrevented).toBe(true)
+      expect(session.getText()).toBe('abc ')
+      expect(editor.getText()).toBe('abc ')
+      await flushTimers()
 
-      expect(session.getText()).toBe("abc ");
-      expect(editor.getText()).toBe("abc ");
-    });
+      expect(session.getText()).toBe('abc ')
+      expect(editor.getText()).toBe('abc ')
+    })
 
-    it("prevents browser scroll defaults when focused input receives Space", async () => {
-      const session = createDocumentSession("abc");
-      editor.attachSession(session);
-      editor.focus();
+    it('prevents browser scroll defaults when focused input receives Space', async () => {
+      const session = createDocumentSession('abc')
+      editor.attachSession(session)
+      editor.focus()
 
-      const event = new KeyboardEvent("keydown", {
+      const event = new KeyboardEvent('keydown', {
         bubbles: true,
         cancelable: true,
-        key: " ",
-      });
-      const dispatched = editorInput().dispatchEvent(event);
-      expect(dispatched).toBe(false);
-      expect(event.defaultPrevented).toBe(true);
-      expect(session.getText()).toBe("abc ");
-      expect(editor.getText()).toBe("abc ");
-      await flushTimers();
+        key: ' ',
+      })
+      const dispatched = editorInput().dispatchEvent(event)
+      expect(dispatched).toBe(false)
+      expect(event.defaultPrevented).toBe(true)
+      expect(session.getText()).toBe('abc ')
+      expect(editor.getText()).toBe('abc ')
+      await flushTimers()
 
-      expect(session.getText()).toBe("abc ");
-      expect(editor.getText()).toBe("abc ");
-    });
+      expect(session.getText()).toBe('abc ')
+      expect(editor.getText()).toBe('abc ')
+    })
 
-    it("keeps forced Space text when native text follows", async () => {
-      const session = createDocumentSession("abc");
-      editor.attachSession(session);
+    it('keeps forced Space text when native text follows', async () => {
+      const session = createDocumentSession('abc')
+      editor.attachSession(session)
 
-      dispatchEditorKey(" ");
-      editorInput().dispatchEvent(createInsertEvent("X"));
-      await flushTimers();
+      dispatchEditorKey(' ')
+      editorInput().dispatchEvent(createInsertEvent('X'))
+      await flushTimers()
 
-      expect(document.activeElement).toBe(editorInput());
-      expect(session.getText()).toBe("abc X");
-      expect(editor.getText()).toBe("abc X");
-    });
+      expect(document.activeElement).toBe(editorInput())
+      expect(session.getText()).toBe('abc X')
+      expect(editor.getText()).toBe('abc X')
+    })
 
-    it("inserts a literal tab at collapsed selections", () => {
-      const session = createDocumentSession("abc");
-      editor.attachSession(session);
+    it('inserts a literal tab at collapsed selections', () => {
+      const session = createDocumentSession('abc')
+      editor.attachSession(session)
 
-      const event = dispatchEditorKey("Tab");
+      const event = dispatchEditorKey('Tab')
 
-      expect(event.defaultPrevented).toBe(true);
-      expect(session.getText()).toBe("abc\t");
-      expect(editor.getText()).toBe("abc\t");
-    });
+      expect(event.defaultPrevented).toBe(true)
+      expect(session.getText()).toBe('abc\t')
+      expect(editor.getText()).toBe('abc\t')
+    })
 
-    it("indents selected lines with Tab and keeps the edit undoable", () => {
-      const session = createDocumentSession("a\nb\nc");
-      session.setSelection(0, 3);
-      editor.attachSession(session);
+    it('indents selected lines with Tab and keeps the edit undoable', () => {
+      const session = createDocumentSession('a\nb\nc')
+      session.setSelection(0, 3)
+      editor.attachSession(session)
 
-      dispatchEditorKey("Tab");
+      dispatchEditorKey('Tab')
 
-      expect(session.getText()).toBe("\ta\n\tb\nc");
+      expect(session.getText()).toBe('\ta\n\tb\nc')
 
-      dispatchEditorKey("z", primaryModifier());
+      dispatchEditorKey('z', primaryModifier())
 
-      expect(session.getText()).toBe("a\nb\nc");
-    });
+      expect(session.getText()).toBe('a\nb\nc')
+    })
 
-    it("outdents selected lines with Shift+Tab using the configured tab size", () => {
-      editor.dispose();
-      editor = new Editor(container, { tabSize: 2 });
-      const session = createDocumentSession("  a\n\tb\nc");
-      session.setSelection(0, 6);
-      editor.attachSession(session);
+    it('outdents selected lines with Shift+Tab using the configured tab size', () => {
+      editor.dispose()
+      editor = new Editor(container, { tabSize: 2 })
+      const session = createDocumentSession('  a\n\tb\nc')
+      session.setSelection(0, 6)
+      editor.attachSession(session)
 
-      const event = dispatchEditorKey("Tab", { shiftKey: true });
+      const event = dispatchEditorKey('Tab', { shiftKey: true })
 
-      expect(event.defaultPrevented).toBe(true);
-      expect(session.getText()).toBe("a\nb\nc");
-    });
+      expect(event.defaultPrevented).toBe(true)
+      expect(session.getText()).toBe('a\nb\nc')
+    })
 
-    it("falls back to keydown line breaks when native beforeinput never arrives", async () => {
-      const session = createDocumentSession("abc");
-      editor.attachSession(session);
-      editor.focus();
+    it('falls back to keydown line breaks when native beforeinput never arrives', async () => {
+      const session = createDocumentSession('abc')
+      editor.attachSession(session)
+      editor.focus()
 
-      dispatchInputKey("Enter");
-      await flushTimers();
+      dispatchInputKey('Enter')
+      await flushTimers()
 
-      expect(session.getText()).toBe("abc\n");
-      expect(editor.getText()).toBe("abc\n");
-    });
+      expect(session.getText()).toBe('abc\n')
+      expect(editor.getText()).toBe('abc\n')
+    })
 
-    it("does not schedule keydown fallback while composing", async () => {
-      const session = createDocumentSession("abc");
-      editor.attachSession(session);
-      editor.focus();
+    it('does not schedule keydown fallback while composing', async () => {
+      const session = createDocumentSession('abc')
+      editor.attachSession(session)
+      editor.focus()
 
-      dispatchInputKey("X", { isComposing: true });
-      await flushTimers();
+      dispatchInputKey('X', { isComposing: true })
+      await flushTimers()
 
-      expect(session.getText()).toBe("abc");
-      expect(editor.getText()).toBe("abc");
-    });
+      expect(session.getText()).toBe('abc')
+      expect(editor.getText()).toBe('abc')
+    })
 
-    it("clears pending keydown fallback on dispose", async () => {
-      const session = createDocumentSession("abc");
-      editor.attachSession(session);
-      editor.focus();
+    it('clears pending keydown fallback on dispose', async () => {
+      const session = createDocumentSession('abc')
+      editor.attachSession(session)
+      editor.focus()
 
-      dispatchInputKey("X");
-      editor.dispose();
-      await flushTimers();
+      dispatchInputKey('X')
+      editor.dispose()
+      await flushTimers()
 
-      expect(session.getText()).toBe("abc");
-      editor = new Editor(container, { plugins: withTestLanguagePlugins() });
-    });
+      expect(session.getText()).toBe('abc')
+      editor = new Editor(container, { plugins: withTestLanguagePlugins() })
+    })
 
-    it("measures input timing from the browser event timestamp", () => {
-      const changes: DocumentSessionChange[] = [];
-      editor.dispose();
+    it('measures input timing from the browser event timestamp', () => {
+      const changes: DocumentSessionChange[] = []
+      editor.dispose()
       editor = new Editor(container, {
         onChange: (_state, change) => {
-          if (change) changes.push(change);
+          if (change) changes.push(change)
         },
-      });
-      editor.attachSession(createDocumentSession("abc"));
+      })
+      editor.attachSession(createDocumentSession('abc'))
 
-      const event = new InputEvent("beforeinput", {
+      const event = new InputEvent('beforeinput', {
         bubbles: true,
         cancelable: true,
-        data: "!",
-        inputType: "insertText",
-      });
-      Object.defineProperty(event, "timeStamp", { configurable: true, value: 1 });
-      editorRoot().dispatchEvent(event);
+        data: '!',
+        inputType: 'insertText',
+      })
+      Object.defineProperty(event, 'timeStamp', { configurable: true, value: 1 })
+      editorRoot().dispatchEvent(event)
 
-      const timing = changes.at(-1)?.timings.find(({ name }) => name === "input.beforeinput");
-      expect(timing?.durationMs).toBeGreaterThan(1);
-    });
+      const timing = changes.at(-1)?.timings.find(({ name }) => name === 'input.beforeinput')
+      expect(timing?.durationMs).toBeGreaterThan(1)
+    })
 
-    it("routes undo through a document session", () => {
-      const session = createDocumentSession("abc");
-      editor.attachSession(session);
-      session.applyText("!");
+    it('routes undo through a document session', () => {
+      const session = createDocumentSession('abc')
+      editor.attachSession(session)
+      session.applyText('!')
 
       editorInput().dispatchEvent(
-        new KeyboardEvent("keydown", {
+        new KeyboardEvent('keydown', {
           bubbles: true,
           cancelable: true,
-          key: "z",
+          key: 'z',
           ...primaryModifier(),
         }),
-      );
+      )
 
-      expect(session.getText()).toBe("abc");
-      expect(editorRoot().textContent).toBe("abc");
-    });
+      expect(session.getText()).toBe('abc')
+      expect(editorRoot().textContent).toBe('abc')
+    })
 
-    it("routes delete commands through the keymap layer", () => {
-      const session = createDocumentSession("abc");
-      editor.attachSession(session);
+    it('routes delete commands through the keymap layer', () => {
+      const session = createDocumentSession('abc')
+      editor.attachSession(session)
 
-      dispatchEditorKey("Backspace");
+      dispatchEditorKey('Backspace')
 
-      expect(session.getText()).toBe("ab");
-      expect(editor.getText()).toBe("ab");
-    });
+      expect(session.getText()).toBe('ab')
+      expect(editor.getText()).toBe('ab')
+    })
 
-    it("deletes words through explicit editor commands", () => {
-      const session = createDocumentSession("alpha beta gamma");
-      session.setSelection(11);
-      editor.attachSession(session);
+    it('deletes words through explicit editor commands', () => {
+      const session = createDocumentSession('alpha beta gamma')
+      session.setSelection(11)
+      editor.attachSession(session)
 
-      expect(editor.dispatchCommand("deleteWordLeft")).toBe(true);
-      expect(session.getText()).toBe("alpha gamma");
-      expect(resolvedSelectionRanges(session)).toEqual([{ anchor: 6, head: 6, start: 6, end: 6 }]);
+      expect(editor.dispatchCommand('deleteWordLeft')).toBe(true)
+      expect(session.getText()).toBe('alpha gamma')
+      expect(resolvedSelectionRanges(session)).toEqual([{ anchor: 6, head: 6, start: 6, end: 6 }])
 
-      expect(editor.dispatchCommand("deleteWordRight")).toBe(true);
-      expect(session.getText()).toBe("alpha ");
-    });
+      expect(editor.dispatchCommand('deleteWordRight')).toBe(true)
+      expect(session.getText()).toBe('alpha ')
+    })
 
-    it("deletes, copies, and moves touched lines through explicit editor commands", () => {
-      const deleteSession = createDocumentSession("a\nb\nc");
-      deleteSession.setSelection(3);
-      editor.attachSession(deleteSession);
+    it('deletes, copies, and moves touched lines through explicit editor commands', () => {
+      const deleteSession = createDocumentSession('a\nb\nc')
+      deleteSession.setSelection(3)
+      editor.attachSession(deleteSession)
 
-      expect(editor.dispatchCommand("editor.action.deleteLines")).toBe(true);
-      expect(deleteSession.getText()).toBe("a\nc");
+      expect(editor.dispatchCommand('editor.action.deleteLines')).toBe(true)
+      expect(deleteSession.getText()).toBe('a\nc')
 
-      const copyUpSession = createDocumentSession("a\nb\nc");
-      copyUpSession.setSelection(3);
-      editor.attachSession(copyUpSession);
+      const copyUpSession = createDocumentSession('a\nb\nc')
+      copyUpSession.setSelection(3)
+      editor.attachSession(copyUpSession)
 
-      expect(editor.dispatchCommand("editor.action.copyLinesUpAction")).toBe(true);
-      expect(copyUpSession.getText()).toBe("a\nb\nb\nc");
+      expect(editor.dispatchCommand('editor.action.copyLinesUpAction')).toBe(true)
+      expect(copyUpSession.getText()).toBe('a\nb\nb\nc')
       expect(resolvedSelectionRanges(copyUpSession)).toEqual([
         { anchor: 3, head: 3, start: 3, end: 3 },
-      ]);
+      ])
 
-      const copyDownSession = createDocumentSession("a\nb\nc");
-      copyDownSession.setSelection(3);
-      editor.attachSession(copyDownSession);
+      const copyDownSession = createDocumentSession('a\nb\nc')
+      copyDownSession.setSelection(3)
+      editor.attachSession(copyDownSession)
 
-      expect(editor.dispatchCommand("editor.action.copyLinesDownAction")).toBe(true);
-      expect(copyDownSession.getText()).toBe("a\nb\nb\nc");
+      expect(editor.dispatchCommand('editor.action.copyLinesDownAction')).toBe(true)
+      expect(copyDownSession.getText()).toBe('a\nb\nb\nc')
       expect(resolvedSelectionRanges(copyDownSession)).toEqual([
         { anchor: 5, head: 5, start: 5, end: 5 },
-      ]);
+      ])
 
-      const moveUpSession = createDocumentSession("a\nb\nc");
-      moveUpSession.setSelection(5);
-      editor.attachSession(moveUpSession);
+      const moveUpSession = createDocumentSession('a\nb\nc')
+      moveUpSession.setSelection(5)
+      editor.attachSession(moveUpSession)
 
-      expect(editor.dispatchCommand("editor.action.moveLinesUpAction")).toBe(true);
-      expect(moveUpSession.getText()).toBe("a\nc\nb");
+      expect(editor.dispatchCommand('editor.action.moveLinesUpAction')).toBe(true)
+      expect(moveUpSession.getText()).toBe('a\nc\nb')
       expect(resolvedSelectionRanges(moveUpSession)).toEqual([
         { anchor: 3, head: 3, start: 3, end: 3 },
-      ]);
+      ])
 
-      const moveDownSession = createDocumentSession("a\nb\nc");
-      moveDownSession.setSelection(3);
-      editor.attachSession(moveDownSession);
+      const moveDownSession = createDocumentSession('a\nb\nc')
+      moveDownSession.setSelection(3)
+      editor.attachSession(moveDownSession)
 
-      expect(editor.dispatchCommand("editor.action.moveLinesDownAction")).toBe(true);
-      expect(moveDownSession.getText()).toBe("a\nc\nb");
+      expect(editor.dispatchCommand('editor.action.moveLinesDownAction')).toBe(true)
+      expect(moveDownSession.getText()).toBe('a\nc\nb')
       expect(resolvedSelectionRanges(moveDownSession)).toEqual([
         { anchor: 5, head: 5, start: 5, end: 5 },
-      ]);
-    });
+      ])
+    })
 
-    it("inserts lines before and after through explicit editor commands", () => {
-      const beforeSession = createDocumentSession("a\nb\nc");
-      beforeSession.setSelection(3);
-      editor.attachSession(beforeSession);
+    it('inserts lines before and after through explicit editor commands', () => {
+      const beforeSession = createDocumentSession('a\nb\nc')
+      beforeSession.setSelection(3)
+      editor.attachSession(beforeSession)
 
-      expect(editor.dispatchCommand("editor.action.insertLineBefore")).toBe(true);
-      expect(beforeSession.getText()).toBe("a\n\nb\nc");
+      expect(editor.dispatchCommand('editor.action.insertLineBefore')).toBe(true)
+      expect(beforeSession.getText()).toBe('a\n\nb\nc')
       expect(resolvedSelectionRanges(beforeSession)).toEqual([
         { anchor: 2, head: 2, start: 2, end: 2 },
-      ]);
+      ])
 
-      const afterSession = createDocumentSession("a\nb\nc");
-      afterSession.setSelection(3);
-      editor.attachSession(afterSession);
+      const afterSession = createDocumentSession('a\nb\nc')
+      afterSession.setSelection(3)
+      editor.attachSession(afterSession)
 
-      expect(editor.dispatchCommand("editor.action.insertLineAfter")).toBe(true);
-      expect(afterSession.getText()).toBe("a\nb\n\nc");
+      expect(editor.dispatchCommand('editor.action.insertLineAfter')).toBe(true)
+      expect(afterSession.getText()).toBe('a\nb\n\nc')
       expect(resolvedSelectionRanges(afterSession)).toEqual([
         { anchor: 4, head: 4, start: 4, end: 4 },
-      ]);
-    });
+      ])
+    })
 
-    it("toggles line comments through explicit editor commands", () => {
-      const text = "const a = 1;\n  const b = 2;\nconst c = 3;";
-      const session = createDocumentSession(text);
-      session.setSelection(0, text.indexOf("const c"));
-      editor.attachSession(session, { languageId: "typescript" });
+    it('toggles line comments through explicit editor commands', () => {
+      const text = 'const a = 1;\n  const b = 2;\nconst c = 3;'
+      const session = createDocumentSession(text)
+      session.setSelection(0, text.indexOf('const c'))
+      editor.attachSession(session, { languageId: 'typescript' })
 
-      expect(editor.dispatchCommand("editor.action.commentLine")).toBe(true);
-      expect(session.getText()).toBe("// const a = 1;\n  // const b = 2;\nconst c = 3;");
+      expect(editor.dispatchCommand('editor.action.commentLine')).toBe(true)
+      expect(session.getText()).toBe('// const a = 1;\n  // const b = 2;\nconst c = 3;')
 
-      expect(editor.dispatchCommand("editor.action.commentLine")).toBe(true);
-      expect(session.getText()).toBe(text);
-    });
+      expect(editor.dispatchCommand('editor.action.commentLine')).toBe(true)
+      expect(session.getText()).toBe(text)
+    })
 
-    it("toggles block comments through explicit editor commands", () => {
-      const text = "const value = 1;";
-      const start = text.indexOf("value");
-      const end = start + "value".length;
-      const session = createDocumentSession(text);
-      session.setSelection(start, end);
-      editor.attachSession(session, { languageId: "typescript" });
+    it('toggles block comments through explicit editor commands', () => {
+      const text = 'const value = 1;'
+      const start = text.indexOf('value')
+      const end = start + 'value'.length
+      const session = createDocumentSession(text)
+      session.setSelection(start, end)
+      editor.attachSession(session, { languageId: 'typescript' })
 
-      expect(editor.dispatchCommand("editor.action.blockComment")).toBe(true);
-      expect(session.getText()).toBe("const /* value */ = 1;");
+      expect(editor.dispatchCommand('editor.action.blockComment')).toBe(true)
+      expect(session.getText()).toBe('const /* value */ = 1;')
       expect(resolvedSelectionRanges(session)).toEqual([
         { anchor: start + 3, head: end + 3, start: start + 3, end: end + 3 },
-      ]);
+      ])
 
-      expect(editor.dispatchCommand("editor.action.blockComment")).toBe(true);
-      expect(session.getText()).toBe(text);
-      expect(resolvedSelectionRanges(session)).toEqual([{ anchor: start, head: end, start, end }]);
-    });
+      expect(editor.dispatchCommand('editor.action.blockComment')).toBe(true)
+      expect(session.getText()).toBe(text)
+      expect(resolvedSelectionRanges(session)).toEqual([{ anchor: start, head: end, start, end }])
+    })
 
-    it("indents and outdents whole lines through explicit editor commands", () => {
-      const indentSession = createDocumentSession("abc");
-      indentSession.setSelection(1);
-      editor.attachSession(indentSession);
+    it('indents and outdents whole lines through explicit editor commands', () => {
+      const indentSession = createDocumentSession('abc')
+      indentSession.setSelection(1)
+      editor.attachSession(indentSession)
 
-      expect(editor.dispatchCommand("editor.action.indentLines")).toBe(true);
-      expect(indentSession.getText()).toBe("\tabc");
+      expect(editor.dispatchCommand('editor.action.indentLines')).toBe(true)
+      expect(indentSession.getText()).toBe('\tabc')
       expect(resolvedSelectionRanges(indentSession)).toEqual([
         { anchor: 2, head: 2, start: 2, end: 2 },
-      ]);
+      ])
 
-      const outdentSession = createDocumentSession("    abc");
-      outdentSession.setSelection(5);
-      editor.attachSession(outdentSession);
+      const outdentSession = createDocumentSession('    abc')
+      outdentSession.setSelection(5)
+      editor.attachSession(outdentSession)
 
-      expect(editor.dispatchCommand("editor.action.outdentLines")).toBe(true);
-      expect(outdentSession.getText()).toBe("abc");
+      expect(editor.dispatchCommand('editor.action.outdentLines')).toBe(true)
+      expect(outdentSession.getText()).toBe('abc')
       expect(resolvedSelectionRanges(outdentSession)).toEqual([
         { anchor: 1, head: 1, start: 1, end: 1 },
-      ]);
-    });
+      ])
+    })
 
-    it("selects the full document with Mod+A", () => {
-      const session = createDocumentSession("abc");
-      editor.attachSession(session);
+    it('selects the full document with Mod+A', () => {
+      const session = createDocumentSession('abc')
+      editor.attachSession(session)
 
-      dispatchEditorKey("a", primaryModifier());
+      dispatchEditorKey('a', primaryModifier())
 
       const resolved = resolveSelection(
         session.getSnapshot(),
         session.getSelections().selections[0]!,
-      );
-      expect(resolved.startOffset).toBe(0);
-      expect(resolved.endOffset).toBe(3);
-    });
+      )
+      expect(resolved.startOffset).toBe(0)
+      expect(resolved.endOffset).toBe(3)
+    })
 
-    it("copies selected text as plain text", () => {
-      const session = createDocumentSession("alpha beta");
-      session.setSelection(6, 10);
-      editor.attachSession(session);
+    it('copies selected text as plain text', () => {
+      const session = createDocumentSession('alpha beta')
+      session.setSelection(6, 10)
+      editor.attachSession(session)
 
-      const copy = createCopyEvent();
-      editorRoot().dispatchEvent(copy.event);
+      const copy = createCopyEvent()
+      editorRoot().dispatchEvent(copy.event)
 
-      expect(copy.getText()).toBe("beta");
-      expect(copy.event.defaultPrevented).toBe(true);
-    });
+      expect(copy.getText()).toBe('beta')
+      expect(copy.event.defaultPrevented).toBe(true)
+    })
 
-    it("does not intercept copy for collapsed selections", () => {
-      const session = createDocumentSession("abc");
-      editor.attachSession(session);
+    it('does not intercept copy for collapsed selections', () => {
+      const session = createDocumentSession('abc')
+      editor.attachSession(session)
 
-      const copy = createCopyEvent();
-      editorRoot().dispatchEvent(copy.event);
+      const copy = createCopyEvent()
+      editorRoot().dispatchEvent(copy.event)
 
-      expect(copy.formatCount()).toBe(0);
-      expect(copy.event.defaultPrevented).toBe(false);
-    });
+      expect(copy.formatCount()).toBe(0)
+      expect(copy.event.defaultPrevented).toBe(false)
+    })
 
-    it("copies the full document after Mod+A", () => {
-      editor.setText("abc");
+    it('copies the full document after Mod+A', () => {
+      editor.setText('abc')
 
-      dispatchEditorKey("a", primaryModifier());
-      const copy = createCopyEvent();
-      editorRoot().dispatchEvent(copy.event);
+      dispatchEditorKey('a', primaryModifier())
+      const copy = createCopyEvent()
+      editorRoot().dispatchEvent(copy.event)
 
-      expect(copy.getText()).toBe("abc");
-      expect(copy.event.defaultPrevented).toBe(true);
-    });
+      expect(copy.getText()).toBe('abc')
+      expect(copy.event.defaultPrevented).toBe(true)
+    })
 
-    it("opens long documents without revealing the initial end selection", () => {
-      const root = editorRoot();
-      const text = Array.from({ length: 80 }, (_value, index) => `line ${index}`).join("\n");
-      mockEditorViewport(root, 80, 40, 2_000);
+    it('opens long documents without revealing the initial end selection', () => {
+      const root = editorRoot()
+      const text = Array.from({ length: 80 }, (_value, index) => `line ${index}`).join('\n')
+      mockEditorViewport(root, 80, 40, 2_000)
 
-      editor.setText(text);
+      editor.setText(text)
 
-      expect(editor.getState().cursor).toEqual({ row: 79, column: 7 });
-      expect(root.scrollTop).toBe(0);
-    });
+      expect(editor.getState().cursor).toEqual({ row: 79, column: 7 })
+      expect(root.scrollTop).toBe(0)
+    })
 
-    it("scrolls to the bottom of pasted text", () => {
-      const pasted = Array.from({ length: 8 }, (_value, index) => `line ${index}`).join("\n");
-      editor.setText("");
-      mockEditorViewport(editorRoot(), 80, 40);
-      editor.focus();
+    it('scrolls to the bottom of pasted text', () => {
+      const pasted = Array.from({ length: 8 }, (_value, index) => `line ${index}`).join('\n')
+      editor.setText('')
+      mockEditorViewport(editorRoot(), 80, 40)
+      editor.focus()
 
-      editorInput().dispatchEvent(createPasteEvent(pasted));
+      editorInput().dispatchEvent(createPasteEvent(pasted))
 
-      expect(editor.getText()).toBe(pasted);
-      expect(editor.getState().cursor).toEqual({ row: 7, column: 6 });
-      expect(editorRoot().scrollTop).toBeGreaterThan(0);
-    });
+      expect(editor.getText()).toBe(pasted)
+      expect(editor.getState().cursor).toEqual({ row: 7, column: 6 })
+      expect(editorRoot().scrollTop).toBeGreaterThan(0)
+    })
 
-    it("writes scrollTop once when revealing pasted text at the viewport end", () => {
-      const pasted = Array.from({ length: 8 }, (_value, index) => `line ${index}`).join("\n");
-      const root = editorRoot();
-      editor.setText("");
-      mockEditorViewport(root, 80, 40);
-      editor.focus();
-      const scrollTopWrites = trackScrollTopWrites(root);
+    it('writes scrollTop once when revealing pasted text at the viewport end', () => {
+      const pasted = Array.from({ length: 8 }, (_value, index) => `line ${index}`).join('\n')
+      const root = editorRoot()
+      editor.setText('')
+      mockEditorViewport(root, 80, 40)
+      editor.focus()
+      const scrollTopWrites = trackScrollTopWrites(root)
 
       try {
-        editorInput().dispatchEvent(createPasteEvent(pasted));
+        editorInput().dispatchEvent(createPasteEvent(pasted))
       } finally {
-        scrollTopWrites.restore();
+        scrollTopWrites.restore()
       }
 
-      expect(scrollTopWrites.values).toHaveLength(1);
-      expect(scrollTopWrites.values[0]).toBeGreaterThan(0);
-    });
+      expect(scrollTopWrites.values).toHaveLength(1)
+      expect(scrollTopWrites.values[0]).toBeGreaterThan(0)
+    })
 
-    it("moves a collapsed caret with arrow keys", () => {
-      const session = createDocumentSession("abc");
-      editor.attachSession(session);
+    it('moves a collapsed caret with arrow keys', () => {
+      const session = createDocumentSession('abc')
+      editor.attachSession(session)
 
-      dispatchEditorKey("ArrowLeft");
+      dispatchEditorKey('ArrowLeft')
 
-      expect(editor.getState().cursor).toEqual({ row: 0, column: 2 });
+      expect(editor.getState().cursor).toEqual({ row: 0, column: 2 })
       const resolved = resolveSelection(
         session.getSnapshot(),
         session.getSelections().selections[0]!,
-      );
-      expect(resolved.headOffset).toBe(2);
-    });
+      )
+      expect(resolved.headOffset).toBe(2)
+    })
 
-    it("moves all collapsed cursors with arrow keys", () => {
-      const session = createDocumentSession("abc\ndef");
-      session.setSelections([{ anchor: 3 }, { anchor: 7 }]);
-      editor.attachSession(session);
+    it('moves all collapsed cursors with arrow keys', () => {
+      const session = createDocumentSession('abc\ndef')
+      session.setSelections([{ anchor: 3 }, { anchor: 7 }])
+      editor.attachSession(session)
 
-      dispatchEditorKey("ArrowLeft");
+      dispatchEditorKey('ArrowLeft')
 
       expect(resolvedSelectionRanges(session)).toEqual([
         { anchor: 2, head: 2, start: 2, end: 2 },
         { anchor: 6, head: 6, start: 6, end: 6 },
-      ]);
-      expect(container.querySelectorAll(".editor-virtualized-caret:not([hidden])")).toHaveLength(2);
-    });
+      ])
+      expect(container.querySelectorAll('.editor-virtualized-caret:not([hidden])')).toHaveLength(2)
+    })
 
-    it("extends selections with shift arrow keys", () => {
-      const session = createDocumentSession("abc");
-      editor.attachSession(session);
+    it('extends selections with shift arrow keys', () => {
+      const session = createDocumentSession('abc')
+      editor.attachSession(session)
 
-      dispatchEditorKey("ArrowLeft", { shiftKey: true });
+      dispatchEditorKey('ArrowLeft', { shiftKey: true })
 
       const resolved = resolveSelection(
         session.getSnapshot(),
         session.getSelections().selections[0]!,
-      );
-      expect(resolved.anchorOffset).toBe(3);
-      expect(resolved.headOffset).toBe(2);
-      expect(resolved.startOffset).toBe(2);
-      expect(resolved.endOffset).toBe(3);
-      expect(selectionRanges()).toHaveLength(1);
-    });
+      )
+      expect(resolved.anchorOffset).toBe(3)
+      expect(resolved.headOffset).toBe(2)
+      expect(resolved.startOffset).toBe(2)
+      expect(resolved.endOffset).toBe(3)
+      expect(selectionRanges()).toHaveLength(1)
+    })
 
-    it("renders and copies keyboard selections with selection sync disabled", () => {
-      editor.dispose();
+    it('renders and copies keyboard selections with selection sync disabled', () => {
+      editor.dispose()
       editor = new Editor(container, {
-        defaultText: "abc",
-        selectionSyncMode: "none",
-      });
-      const nativeSelection = spyOnNativeSelection();
+        defaultText: 'abc',
+        selectionSyncMode: 'none',
+      })
+      const nativeSelection = spyOnNativeSelection()
 
       try {
-        dispatchEditorKey("ArrowLeft", { shiftKey: true });
+        dispatchEditorKey('ArrowLeft', { shiftKey: true })
 
-        expect(selectionRanges()).toHaveLength(1);
-        expect(nativeSelection.addRange).not.toHaveBeenCalled();
+        expect(selectionRanges()).toHaveLength(1)
+        expect(nativeSelection.addRange).not.toHaveBeenCalled()
 
-        const copy = createCopyEvent();
-        editorRoot().dispatchEvent(copy.event);
+        const copy = createCopyEvent()
+        editorRoot().dispatchEvent(copy.event)
 
-        expect(copy.getText()).toBe("c");
+        expect(copy.getText()).toBe('c')
       } finally {
-        nativeSelection.restore();
+        nativeSelection.restore()
       }
-    });
+    })
 
-    it("extends all cursors with shift arrow keys", () => {
-      const session = createDocumentSession("abcdef");
-      session.setSelections([{ anchor: 2 }, { anchor: 5 }]);
-      editor.attachSession(session);
+    it('extends all cursors with shift arrow keys', () => {
+      const session = createDocumentSession('abcdef')
+      session.setSelections([{ anchor: 2 }, { anchor: 5 }])
+      editor.attachSession(session)
 
-      dispatchEditorKey("ArrowRight", { shiftKey: true });
+      dispatchEditorKey('ArrowRight', { shiftKey: true })
 
       expect(resolvedSelectionRanges(session)).toEqual([
         { anchor: 2, head: 3, start: 2, end: 3 },
         { anchor: 5, head: 6, start: 5, end: 6 },
-      ]);
-      expect(container.querySelectorAll(".editor-virtualized-caret:not([hidden])")).toHaveLength(2);
-    });
+      ])
+      expect(container.querySelectorAll('.editor-virtualized-caret:not([hidden])')).toHaveLength(2)
+    })
 
-    it("keeps vertical navigation on the preferred visual column", () => {
-      const session = createDocumentSession("abcdef\nx\n12345");
-      editor.attachSession(session);
+    it('keeps vertical navigation on the preferred visual column', () => {
+      const session = createDocumentSession('abcdef\nx\n12345')
+      editor.attachSession(session)
 
-      dispatchEditorKey("ArrowUp");
-      dispatchEditorKey("ArrowUp");
+      dispatchEditorKey('ArrowUp')
+      dispatchEditorKey('ArrowUp')
 
-      expect(editor.getState().cursor).toEqual({ row: 0, column: 5 });
-    });
+      expect(editor.getState().cursor).toEqual({ row: 0, column: 5 })
+    })
 
-    it("keeps independent visual columns while vertically moving all cursors", () => {
-      const session = createDocumentSession("abcde\nx\n123456789\nABCDE\ny\n987654321");
-      session.setSelections([{ anchor: 13 }, { anchor: 34 }]);
-      editor.attachSession(session);
+    it('keeps independent visual columns while vertically moving all cursors', () => {
+      const session = createDocumentSession('abcde\nx\n123456789\nABCDE\ny\n987654321')
+      session.setSelections([{ anchor: 13 }, { anchor: 34 }])
+      editor.attachSession(session)
 
-      dispatchEditorKey("ArrowUp");
+      dispatchEditorKey('ArrowUp')
       expect(resolvedSelectionRanges(session)).toEqual([
         { anchor: 7, head: 7, start: 7, end: 7 },
         { anchor: 25, head: 25, start: 25, end: 25 },
-      ]);
+      ])
 
-      dispatchEditorKey("ArrowDown");
+      dispatchEditorKey('ArrowDown')
       expect(resolvedSelectionRanges(session)).toEqual([
         { anchor: 13, head: 13, start: 13, end: 13 },
         { anchor: 34, head: 34, start: 34, end: 34 },
-      ]);
-    });
+      ])
+    })
 
-    it("keeps multi-cursor navigation for word, line, page, and document commands", () => {
-      const wordSession = createDocumentSession("one two three four five six");
-      wordSession.setSelections([{ anchor: 4 }, { anchor: 19 }]);
-      editor.attachSession(wordSession);
+    it('keeps multi-cursor navigation for word, line, page, and document commands', () => {
+      const wordSession = createDocumentSession('one two three four five six')
+      wordSession.setSelections([{ anchor: 4 }, { anchor: 19 }])
+      editor.attachSession(wordSession)
 
-      dispatchEditorKey("ArrowRight", wordNavigationModifier());
-      expect(wordSession.getSelections().selections).toHaveLength(2);
+      dispatchEditorKey('ArrowRight', wordNavigationModifier())
+      expect(wordSession.getSelections().selections).toHaveLength(2)
 
-      const lineSession = createDocumentSession("abc\ndef");
-      lineSession.setSelections([{ anchor: 1 }, { anchor: 5 }]);
-      editor.attachSession(lineSession);
+      const lineSession = createDocumentSession('abc\ndef')
+      lineSession.setSelections([{ anchor: 1 }, { anchor: 5 }])
+      editor.attachSession(lineSession)
 
-      dispatchEditorKey("End");
+      dispatchEditorKey('End')
       expect(resolvedSelectionRanges(lineSession)).toEqual([
         { anchor: 3, head: 3, start: 3, end: 3 },
         { anchor: 7, head: 7, start: 7, end: 7 },
-      ]);
+      ])
 
       const pageSession = createDocumentSession(
-        Array.from({ length: 12 }, (_value, index) => `line ${index}`).join("\n"),
-      );
-      pageSession.setSelections([{ anchor: 0 }, { anchor: 7 }]);
-      mockEditorViewport(editorRoot(), 80, 40);
-      editor.attachSession(pageSession);
+        Array.from({ length: 12 }, (_value, index) => `line ${index}`).join('\n'),
+      )
+      pageSession.setSelections([{ anchor: 0 }, { anchor: 7 }])
+      mockEditorViewport(editorRoot(), 80, 40)
+      editor.attachSession(pageSession)
 
-      dispatchEditorKey("PageDown");
-      expect(pageSession.getSelections().selections).toHaveLength(2);
+      dispatchEditorKey('PageDown')
+      expect(pageSession.getSelections().selections).toHaveLength(2)
 
-      const documentSession = createDocumentSession("abc\ndef");
-      documentSession.setSelections([{ anchor: 1 }, { anchor: 5 }]);
-      editor.attachSession(documentSession);
+      const documentSession = createDocumentSession('abc\ndef')
+      documentSession.setSelections([{ anchor: 1 }, { anchor: 5 }])
+      editor.attachSession(documentSession)
 
-      const documentEndKey = detectPlatform() === "mac" ? "ArrowDown" : "End";
-      const documentEndModifier =
-        detectPlatform() === "mac" ? { metaKey: true } : { ctrlKey: true };
-      dispatchEditorKey(documentEndKey, documentEndModifier);
+      const documentEndKey = detectPlatform() === 'mac' ? 'ArrowDown' : 'End'
+      const documentEndModifier = detectPlatform() === 'mac' ? { metaKey: true } : { ctrlKey: true }
+      dispatchEditorKey(documentEndKey, documentEndModifier)
       expect(resolvedSelectionRanges(documentSession)).toEqual([
         { anchor: 7, head: 7, start: 7, end: 7 },
-      ]);
-    });
+      ])
+    })
 
-    it("scrolls the caret into view while navigating by keyboard", () => {
-      const session = createDocumentSession("0\n1\n2\n3\n4\n5");
-      session.setSelection(0);
-      mockEditorViewport(editorRoot(), 80, 40);
-      editor.attachSession(session);
+    it('scrolls the caret into view while navigating by keyboard', () => {
+      const session = createDocumentSession('0\n1\n2\n3\n4\n5')
+      session.setSelection(0)
+      mockEditorViewport(editorRoot(), 80, 40)
+      editor.attachSession(session)
 
-      for (let index = 0; index < 5; index += 1) dispatchEditorKey("ArrowDown");
+      for (let index = 0; index < 5; index += 1) dispatchEditorKey('ArrowDown')
 
-      expect(editorRoot().scrollTop).toBeGreaterThan(0);
-      expect(editor.getState().cursor).toEqual({ row: 5, column: 0 });
-    });
+      expect(editorRoot().scrollTop).toBeGreaterThan(0)
+      expect(editor.getState().cursor).toEqual({ row: 5, column: 0 })
+    })
 
-    it("can disable default keymap bindings", () => {
-      editor.dispose();
-      editor = new Editor(container, { keymap: { enabled: false } });
-      editor.setText("abc");
+    it('can disable default keymap bindings', () => {
+      editor.dispose()
+      editor = new Editor(container, { keymap: { enabled: false } })
+      editor.setText('abc')
 
-      dispatchEditorKey("ArrowLeft");
+      dispatchEditorKey('ArrowLeft')
 
-      expect(editor.getState().cursor).toEqual({ row: 0, column: 3 });
-    });
+      expect(editor.getState().cursor).toEqual({ row: 0, column: 3 })
+    })
 
-    it("keeps browser selections synced to the document session", () => {
-      const session = createDocumentSession("abcd");
-      editor.attachSession(session);
-      const textNode = rowTextNode();
-      const range = document.createRange();
-      range.setStart(textNode, 1);
-      range.setEnd(textNode, 3);
+    it('keeps browser selections synced to the document session', () => {
+      const session = createDocumentSession('abcd')
+      editor.attachSession(session)
+      const textNode = rowTextNode()
+      const range = document.createRange()
+      range.setStart(textNode, 1)
+      range.setEnd(textNode, 3)
 
-      const selection = window.getSelection()!;
-      selection.removeAllRanges();
-      selection.addRange(range);
-      editorRoot().dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      const selection = window.getSelection()!
+      selection.removeAllRanges()
+      selection.addRange(range)
+      editorRoot().dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
 
       const resolved = resolveSelection(
         session.getSnapshot(),
         session.getSelections().selections[0]!,
-      );
-      expect(resolved.startOffset).toBe(1);
-      expect(resolved.endOffset).toBe(3);
+      )
+      expect(resolved.startOffset).toBe(1)
+      expect(resolved.endOffset).toBe(3)
 
       editorRoot().dispatchEvent(
-        new InputEvent("beforeinput", {
+        new InputEvent('beforeinput', {
           bubbles: true,
           cancelable: true,
-          data: "X",
-          inputType: "insertText",
+          data: 'X',
+          inputType: 'insertText',
         }),
-      );
+      )
 
-      expect(session.getText()).toBe("aXd");
-      expect(editorRoot().textContent).toBe("aXd");
-    });
+      expect(session.getText()).toBe('aXd')
+      expect(editorRoot().textContent).toBe('aXd')
+    })
 
-    it("renders range selections with custom selection geometry", () => {
-      const session = createDocumentSession("abcd");
-      editor.attachSession(session);
-      const textNode = rowTextNode();
-      const range = document.createRange();
-      range.setStart(textNode, 1);
-      range.setEnd(textNode, 3);
+    it('renders range selections with custom selection geometry', () => {
+      const session = createDocumentSession('abcd')
+      editor.attachSession(session)
+      const textNode = rowTextNode()
+      const range = document.createRange()
+      range.setStart(textNode, 1)
+      range.setEnd(textNode, 3)
 
-      const selection = window.getSelection()!;
-      selection.removeAllRanges();
-      selection.addRange(range);
-      editorRoot().dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      const selection = window.getSelection()!
+      selection.removeAllRanges()
+      selection.addRange(range)
+      editorRoot().dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
 
-      expect(selectionRanges()).toHaveLength(1);
+      expect(selectionRanges()).toHaveLength(1)
 
       editorRoot().dispatchEvent(
-        new InputEvent("beforeinput", {
+        new InputEvent('beforeinput', {
           bubbles: true,
           cancelable: true,
-          data: "X",
-          inputType: "insertText",
+          data: 'X',
+          inputType: 'insertText',
         }),
-      );
+      )
 
-      expect(selectionRanges()).toHaveLength(0);
-    });
+      expect(selectionRanges()).toHaveLength(0)
+    })
 
-    it("adds an Option-click cursor and edits all cursors together", () => {
-      const session = createDocumentSession("abcdef");
-      session.setSelection(1);
-      editor.attachSession(session);
-      mockEditorViewport(editorRoot(), 120, 40);
+    it('adds an Option-click cursor and edits all cursors together', () => {
+      const session = createDocumentSession('abcdef')
+      session.setSelection(1)
+      editor.attachSession(session)
+      mockEditorViewport(editorRoot(), 120, 40)
 
       editorRoot().dispatchEvent(
-        new MouseEvent("mousedown", {
+        new MouseEvent('mousedown', {
           altKey: true,
           bubbles: true,
           cancelable: true,
@@ -2922,1867 +2937,1820 @@ describe("Editor", () => {
           clientY: 10,
           detail: 1,
         }),
-      );
-      editorRoot().dispatchEvent(createInsertEvent("X"));
+      )
+      editorRoot().dispatchEvent(createInsertEvent('X'))
 
-      expect(session.getSelections().selections).toHaveLength(2);
-      expect(editor.getText()).toBe("aXbcdXef");
-      expect(container.querySelectorAll(".editor-virtualized-caret")).toHaveLength(2);
-    });
+      expect(session.getSelections().selections).toHaveLength(2)
+      expect(editor.getText()).toBe('aXbcdXef')
+      expect(container.querySelectorAll('.editor-virtualized-caret')).toHaveLength(2)
+    })
 
-    it("clears secondary cursors with Escape", () => {
-      const session = createDocumentSession("abcdef");
-      session.setSelection(1);
-      session.addSelection(4);
-      editor.attachSession(session);
+    it('clears secondary cursors with Escape', () => {
+      const session = createDocumentSession('abcdef')
+      session.setSelection(1)
+      session.addSelection(4)
+      editor.attachSession(session)
 
-      dispatchEditorKey("Escape");
+      dispatchEditorKey('Escape')
 
-      expect(session.getSelections().selections).toHaveLength(1);
-      expect(container.querySelectorAll(".editor-virtualized-caret:not([hidden])")).toHaveLength(1);
-    });
+      expect(session.getSelections().selections).toHaveLength(1)
+      expect(container.querySelectorAll('.editor-virtualized-caret:not([hidden])')).toHaveLength(1)
+    })
 
-    it("inserts cursors above and below through explicit editor commands", () => {
-      const belowSession = createDocumentSession("abc\ndef\nghi");
-      belowSession.setSelection(5);
-      editor.attachSession(belowSession);
-      mockEditorViewport(editorRoot(), 80, 60);
+    it('inserts cursors above and below through explicit editor commands', () => {
+      const belowSession = createDocumentSession('abc\ndef\nghi')
+      belowSession.setSelection(5)
+      editor.attachSession(belowSession)
+      mockEditorViewport(editorRoot(), 80, 60)
 
-      expect(editor.dispatchCommand("editor.action.insertCursorBelow")).toBe(true);
+      expect(editor.dispatchCommand('editor.action.insertCursorBelow')).toBe(true)
       expect(resolvedSelectionRanges(belowSession)).toEqual([
         { anchor: 5, head: 5, start: 5, end: 5 },
         { anchor: 9, head: 9, start: 9, end: 9 },
-      ]);
+      ])
 
-      const aboveSession = createDocumentSession("abc\ndef\nghi");
-      aboveSession.setSelections([{ anchor: 5 }, { anchor: 9 }]);
-      editor.attachSession(aboveSession);
-      mockEditorViewport(editorRoot(), 80, 60);
+      const aboveSession = createDocumentSession('abc\ndef\nghi')
+      aboveSession.setSelections([{ anchor: 5 }, { anchor: 9 }])
+      editor.attachSession(aboveSession)
+      mockEditorViewport(editorRoot(), 80, 60)
 
-      expect(editor.dispatchCommand("editor.action.insertCursorAbove")).toBe(true);
+      expect(editor.dispatchCommand('editor.action.insertCursorAbove')).toBe(true)
       expect(resolvedSelectionRanges(aboveSession)).toEqual([
         { anchor: 1, head: 1, start: 1, end: 1 },
         { anchor: 5, head: 5, start: 5, end: 5 },
         { anchor: 9, head: 9, start: 9, end: 9 },
-      ]);
-    });
+      ])
+    })
 
-    it("selects the current word then adds the next exact occurrence with Mod+D", () => {
-      const session = createDocumentSession("foo bar foo");
-      session.setSelection(1);
-      editor.attachSession(session);
+    it('selects the current word then adds the next exact occurrence with Mod+D', () => {
+      const session = createDocumentSession('foo bar foo')
+      session.setSelection(1)
+      editor.attachSession(session)
 
-      dispatchEditorKey("d", primaryModifier());
+      dispatchEditorKey('d', primaryModifier())
 
       let ranges = session.getSelections().selections.map((selection) => {
-        const resolved = resolveSelection(session.getSnapshot(), selection);
-        return { start: resolved.startOffset, end: resolved.endOffset };
-      });
-      expect(ranges).toEqual([{ start: 0, end: 3 }]);
+        const resolved = resolveSelection(session.getSnapshot(), selection)
+        return { start: resolved.startOffset, end: resolved.endOffset }
+      })
+      expect(ranges).toEqual([{ start: 0, end: 3 }])
 
-      dispatchEditorKey("d", primaryModifier());
+      dispatchEditorKey('d', primaryModifier())
 
       ranges = session.getSelections().selections.map((selection) => {
-        const resolved = resolveSelection(session.getSnapshot(), selection);
-        return { start: resolved.startOffset, end: resolved.endOffset };
-      });
+        const resolved = resolveSelection(session.getSnapshot(), selection)
+        return { start: resolved.startOffset, end: resolved.endOffset }
+      })
       expect(ranges).toEqual([
         { start: 0, end: 3 },
         { start: 8, end: 11 },
-      ]);
-      expect(container.querySelectorAll(".editor-virtualized-caret")).toHaveLength(2);
-    });
+      ])
+      expect(container.querySelectorAll('.editor-virtualized-caret')).toHaveLength(2)
+    })
 
-    it("selects all exact occurrences with VS Code occurrence command ids", () => {
-      const highlightsSession = createDocumentSession("foo bar foo foo");
-      highlightsSession.setSelection(1);
-      editor.attachSession(highlightsSession);
+    it('selects all exact occurrences with VS Code occurrence command ids', () => {
+      const highlightsSession = createDocumentSession('foo bar foo foo')
+      highlightsSession.setSelection(1)
+      editor.attachSession(highlightsSession)
 
-      expect(editor.dispatchCommand("editor.action.selectHighlights")).toBe(true);
+      expect(editor.dispatchCommand('editor.action.selectHighlights')).toBe(true)
       expect(resolvedSelectionRanges(highlightsSession)).toEqual([
         { anchor: 0, head: 3, start: 0, end: 3 },
         { anchor: 8, head: 11, start: 8, end: 11 },
         { anchor: 12, head: 15, start: 12, end: 15 },
-      ]);
+      ])
 
-      const changeAllSession = createDocumentSession("foo bar foo bar");
-      changeAllSession.setSelection(4, 7);
-      editor.attachSession(changeAllSession);
+      const changeAllSession = createDocumentSession('foo bar foo bar')
+      changeAllSession.setSelection(4, 7)
+      editor.attachSession(changeAllSession)
 
-      expect(editor.dispatchCommand("editor.action.changeAll")).toBe(true);
+      expect(editor.dispatchCommand('editor.action.changeAll')).toBe(true)
       expect(resolvedSelectionRanges(changeAllSession)).toEqual([
         { anchor: 4, head: 7, start: 4, end: 7 },
         { anchor: 12, head: 15, start: 12, end: 15 },
-      ]);
-    });
+      ])
+    })
 
-    it("moves the last selection to the next exact occurrence", () => {
-      const session = createDocumentSession("foo bar foo foo");
-      session.setSelection(1);
-      editor.attachSession(session);
+    it('moves the last selection to the next exact occurrence', () => {
+      const session = createDocumentSession('foo bar foo foo')
+      session.setSelection(1)
+      editor.attachSession(session)
 
-      expect(editor.dispatchCommand("editor.action.moveSelectionToNextFindMatch")).toBe(true);
-      expect(resolvedSelectionRanges(session)).toEqual([
-        { anchor: 8, head: 11, start: 8, end: 11 },
-      ]);
+      expect(editor.dispatchCommand('editor.action.moveSelectionToNextFindMatch')).toBe(true)
+      expect(resolvedSelectionRanges(session)).toEqual([{ anchor: 8, head: 11, start: 8, end: 11 }])
 
       session.setSelections([
         { anchor: 0, head: 3 },
         { anchor: 8, head: 11 },
-      ]);
+      ])
 
-      expect(editor.dispatchCommand("editor.action.moveSelectionToNextFindMatch")).toBe(true);
+      expect(editor.dispatchCommand('editor.action.moveSelectionToNextFindMatch')).toBe(true)
       expect(resolvedSelectionRanges(session)).toEqual([
         { anchor: 0, head: 3, start: 0, end: 3 },
         { anchor: 12, head: 15, start: 12, end: 15 },
-      ]);
-    });
+      ])
+    })
 
-    it("reveals the wrapped occurrence when Mod+D loops to the top", () => {
-      const session = createDocumentSession("foo\nx\nfoo\nx\nfoo");
-      session.setSelection(7);
-      editor.attachSession(session);
-      mockEditorViewport(editorRoot(), 80, 40);
+    it('reveals the wrapped occurrence when Mod+D loops to the top', () => {
+      const session = createDocumentSession('foo\nx\nfoo\nx\nfoo')
+      session.setSelection(7)
+      editor.attachSession(session)
+      mockEditorViewport(editorRoot(), 80, 40)
 
-      dispatchEditorKey("d", primaryModifier());
-      dispatchEditorKey("d", primaryModifier());
+      dispatchEditorKey('d', primaryModifier())
+      dispatchEditorKey('d', primaryModifier())
 
-      expect(editorRoot().scrollTop).toBeGreaterThan(0);
+      expect(editorRoot().scrollTop).toBeGreaterThan(0)
 
-      dispatchEditorKey("d", primaryModifier());
+      dispatchEditorKey('d', primaryModifier())
 
       const ranges = session.getSelections().selections.map((selection) => {
-        const resolved = resolveSelection(session.getSnapshot(), selection);
-        return { start: resolved.startOffset, end: resolved.endOffset };
-      });
+        const resolved = resolveSelection(session.getSnapshot(), selection)
+        return { start: resolved.startOffset, end: resolved.endOffset }
+      })
       expect(ranges).toEqual([
         { start: 0, end: 3 },
         { start: 6, end: 9 },
         { start: 12, end: 15 },
-      ]);
-      expect(editorRoot().scrollTop).toBe(0);
-    });
+      ])
+      expect(editorRoot().scrollTop).toBe(0)
+    })
 
-    it("prevents browser defaults for no-op editor key commands", () => {
-      editor.setText(" ");
+    it('prevents browser defaults for no-op editor key commands', () => {
+      editor.setText(' ')
 
-      const addOccurrence = dispatchEditorKey("d", primaryModifier());
-      const clearSecondary = dispatchEditorKey("Escape");
+      const addOccurrence = dispatchEditorKey('d', primaryModifier())
+      const clearSecondary = dispatchEditorKey('Escape')
 
-      expect(addOccurrence.defaultPrevented).toBe(true);
-      expect(clearSecondary.defaultPrevented).toBe(true);
-    });
+      expect(addOccurrence.defaultPrevented).toBe(true)
+      expect(clearSecondary.defaultPrevented).toBe(true)
+    })
 
-    it("opens find, navigates matches, and paints find highlights", () => {
-      const session = createDocumentSession("foo bar foo");
-      editor.attachSession(session);
+    it('opens find, navigates matches, and paints find highlights', () => {
+      const session = createDocumentSession('foo bar foo')
+      editor.attachSession(session)
 
-      dispatchEditorKey("f", primaryModifier());
-      expect(container.querySelector(".editor-find-widget")).not.toBeNull();
+      dispatchEditorKey('f', primaryModifier())
+      expect(container.querySelector('.editor-find-widget')).not.toBeNull()
 
-      const findInput = container.querySelector(".editor-find-input") as HTMLInputElement;
-      findInput.value = "foo";
-      findInput.dispatchEvent(new Event("input", { bubbles: true }));
+      const findInput = container.querySelector('.editor-find-input') as HTMLInputElement
+      findInput.value = 'foo'
+      findInput.dispatchEvent(new Event('input', { bubbles: true }))
 
-      expect([...highlightsMap.keys()].filter((name) => name.includes("find-match"))).toHaveLength(
+      expect([...highlightsMap.keys()].filter((name) => name.includes('find-match'))).toHaveLength(
         1,
-      );
+      )
       let selection = resolveSelection(
         session.getSnapshot(),
         session.getSelections().selections[0]!,
-      );
+      )
       expect({ start: selection.startOffset, end: selection.endOffset }).toEqual({
         start: 0,
         end: 3,
-      });
+      })
 
-      expect(editor.findNext()).toBe(true);
-      selection = resolveSelection(session.getSnapshot(), session.getSelections().selections[0]!);
+      expect(editor.findNext()).toBe(true)
+      selection = resolveSelection(session.getSnapshot(), session.getSelections().selections[0]!)
       expect({ start: selection.startOffset, end: selection.endOffset }).toEqual({
         start: 8,
         end: 11,
-      });
-    });
+      })
+    })
 
-    it("toggles find closed from the editor and find input", () => {
-      const session = createDocumentSession("foo");
-      editor.attachSession(session);
+    it('toggles find closed from the editor and find input', () => {
+      const session = createDocumentSession('foo')
+      editor.attachSession(session)
 
-      dispatchEditorKey("f", primaryModifier());
-      const widget = container.querySelector(".editor-find-widget") as HTMLDivElement;
-      const findInput = container.querySelector(".editor-find-input") as HTMLInputElement;
+      dispatchEditorKey('f', primaryModifier())
+      const widget = container.querySelector('.editor-find-widget') as HTMLDivElement
+      const findInput = container.querySelector('.editor-find-input') as HTMLInputElement
 
-      expect(widget.hidden).toBe(false);
+      expect(widget.hidden).toBe(false)
 
-      const inputEvent = new KeyboardEvent("keydown", {
+      const inputEvent = new KeyboardEvent('keydown', {
         bubbles: true,
         cancelable: true,
-        key: "f",
+        key: 'f',
         ...primaryModifier(),
-      });
-      findInput.dispatchEvent(inputEvent);
+      })
+      findInput.dispatchEvent(inputEvent)
 
-      expect(inputEvent.defaultPrevented).toBe(true);
-      expect(widget.hidden).toBe(true);
+      expect(inputEvent.defaultPrevented).toBe(true)
+      expect(widget.hidden).toBe(true)
 
-      dispatchEditorKey("f", primaryModifier());
-      expect(widget.hidden).toBe(false);
+      dispatchEditorKey('f', primaryModifier())
+      expect(widget.hidden).toBe(false)
 
-      dispatchEditorKey("f", primaryModifier());
-      expect(widget.hidden).toBe(true);
-    });
+      dispatchEditorKey('f', primaryModifier())
+      expect(widget.hidden).toBe(true)
+    })
 
-    it("replaces one and replace-all is one undoable edit", () => {
-      const session = createDocumentSession("foo foo foo");
-      editor.attachSession(session);
+    it('replaces one and replace-all is one undoable edit', () => {
+      const session = createDocumentSession('foo foo foo')
+      editor.attachSession(session)
 
-      editor.openFindReplace();
-      const inputs = container.querySelectorAll(".editor-find-input");
-      const findInput = inputs[0] as HTMLInputElement;
-      const replaceInput = inputs[1] as HTMLInputElement;
-      findInput.value = "foo";
-      findInput.dispatchEvent(new Event("input", { bubbles: true }));
-      replaceInput.value = "bar";
-      replaceInput.dispatchEvent(new Event("input", { bubbles: true }));
+      editor.openFindReplace()
+      const inputs = container.querySelectorAll('.editor-find-input')
+      const findInput = inputs[0] as HTMLInputElement
+      const replaceInput = inputs[1] as HTMLInputElement
+      findInput.value = 'foo'
+      findInput.dispatchEvent(new Event('input', { bubbles: true }))
+      replaceInput.value = 'bar'
+      replaceInput.dispatchEvent(new Event('input', { bubbles: true }))
 
-      expect(editor.replaceOne()).toBe(true);
-      expect(editor.getText()).toBe("bar foo foo");
+      expect(editor.replaceOne()).toBe(true)
+      expect(editor.getText()).toBe('bar foo foo')
 
-      expect(editor.replaceAll()).toBe(true);
-      expect(editor.getText()).toBe("bar bar bar");
+      expect(editor.replaceAll()).toBe(true)
+      expect(editor.getText()).toBe('bar bar bar')
 
-      editor.dispatchCommand("undo");
-      expect(editor.getText()).toBe("bar foo foo");
-    });
+      editor.dispatchCommand('undo')
+      expect(editor.getText()).toBe('bar foo foo')
+    })
 
-    it("toggles the replace row from the find widget", () => {
-      const session = createDocumentSession("foo");
-      editor.attachSession(session);
+    it('toggles the replace row from the find widget', () => {
+      const session = createDocumentSession('foo')
+      editor.attachSession(session)
 
-      expect(editor.openFind()).toBe(true);
-      const replaceRow = container.querySelector(".editor-find-replace-row") as HTMLDivElement;
-      const toggle = container.querySelector(".editor-find-replace-toggle") as HTMLButtonElement;
-      const matchCase = container.querySelector('button[title="Match Case (Off)"]');
+      expect(editor.openFind()).toBe(true)
+      const replaceRow = container.querySelector('.editor-find-replace-row') as HTMLDivElement
+      const toggle = container.querySelector('.editor-find-replace-toggle') as HTMLButtonElement
+      const matchCase = container.querySelector('button[title="Match Case (Off)"]')
 
-      expect(replaceRow.hidden).toBe(true);
-      expect(toggle.getAttribute("aria-expanded")).toBe("false");
-      expect(toggle.title).toBe("Show Replace");
-      expect(matchCase).not.toBeNull();
+      expect(replaceRow.hidden).toBe(true)
+      expect(toggle.getAttribute('aria-expanded')).toBe('false')
+      expect(toggle.title).toBe('Show Replace')
+      expect(matchCase).not.toBeNull()
 
-      toggle.click();
+      toggle.click()
 
-      expect(replaceRow.hidden).toBe(false);
-      expect(toggle.getAttribute("aria-expanded")).toBe("true");
-      expect(toggle.title).toBe("Hide Replace");
-    });
+      expect(replaceRow.hidden).toBe(false)
+      expect(toggle.getAttribute('aria-expanded')).toBe('true')
+      expect(toggle.title).toBe('Hide Replace')
+    })
 
-    it("find-in-selection and select-all matches create multi-selections", () => {
-      const session = createDocumentSession("foo outside foo inside foo");
-      session.setSelection(12, 26);
-      editor.attachSession(session);
+    it('find-in-selection and select-all matches create multi-selections', () => {
+      const session = createDocumentSession('foo outside foo inside foo')
+      session.setSelection(12, 26)
+      editor.attachSession(session)
 
-      editor.openFind();
-      expect(editor.dispatchCommand("toggleFindInSelection")).toBe(true);
-      const findInput = container.querySelector(".editor-find-input") as HTMLInputElement;
-      findInput.value = "foo";
-      findInput.dispatchEvent(new Event("input", { bubbles: true }));
-      expect(editor.selectAllMatches()).toBe(true);
+      editor.openFind()
+      expect(editor.dispatchCommand('toggleFindInSelection')).toBe(true)
+      const findInput = container.querySelector('.editor-find-input') as HTMLInputElement
+      findInput.value = 'foo'
+      findInput.dispatchEvent(new Event('input', { bubbles: true }))
+      expect(editor.selectAllMatches()).toBe(true)
 
       const ranges = session.getSelections().selections.map((selection) => {
-        const resolved = resolveSelection(session.getSnapshot(), selection);
-        return { start: resolved.startOffset, end: resolved.endOffset };
-      });
+        const resolved = resolveSelection(session.getSnapshot(), selection)
+        return { start: resolved.startOffset, end: resolved.endOffset }
+      })
       expect(ranges).toEqual([
         { start: 12, end: 15 },
         { start: 23, end: 26 },
-      ]);
-    });
+      ])
+    })
 
-    it("updates custom selection immediately while dragging", () => {
-      const session = createDocumentSession("abcd");
-      editor.attachSession(session);
-      mockEditorViewport(editorRoot(), 120, 40);
+    it('updates custom selection immediately while dragging', () => {
+      const session = createDocumentSession('abcd')
+      editor.attachSession(session)
+      mockEditorViewport(editorRoot(), 120, 40)
 
-      const mouseDown = new MouseEvent("mousedown", {
+      const mouseDown = new MouseEvent('mousedown', {
         bubbles: true,
         cancelable: true,
         clientX: 10,
         clientY: 10,
         detail: 1,
-      });
-      editorRoot().dispatchEvent(mouseDown);
+      })
+      editorRoot().dispatchEvent(mouseDown)
       document.dispatchEvent(
-        new MouseEvent("mousemove", { cancelable: true, clientX: 30, clientY: 10 }),
-      );
+        new MouseEvent('mousemove', { cancelable: true, clientX: 30, clientY: 10 }),
+      )
 
-      expect(mouseDown.defaultPrevented).toBe(true);
-      expect(selectionRanges()).toHaveLength(1);
+      expect(mouseDown.defaultPrevented).toBe(true)
+      expect(selectionRanges()).toHaveLength(1)
 
-      let resolved = resolveSelection(
-        session.getSnapshot(),
-        session.getSelections().selections[0]!,
-      );
-      expect(resolved.startOffset).toBe(1);
-      expect(resolved.endOffset).toBe(3);
+      let resolved = resolveSelection(session.getSnapshot(), session.getSelections().selections[0]!)
+      expect(resolved.startOffset).toBe(1)
+      expect(resolved.endOffset).toBe(3)
 
       document.dispatchEvent(
-        new MouseEvent("mouseup", { cancelable: true, clientX: 30, clientY: 10 }),
-      );
+        new MouseEvent('mouseup', { cancelable: true, clientX: 30, clientY: 10 }),
+      )
 
-      resolved = resolveSelection(session.getSnapshot(), session.getSelections().selections[0]!);
-      expect(resolved.startOffset).toBe(1);
-      expect(resolved.endOffset).toBe(3);
-    });
+      resolved = resolveSelection(session.getSnapshot(), session.getSelections().selections[0]!)
+      expect(resolved.startOffset).toBe(1)
+      expect(resolved.endOffset).toBe(3)
+    })
 
-    it("renders and copies pointer drag selections with selection sync disabled", () => {
-      editor.dispose();
+    it('renders and copies pointer drag selections with selection sync disabled', () => {
+      editor.dispose()
       editor = new Editor(container, {
-        defaultText: "abcd",
-        selectionSyncMode: "none",
-      });
-      mockEditorViewport(editorRoot(), 120, 40);
-      const nativeSelection = spyOnNativeSelection();
+        defaultText: 'abcd',
+        selectionSyncMode: 'none',
+      })
+      mockEditorViewport(editorRoot(), 120, 40)
+      const nativeSelection = spyOnNativeSelection()
 
       try {
         editorRoot().dispatchEvent(
-          new MouseEvent("mousedown", {
+          new MouseEvent('mousedown', {
             bubbles: true,
             cancelable: true,
             clientX: 10,
             clientY: 10,
             detail: 1,
           }),
-        );
+        )
         document.dispatchEvent(
-          new MouseEvent("mousemove", { cancelable: true, clientX: 30, clientY: 10 }),
-        );
+          new MouseEvent('mousemove', { cancelable: true, clientX: 30, clientY: 10 }),
+        )
         document.dispatchEvent(
-          new MouseEvent("mouseup", { cancelable: true, clientX: 30, clientY: 10 }),
-        );
+          new MouseEvent('mouseup', { cancelable: true, clientX: 30, clientY: 10 }),
+        )
 
-        expect(selectionRanges()).toHaveLength(1);
-        expect(nativeSelection.addRange).not.toHaveBeenCalled();
+        expect(selectionRanges()).toHaveLength(1)
+        expect(nativeSelection.addRange).not.toHaveBeenCalled()
 
-        const copy = createCopyEvent();
-        editorRoot().dispatchEvent(copy.event);
+        const copy = createCopyEvent()
+        editorRoot().dispatchEvent(copy.event)
 
-        expect(copy.getText()).toBe("bc");
+        expect(copy.getText()).toBe('bc')
       } finally {
-        nativeSelection.restore();
+        nativeSelection.restore()
       }
-    });
+    })
 
-    it("continues dragging selection when pointer hit-testing leaves the text", () => {
-      const session = createDocumentSession("abcd");
-      editor.attachSession(session);
-      mockEditorViewport(editorRoot(), 120, 40);
+    it('continues dragging selection when pointer hit-testing leaves the text', () => {
+      const session = createDocumentSession('abcd')
+      editor.attachSession(session)
+      mockEditorViewport(editorRoot(), 120, 40)
 
-      const textNode = rowTextNode();
+      const textNode = rowTextNode()
       const originalCaretRangeFromPoint = (
         document as Document & { caretRangeFromPoint?: (x: number, y: number) => Range | null }
-      ).caretRangeFromPoint;
-      Object.defineProperty(document, "caretRangeFromPoint", {
+      ).caretRangeFromPoint
+      Object.defineProperty(document, 'caretRangeFromPoint', {
         configurable: true,
         value: (x: number) => {
-          if (x !== 10) return null;
+          if (x !== 10) return null
 
-          const range = document.createRange();
-          range.setStart(textNode, 1);
-          range.setEnd(textNode, 1);
-          return range;
+          const range = document.createRange()
+          range.setStart(textNode, 1)
+          range.setEnd(textNode, 1)
+          return range
         },
-      });
+      })
 
       editorRoot().dispatchEvent(
-        new MouseEvent("mousedown", {
+        new MouseEvent('mousedown', {
           bubbles: true,
           cancelable: true,
           clientX: 10,
           clientY: 10,
           detail: 1,
         }),
-      );
+      )
       document.dispatchEvent(
-        new MouseEvent("mousemove", {
+        new MouseEvent('mousemove', {
           cancelable: true,
           clientX: 120,
           clientY: 10,
         }),
-      );
+      )
       document.dispatchEvent(
-        new MouseEvent("mouseup", {
+        new MouseEvent('mouseup', {
           cancelable: true,
           clientX: 120,
           clientY: 10,
         }),
-      );
+      )
 
       if (originalCaretRangeFromPoint) {
-        Object.defineProperty(document, "caretRangeFromPoint", {
+        Object.defineProperty(document, 'caretRangeFromPoint', {
           configurable: true,
           value: originalCaretRangeFromPoint,
-        });
+        })
       } else {
-        Reflect.deleteProperty(document, "caretRangeFromPoint");
+        Reflect.deleteProperty(document, 'caretRangeFromPoint')
       }
 
       const resolved = resolveSelection(
         session.getSnapshot(),
         session.getSelections().selections[0]!,
-      );
-      expect(resolved.startOffset).toBe(1);
-      expect(resolved.endOffset).toBe(4);
-    });
+      )
+      expect(resolved.startOffset).toBe(1)
+      expect(resolved.endOffset).toBe(4)
+    })
 
-    it("auto-scrolls while dragging selection past the viewport edge", () => {
-      const session = createDocumentSession("0\n1\n2\n3\n4\n5");
-      editor.attachSession(session);
-      mockEditorViewport(editorRoot(), 80, 40);
+    it('auto-scrolls while dragging selection past the viewport edge', () => {
+      const session = createDocumentSession('0\n1\n2\n3\n4\n5')
+      editor.attachSession(session)
+      mockEditorViewport(editorRoot(), 80, 40)
 
-      const textNode = rowTextNode();
+      const textNode = rowTextNode()
       const originalCaretRangeFromPoint = (
         document as Document & { caretRangeFromPoint?: (x: number, y: number) => Range | null }
-      ).caretRangeFromPoint;
-      Object.defineProperty(document, "caretRangeFromPoint", {
+      ).caretRangeFromPoint
+      Object.defineProperty(document, 'caretRangeFromPoint', {
         configurable: true,
         value: (x: number) => {
-          if (x !== 0) return null;
+          if (x !== 0) return null
 
-          const range = document.createRange();
-          range.setStart(textNode, 0);
-          range.setEnd(textNode, 0);
-          return range;
+          const range = document.createRange()
+          range.setStart(textNode, 0)
+          range.setEnd(textNode, 0)
+          return range
         },
-      });
+      })
 
       editorRoot().dispatchEvent(
-        new MouseEvent("mousedown", {
+        new MouseEvent('mousedown', {
           bubbles: true,
           cancelable: true,
           clientX: 0,
           clientY: 5,
           detail: 1,
         }),
-      );
+      )
       document.dispatchEvent(
-        new MouseEvent("mousemove", {
+        new MouseEvent('mousemove', {
           cancelable: true,
           clientX: 80,
           clientY: 45,
         }),
-      );
+      )
       document.dispatchEvent(
-        new MouseEvent("mouseup", {
+        new MouseEvent('mouseup', {
           cancelable: true,
           clientX: 80,
           clientY: 45,
         }),
-      );
+      )
 
       if (originalCaretRangeFromPoint) {
-        Object.defineProperty(document, "caretRangeFromPoint", {
+        Object.defineProperty(document, 'caretRangeFromPoint', {
           configurable: true,
           value: originalCaretRangeFromPoint,
-        });
+        })
       } else {
-        Reflect.deleteProperty(document, "caretRangeFromPoint");
+        Reflect.deleteProperty(document, 'caretRangeFromPoint')
       }
 
       const resolved = resolveSelection(
         session.getSnapshot(),
         session.getSelections().selections[0]!,
-      );
-      expect(editorRoot().scrollTop).toBeGreaterThan(0);
-      expect(resolved.endOffset).toBeGreaterThan(4);
-    });
+      )
+      expect(editorRoot().scrollTop).toBeGreaterThan(0)
+      expect(resolved.endOffset).toBeGreaterThan(4)
+    })
 
-    it("snaps to the bottom visible line end when dragging below the viewport", () => {
-      const session = createDocumentSession("alpha\nbeta");
-      editor.attachSession(session);
-      mockEditorViewport(editorRoot(), 80, 40, 40);
+    it('snaps to the bottom visible line end when dragging below the viewport', () => {
+      const session = createDocumentSession('alpha\nbeta')
+      editor.attachSession(session)
+      mockEditorViewport(editorRoot(), 80, 40, 40)
 
-      const textNode = rowTextNode();
+      const textNode = rowTextNode()
       const originalCaretRangeFromPoint = (
         document as Document & { caretRangeFromPoint?: (x: number, y: number) => Range | null }
-      ).caretRangeFromPoint;
-      Object.defineProperty(document, "caretRangeFromPoint", {
+      ).caretRangeFromPoint
+      Object.defineProperty(document, 'caretRangeFromPoint', {
         configurable: true,
         value: (x: number) => {
-          if (x !== 0) return null;
+          if (x !== 0) return null
 
-          const range = document.createRange();
-          range.setStart(textNode, 0);
-          range.setEnd(textNode, 0);
-          return range;
+          const range = document.createRange()
+          range.setStart(textNode, 0)
+          range.setEnd(textNode, 0)
+          return range
         },
-      });
+      })
 
       editorRoot().dispatchEvent(
-        new MouseEvent("mousedown", {
+        new MouseEvent('mousedown', {
           bubbles: true,
           cancelable: true,
           clientX: 0,
           clientY: 5,
           detail: 1,
         }),
-      );
+      )
       document.dispatchEvent(
-        new MouseEvent("mousemove", {
+        new MouseEvent('mousemove', {
           cancelable: true,
           clientX: 8,
           clientY: 45,
         }),
-      );
+      )
       document.dispatchEvent(
-        new MouseEvent("mouseup", {
+        new MouseEvent('mouseup', {
           cancelable: true,
           clientX: 8,
           clientY: 45,
         }),
-      );
+      )
 
       if (originalCaretRangeFromPoint) {
-        Object.defineProperty(document, "caretRangeFromPoint", {
+        Object.defineProperty(document, 'caretRangeFromPoint', {
           configurable: true,
           value: originalCaretRangeFromPoint,
-        });
+        })
       } else {
-        Reflect.deleteProperty(document, "caretRangeFromPoint");
+        Reflect.deleteProperty(document, 'caretRangeFromPoint')
       }
 
       const resolved = resolveSelection(
         session.getSnapshot(),
         session.getSelections().selections[0]!,
-      );
-      expect(resolved.startOffset).toBe(0);
-      expect(resolved.endOffset).toBe(10);
-    });
+      )
+      expect(resolved.startOffset).toBe(0)
+      expect(resolved.endOffset).toBe(10)
+    })
 
-    it("clamps cross-boundary browser selections before text input", () => {
-      const before = document.createElement("span");
-      before.textContent = "outside before";
-      const after = document.createElement("span");
-      after.textContent = "outside after";
-      container.before(before);
-      container.after(after);
+    it('clamps cross-boundary browser selections before text input', () => {
+      const before = document.createElement('span')
+      before.textContent = 'outside before'
+      const after = document.createElement('span')
+      after.textContent = 'outside after'
+      container.before(before)
+      container.after(after)
 
-      const session = createDocumentSession("abcd");
-      editor.attachSession(session);
-      const textNode = rowTextNode();
-      const range = document.createRange();
-      range.setStart(before.firstChild!, 0);
-      range.setEnd(textNode, 2);
+      const session = createDocumentSession('abcd')
+      editor.attachSession(session)
+      const textNode = rowTextNode()
+      const range = document.createRange()
+      range.setStart(before.firstChild!, 0)
+      range.setEnd(textNode, 2)
 
-      const selection = window.getSelection()!;
-      selection.removeAllRanges();
-      selection.addRange(range);
+      const selection = window.getSelection()!
+      selection.removeAllRanges()
+      selection.addRange(range)
       editorRoot().dispatchEvent(
-        new InputEvent("beforeinput", {
+        new InputEvent('beforeinput', {
           bubbles: true,
           cancelable: true,
-          data: "X",
-          inputType: "insertText",
+          data: 'X',
+          inputType: 'insertText',
         }),
-      );
+      )
 
-      expect(session.getText()).toBe("Xcd");
-      expect(editorRoot().textContent).toBe("Xcd");
-      before.remove();
-      after.remove();
-    });
+      expect(session.getText()).toBe('Xcd')
+      expect(editorRoot().textContent).toBe('Xcd')
+      before.remove()
+      after.remove()
+    })
 
-    it("selects the current line on triple click", () => {
-      const session = createDocumentSession("one\ntwo\nthree");
-      editor.attachSession(session);
-      mockEditorViewport(editorRoot(), 120, 80);
+    it('selects the current line on triple click', () => {
+      const session = createDocumentSession('one\ntwo\nthree')
+      editor.attachSession(session)
+      mockEditorViewport(editorRoot(), 120, 80)
 
       editorRoot().dispatchEvent(
-        new MouseEvent("mousedown", {
+        new MouseEvent('mousedown', {
           bubbles: true,
           cancelable: true,
           clientX: 10,
           clientY: 30,
           detail: 3,
         }),
-      );
+      )
 
       const resolved = resolveSelection(
         session.getSnapshot(),
         session.getSelections().selections[0]!,
-      );
-      expect(resolved.startOffset).toBe(4);
-      expect(resolved.endOffset).toBe(7);
+      )
+      expect(resolved.startOffset).toBe(4)
+      expect(resolved.endOffset).toBe(7)
 
       editorRoot().dispatchEvent(
-        new InputEvent("beforeinput", {
+        new InputEvent('beforeinput', {
           bubbles: true,
           cancelable: true,
-          data: "X",
-          inputType: "insertText",
+          data: 'X',
+          inputType: 'insertText',
         }),
-      );
+      )
 
-      expect(session.getText()).toBe("one\nX\nthree");
-      expect(editor.getText()).toBe("one\nX\nthree");
-    });
+      expect(session.getText()).toBe('one\nX\nthree')
+      expect(editor.getText()).toBe('one\nX\nthree')
+    })
 
-    it("selects the full document on quad click", () => {
-      const session = createDocumentSession("abcd");
-      editor.attachSession(session);
+    it('selects the full document on quad click', () => {
+      const session = createDocumentSession('abcd')
+      editor.attachSession(session)
 
       editorRoot().dispatchEvent(
-        new MouseEvent("mousedown", {
+        new MouseEvent('mousedown', {
           bubbles: true,
           cancelable: true,
           detail: 4,
         }),
-      );
+      )
 
       const resolved = resolveSelection(
         session.getSnapshot(),
         session.getSelections().selections[0]!,
-      );
-      expect(resolved.startOffset).toBe(0);
-      expect(resolved.endOffset).toBe(4);
+      )
+      expect(resolved.startOffset).toBe(0)
+      expect(resolved.endOffset).toBe(4)
 
       editorRoot().dispatchEvent(
-        new InputEvent("beforeinput", {
+        new InputEvent('beforeinput', {
           bubbles: true,
           cancelable: true,
-          data: "X",
-          inputType: "insertText",
+          data: 'X',
+          inputType: 'insertText',
         }),
-      );
+      )
 
-      expect(session.getText()).toBe("X");
-      expect(editorRoot().textContent).toBe("X");
-    });
+      expect(session.getText()).toBe('X')
+      expect(editorRoot().textContent).toBe('X')
+    })
 
-    it("selects a word on double click", () => {
-      const session = createDocumentSession("alpha beta");
-      editor.attachSession(session);
+    it('selects a word on double click', () => {
+      const session = createDocumentSession('alpha beta')
+      editor.attachSession(session)
 
-      const textNode = rowTextNode();
-      const range = document.createRange();
-      range.setStart(textNode, 8);
-      range.setEnd(textNode, 8);
+      const textNode = rowTextNode()
+      const range = document.createRange()
+      range.setStart(textNode, 8)
+      range.setEnd(textNode, 8)
       const originalCaretRangeFromPoint = (
         document as Document & { caretRangeFromPoint?: (x: number, y: number) => Range | null }
-      ).caretRangeFromPoint;
-      Object.defineProperty(document, "caretRangeFromPoint", {
+      ).caretRangeFromPoint
+      Object.defineProperty(document, 'caretRangeFromPoint', {
         configurable: true,
         value: () => range,
-      });
+      })
 
       editorRoot().dispatchEvent(
-        new MouseEvent("mousedown", {
+        new MouseEvent('mousedown', {
           bubbles: true,
           cancelable: true,
           clientX: 10,
           clientY: 10,
           detail: 2,
         }),
-      );
+      )
       if (originalCaretRangeFromPoint) {
-        Object.defineProperty(document, "caretRangeFromPoint", {
+        Object.defineProperty(document, 'caretRangeFromPoint', {
           configurable: true,
           value: originalCaretRangeFromPoint,
-        });
+        })
       } else {
-        Reflect.deleteProperty(document, "caretRangeFromPoint");
+        Reflect.deleteProperty(document, 'caretRangeFromPoint')
       }
 
       const resolved = resolveSelection(
         session.getSnapshot(),
         session.getSelections().selections[0]!,
-      );
-      expect(resolved.startOffset).toBe(6);
-      expect(resolved.endOffset).toBe(10);
+      )
+      expect(resolved.startOffset).toBe(6)
+      expect(resolved.endOffset).toBe(10)
 
       editorRoot().dispatchEvent(
-        new InputEvent("beforeinput", {
+        new InputEvent('beforeinput', {
           bubbles: true,
           cancelable: true,
-          data: "X",
-          inputType: "insertText",
+          data: 'X',
+          inputType: 'insertText',
         }),
-      );
+      )
 
-      expect(session.getText()).toBe("alpha X");
-      expect(editorRoot().textContent).toBe("alpha X");
-    });
+      expect(session.getText()).toBe('alpha X')
+      expect(editorRoot().textContent).toBe('alpha X')
+    })
 
-    it("keeps a multi-click selection when stale DOM selection events arrive", () => {
-      const session = createDocumentSession("alpha beta");
-      editor.attachSession(session);
+    it('keeps a multi-click selection when stale DOM selection events arrive', () => {
+      const session = createDocumentSession('alpha beta')
+      editor.attachSession(session)
 
-      const textNode = rowTextNode();
-      const range = document.createRange();
-      range.setStart(textNode, 8);
-      range.setEnd(textNode, 8);
+      const textNode = rowTextNode()
+      const range = document.createRange()
+      range.setStart(textNode, 8)
+      range.setEnd(textNode, 8)
       const originalCaretRangeFromPoint = (
         document as Document & { caretRangeFromPoint?: (x: number, y: number) => Range | null }
-      ).caretRangeFromPoint;
-      Object.defineProperty(document, "caretRangeFromPoint", {
+      ).caretRangeFromPoint
+      Object.defineProperty(document, 'caretRangeFromPoint', {
         configurable: true,
         value: () => range,
-      });
+      })
 
       editorRoot().dispatchEvent(
-        new MouseEvent("mousedown", {
+        new MouseEvent('mousedown', {
           bubbles: true,
           cancelable: true,
           clientX: 10,
           clientY: 10,
           detail: 2,
         }),
-      );
+      )
       if (originalCaretRangeFromPoint) {
-        Object.defineProperty(document, "caretRangeFromPoint", {
+        Object.defineProperty(document, 'caretRangeFromPoint', {
           configurable: true,
           value: originalCaretRangeFromPoint,
-        });
+        })
       } else {
-        Reflect.deleteProperty(document, "caretRangeFromPoint");
+        Reflect.deleteProperty(document, 'caretRangeFromPoint')
       }
 
-      const staleRange = document.createRange();
-      staleRange.setStart(textNode, 0);
-      staleRange.setEnd(textNode, 0);
-      const selection = window.getSelection()!;
-      selection.removeAllRanges();
-      selection.addRange(staleRange);
-      editorRoot().dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
-      document.dispatchEvent(new Event("selectionchange"));
+      const staleRange = document.createRange()
+      staleRange.setStart(textNode, 0)
+      staleRange.setEnd(textNode, 0)
+      const selection = window.getSelection()!
+      selection.removeAllRanges()
+      selection.addRange(staleRange)
+      editorRoot().dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+      document.dispatchEvent(new Event('selectionchange'))
 
       const resolved = resolveSelection(
         session.getSnapshot(),
         session.getSelections().selections[0]!,
-      );
-      expect(resolved.startOffset).toBe(6);
-      expect(resolved.endOffset).toBe(10);
-      expect(selectionRanges()).toHaveLength(1);
+      )
+      expect(resolved.startOffset).toBe(6)
+      expect(resolved.endOffset).toBe(10)
+      expect(selectionRanges()).toHaveLength(1)
 
       editorRoot().dispatchEvent(
-        new InputEvent("beforeinput", {
+        new InputEvent('beforeinput', {
           bubbles: true,
           cancelable: true,
-          data: "X",
-          inputType: "insertText",
+          data: 'X',
+          inputType: 'insertText',
         }),
-      );
+      )
 
-      expect(session.getText()).toBe("alpha X");
-      expect(editorRoot().textContent).toBe("alpha X");
-    });
-  });
+      expect(session.getText()).toBe('alpha X')
+      expect(editorRoot().textContent).toBe('alpha X')
+    })
+  })
 
-  describe("openDocument", () => {
-    it("sets anonymous text buffers without document identity", () => {
-      editor.setText("abc", { languageId: "typescript" });
+  describe('openDocument', () => {
+    it('sets anonymous text buffers without document identity', () => {
+      editor.setText('abc', { languageId: 'typescript' })
 
-      expect(editor.getText()).toBe("abc");
-      expect(editorRoot().textContent).toBe("abc");
+      expect(editor.getText()).toBe('abc')
+      expect(editorRoot().textContent).toBe('abc')
       expect(editor.getState()).toMatchObject({
         documentId: null,
-        languageId: "typescript",
+        languageId: 'typescript',
         length: 3,
         canUndo: false,
         canRedo: false,
-      });
-    });
+      })
+    })
 
-    it("syncs static document text through an editor change", () => {
-      const changes: DocumentSessionChange[] = [];
-      editor.dispose();
+    it('syncs static document text through an editor change', () => {
+      const changes: DocumentSessionChange[] = []
+      editor.dispose()
       editor = new Editor(container, {
         onChange: (_state, change) => {
-          if (change) changes.push(change);
+          if (change) changes.push(change)
         },
-      });
+      })
       editor.openDocument({
-        documentId: "generated:/note.txt",
-        documentMode: "static",
-        text: "abc",
-      });
+        documentId: 'generated:/note.txt',
+        documentMode: 'static',
+        text: 'abc',
+      })
 
-      editor.syncText("abcdef", { documentMode: "static" });
+      editor.syncText('abcdef', { documentMode: 'static' })
 
-      expect(editor.getText()).toBe("abcdef");
-      expect(editorRoot().textContent).toBe("abcdef");
+      expect(editor.getText()).toBe('abcdef')
+      expect(editorRoot().textContent).toBe('abcdef')
       expect(changes.at(-1)).toMatchObject({
-        kind: "edit",
-        text: "abcdef",
-      });
+        kind: 'edit',
+        text: 'abcdef',
+      })
       expect(editor.getState()).toMatchObject({
         canUndo: false,
-        documentMode: "static",
+        documentMode: 'static',
         length: 6,
-      });
-    });
+      })
+    })
 
-    it("opens editable documents and exposes editor state", () => {
-      editor.openDocument({ documentId: "note.txt", text: "abc" });
+    it('opens editable documents and exposes editor state', () => {
+      editor.openDocument({ documentId: 'note.txt', text: 'abc' })
 
-      expect(editor.getText()).toBe("abc");
-      expect(editorRoot().textContent).toBe("abc");
+      expect(editor.getText()).toBe('abc')
+      expect(editorRoot().textContent).toBe('abc')
       expect(editor.getState()).toMatchObject({
-        documentId: "note.txt",
+        documentId: 'note.txt',
         languageId: null,
-        syntaxStatus: "plain",
+        syntaxStatus: 'plain',
         length: 3,
         canUndo: false,
         canRedo: false,
-      });
-    });
+      })
+    })
 
-    it("routes text input through the owned document session", () => {
-      const states: EditorState[] = [];
-      editor.dispose();
+    it('routes text input through the owned document session', () => {
+      const states: EditorState[] = []
+      editor.dispose()
       editor = new Editor(container, {
         onChange: (state) => states.push(state),
-      });
-      editor.openDocument({ documentId: "note.txt", text: "abc" });
+      })
+      editor.openDocument({ documentId: 'note.txt', text: 'abc' })
 
       editorRoot().dispatchEvent(
-        new InputEvent("beforeinput", {
+        new InputEvent('beforeinput', {
           bubbles: true,
           cancelable: true,
-          data: "!",
-          inputType: "insertText",
+          data: '!',
+          inputType: 'insertText',
         }),
-      );
+      )
 
-      expect(editor.getText()).toBe("abc!");
-      expect(editor.getState().canUndo).toBe(true);
-      expect(states.at(-1)?.length).toBe(4);
-    });
+      expect(editor.getText()).toBe('abc!')
+      expect(editor.getState().canUndo).toBe(true)
+      expect(states.at(-1)?.length).toBe(4)
+    })
 
-    it("routes undo through the owned document session", () => {
-      editor.openDocument({ documentId: "note.txt", text: "abc" });
+    it('routes undo through the owned document session', () => {
+      editor.openDocument({ documentId: 'note.txt', text: 'abc' })
       editorRoot().dispatchEvent(
-        new InputEvent("beforeinput", {
+        new InputEvent('beforeinput', {
           bubbles: true,
           cancelable: true,
-          data: "!",
-          inputType: "insertText",
+          data: '!',
+          inputType: 'insertText',
         }),
-      );
+      )
 
       editorRoot().dispatchEvent(
-        new KeyboardEvent("keydown", {
+        new KeyboardEvent('keydown', {
           bubbles: true,
           cancelable: true,
-          key: "z",
+          key: 'z',
           ...primaryModifier(),
         }),
-      );
+      )
 
-      expect(editor.getText()).toBe("abc");
-      expect(editor.getState()).toMatchObject({ canUndo: false, canRedo: true });
-    });
+      expect(editor.getText()).toBe('abc')
+      expect(editor.getState()).toMatchObject({ canUndo: false, canRedo: true })
+    })
 
-    it("clears owned documents", () => {
-      editor.openDocument({ documentId: "note.txt", text: "abc" });
-      editor.setTokens([{ start: 0, end: 3, style: { color: "#ff0000" } }]);
+    it('clears owned documents', () => {
+      editor.openDocument({ documentId: 'note.txt', text: 'abc' })
+      editor.setTokens([{ start: 0, end: 3, style: { color: '#ff0000' } }])
 
-      editor.clearDocument();
+      editor.clearDocument()
 
-      expect(editor.getText()).toBe("");
+      expect(editor.getText()).toBe('')
       expect(editor.getState()).toMatchObject({
         documentId: null,
         languageId: null,
-        syntaxStatus: "plain",
+        syntaxStatus: 'plain',
         length: 0,
-      });
-      expect(highlightsMap.size).toBe(0);
-    });
+      })
+      expect(highlightsMap.size).toBe(0)
+    })
 
-    it("applies focused programmatic edits", () => {
-      editor.setText("abcdef");
+    it('applies focused programmatic edits', () => {
+      editor.setText('abcdef')
 
-      editor.edit({ from: 1, to: 4, text: "X" });
+      editor.edit({ from: 1, to: 4, text: 'X' })
 
-      expect(editor.getText()).toBe("aXef");
+      expect(editor.getText()).toBe('aXef')
       expect(editor.getState()).toMatchObject({
         canUndo: true,
         cursor: { row: 0, column: 4 },
-      });
-    });
+      })
+    })
 
-    it("creates an anonymous buffer before editing when needed", () => {
-      editor.edit({ from: 0, to: 0, text: "hi" });
+    it('creates an anonymous buffer before editing when needed', () => {
+      editor.edit({ from: 0, to: 0, text: 'hi' })
 
-      expect(editor.getText()).toBe("hi");
+      expect(editor.getText()).toBe('hi')
       expect(editor.getState()).toMatchObject({
         documentId: null,
         length: 2,
         canUndo: true,
-      });
-    });
+      })
+    })
 
-    it("applies batch edits as one editor change and one undo step", () => {
-      const changes: DocumentSessionChange[] = [];
-      editor.dispose();
+    it('applies batch edits as one editor change and one undo step', () => {
+      const changes: DocumentSessionChange[] = []
+      editor.dispose()
       editor = new Editor(container, {
         onChange: (_state, change) => {
-          if (change) changes.push(change);
+          if (change) changes.push(change)
         },
-      });
-      editor.setText("abcd");
+      })
+      editor.setText('abcd')
 
       editor.edit([
-        { from: 3, to: 3, text: "Y" },
-        { from: 1, to: 2, text: "X" },
-      ]);
+        { from: 3, to: 3, text: 'Y' },
+        { from: 1, to: 2, text: 'X' },
+      ])
 
-      expect(editor.getText()).toBe("aXcYd");
-      expect(changes).toHaveLength(1);
+      expect(editor.getText()).toBe('aXcYd')
+      expect(changes).toHaveLength(1)
       expect(changes[0]?.edits).toEqual([
-        { from: 1, to: 2, text: "X" },
-        { from: 3, to: 3, text: "Y" },
-      ]);
+        { from: 1, to: 2, text: 'X' },
+        { from: 3, to: 3, text: 'Y' },
+      ])
 
-      editor.dispatchCommand("undo");
-      expect(editor.getText()).toBe("abcd");
-    });
+      editor.dispatchCommand('undo')
+      expect(editor.getText()).toBe('abcd')
+    })
 
-    it("skips undo history for configured programmatic edits", () => {
-      editor.setText("abc");
+    it('skips undo history for configured programmatic edits', () => {
+      editor.setText('abc')
 
-      editor.edit({ from: 3, to: 3, text: "!" }, { history: "skip" });
+      editor.edit({ from: 3, to: 3, text: '!' }, { history: 'skip' })
 
-      expect(editor.getText()).toBe("abc!");
-      expect(editor.getState().canUndo).toBe(false);
-    });
+      expect(editor.getText()).toBe('abc!')
+      expect(editor.getState().canUndo).toBe(false)
+    })
 
-    it("does not clear existing redo history for skipped programmatic edits", () => {
-      editor.setText("abc");
-      editor.edit({ from: 3, to: 3, text: "!" });
-      editor.dispatchCommand("undo");
+    it('does not clear existing redo history for skipped programmatic edits', () => {
+      editor.setText('abc')
+      editor.edit({ from: 3, to: 3, text: '!' })
+      editor.dispatchCommand('undo')
 
-      expect(editor.getState().canRedo).toBe(true);
-      editor.edit({ from: 3, to: 3, text: "?" }, { history: "skip" });
+      expect(editor.getState().canRedo).toBe(true)
+      editor.edit({ from: 3, to: 3, text: '?' }, { history: 'skip' })
 
-      expect(editor.getText()).toBe("abc?");
-      expect(editor.getState().canRedo).toBe(true);
-    });
+      expect(editor.getText()).toBe('abc?')
+      expect(editor.getState().canRedo).toBe(true)
+    })
 
-    it("rejects invalid and overlapping programmatic edits without changing text", () => {
-      editor.setText("abcd");
+    it('rejects invalid and overlapping programmatic edits without changing text', () => {
+      editor.setText('abcd')
 
       expect(() => {
         editor.edit([
-          { from: 1, to: 3, text: "X" },
-          { from: 2, to: 4, text: "Y" },
-        ]);
-      }).toThrow(RangeError);
+          { from: 1, to: 3, text: 'X' },
+          { from: 2, to: 4, text: 'Y' },
+        ])
+      }).toThrow(RangeError)
       expect(() => {
-        editor.edit({ from: 10, to: 10, text: "!" });
-      }).toThrow(RangeError);
-      expect(editor.getText()).toBe("abcd");
-    });
+        editor.edit({ from: 10, to: 10, text: '!' })
+      }).toThrow(RangeError)
+      expect(editor.getText()).toBe('abcd')
+    })
 
-    it("supports explicit post-edit selections", () => {
-      editor.setText("abcdef");
+    it('supports explicit post-edit selections', () => {
+      editor.setText('abcdef')
 
-      editor.edit({ from: 0, to: 3, text: "let" }, { selection: { anchor: 1, head: 3 } });
+      editor.edit({ from: 0, to: 3, text: 'let' }, { selection: { anchor: 1, head: 3 } })
 
-      expect(editor.getState().cursor).toEqual({ row: 0, column: 3 });
-      expect(window.getSelection()?.toString()).toBe("et");
-    });
+      expect(editor.getState().cursor).toEqual({ row: 0, column: 3 })
+      expect(window.getSelection()?.toString()).toBe('et')
+    })
 
-    it("uses explicit language ids for syntax highlights", async () => {
-      const created: EditorSyntaxSessionOptions[] = [];
+    it('uses explicit language ids for syntax highlights', async () => {
+      const created: EditorSyntaxSessionOptions[] = []
       setEditorSyntaxSessionFactory((options) => {
-        created.push(options);
-        return createMockSyntaxSession();
-      });
+        created.push(options)
+        return createMockSyntaxSession()
+      })
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
-        text: "const a = 1;",
-      });
-      await flushMicrotasks();
+        documentId: 'main.ts',
+        languageId: 'typescript',
+        text: 'const a = 1;',
+      })
+      await flushMicrotasks()
 
       expect(created).toEqual([
         expect.objectContaining({
-          documentId: "main.ts",
+          documentId: 'main.ts',
           includeHighlights: true,
-          languageId: "typescript",
-          syntaxMode: "range",
-          text: "const a = 1;",
+          languageId: 'typescript',
+          syntaxMode: 'range',
+          text: 'const a = 1;',
         }),
-      ]);
-      expect(editor.getState().syntaxStatus).toBe("ready");
-      expect(highlightsMap.size).toBe(1);
-    });
+      ])
+      expect(editor.getState().syntaxStatus).toBe('ready')
+      expect(highlightsMap.size).toBe(1)
+    })
 
-    it("queries visible syntax ranges after compact structural refresh", async () => {
-      const ranges: EditorSyntaxRange[] = [];
+    it('queries visible syntax ranges after compact structural refresh', async () => {
+      const ranges: EditorSyntaxRange[] = []
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           refresh: async () => createSyntaxResult([]),
           queryRange: async (range) => {
-            ranges.push(range);
+            ranges.push(range)
             return createSyntaxResult([
               {
                 start: range.startIndex,
                 end: range.startIndex + 5,
-                style: { color: "#00ff00" },
+                style: { color: '#00ff00' },
               },
-            ]);
+            ])
           },
         }),
-      );
+      )
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
-        text: "const a = 1;",
-      });
-      await flushSyntaxDebounce();
+        documentId: 'main.ts',
+        languageId: 'typescript',
+        text: 'const a = 1;',
+      })
+      await flushSyntaxDebounce()
 
-      expect(ranges.length).toBeGreaterThan(0);
-      expect(ranges[0]?.startIndex).toBe(0);
-      expect(ranges[0]?.endIndex).toBeGreaterThan(0);
-      expect(editor.getState().syntaxStatus).toBe("ready");
-    });
+      expect(ranges.length).toBeGreaterThan(0)
+      expect(ranges[0]?.startIndex).toBe(0)
+      expect(ranges[0]?.endIndex).toBeGreaterThan(0)
+      expect(editor.getState().syntaxStatus).toBe('ready')
+    })
 
-    it("requests visible syntax on scroll without reparsing the document", async () => {
-      const ranges: EditorSyntaxRange[] = [];
-      let refreshCount = 0;
+    it('requests visible syntax on scroll without reparsing the document', async () => {
+      const ranges: EditorSyntaxRange[] = []
+      let refreshCount = 0
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           refresh: async () => {
-            refreshCount += 1;
-            return createSyntaxResult([]);
+            refreshCount += 1
+            return createSyntaxResult([])
           },
           queryRange: async (range) => {
-            ranges.push(range);
-            return createSyntaxResult([]);
+            ranges.push(range)
+            return createSyntaxResult([])
           },
         }),
-      );
+      )
       const text = Array.from(
         { length: 20_000 },
         (_value, index) => `const line${index} = ${index};`,
-      ).join("\n");
+      ).join('\n')
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
+        documentId: 'main.ts',
+        languageId: 'typescript',
         text,
-      });
-      await flushSyntaxDebounce();
-      const initialRangeCount = ranges.length;
+      })
+      await flushSyntaxDebounce()
+      const initialRangeCount = ranges.length
 
-      editor.setScrollPosition({ top: 300_000, left: 0 });
-      await flushSyntaxDebounce();
-      const scrolledRanges = ranges.slice(initialRangeCount);
+      editor.setScrollPosition({ top: 300_000, left: 0 })
+      await flushSyntaxDebounce()
+      const scrolledRanges = ranges.slice(initialRangeCount)
 
-      expect(refreshCount).toBe(1);
-      expect(scrolledRanges.length).toBeGreaterThan(0);
-      expect(scrolledRanges.some((range) => range.startIndex > 0)).toBe(true);
-    });
+      expect(refreshCount).toBe(1)
+      expect(scrolledRanges.length).toBeGreaterThan(0)
+      expect(scrolledRanges.some((range) => range.startIndex > 0)).toBe(true)
+    })
 
-    it("does not query stale visible syntax ranges before edit parsing catches up", async () => {
-      const ranges: EditorSyntaxRange[] = [];
-      const applyChangeResult = createDeferred<EditorSyntaxResult>();
-      let applyChangeStarted = false;
+    it('does not query stale visible syntax ranges before edit parsing catches up', async () => {
+      const ranges: EditorSyntaxRange[] = []
+      const applyChangeResult = createDeferred<EditorSyntaxResult>()
+      let applyChangeStarted = false
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           refresh: async () => createSyntaxResult([]),
           applyChange: () => {
-            applyChangeStarted = true;
-            return applyChangeResult.promise;
+            applyChangeStarted = true
+            return applyChangeResult.promise
           },
           queryRange: async (range) => {
-            ranges.push(range);
+            ranges.push(range)
             return createSyntaxResult([
               {
                 start: range.startIndex + 10,
                 end: range.startIndex + 15,
-                style: { color: "#00ff00" },
+                style: { color: '#00ff00' },
               },
-            ]);
+            ])
           },
         }),
-      );
+      )
       const text = Array.from(
         { length: 20_000 },
         (_value, index) => `const line${index} = ${index};`,
-      ).join("\n");
+      ).join('\n')
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
+        documentId: 'main.ts',
+        languageId: 'typescript',
         text,
-      });
-      await flushSyntaxDebounce();
-      const rangeCountAfterOpen = ranges.length;
+      })
+      await flushSyntaxDebounce()
+      const rangeCountAfterOpen = ranges.length
 
-      editor.edit({ from: 0, to: 0, text: "\n" });
-      editor.setScrollPosition({ top: 300_000, left: 0 });
-      await flushTimers();
-      await flushMicrotasks();
+      editor.edit({ from: 0, to: 0, text: '\n' })
+      editor.setScrollPosition({ top: 300_000, left: 0 })
+      await flushTimers()
+      await flushMicrotasks()
 
-      expect(ranges).toHaveLength(rangeCountAfterOpen);
+      expect(ranges).toHaveLength(rangeCountAfterOpen)
 
-      await flushSyntaxDebounce();
-      expect(applyChangeStarted).toBe(true);
-      expect(ranges).toHaveLength(rangeCountAfterOpen);
+      await flushSyntaxDebounce()
+      expect(applyChangeStarted).toBe(true)
+      expect(ranges).toHaveLength(rangeCountAfterOpen)
 
-      applyChangeResult.resolve(createSyntaxResult([]));
-      await flushMicrotasks();
+      applyChangeResult.resolve(createSyntaxResult([]))
+      await flushMicrotasks()
 
-      expect(ranges).toHaveLength(rangeCountAfterOpen + 1);
-      expect(ranges.at(-1)?.startIndex).toBeGreaterThan(0);
-    });
+      expect(ranges).toHaveLength(rangeCountAfterOpen + 1)
+      expect(ranges.at(-1)?.startIndex).toBeGreaterThan(0)
+    })
 
-    it("prefetches syntax ahead of fast scroll direction", async () => {
-      const ranges: EditorSyntaxRange[] = [];
+    it('prefetches syntax ahead of fast scroll direction', async () => {
+      const ranges: EditorSyntaxRange[] = []
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           refresh: async () => createSyntaxResult([]),
           queryRange: async (range) => {
-            ranges.push(range);
-            return createSyntaxResult([]);
+            ranges.push(range)
+            return createSyntaxResult([])
           },
         }),
-      );
+      )
       const text = Array.from(
         { length: 60_000 },
         (_value, index) => `const line${index} = ${index};`,
-      ).join("\n");
+      ).join('\n')
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
+        documentId: 'main.ts',
+        languageId: 'typescript',
         text,
-      });
-      await flushSyntaxDebounce();
-      const rangeCountBeforeScroll = ranges.length;
+      })
+      await flushSyntaxDebounce()
+      const rangeCountBeforeScroll = ranges.length
 
-      editor.setScrollPosition({ top: 900_000, left: 0 });
-      await flushSyntaxDebounce();
+      editor.setScrollPosition({ top: 900_000, left: 0 })
+      await flushSyntaxDebounce()
 
-      expect(hasLongSyntaxRange(ranges.slice(rangeCountBeforeScroll))).toBe(true);
-    });
+      expect(hasLongSyntaxRange(ranges.slice(rangeCountBeforeScroll))).toBe(true)
+    })
 
-    it("queries the teleported viewport before the larger syntax prefetch range", async () => {
-      const ranges: EditorSyntaxRange[] = [];
+    it('queries the teleported viewport before the larger syntax prefetch range', async () => {
+      const ranges: EditorSyntaxRange[] = []
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           refresh: async () => createSyntaxResult([]),
           queryRange: async (range) => {
-            ranges.push(range);
-            return createSyntaxResult([]);
+            ranges.push(range)
+            return createSyntaxResult([])
           },
         }),
-      );
+      )
       const text = Array.from(
         { length: 60_000 },
         (_value, index) => `const line${index} = ${index};`,
-      ).join("\n");
+      ).join('\n')
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
+        documentId: 'main.ts',
+        languageId: 'typescript',
         text,
-      });
-      await flushSyntaxDebounce();
-      const rangeCountBeforeTeleport = ranges.length;
+      })
+      await flushSyntaxDebounce()
+      const rangeCountBeforeTeleport = ranges.length
 
-      editor.setScrollPosition({ top: 900_000, left: 0 });
-      const urgentRange = ranges[rangeCountBeforeTeleport];
-      await flushSyntaxDebounce();
-      const postTeleportRanges = ranges.slice(rangeCountBeforeTeleport);
+      editor.setScrollPosition({ top: 900_000, left: 0 })
+      const urgentRange = ranges[rangeCountBeforeTeleport]
+      await flushSyntaxDebounce()
+      const postTeleportRanges = ranges.slice(rangeCountBeforeTeleport)
 
-      expect(rangeLength(urgentRange)).toBeLessThan(120_000);
-      expect(hasLongSyntaxRange(postTeleportRanges)).toBe(true);
-    });
+      expect(rangeLength(urgentRange)).toBeLessThan(120_000)
+      expect(hasLongSyntaxRange(postTeleportRanges)).toBe(true)
+    })
 
-    it("queries the teleported viewport synchronously from contribution scroll updates", async () => {
-      const ranges: EditorSyntaxRange[] = [];
-      let contributionContext: EditorViewContributionContext | null = null;
+    it('queries the teleported viewport synchronously from contribution scroll updates', async () => {
+      const ranges: EditorSyntaxRange[] = []
+      let contributionContext: EditorViewContributionContext | null = null
       const plugin: EditorPlugin = {
         activate: (context) =>
           context.registerViewContribution({
             createContribution: (context) => {
-              contributionContext = context;
+              contributionContext = context
               return {
                 update: () => undefined,
                 dispose: () => undefined,
-              };
+              }
             },
           }),
-      };
+      }
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           refresh: async () => createSyntaxResult([]),
           queryRange: async (range) => {
-            ranges.push(range);
-            return createSyntaxResult([]);
+            ranges.push(range)
+            return createSyntaxResult([])
           },
         }),
-      );
-      editor.dispose();
+      )
+      editor.dispose()
       editor = new Editor(container, {
         plugins: withTestLanguagePlugins(plugin),
-      });
+      })
       const text = Array.from(
         { length: 60_000 },
         (_value, index) => `const line${index} = ${index};`,
-      ).join("\n");
+      ).join('\n')
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
+        documentId: 'main.ts',
+        languageId: 'typescript',
         text,
-      });
-      await flushSyntaxDebounce();
-      const rangeCountBeforeTeleport = ranges.length;
+      })
+      await flushSyntaxDebounce()
+      const rangeCountBeforeTeleport = ranges.length
 
-      requireViewContributionContext(contributionContext).setScrollTop(900_000);
-      const urgentRange = ranges[rangeCountBeforeTeleport];
-      await flushSyntaxDebounce();
-      const postTeleportRanges = ranges.slice(rangeCountBeforeTeleport);
+      requireViewContributionContext(contributionContext).setScrollTop(900_000)
+      const urgentRange = ranges[rangeCountBeforeTeleport]
+      await flushSyntaxDebounce()
+      const postTeleportRanges = ranges.slice(rangeCountBeforeTeleport)
 
-      expect(editor.getScrollPosition().top).toBe(900_000);
-      expect(rangeLength(urgentRange)).toBeLessThan(120_000);
-      expect(hasLongSyntaxRange(postTeleportRanges)).toBe(true);
-    });
+      expect(editor.getScrollPosition().top).toBe(900_000)
+      expect(rangeLength(urgentRange)).toBeLessThan(120_000)
+      expect(hasLongSyntaxRange(postTeleportRanges)).toBe(true)
+    })
 
-    it("does not cache visible syntax ranges while range queries are not ready", async () => {
-      const ranges: EditorSyntaxRange[] = [];
-      let canQueryRange = false;
+    it('does not cache visible syntax ranges while range queries are not ready', async () => {
+      const ranges: EditorSyntaxRange[] = []
+      let canQueryRange = false
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           canQueryRange: () => canQueryRange,
           refresh: async () => createSyntaxResult([]),
           queryRange: async (range) => {
-            ranges.push(range);
+            ranges.push(range)
             return createSyntaxResult([
               {
                 start: range.startIndex + 10,
                 end: range.startIndex + 15,
-                style: { color: "#00ff00" },
+                style: { color: '#00ff00' },
               },
-            ]);
+            ])
           },
         }),
-      );
+      )
       const text = Array.from(
         { length: 60_000 },
         (_value, index) => `const line${index} = ${index};`,
-      ).join("\n");
+      ).join('\n')
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
+        documentId: 'main.ts',
+        languageId: 'typescript',
         text,
-      });
-      await flushSyntaxDebounce();
+      })
+      await flushSyntaxDebounce()
 
-      editor.setScrollPosition({ top: 300_000, left: 0 });
-      await flushSyntaxDebounce();
-      expect(ranges).toHaveLength(0);
+      editor.setScrollPosition({ top: 300_000, left: 0 })
+      await flushSyntaxDebounce()
+      expect(ranges).toHaveLength(0)
 
-      canQueryRange = true;
-      editor.setScrollPosition({ top: 250_000, left: 0 });
+      canQueryRange = true
+      editor.setScrollPosition({ top: 250_000, left: 0 })
 
-      expect(ranges).toHaveLength(1);
-      expect(ranges[0]?.startIndex).toBeGreaterThan(0);
-    });
+      expect(ranges).toHaveLength(1)
+      expect(ranges[0]?.startIndex).toBeGreaterThan(0)
+    })
 
-    it("keeps syntax prefetch behind the visible range query", async () => {
-      const ranges: EditorSyntaxRange[] = [];
-      const pendingRanges: Deferred<EditorSyntaxResult>[] = [];
-      let deferRangeQueries = false;
+    it('keeps syntax prefetch behind the visible range query', async () => {
+      const ranges: EditorSyntaxRange[] = []
+      const pendingRanges: Deferred<EditorSyntaxResult>[] = []
+      let deferRangeQueries = false
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           refresh: async () => createSyntaxResult([]),
           queryRange: (range) => {
-            ranges.push(range);
-            if (!deferRangeQueries) return Promise.resolve(createSyntaxResult([]));
+            ranges.push(range)
+            if (!deferRangeQueries) return Promise.resolve(createSyntaxResult([]))
 
-            const pending = createDeferred<EditorSyntaxResult>();
-            pendingRanges.push(pending);
-            return pending.promise;
+            const pending = createDeferred<EditorSyntaxResult>()
+            pendingRanges.push(pending)
+            return pending.promise
           },
         }),
-      );
+      )
       const text = Array.from(
         { length: 60_000 },
         (_value, index) => `const line${index} = ${index};`,
-      ).join("\n");
+      ).join('\n')
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
+        documentId: 'main.ts',
+        languageId: 'typescript',
         text,
-      });
-      await flushSyntaxDebounce();
-      const rangeCountBeforeTeleport = ranges.length;
-      deferRangeQueries = true;
+      })
+      await flushSyntaxDebounce()
+      const rangeCountBeforeTeleport = ranges.length
+      deferRangeQueries = true
 
-      editor.setScrollPosition({ top: 900_000, left: 0 });
-      await new Promise((resolve) => setTimeout(resolve, 40));
-      await flushMicrotasks();
+      editor.setScrollPosition({ top: 900_000, left: 0 })
+      await new Promise((resolve) => setTimeout(resolve, 40))
+      await flushMicrotasks()
 
-      expect(ranges).toHaveLength(rangeCountBeforeTeleport + 1);
-      expect(rangeLength(ranges[rangeCountBeforeTeleport])).toBeLessThan(120_000);
+      expect(ranges).toHaveLength(rangeCountBeforeTeleport + 1)
+      expect(rangeLength(ranges[rangeCountBeforeTeleport])).toBeLessThan(120_000)
 
-      pendingRanges[0]?.resolve(createSyntaxResult([]));
-      await flushMicrotasks();
-      await new Promise((resolve) => setTimeout(resolve, 40));
-      await flushMicrotasks();
+      pendingRanges[0]?.resolve(createSyntaxResult([]))
+      await flushMicrotasks()
+      await new Promise((resolve) => setTimeout(resolve, 40))
+      await flushMicrotasks()
 
-      expect(ranges.length).toBeGreaterThan(rangeCountBeforeTeleport + 1);
-      expect(rangeLength(ranges.at(-1))).toBeGreaterThan(200_000);
-    });
+      expect(ranges.length).toBeGreaterThan(rangeCountBeforeTeleport + 1)
+      expect(rangeLength(ranges.at(-1))).toBeGreaterThan(200_000)
+    })
 
-    it("warms non-visible syntax tiles in the background", async () => {
-      const ranges: EditorSyntaxRange[] = [];
+    it('warms non-visible syntax tiles in the background', async () => {
+      const ranges: EditorSyntaxRange[] = []
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           refresh: async () => createSyntaxResult([]),
           queryRange: async (range) => {
-            ranges.push(range);
-            return createSyntaxResult([]);
+            ranges.push(range)
+            return createSyntaxResult([])
           },
         }),
-      );
+      )
       const text = Array.from(
         { length: 60_000 },
         (_value, index) => `const line${index} = ${index};`,
-      ).join("\n");
+      ).join('\n')
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
+        documentId: 'main.ts',
+        languageId: 'typescript',
         text,
-      });
-      await flushSyntaxDebounce();
-      await flushSyntaxDebounce();
+      })
+      await flushSyntaxDebounce()
+      await flushSyntaxDebounce()
 
       const warmedTile = ranges.find(
         (range) => range.startIndex >= 120_000 && rangeLength(range) <= 120_000,
-      );
-      expect(warmedTile).toBeDefined();
-      expect(ranges).not.toContainEqual({ startIndex: 0, endIndex: 120_000 });
-    });
+      )
+      expect(warmedTile).toBeDefined()
+      expect(ranges).not.toContainEqual({ startIndex: 0, endIndex: 120_000 })
+    })
 
-    it("keeps visible syntax folds when offscreen range warming finishes", async () => {
-      const events: ViewContributionEvent[] = [];
-      const ranges: EditorSyntaxRange[] = [];
-      const prefix = "if (x) {\n  y();\n}\n";
+    it('keeps visible syntax folds when offscreen range warming finishes', async () => {
+      const events: ViewContributionEvent[] = []
+      const ranges: EditorSyntaxRange[] = []
+      const prefix = 'if (x) {\n  y();\n}\n'
       const text =
         prefix +
         Array.from({ length: 60_000 }, (_value, index) => `const line${index} = ${index};`).join(
-          "\n",
-        );
+          '\n',
+        )
       const fold = {
         startIndex: 0,
         endIndex: prefix.length - 1,
         startLine: 0,
         endLine: 2,
-        type: "statement_block",
-        languageId: "typescript",
-      };
-      editor.dispose();
+        type: 'statement_block',
+        languageId: 'typescript',
+      }
+      editor.dispose()
       editor = new Editor(container, {
         plugins: withTestLanguagePlugins(createViewContributionPlugin(events)),
-      });
+      })
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           refresh: async () => createSyntaxResult([], []),
           queryRange: async (range) => {
-            ranges.push(range);
+            ranges.push(range)
             const folds =
-              range.startIndex <= fold.startIndex && range.endIndex >= fold.endIndex ? [fold] : [];
-            return createSyntaxResult([], folds);
+              range.startIndex <= fold.startIndex && range.endIndex >= fold.endIndex ? [fold] : []
+            return createSyntaxResult([], folds)
           },
         }),
-      );
+      )
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
+        documentId: 'main.ts',
+        languageId: 'typescript',
         text,
-      });
-      await flushSyntaxDebounce();
+      })
+      await flushSyntaxDebounce()
 
-      expect(latestFoldMarkers(events)).toHaveLength(1);
+      expect(latestFoldMarkers(events)).toHaveLength(1)
 
-      await flushSyntaxDebounce();
+      await flushSyntaxDebounce()
 
       expect(
         ranges.some((range) => range.startIndex >= 120_000 && rangeLength(range) <= 120_000),
-      ).toBe(true);
-      expect(latestFoldMarkers(events)).toHaveLength(1);
-    });
+      ).toBe(true)
+      expect(latestFoldMarkers(events)).toHaveLength(1)
+    })
 
-    it("keeps previously queried syntax tokens while scrolling to a new range", async () => {
-      const events: ViewContributionEvent[] = [];
-      const ranges: EditorSyntaxRange[] = [];
-      editor.dispose();
+    it('keeps previously queried syntax tokens while scrolling to a new range', async () => {
+      const events: ViewContributionEvent[] = []
+      const ranges: EditorSyntaxRange[] = []
+      editor.dispose()
       editor = new Editor(container, {
         plugins: withTestLanguagePlugins(createViewContributionPlugin(events)),
-      });
+      })
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           refresh: async () => createSyntaxResult([]),
           queryRange: async (range) => {
-            ranges.push(range);
+            ranges.push(range)
             return createSyntaxResult([
               {
                 start: range.startIndex + 10,
                 end: range.startIndex + 15,
-                style: { color: "#00ff00" },
+                style: { color: '#00ff00' },
               },
-            ]);
+            ])
           },
         }),
-      );
+      )
       const text = Array.from(
         { length: 20_000 },
         (_value, index) => `const line${index} = ${index};`,
-      ).join("\n");
+      ).join('\n')
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
+        documentId: 'main.ts',
+        languageId: 'typescript',
         text,
-      });
-      await flushSyntaxDebounce();
-      const rangeCountAfterOpen = ranges.length;
-      const initialToken = tokenSnapshotFromLastEvent(events)[0];
-      expect(initialToken).toMatchObject({ start: 10, end: 15 });
+      })
+      await flushSyntaxDebounce()
+      const rangeCountAfterOpen = ranges.length
+      const initialToken = tokenSnapshotFromLastEvent(events)[0]
+      expect(initialToken).toMatchObject({ start: 10, end: 15 })
 
-      editor.setScrollPosition({ top: 300_000, left: 0 });
-      await flushSyntaxDebounce();
-      const tokens = tokenSnapshotFromLastEvent(events);
-      const scrolledRanges = ranges.slice(rangeCountAfterOpen);
+      editor.setScrollPosition({ top: 300_000, left: 0 })
+      await flushSyntaxDebounce()
+      const tokens = tokenSnapshotFromLastEvent(events)
+      const scrolledRanges = ranges.slice(rangeCountAfterOpen)
       const scrolledToken = tokens.find((token) =>
         scrolledRanges.some(
           (range) => range.startIndex > 0 && token.start === range.startIndex + 10,
         ),
-      );
+      )
 
-      expect(tokens).toContainEqual(initialToken);
-      expect(scrolledToken).toBeDefined();
-    });
+      expect(tokens).toContainEqual(initialToken)
+      expect(scrolledToken).toBeDefined()
+    })
 
-    it("repaints cached syntax immediately when scrolling back to a previous range", async () => {
-      const events: ViewContributionEvent[] = [];
-      const ranges: EditorSyntaxRange[] = [];
-      editor.dispose();
+    it('repaints cached syntax immediately when scrolling back to a previous range', async () => {
+      const events: ViewContributionEvent[] = []
+      const ranges: EditorSyntaxRange[] = []
+      editor.dispose()
       editor = new Editor(container, {
         plugins: withTestLanguagePlugins(createViewContributionPlugin(events)),
-      });
+      })
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           refresh: async () => createSyntaxResult([]),
           queryRange: async (range) => {
-            ranges.push(range);
+            ranges.push(range)
             return createSyntaxResult([
               {
                 start: range.startIndex + 10,
                 end: range.startIndex + 15,
-                style: { color: "#00ff00" },
+                style: { color: '#00ff00' },
               },
-            ]);
+            ])
           },
         }),
-      );
+      )
       const text = Array.from(
         { length: 20_000 },
         (_value, index) => `const line${index} = ${index};`,
-      ).join("\n");
+      ).join('\n')
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
+        documentId: 'main.ts',
+        languageId: 'typescript',
         text,
-      });
-      await flushSyntaxDebounce();
-      const initialToken = tokenSnapshotFromLastEvent(events)[0];
+      })
+      await flushSyntaxDebounce()
+      const initialToken = tokenSnapshotFromLastEvent(events)[0]
 
-      editor.setScrollPosition({ top: 300_000, left: 0 });
-      await flushSyntaxDebounce();
-      const rangeCountAfterScrollAway = ranges.length;
+      editor.setScrollPosition({ top: 300_000, left: 0 })
+      await flushSyntaxDebounce()
+      const rangeCountAfterScrollAway = ranges.length
 
-      editor.setScrollPosition({ top: 0, left: 0 });
-      await flushSyntaxDebounce();
-      const tokens = tokenSnapshotFromLastEvent(events);
+      editor.setScrollPosition({ top: 0, left: 0 })
+      await flushSyntaxDebounce()
+      const tokens = tokenSnapshotFromLastEvent(events)
 
-      expect(rangeCountAfterScrollAway).toBeGreaterThan(1);
-      expect(ranges).toHaveLength(rangeCountAfterScrollAway);
-      expect(tokens).toContainEqual(initialToken);
-    });
+      expect(rangeCountAfterScrollAway).toBeGreaterThan(1)
+      expect(ranges).toHaveLength(rangeCountAfterScrollAway)
+      expect(tokens).toContainEqual(initialToken)
+    })
 
-    it("does not reuse cached visible syntax after newline edits", async () => {
-      const ranges: EditorSyntaxRange[] = [];
+    it('does not reuse cached visible syntax after newline edits', async () => {
+      const ranges: EditorSyntaxRange[] = []
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           refresh: async () => createSyntaxResult([]),
           queryRange: async (range) => {
-            ranges.push(range);
+            ranges.push(range)
             return createSyntaxResult([
               {
                 start: range.startIndex + 10,
                 end: range.startIndex + 15,
-                style: { color: "#00ff00" },
+                style: { color: '#00ff00' },
               },
-            ]);
+            ])
           },
         }),
-      );
+      )
       const text = Array.from(
         { length: 20_000 },
         (_value, index) => `const line${index} = ${index};`,
-      ).join("\n");
+      ).join('\n')
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
+        documentId: 'main.ts',
+        languageId: 'typescript',
         text,
-      });
-      await flushSyntaxDebounce();
-      editor.setScrollPosition({ top: 300_000, left: 0 });
-      await flushSyntaxDebounce();
+      })
+      await flushSyntaxDebounce()
+      editor.setScrollPosition({ top: 300_000, left: 0 })
+      await flushSyntaxDebounce()
 
-      editor.setSelection(5, 5, { reveal: false });
-      editorRoot().dispatchEvent(createLineBreakEvent());
-      expect(editor.getText().startsWith("const\n line0")).toBe(true);
-      const rangeCountBeforeScrollBack = ranges.length;
-      editor.setScrollPosition({ top: 0, left: 0 });
-      await flushTimers();
-      await flushMicrotasks();
+      editor.setSelection(5, 5, { reveal: false })
+      editorRoot().dispatchEvent(createLineBreakEvent())
+      expect(editor.getText().startsWith('const\n line0')).toBe(true)
+      const rangeCountBeforeScrollBack = ranges.length
+      editor.setScrollPosition({ top: 0, left: 0 })
+      await flushTimers()
+      await flushMicrotasks()
 
-      expect(ranges).toHaveLength(rangeCountBeforeScrollBack);
+      expect(ranges).toHaveLength(rangeCountBeforeScrollBack)
 
-      await flushSyntaxDebounce();
+      await flushSyntaxDebounce()
 
-      expect(ranges.length).toBeGreaterThan(rangeCountBeforeScrollBack);
-      expect(ranges.at(-1)?.startIndex).toBe(0);
-    });
+      expect(ranges.length).toBeGreaterThan(rangeCountBeforeScrollBack)
+      expect(ranges.at(-1)?.startIndex).toBe(0)
+    })
 
-    it("applies syncText changes through incremental syntax sessions", async () => {
-      const appliedChanges: DocumentSessionChange[] = [];
+    it('applies syncText changes through incremental syntax sessions', async () => {
+      const appliedChanges: DocumentSessionChange[] = []
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           applyChange: async (change) => {
-            appliedChanges.push(change);
-            return createSyntaxResult();
+            appliedChanges.push(change)
+            return createSyntaxResult()
           },
         }),
-      );
+      )
 
       editor.openDocument({
-        documentId: "generated:/main.ts",
-        documentMode: "static",
-        languageId: "typescript",
-        text: "const a = 1;",
-      });
-      await flushMicrotasks();
+        documentId: 'generated:/main.ts',
+        documentMode: 'static',
+        languageId: 'typescript',
+        text: 'const a = 1;',
+      })
+      await flushMicrotasks()
 
-      editor.syncText("const ab = 1;", {
-        documentMode: "static",
-        languageId: "typescript",
-      });
-      await flushSyntaxDebounce();
+      editor.syncText('const ab = 1;', {
+        documentMode: 'static',
+        languageId: 'typescript',
+      })
+      await flushSyntaxDebounce()
 
-      expect(appliedChanges).toHaveLength(1);
+      expect(appliedChanges).toHaveLength(1)
       expect(appliedChanges[0]).toMatchObject({
-        edits: [{ from: 7, text: "b", to: 7 }],
-        kind: "edit",
-        text: "const ab = 1;",
-      });
-    });
+        edits: [{ from: 7, text: 'b', to: 7 }],
+        kind: 'edit',
+        text: 'const ab = 1;',
+      })
+    })
 
-    it("does not infer language from document ids", async () => {
-      const created: EditorSyntaxSessionOptions[] = [];
+    it('does not infer language from document ids', async () => {
+      const created: EditorSyntaxSessionOptions[] = []
       setEditorSyntaxSessionFactory((options) => {
-        created.push(options);
-        return createMockSyntaxSession();
-      });
+        created.push(options)
+        return createMockSyntaxSession()
+      })
 
-      editor.openDocument({ documentId: "main.ts", text: "const a = 1;" });
-      await flushMicrotasks();
+      editor.openDocument({ documentId: 'main.ts', text: 'const a = 1;' })
+      await flushMicrotasks()
 
-      expect(created).toEqual([]);
+      expect(created).toEqual([])
       expect(editor.getState()).toMatchObject({
         languageId: null,
-        syntaxStatus: "plain",
-      });
-      expect(highlightsMap.size).toBe(0);
-    });
+        syntaxStatus: 'plain',
+      })
+      expect(highlightsMap.size).toBe(0)
+    })
 
-    it("uses plugin highlights instead of Tree-sitter tokens", async () => {
-      const created: EditorSyntaxSessionOptions[] = [];
+    it('uses plugin highlights instead of Tree-sitter tokens', async () => {
+      const created: EditorSyntaxSessionOptions[] = []
       const highlighter = createMockHighlighterSession({
         refresh: async () =>
-          createHighlightResult([{ start: 6, end: 7, style: { color: "#00ff00" } }]),
-      });
-      editor.dispose();
+          createHighlightResult([{ start: 6, end: 7, style: { color: '#00ff00' } }]),
+      })
+      editor.dispose()
       editor = new Editor(container, {
         plugins: withTestGutterPlugins(createHighlighterPlugin(highlighter)),
-      });
+      })
       setEditorSyntaxSessionFactory((options) => {
-        created.push(options);
+        created.push(options)
         return createMockSyntaxSession({
           refresh: async () =>
-            createSyntaxResult([{ start: 0, end: 5, style: { color: "#ff0000" } }]),
-        });
-      });
+            createSyntaxResult([{ start: 0, end: 5, style: { color: '#ff0000' } }]),
+        })
+      })
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
-        text: "const a = 1;",
-      });
-      await flushMicrotasks();
+        documentId: 'main.ts',
+        languageId: 'typescript',
+        text: 'const a = 1;',
+      })
+      await flushMicrotasks()
 
-      expect(created[0]).toEqual(expect.objectContaining({ includeHighlights: false }));
-      expect(tokenHighlightRanges()).toHaveLength(1);
-      expect(tokenHighlightRanges()[0]?.startOffset).toBe(6);
-    });
+      expect(created[0]).toEqual(expect.objectContaining({ includeHighlights: false }))
+      expect(tokenHighlightRanges()).toHaveLength(1)
+      expect(tokenHighlightRanges()[0]?.startOffset).toBe(6)
+    })
 
-    it("applies highlighter theme colors without dropping configured Tree-sitter syntax colors", async () => {
+    it('applies highlighter theme colors without dropping configured Tree-sitter syntax colors', async () => {
       const highlighter = createMockHighlighterSession({
         refresh: async () =>
           createHighlightResult([], {
-            backgroundColor: "#ffffff",
-            foregroundColor: "#24292e",
-            gutterForegroundColor: "#6e7781",
+            backgroundColor: '#ffffff',
+            foregroundColor: '#24292e',
+            gutterForegroundColor: '#6e7781',
           }),
-      });
-      editor.dispose();
+      })
+      editor.dispose()
       editor = new Editor(container, {
         plugins: withTestLanguagePlugins(createHighlighterPlugin(highlighter)),
-        theme: { syntax: { keyword: "#cf222e" } },
-      });
-      setEditorSyntaxSessionFactory(() => createMockSyntaxSession());
+        theme: { syntax: { keyword: '#cf222e' } },
+      })
+      setEditorSyntaxSessionFactory(() => createMockSyntaxSession())
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
-        text: "const a = 1;",
-      });
-      await flushMicrotasks();
+        documentId: 'main.ts',
+        languageId: 'typescript',
+        text: 'const a = 1;',
+      })
+      await flushMicrotasks()
 
-      const root = editorRoot();
-      expect(root.style.getPropertyValue("--editor-background")).toBe("#ffffff");
-      expect(root.style.getPropertyValue("--editor-foreground")).toBe("#24292e");
-      expect(root.style.getPropertyValue("--editor-gutter-foreground")).toBe("#6e7781");
-      expect(root.style.getPropertyValue("--editor-syntax-keyword")).toBe("#cf222e");
-    });
+      const root = editorRoot()
+      expect(root.style.getPropertyValue('--editor-background')).toBe('#ffffff')
+      expect(root.style.getPropertyValue('--editor-foreground')).toBe('#24292e')
+      expect(root.style.getPropertyValue('--editor-gutter-foreground')).toBe('#6e7781')
+      expect(root.style.getPropertyValue('--editor-syntax-keyword')).toBe('#cf222e')
+    })
 
-    it("keeps configured theme colors above highlighter theme colors", async () => {
+    it('keeps configured theme colors above highlighter theme colors', async () => {
       const highlighter = createMockHighlighterSession({
         refresh: async () =>
           createHighlightResult([], {
-            backgroundColor: "#ffffff",
-            foregroundColor: "#24292e",
-            syntax: { keyword: "#0969da" },
+            backgroundColor: '#ffffff',
+            foregroundColor: '#24292e',
+            syntax: { keyword: '#0969da' },
           }),
-      });
-      editor.dispose();
+      })
+      editor.dispose()
       editor = new Editor(container, {
         plugins: withTestLanguagePlugins(createHighlighterPlugin(highlighter)),
         theme: {
-          backgroundColor: "#101010",
-          foregroundColor: "#eeeeee",
-          syntax: { keyword: "#cf222e" },
+          backgroundColor: '#101010',
+          foregroundColor: '#eeeeee',
+          syntax: { keyword: '#cf222e' },
         },
-      });
-      setEditorSyntaxSessionFactory(() => createMockSyntaxSession());
+      })
+      setEditorSyntaxSessionFactory(() => createMockSyntaxSession())
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
-        text: "const a = 1;",
-      });
-      await flushMicrotasks();
+        documentId: 'main.ts',
+        languageId: 'typescript',
+        text: 'const a = 1;',
+      })
+      await flushMicrotasks()
 
-      const root = editorRoot();
-      expect(root.style.getPropertyValue("--editor-background")).toBe("#101010");
-      expect(root.style.getPropertyValue("--editor-foreground")).toBe("#eeeeee");
-      expect(root.style.getPropertyValue("--editor-syntax-keyword")).toBe("#cf222e");
-    });
+      const root = editorRoot()
+      expect(root.style.getPropertyValue('--editor-background')).toBe('#101010')
+      expect(root.style.getPropertyValue('--editor-foreground')).toBe('#eeeeee')
+      expect(root.style.getPropertyValue('--editor-syntax-keyword')).toBe('#cf222e')
+    })
 
-    it("exposes the resolved highlighter theme to view contributions", async () => {
-      const events: ViewContributionEvent[] = [];
+    it('exposes the resolved highlighter theme to view contributions', async () => {
+      const events: ViewContributionEvent[] = []
       const highlighter = createMockHighlighterSession({
         refresh: async () =>
           createHighlightResult([], {
-            backgroundColor: "#ffffff",
-            foregroundColor: "#24292e",
-            syntax: { keyword: "#cf222e" },
+            backgroundColor: '#ffffff',
+            foregroundColor: '#24292e',
+            syntax: { keyword: '#cf222e' },
           }),
-      });
-      editor.dispose();
+      })
+      editor.dispose()
       editor = new Editor(container, {
         plugins: withTestLanguagePlugins(
           createViewContributionPlugin(events),
           createHighlighterPlugin(highlighter),
         ),
-      });
+      })
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
-        text: "const a = 1;",
-      });
-      await flushMicrotasks();
+        documentId: 'main.ts',
+        languageId: 'typescript',
+        text: 'const a = 1;',
+      })
+      await flushMicrotasks()
 
-      const tokenEvent = events.findLast((event) => event.kind === "tokens");
+      const tokenEvent = events.findLast((event) => event.kind === 'tokens')
       expect(tokenEvent?.snapshot?.theme).toMatchObject({
-        backgroundColor: "#ffffff",
-        foregroundColor: "#24292e",
-        syntax: { keyword: "#cf222e" },
-      });
-    });
+        backgroundColor: '#ffffff',
+        foregroundColor: '#24292e',
+        syntax: { keyword: '#cf222e' },
+      })
+    })
 
-    it("applies highlighter provider theme colors before a document is opened", async () => {
-      const highlighter = createMockHighlighterSession();
-      editor.dispose();
+    it('applies highlighter provider theme colors before a document is opened', async () => {
+      const highlighter = createMockHighlighterSession()
+      editor.dispose()
       editor = new Editor(container, {
         plugins: withTestLanguagePlugins(
           createHighlighterPlugin(highlighter, {
             loadTheme: async () => ({
-              backgroundColor: "#ffffff",
-              foregroundColor: "#24292e",
+              backgroundColor: '#ffffff',
+              foregroundColor: '#24292e',
             }),
           }),
         ),
-      });
-      await flushMicrotasks();
+      })
+      await flushMicrotasks()
 
-      const root = editorRoot();
-      expect(root.style.getPropertyValue("--editor-background")).toBe("#ffffff");
-      expect(root.style.getPropertyValue("--editor-foreground")).toBe("#24292e");
-      expect(editor.getState()).toMatchObject({ length: 0, canUndo: false });
-    });
+      const root = editorRoot()
+      expect(root.style.getPropertyValue('--editor-background')).toBe('#ffffff')
+      expect(root.style.getPropertyValue('--editor-foreground')).toBe('#24292e')
+      expect(editor.getState()).toMatchObject({ length: 0, canUndo: false })
+    })
 
-    it("keeps highlighter provider theme colors after clearing a document", async () => {
+    it('keeps highlighter provider theme colors after clearing a document', async () => {
       const highlighter = createMockHighlighterSession({
         refresh: async () =>
           createHighlightResult([], {
-            backgroundColor: "#0d1117",
+            backgroundColor: '#0d1117',
           }),
-      });
-      editor.dispose();
+      })
+      editor.dispose()
       editor = new Editor(container, {
         plugins: withTestLanguagePlugins(
           createHighlighterPlugin(highlighter, {
-            loadTheme: async () => ({ backgroundColor: "#ffffff" }),
+            loadTheme: async () => ({ backgroundColor: '#ffffff' }),
           }),
         ),
-      });
-      await flushMicrotasks();
+      })
+      await flushMicrotasks()
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
-        text: "const a = 1;",
-      });
-      await flushMicrotasks();
-      expect(editorRoot().style.getPropertyValue("--editor-background")).toBe("#0d1117");
+        documentId: 'main.ts',
+        languageId: 'typescript',
+        text: 'const a = 1;',
+      })
+      await flushMicrotasks()
+      expect(editorRoot().style.getPropertyValue('--editor-background')).toBe('#0d1117')
 
-      editor.clearDocument();
+      editor.clearDocument()
 
-      expect(editorRoot().style.getPropertyValue("--editor-background")).toBe("#ffffff");
-    });
+      expect(editorRoot().style.getPropertyValue('--editor-background')).toBe('#ffffff')
+    })
 
-    it("keeps Tree-sitter folds when plugin highlights are active", async () => {
-      const text = "if (x) {\n  y();\n}\nz();";
-      const foldEnd = text.indexOf("\nz();");
+    it('keeps Tree-sitter folds when plugin highlights are active', async () => {
+      const text = 'if (x) {\n  y();\n}\nz();'
+      const foldEnd = text.indexOf('\nz();')
       const highlighter = createMockHighlighterSession({
         refresh: async () =>
-          createHighlightResult([{ start: 3, end: 4, style: { color: "#00ff00" } }]),
-      });
-      editor.dispose();
+          createHighlightResult([{ start: 3, end: 4, style: { color: '#00ff00' } }]),
+      })
+      editor.dispose()
       editor = new Editor(container, {
         plugins: withTestGutterPlugins(createHighlighterPlugin(highlighter)),
-      });
+      })
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           refresh: async () =>
             createSyntaxResult(
-              [{ start: 0, end: 2, style: { color: "#ff0000" } }],
+              [{ start: 0, end: 2, style: { color: '#ff0000' } }],
               [
                 {
                   startIndex: 0,
                   endIndex: foldEnd,
                   startLine: 0,
                   endLine: 2,
-                  type: "statement_block",
-                  languageId: "typescript",
+                  type: 'statement_block',
+                  languageId: 'typescript',
                 },
               ],
             ),
         }),
-      );
+      )
 
-      editor.openDocument({ documentId: "main.ts", languageId: "typescript", text });
-      await flushMicrotasks();
+      editor.openDocument({ documentId: 'main.ts', languageId: 'typescript', text })
+      await flushMicrotasks()
 
-      expect(foldToggle().dataset.editorFoldState).toBe("expanded");
-      expect(tokenHighlightRanges()[0]?.startOffset).toBe(3);
-    });
+      expect(foldToggle().dataset.editorFoldState).toBe('expanded')
+      expect(tokenHighlightRanges()[0]?.startOffset).toBe(3)
+    })
 
-    it("renders syntax fold controls and toggles collapsed rows", async () => {
-      const text = "if (x) {\n  y();\n}\nz();";
-      const foldEnd = text.indexOf("\nz();");
-      editor.dispose();
-      editor = new Editor(container, { plugins: withTestGutterPlugins() });
-      setEditorSyntaxSessionFactory(() =>
-        createMockSyntaxSession({
-          refresh: async () =>
-            createSyntaxResult(
-              [],
-              [
-                {
-                  startIndex: 0,
-                  endIndex: foldEnd,
-                  startLine: 0,
-                  endLine: 2,
-                  type: "statement_block",
-                  languageId: "typescript",
-                },
-              ],
-            ),
-        }),
-      );
-
-      editor.openDocument({ documentId: "main.ts", languageId: "typescript", text });
-      await flushMicrotasks();
-
-      expect(foldToggle().dataset.editorFoldState).toBe("expanded");
-      expect(editorRoot().textContent).toContain("  y();");
-
-      foldToggle().dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
-
-      expect(foldToggle().dataset.editorFoldState).toBe("collapsed");
-      expect(editorRoot().textContent).toContain("...");
-      expect(editorRoot().textContent).not.toContain("  y();");
-
-      foldToggle().dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
-
-      expect(foldToggle().dataset.editorFoldState).toBe("expanded");
-      expect(editorRoot().textContent).toContain("  y();");
-    });
-
-    it("folds, unfolds, and toggles syntax folds through the editor API", async () => {
-      const text = "if (x) {\n  y();\n}\nz();";
-      const foldEnd = text.indexOf("\nz();");
-      editor.dispose();
-      editor = new Editor(container, { plugins: withTestGutterPlugins() });
+    it('renders syntax fold controls and toggles collapsed rows', async () => {
+      const text = 'if (x) {\n  y();\n}\nz();'
+      const foldEnd = text.indexOf('\nz();')
+      editor.dispose()
+      editor = new Editor(container, { plugins: withTestGutterPlugins() })
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           refresh: async () =>
@@ -4794,41 +4762,83 @@ describe("Editor", () => {
                   endIndex: foldEnd,
                   startLine: 0,
                   endLine: 2,
-                  type: "statement_block",
-                  languageId: "typescript",
+                  type: 'statement_block',
+                  languageId: 'typescript',
                 },
               ],
             ),
         }),
-      );
+      )
 
-      editor.openDocument({ documentId: "main.ts", languageId: "typescript", text });
-      await flushMicrotasks();
+      editor.openDocument({ documentId: 'main.ts', languageId: 'typescript', text })
+      await flushMicrotasks()
 
-      expect(editor.fold(0)).toBe(true);
-      expect(foldToggle().dataset.editorFoldState).toBe("collapsed");
-      expect(editorRoot().textContent).not.toContain("  y();");
+      expect(foldToggle().dataset.editorFoldState).toBe('expanded')
+      expect(editorRoot().textContent).toContain('  y();')
 
-      expect(editor.fold(0)).toBe(false);
-      expect(editor.unfold(0)).toBe(true);
-      expect(foldToggle().dataset.editorFoldState).toBe("expanded");
-      expect(editorRoot().textContent).toContain("  y();");
+      foldToggle().dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
 
-      editor.setSelection(0);
-      expect(editor.toggleFold()).toBe(true);
-      expect(foldToggle().dataset.editorFoldState).toBe("collapsed");
-      expect(editor.toggleFold()).toBe(true);
-      expect(foldToggle().dataset.editorFoldState).toBe("expanded");
-    });
+      expect(foldToggle().dataset.editorFoldState).toBe('collapsed')
+      expect(editorRoot().textContent).toContain('...')
+      expect(editorRoot().textContent).not.toContain('  y();')
 
-    it("folds and unfolds all syntax folds through the editor API", async () => {
-      const text = "if (x) {\n  y();\n}\nwhile (z) {\n  q();\n}\n";
-      const secondStart = text.indexOf("while");
-      const events: ViewContributionEvent[] = [];
-      editor.dispose();
+      foldToggle().dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+
+      expect(foldToggle().dataset.editorFoldState).toBe('expanded')
+      expect(editorRoot().textContent).toContain('  y();')
+    })
+
+    it('folds, unfolds, and toggles syntax folds through the editor API', async () => {
+      const text = 'if (x) {\n  y();\n}\nz();'
+      const foldEnd = text.indexOf('\nz();')
+      editor.dispose()
+      editor = new Editor(container, { plugins: withTestGutterPlugins() })
+      setEditorSyntaxSessionFactory(() =>
+        createMockSyntaxSession({
+          refresh: async () =>
+            createSyntaxResult(
+              [],
+              [
+                {
+                  startIndex: 0,
+                  endIndex: foldEnd,
+                  startLine: 0,
+                  endLine: 2,
+                  type: 'statement_block',
+                  languageId: 'typescript',
+                },
+              ],
+            ),
+        }),
+      )
+
+      editor.openDocument({ documentId: 'main.ts', languageId: 'typescript', text })
+      await flushMicrotasks()
+
+      expect(editor.fold(0)).toBe(true)
+      expect(foldToggle().dataset.editorFoldState).toBe('collapsed')
+      expect(editorRoot().textContent).not.toContain('  y();')
+
+      expect(editor.fold(0)).toBe(false)
+      expect(editor.unfold(0)).toBe(true)
+      expect(foldToggle().dataset.editorFoldState).toBe('expanded')
+      expect(editorRoot().textContent).toContain('  y();')
+
+      editor.setSelection(0)
+      expect(editor.toggleFold()).toBe(true)
+      expect(foldToggle().dataset.editorFoldState).toBe('collapsed')
+      expect(editor.toggleFold()).toBe(true)
+      expect(foldToggle().dataset.editorFoldState).toBe('expanded')
+    })
+
+    it('folds and unfolds all syntax folds through the editor API', async () => {
+      const text = 'if (x) {\n  y();\n}\nwhile (z) {\n  q();\n}\n'
+      const secondStart = text.indexOf('while')
+      const events: ViewContributionEvent[] = []
+      editor.dispose()
       editor = new Editor(container, {
         plugins: withTestGutterPlugins(createViewContributionPlugin(events)),
-      });
+      })
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           refresh: async () =>
@@ -4840,48 +4850,48 @@ describe("Editor", () => {
                   endIndex: secondStart - 1,
                   startLine: 0,
                   endLine: 2,
-                  type: "statement_block",
-                  languageId: "typescript",
+                  type: 'statement_block',
+                  languageId: 'typescript',
                 },
                 {
                   startIndex: secondStart,
                   endIndex: text.length,
                   startLine: 3,
                   endLine: 5,
-                  type: "statement_block",
-                  languageId: "typescript",
+                  type: 'statement_block',
+                  languageId: 'typescript',
                 },
               ],
             ),
         }),
-      );
+      )
 
-      editor.openDocument({ documentId: "main.ts", languageId: "typescript", text });
-      await flushMicrotasks();
+      editor.openDocument({ documentId: 'main.ts', languageId: 'typescript', text })
+      await flushMicrotasks()
 
-      expect(editor.foldAll()).toBe(true);
+      expect(editor.foldAll()).toBe(true)
       expect(events.at(-1)?.snapshot?.foldMarkers.map((marker) => marker.collapsed)).toEqual([
         true,
         true,
-      ]);
-      expect(editorRoot().textContent).not.toContain("  y();");
-      expect(editor.foldAll()).toBe(false);
+      ])
+      expect(editorRoot().textContent).not.toContain('  y();')
+      expect(editor.foldAll()).toBe(false)
 
-      expect(editor.unfoldAll()).toBe(true);
+      expect(editor.unfoldAll()).toBe(true)
       expect(events.at(-1)?.snapshot?.foldMarkers.map((marker) => marker.collapsed)).toEqual([
         false,
         false,
-      ]);
-      expect(editorRoot().textContent).toContain("  y();");
-      expect(editorRoot().textContent).toContain("  q();");
-      expect(editor.unfoldAll()).toBe(false);
-    });
+      ])
+      expect(editorRoot().textContent).toContain('  y();')
+      expect(editorRoot().textContent).toContain('  q();')
+      expect(editor.unfoldAll()).toBe(false)
+    })
 
-    it("hides fold controls on rows without fold candidates", async () => {
-      const text = "if (x) {\n  y();\n}\nz();";
-      const foldEnd = text.indexOf("\nz();");
-      editor.dispose();
-      editor = new Editor(container, { plugins: withTestGutterPlugins() });
+    it('hides fold controls on rows without fold candidates', async () => {
+      const text = 'if (x) {\n  y();\n}\nz();'
+      const foldEnd = text.indexOf('\nz();')
+      editor.dispose()
+      editor = new Editor(container, { plugins: withTestGutterPlugins() })
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           refresh: async () =>
@@ -4893,207 +4903,206 @@ describe("Editor", () => {
                   endIndex: foldEnd,
                   startLine: 0,
                   endLine: 2,
-                  type: "statement_block",
-                  languageId: "typescript",
+                  type: 'statement_block',
+                  languageId: 'typescript',
                 },
               ],
             ),
         }),
-      );
+      )
 
-      editor.openDocument({ documentId: "main.ts", languageId: "typescript", text });
-      await flushMicrotasks();
+      editor.openDocument({ documentId: 'main.ts', languageId: 'typescript', text })
+      await flushMicrotasks()
 
       const buttons = [
-        ...document.querySelectorAll<HTMLButtonElement>(".editor-virtualized-fold-toggle"),
-      ];
-      const visible = buttons.filter((button) => !button.hidden);
-      const hidden = buttons.filter((button) => button.hidden);
+        ...document.querySelectorAll<HTMLButtonElement>('.editor-virtualized-fold-toggle'),
+      ]
+      const visible = buttons.filter((button) => !button.hidden)
+      const hidden = buttons.filter((button) => button.hidden)
 
-      expect(visible).toHaveLength(1);
-      expect(hidden.length).toBeGreaterThan(0);
-      expect(hidden.every((button) => button.disabled && button.tabIndex === -1)).toBe(true);
+      expect(visible).toHaveLength(1)
+      expect(hidden.length).toBeGreaterThan(0)
+      expect(hidden.every((button) => button.disabled && button.tabIndex === -1)).toBe(true)
       expect(
         visible[0]
-          ?.closest("[data-editor-virtual-gutter-row]")
-          ?.getAttribute("data-editor-virtual-gutter-row"),
-      ).toBe("0");
+          ?.closest('[data-editor-virtual-gutter-row]')
+          ?.getAttribute('data-editor-virtual-gutter-row'),
+      ).toBe('0')
       expect(
         visible[0]
           ?.closest("[data-editor-gutter-contribution='fold-gutter']")
-          ?.previousElementSibling?.classList.contains("editor-virtualized-line-number"),
-      ).toBe(true);
-    });
+          ?.previousElementSibling?.classList.contains('editor-virtualized-line-number'),
+      ).toBe(true)
+    })
 
-    it("refreshes syntax after edits", async () => {
-      const changes: string[] = [];
+    it('refreshes syntax after edits', async () => {
+      const changes: string[] = []
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           applyChange: async (change) => {
-            changes.push(change.text);
-            return createSyntaxResult([{ start: 6, end: 7, style: { color: "#00ff00" } }]);
+            changes.push(change.text)
+            return createSyntaxResult([{ start: 6, end: 7, style: { color: '#00ff00' } }])
           },
         }),
-      );
+      )
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
-        text: "const a = 1;",
-      });
-      await flushMicrotasks();
+        documentId: 'main.ts',
+        languageId: 'typescript',
+        text: 'const a = 1;',
+      })
+      await flushMicrotasks()
       editorRoot().dispatchEvent(
-        new InputEvent("beforeinput", {
+        new InputEvent('beforeinput', {
           bubbles: true,
           cancelable: true,
-          data: "!",
-          inputType: "insertText",
+          data: '!',
+          inputType: 'insertText',
         }),
-      );
-      await flushMicrotasks();
+      )
+      await flushMicrotasks()
 
-      expect(changes).toEqual([]);
-      await flushSyntaxDebounce();
-      expect(changes).toEqual(["const a = 1;!"]);
-      expect(editor.getState().syntaxStatus).toBe("ready");
-      expect(highlightsMap.size).toBe(1);
-    });
+      expect(changes).toEqual([])
+      await flushSyntaxDebounce()
+      expect(changes).toEqual(['const a = 1;!'])
+      expect(editor.getState().syntaxStatus).toBe('ready')
+      expect(highlightsMap.size).toBe(1)
+    })
 
-    it("reloads the syntax session when edit syntax fails", async () => {
-      const createdTexts: string[] = [];
-      let disposeCount = 0;
+    it('reloads the syntax session when edit syntax fails', async () => {
+      const createdTexts: string[] = []
+      let disposeCount = 0
       setEditorSyntaxSessionFactory((options) => {
-        createdTexts.push(options.text);
-        const isInitialSession = createdTexts.length === 1;
+        createdTexts.push(options.text)
+        const isInitialSession = createdTexts.length === 1
 
         return createMockSyntaxSession({
           refresh: async () =>
-            createSyntaxResult([{ start: 0, end: 5, style: { color: "#00ff00" } }]),
+            createSyntaxResult([{ start: 0, end: 5, style: { color: '#00ff00' } }]),
           applyChange: async () => {
-            if (!isInitialSession) return createSyntaxResult();
-            throw new Error("incremental syntax failed");
+            if (!isInitialSession) return createSyntaxResult()
+            throw new Error('incremental syntax failed')
           },
           dispose: () => {
-            disposeCount += 1;
+            disposeCount += 1
           },
-        });
-      });
+        })
+      })
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
-        text: "const a = 1;",
-      });
-      await flushMicrotasks();
-      editorRoot().dispatchEvent(createInsertEvent("!"));
+        documentId: 'main.ts',
+        languageId: 'typescript',
+        text: 'const a = 1;',
+      })
+      await flushMicrotasks()
+      editorRoot().dispatchEvent(createInsertEvent('!'))
 
-      await flushSyntaxDebounce();
-      await flushMicrotasks();
+      await flushSyntaxDebounce()
+      await flushMicrotasks()
 
-      expect(createdTexts).toEqual(["const a = 1;", "const a = 1;!"]);
-      expect(disposeCount).toBe(1);
-      expect(editor.getState().syntaxStatus).toBe("ready");
-      expect(tokenHighlightRanges()[0]?.startOffset).toBe(0);
-    });
+      expect(createdTexts).toEqual(['const a = 1;', 'const a = 1;!'])
+      expect(disposeCount).toBe(1)
+      expect(editor.getState().syntaxStatus).toBe('ready')
+      expect(tokenHighlightRanges()[0]?.startOffset).toBe(0)
+    })
 
-    it("keeps projected syntax highlights until edit syntax finishes", async () => {
-      const editResult = createDeferred<EditorSyntaxResult>();
+    it('keeps projected syntax highlights until edit syntax finishes', async () => {
+      const editResult = createDeferred<EditorSyntaxResult>()
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           refresh: async () =>
-            createSyntaxResult([{ start: 0, end: 5, style: { color: "#ff0000" } }]),
+            createSyntaxResult([{ start: 0, end: 5, style: { color: '#ff0000' } }]),
           applyChange: () => editResult.promise,
         }),
-      );
+      )
 
-      editor.openDocument({ documentId: "main.ts", languageId: "typescript", text: "world" });
-      await flushMicrotasks();
-      setCollapsedDomSelection(2);
-      editorRoot().dispatchEvent(createInsertEvent("X"));
+      editor.openDocument({ documentId: 'main.ts', languageId: 'typescript', text: 'world' })
+      await flushMicrotasks()
+      setCollapsedDomSelection(2)
+      editorRoot().dispatchEvent(createInsertEvent('X'))
 
-      const ranges = [...tokenHighlights()[0]!];
-      expect(editor.getText()).toBe("woXrld");
-      expect(ranges).toHaveLength(1);
-      expect(ranges[0]!.startOffset).toBe(0);
+      const ranges = [...tokenHighlights()[0]!]
+      expect(editor.getText()).toBe('woXrld')
+      expect(ranges).toHaveLength(1)
+      expect(ranges[0]!.startOffset).toBe(0)
 
-      await flushSyntaxDebounce();
-      editResult.resolve(createSyntaxResult([{ start: 0, end: 6, style: { color: "#00ff00" } }]));
-      await flushMicrotasks();
+      await flushSyntaxDebounce()
+      editResult.resolve(createSyntaxResult([{ start: 0, end: 6, style: { color: '#00ff00' } }]))
+      await flushMicrotasks()
 
-      expect(editor.getState().syntaxStatus).toBe("ready");
-      expect(tokenHighlights()).toHaveLength(1);
-    });
+      expect(editor.getState().syntaxStatus).toBe('ready')
+      expect(tokenHighlights()).toHaveLength(1)
+    })
 
-    it("keeps projected syntax highlights stable through mixed newlines and typing", async () => {
+    it('keeps projected syntax highlights stable through mixed newlines and typing', async () => {
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           refresh: async () =>
             createSyntaxResult([
-              { start: 0, end: 2, style: { color: "#ff0000" } },
-              { start: 3, end: 5, style: { color: "#00ff00" } },
-              { start: 6, end: 8, style: { color: "#0000ff" } },
+              { start: 0, end: 2, style: { color: '#ff0000' } },
+              { start: 3, end: 5, style: { color: '#00ff00' } },
+              { start: 6, end: 8, style: { color: '#0000ff' } },
             ]),
           applyChange: () => new Promise<EditorSyntaxResult>(() => undefined),
         }),
-      );
+      )
 
-      editor.openDocument({ documentId: "main.ts", languageId: "typescript", text: "aa\nbb\ncc" });
-      await flushMicrotasks();
+      editor.openDocument({ documentId: 'main.ts', languageId: 'typescript', text: 'aa\nbb\ncc' })
+      await flushMicrotasks()
 
-      editor.setSelection(1);
-      editorRoot().dispatchEvent(createLineBreakEvent());
-      editor.setSelection(2);
-      editorRoot().dispatchEvent(createInsertEvent("X"));
-      editor.setSelection(3);
-      editorRoot().dispatchEvent(createLineBreakEvent());
-      editor.setSelection(4);
-      editorRoot().dispatchEvent(createInsertEvent("Y"));
+      editor.setSelection(1)
+      editorRoot().dispatchEvent(createLineBreakEvent())
+      editor.setSelection(2)
+      editorRoot().dispatchEvent(createInsertEvent('X'))
+      editor.setSelection(3)
+      editorRoot().dispatchEvent(createLineBreakEvent())
+      editor.setSelection(4)
+      editorRoot().dispatchEvent(createInsertEvent('Y'))
 
-      const bbNode = rowTextNode(3);
-      const bbRange = tokenHighlightRanges().find((range) => range.startContainer === bbNode);
-      expect(editor.getText()).toBe("a\nX\nYa\nbb\ncc");
-      expect(bbRange).toBeDefined();
-      expect(bbRange!.startOffset).toBe(0);
-      expect(bbRange!.endOffset).toBe(2);
-    });
+      const bbNode = rowTextNode(3)
+      const bbRange = tokenHighlightRanges().find((range) => range.startContainer === bbNode)
+      expect(editor.getText()).toBe('a\nX\nYa\nbb\ncc')
+      expect(bbRange).toBeDefined()
+      expect(bbRange!.startOffset).toBe(0)
+      expect(bbRange!.endOffset).toBe(2)
+    })
 
-    it("keeps projected syntax highlights stable through repeated newline-only edits", async () => {
+    it('keeps projected syntax highlights stable through repeated newline-only edits', async () => {
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           refresh: async () =>
             createSyntaxResult([
-              { start: 0, end: 2, style: { color: "#ff0000" } },
-              { start: 3, end: 5, style: { color: "#00ff00" } },
-              { start: 6, end: 8, style: { color: "#0000ff" } },
+              { start: 0, end: 2, style: { color: '#ff0000' } },
+              { start: 3, end: 5, style: { color: '#00ff00' } },
+              { start: 6, end: 8, style: { color: '#0000ff' } },
             ]),
           applyChange: () => new Promise<EditorSyntaxResult>(() => undefined),
         }),
-      );
+      )
 
-      editor.openDocument({ documentId: "main.ts", languageId: "typescript", text: "aa\nbb\ncc" });
-      await flushMicrotasks();
+      editor.openDocument({ documentId: 'main.ts', languageId: 'typescript', text: 'aa\nbb\ncc' })
+      await flushMicrotasks()
 
       for (let count = 0; count < 4; count += 1) {
-        editor.setSelection(editor.getText().indexOf("bb"));
-        editorRoot().dispatchEvent(createLineBreakEvent());
+        editor.setSelection(editor.getText().indexOf('bb'))
+        editorRoot().dispatchEvent(createLineBreakEvent())
       }
 
-      const bbRow =
-        editor.getText().slice(0, editor.getText().indexOf("bb")).split("\n").length - 1;
-      const bbNode = rowTextNode(bbRow);
-      const bbRange = tokenHighlightRanges().find((range) => range.startContainer === bbNode);
-      expect(editor.getText()).toBe("aa\n\n\n\n\nbb\ncc");
-      expect(bbRange).toBeDefined();
-      expect(bbRange!.startOffset).toBe(0);
-      expect(bbRange!.endOffset).toBe(2);
-    });
+      const bbRow = editor.getText().slice(0, editor.getText().indexOf('bb')).split('\n').length - 1
+      const bbNode = rowTextNode(bbRow)
+      const bbRange = tokenHighlightRanges().find((range) => range.startContainer === bbNode)
+      expect(editor.getText()).toBe('aa\n\n\n\n\nbb\ncc')
+      expect(bbRange).toBeDefined()
+      expect(bbRange!.startOffset).toBe(0)
+      expect(bbRange!.endOffset).toBe(2)
+    })
 
-    it("keeps syntax fold controls until edit syntax finishes", async () => {
-      const text = "if (x) {\n  y();\n}\nz();";
-      const foldEnd = text.indexOf("\nz();");
-      const editResult = createDeferred<EditorSyntaxResult>();
-      editor.dispose();
-      editor = new Editor(container, { plugins: withTestGutterPlugins() });
+    it('keeps syntax fold controls until edit syntax finishes', async () => {
+      const text = 'if (x) {\n  y();\n}\nz();'
+      const foldEnd = text.indexOf('\nz();')
+      const editResult = createDeferred<EditorSyntaxResult>()
+      editor.dispose()
+      editor = new Editor(container, { plugins: withTestGutterPlugins() })
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           refresh: async () =>
@@ -5105,106 +5114,106 @@ describe("Editor", () => {
                   endIndex: foldEnd,
                   startLine: 0,
                   endLine: 2,
-                  type: "statement_block",
-                  languageId: "typescript",
+                  type: 'statement_block',
+                  languageId: 'typescript',
                 },
               ],
             ),
           applyChange: () => editResult.promise,
         }),
-      );
+      )
 
-      editor.openDocument({ documentId: "main.ts", languageId: "typescript", text });
-      await flushMicrotasks();
-      editorRoot().dispatchEvent(createInsertEvent("!"));
+      editor.openDocument({ documentId: 'main.ts', languageId: 'typescript', text })
+      await flushMicrotasks()
+      editorRoot().dispatchEvent(createInsertEvent('!'))
 
-      expect(editor.getText()).toBe(`${text}!`);
-      expect(foldToggle().dataset.editorFoldState).toBe("expanded");
+      expect(editor.getText()).toBe(`${text}!`)
+      expect(foldToggle().dataset.editorFoldState).toBe('expanded')
 
-      await flushSyntaxDebounce();
-      editResult.resolve(createSyntaxResult([], []));
-      await flushMicrotasks();
+      await flushSyntaxDebounce()
+      editResult.resolve(createSyntaxResult([], []))
+      await flushMicrotasks()
 
-      expect(document.querySelector(".editor-virtualized-fold-toggle:not([hidden])")).toBeNull();
-    });
+      expect(document.querySelector('.editor-virtualized-fold-toggle:not([hidden])')).toBeNull()
+    })
 
-    it("keeps projected highlights and folds through undo while syntax is pending", async () => {
-      const text = "if (x) {\n  y();\n}\nz();";
-      const foldEnd = text.indexOf("\nz();");
-      const changes: DocumentSessionChange[] = [];
-      let refreshCount = 0;
-      editor.dispose();
-      editor = new Editor(container, { plugins: withTestGutterPlugins() });
+    it('keeps projected highlights and folds through undo while syntax is pending', async () => {
+      const text = 'if (x) {\n  y();\n}\nz();'
+      const foldEnd = text.indexOf('\nz();')
+      const changes: DocumentSessionChange[] = []
+      let refreshCount = 0
+      editor.dispose()
+      editor = new Editor(container, { plugins: withTestGutterPlugins() })
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           refresh: async () => {
-            refreshCount += 1;
+            refreshCount += 1
             return createSyntaxResult(
-              [{ start: 0, end: 2, style: { color: "#ff0000" } }],
+              [{ start: 0, end: 2, style: { color: '#ff0000' } }],
               [
                 {
                   startIndex: 0,
                   endIndex: foldEnd,
                   startLine: 0,
                   endLine: 2,
-                  type: "statement_block",
-                  languageId: "typescript",
+                  type: 'statement_block',
+                  languageId: 'typescript',
                 },
               ],
-            );
+            )
           },
           applyChange: async (change) => {
-            changes.push(change);
+            changes.push(change)
             return createSyntaxResult(
-              [{ start: 0, end: 2, style: { color: "#00ff00" } }],
+              [{ start: 0, end: 2, style: { color: '#00ff00' } }],
               [
                 {
                   startIndex: 0,
                   endIndex: foldEnd,
                   startLine: 0,
                   endLine: 2,
-                  type: "statement_block",
-                  languageId: "typescript",
+                  type: 'statement_block',
+                  languageId: 'typescript',
                 },
               ],
-            );
+            )
           },
         }),
-      );
+      )
 
-      editor.openDocument({ documentId: "main.ts", languageId: "typescript", text });
-      await flushMicrotasks();
-      editorRoot().dispatchEvent(createInsertEvent("!"));
+      editor.openDocument({ documentId: 'main.ts', languageId: 'typescript', text })
+      await flushMicrotasks()
+      editorRoot().dispatchEvent(createInsertEvent('!'))
       editorRoot().dispatchEvent(
-        new KeyboardEvent("keydown", {
+        new KeyboardEvent('keydown', {
           bubbles: true,
           cancelable: true,
-          key: "z",
+          key: 'z',
           ...primaryModifier(),
         }),
-      );
+      )
 
-      expect(editor.getText()).toBe(text);
-      expect(tokenHighlightRanges()).toHaveLength(1);
-      expect(foldToggle().dataset.editorFoldState).toBe("expanded");
-      expect(refreshCount).toBe(1);
+      expect(editor.getText()).toBe(text)
+      expect(tokenHighlightRanges()).toHaveLength(1)
+      expect(foldToggle().dataset.editorFoldState).toBe('expanded')
+      expect(refreshCount).toBe(1)
 
-      await flushSyntaxDebounce();
-      expect(refreshCount).toBe(1);
-      expect(changes).toHaveLength(1);
+      await flushSyntaxDebounce()
+      expect(refreshCount).toBe(1)
+      expect(changes).toHaveLength(1)
       expect(changes[0]).toMatchObject({
-        kind: "undo",
-        edits: [{ from: text.length, to: text.length + 1, text: "" }],
-      });
-    });
+        kind: 'undo',
+        edits: [{ from: text.length, to: text.length + 1, text: '' }],
+      })
+    })
 
-    it("moves syntax fold controls through line edits while syntax is pending", async () => {
-      const text = "a\nif (x) {\n  y();\n}\nz();";
-      const foldStart = text.indexOf("if");
-      const foldEnd = text.indexOf("\nz();");
-      const editResult = createDeferred<EditorSyntaxResult>();
-      editor.dispose();
-      editor = new Editor(container, { plugins: withTestGutterPlugins() });
+    it('moves syntax fold controls through line edits while syntax is pending', async () => {
+      const text = 'a\nif (x) {\n  y();\n}\nz();'
+      const foldStart = text.indexOf('if')
+      const foldEnd = text.indexOf('\nz();')
+      const editResult = createDeferred<EditorSyntaxResult>()
+      editor.dispose()
+      editor = new Editor(container, { plugins: withTestGutterPlugins() })
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           refresh: async () =>
@@ -5216,363 +5225,361 @@ describe("Editor", () => {
                   endIndex: foldEnd,
                   startLine: 1,
                   endLine: 3,
-                  type: "statement_block",
-                  languageId: "typescript",
+                  type: 'statement_block',
+                  languageId: 'typescript',
                 },
               ],
             ),
           applyChange: () => editResult.promise,
         }),
-      );
+      )
 
-      editor.openDocument({ documentId: "main.ts", languageId: "typescript", text });
-      await flushMicrotasks();
-      foldToggle().dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
-      setCollapsedDomSelection(0);
-      editorRoot().dispatchEvent(createLineBreakEvent());
+      editor.openDocument({ documentId: 'main.ts', languageId: 'typescript', text })
+      await flushMicrotasks()
+      foldToggle().dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      setCollapsedDomSelection(0)
+      editorRoot().dispatchEvent(createLineBreakEvent())
 
       const gutterRow = foldToggle()
-        .closest("[data-editor-virtual-gutter-row]")
-        ?.getAttribute("data-editor-virtual-gutter-row");
-      expect(gutterRow).toBe("2");
-      expect(foldToggle().dataset.editorFoldState).toBe("collapsed");
-      expect(editorRoot().textContent).toContain("...");
-      expect(editorRoot().textContent).not.toContain("  y();");
+        .closest('[data-editor-virtual-gutter-row]')
+        ?.getAttribute('data-editor-virtual-gutter-row')
+      expect(gutterRow).toBe('2')
+      expect(foldToggle().dataset.editorFoldState).toBe('collapsed')
+      expect(editorRoot().textContent).toContain('...')
+      expect(editorRoot().textContent).not.toContain('  y();')
 
-      await flushSyntaxDebounce();
-      editResult.resolve(createSyntaxResult([], []));
-      await flushMicrotasks();
-    });
+      await flushSyntaxDebounce()
+      editResult.resolve(createSyntaxResult([], []))
+      await flushMicrotasks()
+    })
 
-    it("debounces rapid edit syntax requests to the latest text", async () => {
-      const changes: string[] = [];
+    it('debounces rapid edit syntax requests to the latest text', async () => {
+      const changes: string[] = []
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           refresh: async () => createSyntaxResult([]),
           applyChange: async (change) => {
-            changes.push(change.text);
-            return createSyntaxResult([{ start: 0, end: 5, style: { color: "#00ff00" } }]);
+            changes.push(change.text)
+            return createSyntaxResult([{ start: 0, end: 5, style: { color: '#00ff00' } }])
           },
         }),
-      );
+      )
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
-        text: "const a = 1;",
-      });
-      await flushMicrotasks();
-      editorRoot().dispatchEvent(createInsertEvent("!"));
-      editorRoot().dispatchEvent(createInsertEvent("?"));
+        documentId: 'main.ts',
+        languageId: 'typescript',
+        text: 'const a = 1;',
+      })
+      await flushMicrotasks()
+      editorRoot().dispatchEvent(createInsertEvent('!'))
+      editorRoot().dispatchEvent(createInsertEvent('?'))
 
-      await flushSyntaxDebounce();
-      expect(changes).toEqual(["const a = 1;!?"]);
-      expect(editor.getText()).toBe("const a = 1;!?");
-      expect(highlightsMap.size).toBe(1);
-    });
+      await flushSyntaxDebounce()
+      expect(changes).toEqual(['const a = 1;!?'])
+      expect(editor.getText()).toBe('const a = 1;!?')
+      expect(highlightsMap.size).toBe(1)
+    })
 
-    it("ignores stale syntax results after a newer edit", async () => {
-      const initial = createDeferred<EditorSyntaxResult>();
-      const firstEdit = createDeferred<EditorSyntaxResult>();
-      const secondEdit = createDeferred<EditorSyntaxResult>();
-      const editResults = [firstEdit, secondEdit];
+    it('ignores stale syntax results after a newer edit', async () => {
+      const initial = createDeferred<EditorSyntaxResult>()
+      const firstEdit = createDeferred<EditorSyntaxResult>()
+      const secondEdit = createDeferred<EditorSyntaxResult>()
+      const editResults = [firstEdit, secondEdit]
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           refresh: () => initial.promise,
           applyChange: () => editResults.shift()!.promise,
         }),
-      );
+      )
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
-        text: "const a = 1;",
-      });
-      initial.resolve(createSyntaxResult([]));
-      await flushMicrotasks();
-      editorRoot().dispatchEvent(createInsertEvent("!"));
-      await flushSyntaxDebounce();
-      editorRoot().dispatchEvent(createInsertEvent("?"));
-      await flushSyntaxDebounce();
+        documentId: 'main.ts',
+        languageId: 'typescript',
+        text: 'const a = 1;',
+      })
+      initial.resolve(createSyntaxResult([]))
+      await flushMicrotasks()
+      editorRoot().dispatchEvent(createInsertEvent('!'))
+      await flushSyntaxDebounce()
+      editorRoot().dispatchEvent(createInsertEvent('?'))
+      await flushSyntaxDebounce()
 
-      secondEdit.resolve(createSyntaxResult([{ start: 0, end: 5, style: { color: "#00ff00" } }]));
-      await flushMicrotasks();
-      expect(highlightsMap.size).toBe(1);
+      secondEdit.resolve(createSyntaxResult([{ start: 0, end: 5, style: { color: '#00ff00' } }]))
+      await flushMicrotasks()
+      expect(highlightsMap.size).toBe(1)
 
-      firstEdit.resolve(createSyntaxResult([{ start: 6, end: 7, style: { color: "#ff0000" } }]));
-      await flushMicrotasks();
-      expect(editor.getText()).toBe("const a = 1;!?");
-      expect(highlightsMap.size).toBe(1);
-    });
+      firstEdit.resolve(createSyntaxResult([{ start: 6, end: 7, style: { color: '#ff0000' } }]))
+      await flushMicrotasks()
+      expect(editor.getText()).toBe('const a = 1;!?')
+      expect(highlightsMap.size).toBe(1)
+    })
 
-    it("debounces rapid edit plugin highlight requests to the latest text", async () => {
-      const changes: string[] = [];
+    it('debounces rapid edit plugin highlight requests to the latest text', async () => {
+      const changes: string[] = []
       const highlighter = createMockHighlighterSession({
         refresh: async () => createHighlightResult([]),
         applyChange: async (change) => {
-          changes.push(change.text);
-          return createHighlightResult([{ start: 0, end: 5, style: { color: "#00ff00" } }]);
+          changes.push(change.text)
+          return createHighlightResult([{ start: 0, end: 5, style: { color: '#00ff00' } }])
         },
-      });
-      editor.dispose();
+      })
+      editor.dispose()
       editor = new Editor(container, {
         plugins: withTestLanguagePlugins(createHighlighterPlugin(highlighter)),
-      });
+      })
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           refresh: async () => createSyntaxResult([]),
           applyChange: async () => createSyntaxResult([]),
         }),
-      );
+      )
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
-        text: "const a = 1;",
-      });
-      await flushMicrotasks();
-      editorRoot().dispatchEvent(createInsertEvent("!"));
-      editorRoot().dispatchEvent(createInsertEvent("?"));
+        documentId: 'main.ts',
+        languageId: 'typescript',
+        text: 'const a = 1;',
+      })
+      await flushMicrotasks()
+      editorRoot().dispatchEvent(createInsertEvent('!'))
+      editorRoot().dispatchEvent(createInsertEvent('?'))
 
-      await flushSyntaxDebounce();
-      expect(changes).toEqual(["const a = 1;!?"]);
-      expect(tokenHighlightRanges()[0]?.startOffset).toBe(0);
-    });
+      await flushSyntaxDebounce()
+      expect(changes).toEqual(['const a = 1;!?'])
+      expect(tokenHighlightRanges()[0]?.startOffset).toBe(0)
+    })
 
-    it("reloads the plugin highlighter session when edit highlighting fails", async () => {
-      const createdTexts: string[] = [];
-      let disposeCount = 0;
+    it('reloads the plugin highlighter session when edit highlighting fails', async () => {
+      const createdTexts: string[] = []
+      let disposeCount = 0
       const plugin: EditorPlugin = {
         activate: (context) =>
           context.registerHighlighter({
             createSession: (options) => {
-              createdTexts.push(options.text);
-              const isInitialSession = createdTexts.length === 1;
+              createdTexts.push(options.text)
+              const isInitialSession = createdTexts.length === 1
 
               return createMockHighlighterSession({
                 refresh: async () =>
                   createHighlightResult(
-                    isInitialSession ? [] : [{ start: 0, end: 5, style: { color: "#00ff00" } }],
+                    isInitialSession ? [] : [{ start: 0, end: 5, style: { color: '#00ff00' } }],
                   ),
                 applyChange: async () => {
-                  throw new Error("incremental highlighting failed");
+                  throw new Error('incremental highlighting failed')
                 },
                 dispose: () => {
-                  disposeCount += 1;
+                  disposeCount += 1
                 },
-              });
+              })
             },
           }),
-      };
-      editor.dispose();
+      }
+      editor.dispose()
       editor = new Editor(container, {
         plugins: withTestLanguagePlugins(plugin),
-      });
+      })
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           refresh: async () => createSyntaxResult([]),
           applyChange: async () => createSyntaxResult([]),
         }),
-      );
+      )
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
-        text: "const a = 1;",
-      });
-      await flushMicrotasks();
-      editorRoot().dispatchEvent(createInsertEvent("!"));
+        documentId: 'main.ts',
+        languageId: 'typescript',
+        text: 'const a = 1;',
+      })
+      await flushMicrotasks()
+      editorRoot().dispatchEvent(createInsertEvent('!'))
 
-      await flushSyntaxDebounce();
-      await flushMicrotasks();
+      await flushSyntaxDebounce()
+      await flushMicrotasks()
 
-      expect(createdTexts).toEqual(["const a = 1;", "const a = 1;!"]);
-      expect(disposeCount).toBe(1);
-      expect(tokenHighlightRanges()[0]?.startOffset).toBe(0);
-    });
+      expect(createdTexts).toEqual(['const a = 1;', 'const a = 1;!'])
+      expect(disposeCount).toBe(1)
+      expect(tokenHighlightRanges()[0]?.startOffset).toBe(0)
+    })
 
-    it("sends undo edits to plugin highlighter sessions", async () => {
-      const changes: DocumentSessionChange[] = [];
+    it('sends undo edits to plugin highlighter sessions', async () => {
+      const changes: DocumentSessionChange[] = []
       const highlighter = createMockHighlighterSession({
         refresh: async () => createHighlightResult([]),
         applyChange: async (change) => {
-          changes.push(change);
-          return createHighlightResult([]);
+          changes.push(change)
+          return createHighlightResult([])
         },
-      });
-      editor.dispose();
+      })
+      editor.dispose()
       editor = new Editor(container, {
         plugins: withTestLanguagePlugins(createHighlighterPlugin(highlighter)),
-      });
+      })
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           refresh: async () => createSyntaxResult([]),
           applyChange: async () => createSyntaxResult([]),
         }),
-      );
+      )
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
-        text: "const a = 1;",
-      });
-      await flushMicrotasks();
-      editorRoot().dispatchEvent(createInsertEvent("!"));
+        documentId: 'main.ts',
+        languageId: 'typescript',
+        text: 'const a = 1;',
+      })
+      await flushMicrotasks()
+      editorRoot().dispatchEvent(createInsertEvent('!'))
       editorRoot().dispatchEvent(
-        new KeyboardEvent("keydown", {
+        new KeyboardEvent('keydown', {
           bubbles: true,
           cancelable: true,
-          key: "z",
+          key: 'z',
           ...primaryModifier(),
         }),
-      );
+      )
 
-      await flushSyntaxDebounce();
-      expect(changes).toHaveLength(1);
+      await flushSyntaxDebounce()
+      expect(changes).toHaveLength(1)
       expect(changes[0]).toMatchObject({
-        kind: "undo",
-        edits: [{ from: 12, to: 13, text: "" }],
-      });
-    });
+        kind: 'undo',
+        edits: [{ from: 12, to: 13, text: '' }],
+      })
+    })
 
-    it("ignores stale plugin highlight results after a newer edit", async () => {
-      const firstEdit = createDeferred<EditorHighlightResult>();
-      const secondEdit = createDeferred<EditorHighlightResult>();
-      const editResults = [firstEdit, secondEdit];
+    it('ignores stale plugin highlight results after a newer edit', async () => {
+      const firstEdit = createDeferred<EditorHighlightResult>()
+      const secondEdit = createDeferred<EditorHighlightResult>()
+      const editResults = [firstEdit, secondEdit]
       const highlighter = createMockHighlighterSession({
         refresh: async () => createHighlightResult([]),
         applyChange: () => editResults.shift()!.promise,
-      });
-      editor.dispose();
+      })
+      editor.dispose()
       editor = new Editor(container, {
         plugins: withTestLanguagePlugins(createHighlighterPlugin(highlighter)),
-      });
+      })
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           refresh: async () => createSyntaxResult([]),
           applyChange: async () => createSyntaxResult([]),
         }),
-      );
+      )
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
-        text: "const a = 1;",
-      });
-      await flushMicrotasks();
-      editorRoot().dispatchEvent(createInsertEvent("!"));
-      await flushSyntaxDebounce();
-      editorRoot().dispatchEvent(createInsertEvent("?"));
-      await flushSyntaxDebounce();
+        documentId: 'main.ts',
+        languageId: 'typescript',
+        text: 'const a = 1;',
+      })
+      await flushMicrotasks()
+      editorRoot().dispatchEvent(createInsertEvent('!'))
+      await flushSyntaxDebounce()
+      editorRoot().dispatchEvent(createInsertEvent('?'))
+      await flushSyntaxDebounce()
 
-      secondEdit.resolve(
-        createHighlightResult([{ start: 0, end: 5, style: { color: "#00ff00" } }]),
-      );
-      await flushMicrotasks();
-      expect(tokenHighlightRanges()[0]?.startOffset).toBe(0);
+      secondEdit.resolve(createHighlightResult([{ start: 0, end: 5, style: { color: '#00ff00' } }]))
+      await flushMicrotasks()
+      expect(tokenHighlightRanges()[0]?.startOffset).toBe(0)
 
-      firstEdit.resolve(createHighlightResult([{ start: 6, end: 7, style: { color: "#ff0000" } }]));
-      await flushMicrotasks();
-      expect(editor.getText()).toBe("const a = 1;!?");
-      expect(tokenHighlightRanges()[0]?.startOffset).toBe(0);
-    });
+      firstEdit.resolve(createHighlightResult([{ start: 6, end: 7, style: { color: '#ff0000' } }]))
+      await flushMicrotasks()
+      expect(editor.getText()).toBe('const a = 1;!?')
+      expect(tokenHighlightRanges()[0]?.startOffset).toBe(0)
+    })
 
-    it("keeps structural syntax ready when plugin highlighting fails", async () => {
+    it('keeps structural syntax ready when plugin highlighting fails', async () => {
       const highlighter = createMockHighlighterSession({
         refresh: async () => {
-          throw new Error("highlight failed");
+          throw new Error('highlight failed')
         },
-      });
-      editor.dispose();
+      })
+      editor.dispose()
       editor = new Editor(container, {
         plugins: withTestLanguagePlugins(createHighlighterPlugin(highlighter)),
-      });
+      })
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           refresh: async () => createSyntaxResult([]),
         }),
-      );
+      )
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
-        text: "const a = 1;",
-      });
-      await flushMicrotasks();
+        documentId: 'main.ts',
+        languageId: 'typescript',
+        text: 'const a = 1;',
+      })
+      await flushMicrotasks()
 
-      expect(editor.getState().syntaxStatus).toBe("ready");
-      expect(tokenHighlights()).toHaveLength(0);
-    });
+      expect(editor.getState().syntaxStatus).toBe('ready')
+      expect(tokenHighlights()).toHaveLength(0)
+    })
 
-    it("falls back to plain text for unknown languages", async () => {
-      const created: EditorSyntaxSessionOptions[] = [];
+    it('falls back to plain text for unknown languages', async () => {
+      const created: EditorSyntaxSessionOptions[] = []
       setEditorSyntaxSessionFactory((options) => {
-        created.push(options);
-        return createMockSyntaxSession();
-      });
+        created.push(options)
+        return createMockSyntaxSession()
+      })
 
-      editor.openDocument({ documentId: "README", text: "hello" });
-      await flushMicrotasks();
+      editor.openDocument({ documentId: 'README', text: 'hello' })
+      await flushMicrotasks()
 
-      expect(created).toEqual([]);
-      expect(editor.getState().syntaxStatus).toBe("plain");
-      expect(highlightsMap.size).toBe(0);
-    });
+      expect(created).toEqual([])
+      expect(editor.getState().syntaxStatus).toBe('plain')
+      expect(highlightsMap.size).toBe(0)
+    })
 
-    it("keeps explicit but unregistered languages editable", async () => {
-      editor.dispose();
-      editor = new Editor(container);
+    it('keeps explicit but unregistered languages editable', async () => {
+      editor.dispose()
+      editor = new Editor(container)
 
-      editor.openDocument({ documentId: "main.rs", languageId: "rust", text: "fn main() {}" });
-      await flushMicrotasks();
-      editorRoot().dispatchEvent(createLineBreakEvent());
-      await flushSyntaxDebounce();
+      editor.openDocument({ documentId: 'main.rs', languageId: 'rust', text: 'fn main() {}' })
+      await flushMicrotasks()
+      editorRoot().dispatchEvent(createLineBreakEvent())
+      await flushSyntaxDebounce()
 
-      expect(editor.getText()).toBe("fn main() {}\n");
+      expect(editor.getText()).toBe('fn main() {}\n')
       expect(editor.getState()).toMatchObject({
-        languageId: "rust",
-        syntaxStatus: "plain",
-      });
-      expect(highlightsMap.size).toBe(0);
-    });
+        languageId: 'rust',
+        syntaxStatus: 'plain',
+      })
+      expect(highlightsMap.size).toBe(0)
+    })
 
-    it("marks syntax errors without blocking editing", async () => {
+    it('marks syntax errors without blocking editing', async () => {
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           refresh: async () => {
-            throw new Error("parse failed");
+            throw new Error('parse failed')
           },
         }),
-      );
+      )
 
       editor.openDocument({
-        documentId: "main.ts",
-        languageId: "typescript",
-        text: "const a = 1;",
-      });
-      await flushMicrotasks();
-      expect(editor.getState().syntaxStatus).toBe("error");
-      editorRoot().dispatchEvent(createInsertEvent("!"));
+        documentId: 'main.ts',
+        languageId: 'typescript',
+        text: 'const a = 1;',
+      })
+      await flushMicrotasks()
+      expect(editor.getState().syntaxStatus).toBe('error')
+      editorRoot().dispatchEvent(createInsertEvent('!'))
 
-      expect(editor.getText()).toBe("const a = 1;!");
-    });
-  });
+      expect(editor.getText()).toBe('const a = 1;!')
+    })
+  })
 
-  describe("clear", () => {
-    it("clears content and highlights", () => {
-      editor.setContent("test");
-      editor.setTokens([{ start: 0, end: 4, style: { color: "#ff0000" } }]);
-      editor.clear();
-      expect(editorRoot().textContent).toBe("");
-      expect(highlightsMap.size).toBe(0);
-    });
-  });
+  describe('clear', () => {
+    it('clears content and highlights', () => {
+      editor.setContent('test')
+      editor.setTokens([{ start: 0, end: 4, style: { color: '#ff0000' } }])
+      editor.clear()
+      expect(editorRoot().textContent).toBe('')
+      expect(highlightsMap.size).toBe(0)
+    })
+  })
 
-  describe("dispose", () => {
-    it("removes elements from DOM", () => {
-      expect(container.querySelector(".editor-virtualized")).not.toBeNull();
-      editor.dispose();
-      expect(container.querySelector(".editor-virtualized")).toBeNull();
-    });
-  });
-});
+  describe('dispose', () => {
+    it('removes elements from DOM', () => {
+      expect(container.querySelector('.editor-virtualized')).not.toBeNull()
+      editor.dispose()
+      expect(container.querySelector('.editor-virtualized')).toBeNull()
+    })
+  })
+})

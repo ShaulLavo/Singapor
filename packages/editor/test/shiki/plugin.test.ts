@@ -1,105 +1,105 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { createPieceTableSnapshot } from "../../src";
-import type { EditorHighlighterProvider, EditorPluginContext } from "../../src/plugins";
-import { createShikiHighlighterPlugin } from "../../src/shiki";
+import { createPieceTableSnapshot } from '../../src'
+import type { EditorHighlighterProvider, EditorPluginContext } from '../../src/plugins'
+import { createShikiHighlighterPlugin } from '../../src/shiki'
 
-const canUseShikiWorker = vi.hoisted(() => vi.fn(() => true));
-const createShikiHighlighterSession = vi.hoisted(() => vi.fn(() => null));
-const loadShikiTheme = vi.hoisted(() => vi.fn());
+const canUseShikiWorker = vi.hoisted(() => vi.fn(() => true))
+const createShikiHighlighterSession = vi.hoisted(() => vi.fn(() => null))
+const loadShikiTheme = vi.hoisted(() => vi.fn())
 
-vi.mock("../../src/shiki/workerClient", () => ({
+vi.mock('../../src/shiki/workerClient', () => ({
   canUseShikiWorker,
   createShikiHighlighterSession,
   loadShikiTheme,
-}));
+}))
 
-describe("createShikiHighlighterPlugin", () => {
+describe('createShikiHighlighterPlugin', () => {
   beforeEach(() => {
-    createShikiHighlighterSession.mockClear();
-    loadShikiTheme.mockClear();
-  });
+    createShikiHighlighterSession.mockClear()
+    loadShikiTheme.mockClear()
+  })
 
-  it("maps .tsx TypeScript documents to Shiki TSX", () => {
-    const provider = activateHighlighterProvider();
-    const text = 'const el = <div className="x" />';
+  it('maps .tsx TypeScript documents to Shiki TSX', () => {
+    const provider = activateHighlighterProvider()
+    const text = 'const el = <div className="x" />'
 
     provider.createSession({
-      documentId: "App.tsx",
-      languageId: "typescript",
+      documentId: 'App.tsx',
+      languageId: 'typescript',
       text,
       snapshot: createPieceTableSnapshot(text),
-    });
+    })
 
     expect(createShikiHighlighterSession).toHaveBeenCalledWith(
       expect.objectContaining({
-        lang: "tsx",
+        lang: 'tsx',
       }),
-    );
-  });
+    )
+  })
 
-  it("maps .jsx JavaScript documents to Shiki JSX", () => {
-    const provider = activateHighlighterProvider();
-    const text = 'const el = <div className="x" />';
+  it('maps .jsx JavaScript documents to Shiki JSX', () => {
+    const provider = activateHighlighterProvider()
+    const text = 'const el = <div className="x" />'
 
     provider.createSession({
-      documentId: "App.jsx",
-      languageId: "javascript",
+      documentId: 'App.jsx',
+      languageId: 'javascript',
       text,
       snapshot: createPieceTableSnapshot(text),
-    });
+    })
 
     expect(createShikiHighlighterSession).toHaveBeenCalledWith(
       expect.objectContaining({
-        lang: "jsx",
+        lang: 'jsx',
       }),
-    );
-  });
+    )
+  })
 
-  it("keeps explicit language overrides ahead of extension inference", () => {
-    const provider = activateHighlighterProvider({ languages: { typescript: "typescript" } });
-    const text = 'const el = <div className="x" />';
+  it('keeps explicit language overrides ahead of extension inference', () => {
+    const provider = activateHighlighterProvider({ languages: { typescript: 'typescript' } })
+    const text = 'const el = <div className="x" />'
 
     provider.createSession({
-      documentId: "App.tsx",
-      languageId: "typescript",
+      documentId: 'App.tsx',
+      languageId: 'typescript',
       text,
       snapshot: createPieceTableSnapshot(text),
-    });
+    })
 
     expect(createShikiHighlighterSession).toHaveBeenCalledWith(
       expect.objectContaining({
-        lang: "typescript",
+        lang: 'typescript',
       }),
-    );
-  });
+    )
+  })
 
-  it("reuses equivalent shared highlighter providers", () => {
+  it('reuses equivalent shared highlighter providers', () => {
     const first = activateHighlighterProvider({
-      preloadLanguages: ["typescript", "tsx"],
-      preloadThemes: ["github-dark"],
-    });
+      preloadLanguages: ['typescript', 'tsx'],
+      preloadThemes: ['github-dark'],
+    })
     const second = activateHighlighterProvider({
-      preloadLanguages: ["tsx", "typescript"],
-      preloadThemes: ["github-dark"],
-    });
+      preloadLanguages: ['tsx', 'typescript'],
+      preloadThemes: ['github-dark'],
+    })
 
-    expect(second).toBe(first);
-  });
-});
+    expect(second).toBe(first)
+  })
+})
 
 function activateHighlighterProvider(
   options: Parameters<typeof createShikiHighlighterPlugin>[0] = {},
 ): EditorHighlighterProvider {
-  let provider: EditorHighlighterProvider | null = null;
+  let provider: EditorHighlighterProvider | null = null
   const context = {
     registerHighlighter: (nextProvider) => {
-      provider = nextProvider;
-      return { dispose: () => undefined };
+      provider = nextProvider
+      return { dispose: () => undefined }
     },
-  } satisfies Partial<EditorPluginContext>;
+  } satisfies Partial<EditorPluginContext>
 
-  createShikiHighlighterPlugin(options).activate(context as EditorPluginContext);
-  if (!provider) throw new Error("Expected Shiki plugin to register a highlighter");
-  return provider;
+  createShikiHighlighterPlugin(options).activate(context as EditorPluginContext)
+  if (!provider) throw new Error('Expected Shiki plugin to register a highlighter')
+  return provider
 }

@@ -1,4 +1,4 @@
-export { createMinimapPlugin } from "./plugin";
+export { createMinimapPlugin } from './plugin'
 export type {
   EditorMinimapDecoration,
   EditorMinimapOptions,
@@ -8,4 +8,4 @@ export type {
   MinimapSide,
   MinimapSize,
   MinimapSliderVisibility,
-} from "./types";
+} from './types'

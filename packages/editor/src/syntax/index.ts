@@ -14,5 +14,5 @@ export {
   type EditorSyntaxSession,
   type EditorSyntaxSessionOptions,
   type FoldRange,
-} from "./session";
-export { styleForTreeSitterCapture, treeSitterCapturesToEditorTokens } from "./captures";
+} from './session'
+export { styleForTreeSitterCapture, treeSitterCapturesToEditorTokens } from './captures'

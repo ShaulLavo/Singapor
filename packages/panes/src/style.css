@@ -8,12 +8,12 @@
   width: 100%;
 }
 
-.editor-resizable-pane-group[data-editor-pane-orientation="horizontal"] {
+.editor-resizable-pane-group[data-editor-pane-orientation='horizontal'] {
   flex-direction: row;
   touch-action: pan-y;
 }
 
-.editor-resizable-pane-group[data-editor-pane-orientation="vertical"] {
+.editor-resizable-pane-group[data-editor-pane-orientation='vertical'] {
   flex-direction: column;
   touch-action: pan-x;
 }
@@ -31,16 +31,16 @@
   touch-action: none;
 }
 
-.editor-resizable-pane-handle[aria-orientation="vertical"] {
+.editor-resizable-pane-handle[aria-orientation='vertical'] {
   cursor: ew-resize;
   width: 6px;
 }
 
-.editor-resizable-pane-handle[aria-orientation="horizontal"] {
+.editor-resizable-pane-handle[aria-orientation='horizontal'] {
   cursor: ns-resize;
   height: 6px;
 }
 
-.editor-resizable-pane-handle[aria-disabled="true"] {
+.editor-resizable-pane-handle[aria-disabled='true'] {
   cursor: default;
 }

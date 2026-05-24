@@ -1,20 +1,20 @@
-export { createMergeConflictPlugin, EDITOR_MERGE_CONFLICT_FEATURE_ID } from "./mergeConflictPlugin";
-export { Editor } from "./editor/Editor";
+export { createMergeConflictPlugin, EDITOR_MERGE_CONFLICT_FEATURE_ID } from './mergeConflictPlugin'
+export { Editor } from './editor/Editor'
 export {
   observeEditorMountTiming,
   resetEditorInstanceCount,
   setEditorSyntaxSessionFactory,
   setHighlightRegistry,
-} from "./editor/runtime";
+} from './editor/runtime'
 export {
   createMergeConflictDocumentText,
   parseMergeConflicts,
   resolveMergeConflict,
-} from "./mergeConflicts";
+} from './mergeConflicts'
 export type {
   EditorSelectionRevealOptions,
   EditorSelectionRevealTarget,
-} from "./editor/selectionReveal";
+} from './editor/selectionReveal'
 export type {
   EditorChangeHandler,
   EditorDocumentMode,
@@ -35,8 +35,8 @@ export type {
   EditorSyntaxSessionFactory,
   EditorSyntaxStatus,
   HighlightRegistry,
-} from "./editor/types";
-export type { EditorCommandContext, EditorCommandId } from "./editor/commands";
+} from './editor/types'
+export type { EditorCommandContext, EditorCommandId } from './editor/commands'
 export {
   defaultEditorCommandPacks,
   defaultEditorKeyBindings,
@@ -50,18 +50,18 @@ export {
   editorKeymapLayersForCommandPacks,
   filterEditorKeymapLayersByCommandPacks,
   readonlySafeEditorCommandPacks,
-} from "./editor/keymap";
+} from './editor/keymap'
 export type {
   EditorCommandPack,
   EditorKeyBinding,
   EditorKeymapLayer,
   EditorKeymapLayerSource,
   EditorKeymapOptions,
-} from "./editor/keymap";
+} from './editor/keymap'
 export type {
   EditorMergeConflictFeature,
   EditorMergeConflictPluginOptions,
-} from "./mergeConflictPlugin";
+} from './mergeConflictPlugin'
 export type {
   BoundedSize,
   EditorBlock,
@@ -77,7 +77,7 @@ export type {
   FixedSize,
   MaxSize,
   MinSize,
-} from "./editorBlocks";
+} from './editorBlocks'
 export type {
   CreateMergeConflictDocumentTextOptions,
   MergeConflictRegion,
@@ -85,13 +85,13 @@ export type {
   MergeConflictResolutionResult,
   MergeConflictSide,
   TextOffsetRange,
-} from "./mergeConflicts";
+} from './mergeConflicts'
 export type {
   EditorCursorLineHighlightOptions,
   HiddenCharactersMode,
-} from "./virtualization/virtualizedTextViewTypes";
-export type { EditorSyntaxTheme, EditorSyntaxThemeColor, EditorTheme } from "./theme";
-export type { EditorSyntaxProvider } from "./syntax";
+} from './virtualization/virtualizedTextViewTypes'
+export type { EditorSyntaxTheme, EditorSyntaxThemeColor, EditorTheme } from './theme'
+export type { EditorSyntaxProvider } from './syntax'
 export type {
   EditorDisposable,
   EditorGutterContribution,
@@ -117,4 +117,4 @@ export type {
   EditorViewContributionProvider,
   EditorViewContributionUpdateKind,
   EditorViewSnapshot,
-} from "./plugins";
+} from './plugins'

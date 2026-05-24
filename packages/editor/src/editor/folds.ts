@@ -1,21 +1,21 @@
-import type { TextSnapshot } from "../documentTextSnapshot";
-import type { FoldRange } from "../syntax/session";
-import type { TextEdit } from "../tokens";
-import type { VirtualizedFoldMarker } from "../virtualization/virtualizedTextView";
+import type { TextSnapshot } from '../documentTextSnapshot'
+import type { FoldRange } from '../syntax/session'
+import type { TextEdit } from '../tokens'
+import type { VirtualizedFoldMarker } from '../virtualization/virtualizedTextView'
 
 export type SyntaxFoldProjection = {
-  readonly folds: readonly FoldRange[];
-  readonly keyMap: ReadonlyMap<string, string>;
-};
+  readonly folds: readonly FoldRange[]
+  readonly keyMap: ReadonlyMap<string, string>
+}
 
-export const EMPTY_SYNTAX_FOLDS: readonly FoldRange[] = [];
-export const EMPTY_FOLD_MARKERS: readonly VirtualizedFoldMarker[] = [];
+export const EMPTY_SYNTAX_FOLDS: readonly FoldRange[] = []
+export const EMPTY_FOLD_MARKERS: readonly VirtualizedFoldMarker[] = []
 
 export function foldMarkerFromRange(
   fold: FoldRange,
   collapsedFoldKeys: ReadonlySet<string>,
 ): VirtualizedFoldMarker {
-  const key = foldRangeKey(fold);
+  const key = foldRangeKey(fold)
   return {
     key,
     startOffset: fold.startIndex,
@@ -23,22 +23,22 @@ export function foldMarkerFromRange(
     startRow: fold.startLine,
     endRow: fold.endLine,
     collapsed: collapsedFoldKeys.has(key),
-  };
+  }
 }
 
 export function foldRangeKey(fold: FoldRange): string {
-  return `${fold.languageId ?? "plain"}:${fold.type}:${fold.startIndex}:${fold.endIndex}`;
+  return `${fold.languageId ?? 'plain'}:${fold.type}:${fold.startIndex}:${fold.endIndex}`
 }
 
 export function foldRangesEqual(left: readonly FoldRange[], right: readonly FoldRange[]): boolean {
-  if (left === right) return true;
-  if (left.length !== right.length) return false;
+  if (left === right) return true
+  if (left.length !== right.length) return false
 
   for (let index = 0; index < left.length; index += 1) {
-    if (!foldRangeEqual(left[index]!, right[index]!)) return false;
+    if (!foldRangeEqual(left[index]!, right[index]!)) return false
   }
 
-  return true;
+  return true
 }
 
 export function projectSyntaxFoldsThroughLineEdit(
@@ -46,18 +46,18 @@ export function projectSyntaxFoldsThroughLineEdit(
   edit: TextEdit,
   previousText: string | TextSnapshot,
 ): SyntaxFoldProjection | null {
-  const lineDelta = editLineDelta(edit, previousText);
-  if (lineDelta === 0) return null;
-  if (folds.length === 0) return null;
+  const lineDelta = editLineDelta(edit, previousText)
+  if (lineDelta === 0) return null
+  if (folds.length === 0) return null
 
-  const offsetDelta = edit.text.length - (edit.to - edit.from);
-  const keyMap = new Map<string, string>();
+  const offsetDelta = edit.text.length - (edit.to - edit.from)
+  const keyMap = new Map<string, string>()
   const projected = folds.map((fold) =>
     projectSyntaxFoldThroughLineEdit(fold, edit, offsetDelta, lineDelta, keyMap),
-  );
+  )
 
-  if (foldRangesEqual(folds, projected)) return null;
-  return { folds: projected, keyMap };
+  if (foldRangesEqual(folds, projected)) return null
+  return { folds: projected, keyMap }
 }
 
 function foldRangeEqual(left: FoldRange, right: FoldRange): boolean {
@@ -68,7 +68,7 @@ function foldRangeEqual(left: FoldRange, right: FoldRange): boolean {
     left.endLine === right.endLine &&
     left.type === right.type &&
     left.languageId === right.languageId
-  );
+  )
 }
 
 function projectSyntaxFoldThroughLineEdit(
@@ -78,11 +78,11 @@ function projectSyntaxFoldThroughLineEdit(
   lineDelta: number,
   keyMap: Map<string, string>,
 ): FoldRange {
-  const projected = projectFoldRangeThroughLineEdit(fold, edit, offsetDelta, lineDelta);
-  if (projected === fold) return fold;
+  const projected = projectFoldRangeThroughLineEdit(fold, edit, offsetDelta, lineDelta)
+  if (projected === fold) return fold
 
-  keyMap.set(foldRangeKey(fold), foldRangeKey(projected));
-  return projected;
+  keyMap.set(foldRangeKey(fold), foldRangeKey(projected))
+  return projected
 }
 
 function projectFoldRangeThroughLineEdit(
@@ -91,13 +91,13 @@ function projectFoldRangeThroughLineEdit(
   offsetDelta: number,
   lineDelta: number,
 ): FoldRange {
-  if (edit.to <= fold.startIndex) return shiftFoldRange(fold, offsetDelta, lineDelta);
-  if (edit.from >= fold.endIndex) return fold;
+  if (edit.to <= fold.startIndex) return shiftFoldRange(fold, offsetDelta, lineDelta)
+  if (edit.from >= fold.endIndex) return fold
   if (edit.from > fold.startIndex && edit.to < fold.endIndex) {
-    return resizeFoldRangeEnd(fold, offsetDelta, lineDelta);
+    return resizeFoldRangeEnd(fold, offsetDelta, lineDelta)
   }
 
-  return fold;
+  return fold
 }
 
 function shiftFoldRange(fold: FoldRange, offsetDelta: number, lineDelta: number): FoldRange {
@@ -107,7 +107,7 @@ function shiftFoldRange(fold: FoldRange, offsetDelta: number, lineDelta: number)
     endIndex: Math.max(0, fold.endIndex + offsetDelta),
     startLine: Math.max(0, fold.startLine + lineDelta),
     endLine: Math.max(0, fold.endLine + lineDelta),
-  };
+  }
 }
 
 function resizeFoldRangeEnd(fold: FoldRange, offsetDelta: number, lineDelta: number): FoldRange {
@@ -115,25 +115,25 @@ function resizeFoldRangeEnd(fold: FoldRange, offsetDelta: number, lineDelta: num
     ...fold,
     endIndex: Math.max(fold.startIndex + 1, fold.endIndex + offsetDelta),
     endLine: Math.max(fold.startLine + 1, fold.endLine + lineDelta),
-  };
+  }
 }
 
 function editLineDelta(edit: TextEdit, previousText: string | TextSnapshot): number {
-  const deletedText = textInRange(previousText, edit.from, edit.to);
-  return countLineBreaks(edit.text) - countLineBreaks(deletedText);
+  const deletedText = textInRange(previousText, edit.from, edit.to)
+  return countLineBreaks(edit.text) - countLineBreaks(deletedText)
 }
 
 function textInRange(text: string | TextSnapshot, start: number, end: number): string {
-  if (typeof text === "string") return text.slice(start, end);
-  return text.getTextInRange(start, end);
+  if (typeof text === 'string') return text.slice(start, end)
+  return text.getTextInRange(start, end)
 }
 
 function countLineBreaks(text: string): number {
-  let count = 0;
+  let count = 0
 
   for (let index = 0; index < text.length; index += 1) {
-    if (text[index] === "\n") count += 1;
+    if (text[index] === '\n') count += 1
   }
 
-  return count;
+  return count
 }

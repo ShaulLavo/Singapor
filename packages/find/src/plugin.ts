@@ -4,38 +4,38 @@ import type {
   EditorFeatureContributionContext,
   EditorPlugin,
   EditorResolvedSelection,
-} from "@editor/core";
-import type { EditorFindOptions } from "./types";
+} from '@editor/core'
+import type { EditorFindOptions } from './types'
 import {
   EditorFindController,
   type EditorFindResolvedSelection,
   type EditorFindSelectionRange,
-} from "./findController";
+} from './findController'
 
-export const EDITOR_FIND_FEATURE_ID = "editor.find";
+export const EDITOR_FIND_FEATURE_ID = 'editor.find'
 
 export type EditorFindFeature = {
-  openFind(): boolean;
-  toggleFind(): boolean;
-  openFindReplace(): boolean;
-  closeFind(): boolean;
-  findNext(): boolean;
-  findPrevious(): boolean;
-  replaceOne(): boolean;
-  replaceAll(): boolean;
-  selectAllMatches(): boolean;
-};
+  openFind(): boolean
+  toggleFind(): boolean
+  openFindReplace(): boolean
+  closeFind(): boolean
+  findNext(): boolean
+  findPrevious(): boolean
+  replaceOne(): boolean
+  replaceAll(): boolean
+  selectAllMatches(): boolean
+}
 
 export function createEditorFindPlugin(options: EditorFindOptions = {}): EditorPlugin {
   return {
-    name: "editor.find",
+    name: 'editor.find',
     activate(context) {
       return context.registerEditorFeatureContribution({
         createContribution: (contributionContext) =>
           createFindContribution(contributionContext, options),
-      });
+      })
     },
-  };
+  }
 }
 
 function createFindContribution(
@@ -61,40 +61,40 @@ function createFindContribution(
     },
     context.highlightPrefix,
     options,
-  );
-  const disposables = registerFindFeature(context, controller);
+  )
+  const disposables = registerFindFeature(context, controller)
 
   return {
     handleEditorChange: (change) => controller.handleEditorChange(change),
     dispose() {
-      disposeAll(disposables);
-      controller.dispose();
+      disposeAll(disposables)
+      controller.dispose()
     },
-  };
+  }
 }
 
 function registerFindFeature(
   context: EditorFeatureContributionContext,
   controller: EditorFindController,
 ): readonly EditorDisposable[] {
-  const feature = createFindFeature(controller);
+  const feature = createFindFeature(controller)
 
   return [
     context.registerFeature<EditorFindFeature>(EDITOR_FIND_FEATURE_ID, feature),
-    context.registerCommand("find", () => controller.toggleFind()),
-    context.registerCommand("findReplace", () => controller.openFindReplace()),
-    context.registerCommand("findNext", () => controller.findNext()),
-    context.registerCommand("findPrevious", () => controller.findPrevious()),
-    context.registerCommand("closeFind", () => controller.close()),
-    context.registerCommand("toggleFindCaseSensitive", () => controller.toggleMatchCase()),
-    context.registerCommand("toggleFindWholeWord", () => controller.toggleWholeWord()),
-    context.registerCommand("toggleFindRegex", () => controller.toggleRegex()),
-    context.registerCommand("toggleFindInSelection", () => controller.toggleFindInSelection()),
-    context.registerCommand("togglePreserveCase", () => controller.togglePreserveCase()),
-    context.registerCommand("replaceOne", () => controller.replaceOne()),
-    context.registerCommand("replaceAll", () => controller.replaceAll()),
-    context.registerCommand("selectAllMatches", () => controller.selectAllMatches()),
-  ];
+    context.registerCommand('find', () => controller.toggleFind()),
+    context.registerCommand('findReplace', () => controller.openFindReplace()),
+    context.registerCommand('findNext', () => controller.findNext()),
+    context.registerCommand('findPrevious', () => controller.findPrevious()),
+    context.registerCommand('closeFind', () => controller.close()),
+    context.registerCommand('toggleFindCaseSensitive', () => controller.toggleMatchCase()),
+    context.registerCommand('toggleFindWholeWord', () => controller.toggleWholeWord()),
+    context.registerCommand('toggleFindRegex', () => controller.toggleRegex()),
+    context.registerCommand('toggleFindInSelection', () => controller.toggleFindInSelection()),
+    context.registerCommand('togglePreserveCase', () => controller.togglePreserveCase()),
+    context.registerCommand('replaceOne', () => controller.replaceOne()),
+    context.registerCommand('replaceAll', () => controller.replaceAll()),
+    context.registerCommand('selectAllMatches', () => controller.selectAllMatches()),
+  ]
 }
 
 function createFindFeature(controller: EditorFindController): EditorFindFeature {
@@ -108,7 +108,7 @@ function createFindFeature(controller: EditorFindController): EditorFindFeature 
     replaceOne: () => controller.replaceOne(),
     replaceAll: () => controller.replaceAll(),
     selectAllMatches: () => controller.selectAllMatches(),
-  };
+  }
 }
 
 function findSelections(
@@ -117,11 +117,11 @@ function findSelections(
   return selections.map((selection) => ({
     ...selection,
     collapsed: selection.startOffset === selection.endOffset,
-  }));
+  }))
 }
 
 function disposeAll(disposables: readonly EditorDisposable[]): void {
-  for (const disposable of disposables.toReversed()) disposable.dispose();
+  for (const disposable of disposables.toReversed()) disposable.dispose()
 }
 
-export type { EditorFindOptions, EditorFindSelectionRange };
+export type { EditorFindOptions, EditorFindSelectionRange }

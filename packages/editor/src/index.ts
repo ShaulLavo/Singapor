@@ -4,22 +4,22 @@ export {
   resetEditorInstanceCount,
   setEditorSyntaxSessionFactory,
   setHighlightRegistry,
-} from "./editor";
-export * from "./documentSession";
-export * from "./documentTextSnapshot";
-export * from "./displayTransforms";
-export * from "./foldMap";
-export * from "./history";
-export * from "./mergeConflicts";
-export * from "./mergeConflictPlugin";
-export * from "./editorBlocks";
-export * from "./pieceTable";
-export * from "./plugins";
-export * from "./selections";
-export * from "./syntax";
-export * from "./theme";
-export * from "./virtualization";
-export type { EditorCommandContext, EditorCommandId } from "./editor/commands";
+} from './editor'
+export * from './documentSession'
+export * from './documentTextSnapshot'
+export * from './displayTransforms'
+export * from './foldMap'
+export * from './history'
+export * from './mergeConflicts'
+export * from './mergeConflictPlugin'
+export * from './editorBlocks'
+export * from './pieceTable'
+export * from './plugins'
+export * from './selections'
+export * from './syntax'
+export * from './theme'
+export * from './virtualization'
+export type { EditorCommandContext, EditorCommandId } from './editor/commands'
 export {
   defaultEditorCommandPacks,
   defaultEditorKeyBindings,
@@ -33,14 +33,14 @@ export {
   editorKeymapLayersForCommandPacks,
   filterEditorKeymapLayersByCommandPacks,
   readonlySafeEditorCommandPacks,
-} from "./editor/keymap";
+} from './editor/keymap'
 export type {
   EditorCommandPack,
   EditorKeyBinding,
   EditorKeymapLayer,
   EditorKeymapLayerSource,
   EditorKeymapOptions,
-} from "./editor/keymap";
+} from './editor/keymap'
 export type {
   EditorChangeHandler,
   EditorDocumentMode,
@@ -62,6 +62,6 @@ export type {
   EditorSyntaxStatus,
   HiddenCharactersMode,
   HighlightRegistry,
-} from "./editor";
-export type { EditorDocument, EditorToken, EditorTokenStyle, TextEdit } from "./tokens";
-export type { EditorSyntaxTheme, EditorSyntaxThemeColor, EditorTheme } from "./theme";
+} from './editor'
+export type { EditorDocument, EditorToken, EditorTokenStyle, TextEdit } from './tokens'
+export type { EditorSyntaxTheme, EditorSyntaxThemeColor, EditorTheme } from './theme'

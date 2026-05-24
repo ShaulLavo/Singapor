@@ -1,66 +1,66 @@
-import type { EditorTheme } from "../theme";
-import type { EditorToken, TextEdit } from "../tokens";
+import type { EditorTheme } from '../theme'
+import type { EditorToken, TextEdit } from '../tokens'
 
 export type ShikiWorkerDocumentOptions = {
-  readonly documentId: string;
-  readonly lang: string;
-  readonly theme: string;
-  readonly text?: string;
-  readonly langs: readonly string[];
-  readonly themes: readonly string[];
-};
+  readonly documentId: string
+  readonly lang: string
+  readonly theme: string
+  readonly text?: string
+  readonly langs: readonly string[]
+  readonly themes: readonly string[]
+}
 
 export type ShikiWorkerOpenRequest = ShikiWorkerDocumentOptions & {
-  readonly type: "open";
-  readonly text: string;
-};
+  readonly type: 'open'
+  readonly text: string
+}
 
 export type ShikiWorkerEditRequest = ShikiWorkerDocumentOptions & {
-  readonly type: "edit";
-  readonly edit?: TextEdit;
-};
+  readonly type: 'edit'
+  readonly edit?: TextEdit
+}
 
 export type ShikiWorkerDisposeDocumentRequest = {
-  readonly type: "disposeDocument";
-  readonly documentId: string;
-};
+  readonly type: 'disposeDocument'
+  readonly documentId: string
+}
 
 export type ShikiWorkerDisposeRequest = {
-  readonly type: "dispose";
-};
+  readonly type: 'dispose'
+}
 
 export type ShikiWorkerThemeRequest = {
-  readonly type: "theme";
-  readonly theme: string;
-  readonly themes: readonly string[];
-};
+  readonly type: 'theme'
+  readonly theme: string
+  readonly themes: readonly string[]
+}
 
 export type ShikiWorkerRequestPayload =
   | ShikiWorkerOpenRequest
   | ShikiWorkerEditRequest
   | ShikiWorkerDisposeDocumentRequest
   | ShikiWorkerDisposeRequest
-  | ShikiWorkerThemeRequest;
+  | ShikiWorkerThemeRequest
 
 export type ShikiWorkerResult = {
-  readonly documentId?: string;
-  readonly tokens?: readonly EditorToken[];
-  readonly theme?: EditorTheme;
-};
+  readonly documentId?: string
+  readonly tokens?: readonly EditorToken[]
+  readonly theme?: EditorTheme
+}
 
 export type ShikiWorkerRequest = {
-  readonly id: number;
-  readonly payload: ShikiWorkerRequestPayload;
-};
+  readonly id: number
+  readonly payload: ShikiWorkerRequestPayload
+}
 
 export type ShikiWorkerResponse =
   | {
-      readonly id: number;
-      readonly ok: true;
-      readonly result?: ShikiWorkerResult;
+      readonly id: number
+      readonly ok: true
+      readonly result?: ShikiWorkerResult
     }
   | {
-      readonly id: number;
-      readonly ok: false;
-      readonly error: string;
-    };
+      readonly id: number
+      readonly ok: false
+      readonly error: string
+    }

@@ -1,88 +1,88 @@
-import type { EditorCommandHandler, EditorDisposable } from "../plugins";
-import type { EditorCommandContext, EditorCommandId } from "./commands";
-import { isEditorEditActionCommand, type EditorEditActionCommandId } from "./editActions";
+import type { EditorCommandHandler, EditorDisposable } from '../plugins'
+import type { EditorCommandContext, EditorCommandId } from './commands'
+import { isEditorEditActionCommand, type EditorEditActionCommandId } from './editActions'
 
 export type EditorCommandRouterHandlers = {
-  history(command: "undo" | "redo", context: EditorCommandContext): boolean;
-  delete(direction: "backward" | "forward", context: EditorCommandContext): boolean;
-  indent(direction: "indent" | "outdent", context: EditorCommandContext): boolean;
-  editAction(command: EditorEditActionCommandId, context: EditorCommandContext): boolean;
-  selectAll(context: EditorCommandContext): boolean;
-  addNextOccurrence(context: EditorCommandContext): boolean;
-  clearSecondarySelections(context: EditorCommandContext): boolean;
-  insertCursor(direction: "above" | "below", context: EditorCommandContext): boolean;
+  history(command: 'undo' | 'redo', context: EditorCommandContext): boolean
+  delete(direction: 'backward' | 'forward', context: EditorCommandContext): boolean
+  indent(direction: 'indent' | 'outdent', context: EditorCommandContext): boolean
+  editAction(command: EditorEditActionCommandId, context: EditorCommandContext): boolean
+  selectAll(context: EditorCommandContext): boolean
+  addNextOccurrence(context: EditorCommandContext): boolean
+  clearSecondarySelections(context: EditorCommandContext): boolean
+  insertCursor(direction: 'above' | 'below', context: EditorCommandContext): boolean
   selectExactOccurrences(
-    command: "editor.action.selectHighlights" | "editor.action.changeAll",
+    command: 'editor.action.selectHighlights' | 'editor.action.changeAll',
     context: EditorCommandContext,
-  ): boolean;
-  moveSelectionToNextOccurrence(context: EditorCommandContext): boolean;
-  navigation(command: EditorCommandId, context: EditorCommandContext): boolean;
-};
+  ): boolean
+  moveSelectionToNextOccurrence(context: EditorCommandContext): boolean
+  navigation(command: EditorCommandId, context: EditorCommandContext): boolean
+}
 
 export class EditorCommandRouter {
-  private readonly commandHandlers = new Map<EditorCommandId, EditorCommandHandler>();
+  private readonly commandHandlers = new Map<EditorCommandId, EditorCommandHandler>()
 
   constructor(private readonly handlers: EditorCommandRouterHandlers) {}
 
   dispatch(command: EditorCommandId, context: EditorCommandContext = {}): boolean {
-    const registeredResult = this.runRegisteredCommand(command, context);
+    const registeredResult = this.runRegisteredCommand(command, context)
     if (registeredResult !== null) {
-      if (command === "closeFind" && !registeredResult) {
-        return this.handlers.clearSecondarySelections(context);
+      if (command === 'closeFind' && !registeredResult) {
+        return this.handlers.clearSecondarySelections(context)
       }
 
-      return registeredResult;
+      return registeredResult
     }
 
-    if (command === "undo") return this.handlers.history("undo", context);
-    if (command === "redo") return this.handlers.history("redo", context);
-    if (command === "selectAll") return this.handlers.selectAll(context);
-    if (command === "addNextOccurrence") return this.handlers.addNextOccurrence(context);
-    if (command === "clearSecondarySelections") {
-      return this.handlers.clearSecondarySelections(context);
+    if (command === 'undo') return this.handlers.history('undo', context)
+    if (command === 'redo') return this.handlers.history('redo', context)
+    if (command === 'selectAll') return this.handlers.selectAll(context)
+    if (command === 'addNextOccurrence') return this.handlers.addNextOccurrence(context)
+    if (command === 'clearSecondarySelections') {
+      return this.handlers.clearSecondarySelections(context)
     }
-    if (command === "editor.action.insertCursorAbove") {
-      return this.handlers.insertCursor("above", context);
+    if (command === 'editor.action.insertCursorAbove') {
+      return this.handlers.insertCursor('above', context)
     }
-    if (command === "editor.action.insertCursorBelow") {
-      return this.handlers.insertCursor("below", context);
+    if (command === 'editor.action.insertCursorBelow') {
+      return this.handlers.insertCursor('below', context)
     }
-    if (command === "editor.action.selectHighlights" || command === "editor.action.changeAll") {
-      return this.handlers.selectExactOccurrences(command, context);
+    if (command === 'editor.action.selectHighlights' || command === 'editor.action.changeAll') {
+      return this.handlers.selectExactOccurrences(command, context)
     }
-    if (command === "editor.action.moveSelectionToNextFindMatch") {
-      return this.handlers.moveSelectionToNextOccurrence(context);
+    if (command === 'editor.action.moveSelectionToNextFindMatch') {
+      return this.handlers.moveSelectionToNextOccurrence(context)
     }
-    if (command === "deleteBackward") return this.handlers.delete("backward", context);
-    if (command === "deleteForward") return this.handlers.delete("forward", context);
-    if (isEditorEditActionCommand(command)) return this.handlers.editAction(command, context);
-    if (command === "indentSelection") return this.handlers.indent("indent", context);
-    if (command === "outdentSelection") return this.handlers.indent("outdent", context);
+    if (command === 'deleteBackward') return this.handlers.delete('backward', context)
+    if (command === 'deleteForward') return this.handlers.delete('forward', context)
+    if (isEditorEditActionCommand(command)) return this.handlers.editAction(command, context)
+    if (command === 'indentSelection') return this.handlers.indent('indent', context)
+    if (command === 'outdentSelection') return this.handlers.indent('outdent', context)
 
-    return this.handlers.navigation(command, context);
+    return this.handlers.navigation(command, context)
   }
 
   registerCommandHandler(
     command: EditorCommandId,
     handler: EditorCommandHandler,
   ): EditorDisposable {
-    this.commandHandlers.set(command, handler);
+    this.commandHandlers.set(command, handler)
 
     return {
       dispose: () => this.unregisterCommandHandler(command, handler),
-    };
+    }
   }
 
   private unregisterCommandHandler(command: EditorCommandId, handler: EditorCommandHandler): void {
-    if (this.commandHandlers.get(command) !== handler) return;
+    if (this.commandHandlers.get(command) !== handler) return
 
-    this.commandHandlers.delete(command);
+    this.commandHandlers.delete(command)
   }
 
   private runRegisteredCommand(
     command: EditorCommandId,
     context: EditorCommandContext,
   ): boolean | null {
-    return this.commandHandlers.get(command)?.(context) ?? null;
+    return this.commandHandlers.get(command)?.(context) ?? null
   }
 }

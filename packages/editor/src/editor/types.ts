@@ -1,118 +1,115 @@
-import type { DocumentSessionChange } from "../documentSession";
+import type { DocumentSessionChange } from '../documentSession'
 import type {
   EditorSyntaxLanguageId,
   EditorSyntaxSession,
   EditorSyntaxSessionOptions,
-} from "../syntax/session";
-import type { EditorPlugin } from "../plugins";
-import type { EditorTheme } from "../theme";
+} from '../syntax/session'
+import type { EditorPlugin } from '../plugins'
+import type { EditorTheme } from '../theme'
 import type {
   EditorCursorLineHighlightOptions,
   HiddenCharactersMode,
-} from "../virtualization/virtualizedTextViewTypes";
-import type { BrowserTextMetrics } from "../virtualization/browserMetrics";
-import type { EditorKeymapOptions } from "./keymap";
-import type { TextEdit } from "../tokens";
+} from '../virtualization/virtualizedTextViewTypes'
+import type { BrowserTextMetrics } from '../virtualization/browserMetrics'
+import type { EditorKeymapOptions } from './keymap'
+import type { TextEdit } from '../tokens'
 
 /** Minimal interface for the CSS Custom Highlight API registry. */
 export interface HighlightRegistry {
-  set(name: string, highlight: Highlight): void;
-  delete(name: string): boolean;
+  set(name: string, highlight: Highlight): void
+  delete(name: string): boolean
 }
 
-export type EditorSessionChangeHandler = (change: DocumentSessionChange) => void;
+export type EditorSessionChangeHandler = (change: DocumentSessionChange) => void
 
-export type EditorEditability = "editable" | "readonly";
+export type EditorEditability = 'editable' | 'readonly'
 
-export type EditorDocumentMode = "session" | "static";
+export type EditorDocumentMode = 'session' | 'static'
 
-export type EditorSelectionSyncMode = "sync" | "none";
+export type EditorSelectionSyncMode = 'sync' | 'none'
 
 export type EditorRangeDecoration = {
-  readonly className?: string;
-  readonly end: number;
-  readonly start: number;
-  readonly style?: Partial<CSSStyleDeclaration>;
-};
+  readonly className?: string
+  readonly end: number
+  readonly start: number
+  readonly style?: Partial<CSSStyleDeclaration>
+}
 
 export type EditorScrollPosition = {
-  readonly top?: number;
-  readonly left?: number;
-};
+  readonly top?: number
+  readonly left?: number
+}
 
 export type EditorSessionOptions = {
-  readonly documentId?: string | null;
-  readonly languageId?: EditorSyntaxLanguageId | null;
-  readonly onChange?: EditorSessionChangeHandler;
-  readonly scrollPosition?: EditorScrollPosition;
-};
+  readonly documentId?: string | null
+  readonly languageId?: EditorSyntaxLanguageId | null
+  readonly onChange?: EditorSessionChangeHandler
+  readonly scrollPosition?: EditorScrollPosition
+}
 
-export type EditorSyntaxStatus = "plain" | "loading" | "ready" | "error";
+export type EditorSyntaxStatus = 'plain' | 'loading' | 'ready' | 'error'
 
 export type EditorState = {
-  readonly documentId: string | null;
-  readonly documentMode: EditorDocumentMode;
-  readonly editability: EditorEditability;
-  readonly languageId: EditorSyntaxLanguageId | null;
-  readonly syntaxStatus: EditorSyntaxStatus;
+  readonly documentId: string | null
+  readonly documentMode: EditorDocumentMode
+  readonly editability: EditorEditability
+  readonly languageId: EditorSyntaxLanguageId | null
+  readonly syntaxStatus: EditorSyntaxStatus
   readonly cursor: {
-    readonly row: number;
-    readonly column: number;
-  };
-  readonly length: number;
-  readonly canUndo: boolean;
-  readonly canRedo: boolean;
-  readonly isDirty: boolean;
-};
+    readonly row: number
+    readonly column: number
+  }
+  readonly length: number
+  readonly canUndo: boolean
+  readonly canRedo: boolean
+  readonly isDirty: boolean
+}
 
-export type EditorChangeHandler = (
-  state: EditorState,
-  change: DocumentSessionChange | null,
-) => void;
+export type EditorChangeHandler = (state: EditorState, change: DocumentSessionChange | null) => void
 
 export type EditorOptions = {
-  readonly defaultText?: string;
-  readonly documentMode?: EditorDocumentMode;
-  readonly editability?: EditorEditability;
-  readonly theme?: EditorTheme;
-  readonly onChange?: EditorChangeHandler;
-  readonly plugins?: readonly EditorPlugin[];
-  readonly keymap?: EditorKeymapOptions;
-  readonly cursorLineHighlight?: EditorCursorLineHighlightOptions;
-  readonly hiddenCharacters?: HiddenCharactersMode;
-  readonly lineHeight?: number;
-  readonly rangeDecorations?: readonly EditorRangeDecoration[];
-  readonly rowGap?: number;
-  readonly selectionSyncMode?: EditorSelectionSyncMode;
-  readonly tabSize?: number;
-  readonly textMetrics?: BrowserTextMetrics;
-};
+  readonly defaultText?: string
+  readonly documentMode?: EditorDocumentMode
+  readonly editability?: EditorEditability
+  readonly theme?: EditorTheme
+  readonly onChange?: EditorChangeHandler
+  readonly plugins?: readonly EditorPlugin[]
+  readonly keymap?: EditorKeymapOptions
+  readonly cursorLineHighlight?: EditorCursorLineHighlightOptions
+  readonly hiddenCharacters?: HiddenCharactersMode
+  readonly lineHeight?: number
+  readonly rangeDecorations?: readonly EditorRangeDecoration[]
+  readonly rowGap?: number
+  readonly selectionSyncMode?: EditorSelectionSyncMode
+  readonly tabSize?: number
+  readonly textMetrics?: BrowserTextMetrics
+}
 
 export type EditorSetTextOptions = {
-  readonly documentMode?: EditorDocumentMode;
-  readonly languageId?: EditorSyntaxLanguageId | null;
-  readonly scrollPosition?: EditorScrollPosition;
-};
+  readonly documentMode?: EditorDocumentMode
+  readonly languageId?: EditorSyntaxLanguageId | null
+  readonly scrollPosition?: EditorScrollPosition
+}
 
 export type EditorOpenDocumentOptions = EditorSetTextOptions & {
-  readonly text: string;
-  readonly documentId?: string;
-};
+  readonly text: string
+  readonly documentId?: string
+}
 
-export type EditorEditHistoryMode = "record" | "skip";
+export type EditorEditHistoryMode = 'record' | 'skip'
 
 export type EditorEditSelection = {
-  readonly anchor: number;
-  readonly head?: number;
-};
+  readonly anchor: number
+  readonly head?: number
+}
 
 export type EditorEditOptions = {
-  readonly history?: EditorEditHistoryMode;
-  readonly selection?: EditorEditSelection;
-};
+  readonly history?: EditorEditHistoryMode
+  readonly selection?: EditorEditSelection
+}
 
-export type EditorEditInput = TextEdit | readonly TextEdit[];
+export type EditorEditInput = TextEdit | readonly TextEdit[]
 
 export type EditorSyntaxSessionFactory = (
   options: EditorSyntaxSessionOptions,
-) => EditorSyntaxSession;
+) => EditorSyntaxSession

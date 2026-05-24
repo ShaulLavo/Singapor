@@ -12,18 +12,18 @@ export const enum Constants {
 }
 
 export const allCharCodes: ReadonlyArray<number> = (() => {
-  const values: number[] = [];
+  const values: number[] = []
   for (let index = Constants.START_CH_CODE; index <= Constants.END_CH_CODE; index += 1) {
-    values.push(index);
+    values.push(index)
   }
 
-  values.push(Constants.UNKNOWN_CODE);
-  return values;
-})();
+  values.push(Constants.UNKNOWN_CODE)
+  return values
+})()
 
 export const getCharIndex = (chCode: number, fontScale: number): number => {
-  const index = chCode - Constants.START_CH_CODE;
-  if (index >= 0 && index <= Constants.CHAR_COUNT) return index;
-  if (fontScale <= 2) return (index + Constants.CHAR_COUNT) % Constants.CHAR_COUNT;
-  return Constants.CHAR_COUNT - 1;
-};
+  const index = chCode - Constants.START_CH_CODE
+  if (index >= 0 && index <= Constants.CHAR_COUNT) return index
+  if (fontScale <= 2) return (index + Constants.CHAR_COUNT) % Constants.CHAR_COUNT
+  return Constants.CHAR_COUNT - 1
+}

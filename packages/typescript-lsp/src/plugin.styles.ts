@@ -1,6 +1,6 @@
-import type { VirtualizedTextHighlightStyle } from "@editor/core";
+import type { VirtualizedTextHighlightStyle } from '@editor/core'
 
-import type { TypeScriptLspDiagnosticSeverity } from "./diagnostics";
+import type { TypeScriptLspDiagnosticSeverity } from './diagnostics'
 
 /**
  * Highlight style applied to the identifier range under the pointer while the
@@ -12,10 +12,10 @@ import type { TypeScriptLspDiagnosticSeverity } from "./diagnostics";
  * editor themes without piercing through the foreground text.
  */
 export const LINK_HIGHLIGHT_STYLE: VirtualizedTextHighlightStyle = {
-  backgroundColor: "transparent",
-  color: "#60a5fa",
-  textDecoration: "underline solid #60a5fa",
-};
+  backgroundColor: 'transparent',
+  color: '#60a5fa',
+  textDecoration: 'underline solid #60a5fa',
+}
 
 /**
  * Per-severity highlight styles applied by the TypeScript LSP plugin to the
@@ -32,11 +32,11 @@ export const DIAGNOSTIC_STYLES: Record<
   VirtualizedTextHighlightStyle
 > = {
   error: {
-    backgroundColor: "rgba(239, 68, 68, 0.16)",
-    color: "rgba(248, 113, 113, 1)",
-    textDecoration: "underline wavy rgba(220, 38, 38, 1)",
+    backgroundColor: 'rgba(239, 68, 68, 0.16)',
+    color: 'rgba(248, 113, 113, 1)',
+    textDecoration: 'underline wavy rgba(220, 38, 38, 1)',
   },
-  warning: { backgroundColor: "rgba(245, 158, 11, 0.26)" },
-  information: { backgroundColor: "rgba(59, 130, 246, 0.22)" },
-  hint: { backgroundColor: "rgba(148, 163, 184, 0.22)" },
-};
+  warning: { backgroundColor: 'rgba(245, 158, 11, 0.26)' },
+  information: { backgroundColor: 'rgba(59, 130, 246, 0.22)' },
+  hint: { backgroundColor: 'rgba(148, 163, 184, 0.22)' },
+}

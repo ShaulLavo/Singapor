@@ -1,6 +1,6 @@
-import type { FoldRange } from "../syntax/session";
+import type { FoldRange } from '../syntax/session'
 
-export type FoldOperation = "fold" | "unfold" | "toggle";
+export type FoldOperation = 'fold' | 'unfold' | 'toggle'
 
 export function foldCandidateAtLocation(
   folds: readonly FoldRange[],
@@ -9,22 +9,22 @@ export function foldCandidateAtLocation(
   isCollapsed: (fold: FoldRange) => boolean,
   operation: FoldOperation,
 ): FoldRange | null {
-  let candidate: FoldRange | null = null;
+  let candidate: FoldRange | null = null
 
   for (const fold of folds) {
-    if (!foldContainsLocation(fold, row, offset)) continue;
-    if (!foldMatchesOperation(fold, isCollapsed, operation)) continue;
+    if (!foldContainsLocation(fold, row, offset)) continue
+    if (!foldMatchesOperation(fold, isCollapsed, operation)) continue
     if (candidate && compareFoldCandidates(candidate, fold, row, isCollapsed, operation) <= 0)
-      continue;
-    candidate = fold;
+      continue
+    candidate = fold
   }
 
-  return candidate;
+  return candidate
 }
 
 function foldContainsLocation(fold: FoldRange, row: number, offset: number): boolean {
-  if (fold.startLine === row) return true;
-  return offset >= fold.startIndex && offset < fold.endIndex;
+  if (fold.startLine === row) return true
+  return offset >= fold.startIndex && offset < fold.endIndex
 }
 
 function foldMatchesOperation(
@@ -32,10 +32,10 @@ function foldMatchesOperation(
   isCollapsed: (fold: FoldRange) => boolean,
   operation: FoldOperation,
 ): boolean {
-  const collapsed = isCollapsed(fold);
-  if (operation === "fold") return !collapsed;
-  if (operation === "unfold") return collapsed;
-  return true;
+  const collapsed = isCollapsed(fold)
+  if (operation === 'fold') return !collapsed
+  if (operation === 'unfold') return collapsed
+  return true
 }
 
 function compareFoldCandidates(
@@ -45,18 +45,18 @@ function compareFoldCandidates(
   isCollapsed: (fold: FoldRange) => boolean,
   operation: FoldOperation,
 ): number {
-  const startRowDelta = foldStartRowScore(left, row) - foldStartRowScore(right, row);
-  if (startRowDelta !== 0) return startRowDelta;
+  const startRowDelta = foldStartRowScore(left, row) - foldStartRowScore(right, row)
+  if (startRowDelta !== 0) return startRowDelta
 
   const collapsedDelta =
     foldCollapsedScore(left, isCollapsed, operation) -
-    foldCollapsedScore(right, isCollapsed, operation);
-  if (collapsedDelta !== 0) return collapsedDelta;
+    foldCollapsedScore(right, isCollapsed, operation)
+  if (collapsedDelta !== 0) return collapsedDelta
 
-  const spanDelta = foldSpanCandidateDelta(left, right, isCollapsed, operation);
-  if (spanDelta !== 0) return spanDelta;
+  const spanDelta = foldSpanCandidateDelta(left, right, isCollapsed, operation)
+  if (spanDelta !== 0) return spanDelta
 
-  return left.startIndex - right.startIndex;
+  return left.startIndex - right.startIndex
 }
 
 function foldCollapsedScore(
@@ -64,8 +64,8 @@ function foldCollapsedScore(
   isCollapsed: (fold: FoldRange) => boolean,
   operation: FoldOperation,
 ): number {
-  if (operation !== "toggle") return 0;
-  return isCollapsed(fold) ? 0 : 1;
+  if (operation !== 'toggle') return 0
+  return isCollapsed(fold) ? 0 : 1
 }
 
 function foldSpanCandidateDelta(
@@ -75,10 +75,10 @@ function foldSpanCandidateDelta(
   operation: FoldOperation,
 ): number {
   if (shouldPreferOutermostFold(left, right, isCollapsed, operation)) {
-    return foldSpan(right) - foldSpan(left);
+    return foldSpan(right) - foldSpan(left)
   }
 
-  return foldSpan(left) - foldSpan(right);
+  return foldSpan(left) - foldSpan(right)
 }
 
 function shouldPreferOutermostFold(
@@ -87,15 +87,15 @@ function shouldPreferOutermostFold(
   isCollapsed: (fold: FoldRange) => boolean,
   operation: FoldOperation,
 ): boolean {
-  if (operation === "unfold") return true;
-  if (operation !== "toggle") return false;
-  return isCollapsed(left) && isCollapsed(right);
+  if (operation === 'unfold') return true
+  if (operation !== 'toggle') return false
+  return isCollapsed(left) && isCollapsed(right)
 }
 
 function foldStartRowScore(fold: FoldRange, row: number): number {
-  return fold.startLine === row ? 0 : 1;
+  return fold.startLine === row ? 0 : 1
 }
 
 function foldSpan(fold: FoldRange): number {
-  return fold.endIndex - fold.startIndex;
+  return fold.endIndex - fold.startIndex
 }

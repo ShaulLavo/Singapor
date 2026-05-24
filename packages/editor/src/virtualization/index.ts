@@ -3,11 +3,11 @@ export {
   computeFixedRowTotalSize,
   computeFixedRowVisibleRange,
   computeFixedRowVirtualItems,
-} from "./fixedRowVirtualizer";
-export { clearBrowserTextMetricsCache, measureBrowserTextMetrics } from "./browserMetrics";
-export { VirtualizedTextView } from "./virtualizedTextView";
-export type { BrowserTextMetrics } from "./browserMetrics";
-export type { VirtualizedTextSelection } from "./virtualizedTextViewInternals";
+} from './fixedRowVirtualizer'
+export { clearBrowserTextMetricsCache, measureBrowserTextMetrics } from './browserMetrics'
+export { VirtualizedTextView } from './virtualizedTextView'
+export type { BrowserTextMetrics } from './browserMetrics'
+export type { VirtualizedTextSelection } from './virtualizedTextViewInternals'
 export type {
   FixedRowScrollMetrics,
   FixedRowVirtualItem,
@@ -15,7 +15,7 @@ export type {
   FixedRowVirtualizerOptions,
   FixedRowVirtualizerSnapshot,
   FixedRowVisibleRange,
-} from "./fixedRowVirtualizer";
+} from './fixedRowVirtualizer'
 export type {
   EditorCursorLineHighlightOptions,
   HiddenCharactersMode,
@@ -34,4 +34,4 @@ export type {
   VirtualizedTextRow,
   VirtualizedTextViewOptions,
   VirtualizedTextViewState,
-} from "./virtualizedTextViewTypes";
+} from './virtualizedTextViewTypes'

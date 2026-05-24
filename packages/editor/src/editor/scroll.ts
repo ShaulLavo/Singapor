@@ -1,20 +1,20 @@
-import { clamp } from "../style-utils";
-import type { EditorScrollPosition } from "./types";
+import { clamp } from '../style-utils'
+import type { EditorScrollPosition } from './types'
 
 export const DOCUMENT_START_SCROLL_POSITION = {
   top: 0,
   left: 0,
-} satisfies Required<EditorScrollPosition>;
+} satisfies Required<EditorScrollPosition>
 
 export function normalizeScrollOffset(
   value: number | undefined,
   fallback: number,
   maxValue: number,
 ): number {
-  if (value === undefined) return fallback;
-  if (!Number.isFinite(value)) return fallback;
+  if (value === undefined) return fallback
+  if (!Number.isFinite(value)) return fallback
 
-  return clamp(value, 0, Math.max(0, maxValue));
+  return clamp(value, 0, Math.max(0, maxValue))
 }
 
 export function preservedScrollPosition(
@@ -24,5 +24,5 @@ export function preservedScrollPosition(
   return {
     top: override?.top ?? current.top,
     left: override?.left ?? current.left,
-  };
+  }
 }

@@ -22,7 +22,7 @@
   color: var(--editor-foreground, var(--editor-find-foreground-fallback));
   display: flex;
   flex-direction: column;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 12px;
   gap: 4px;
   max-width: min(620px, calc(100% - 24px));
@@ -159,8 +159,8 @@
 
 .editor-find-button:hover,
 .editor-find-button.active,
-.editor-find-button[aria-expanded="true"],
-.editor-find-button[aria-pressed="true"] {
+.editor-find-button[aria-expanded='true'],
+.editor-find-button[aria-pressed='true'] {
   background: color-mix(
     in srgb,
     var(--editor-foreground, var(--editor-find-hover-background-fallback)) 14%,
@@ -169,8 +169,8 @@
 }
 
 .editor-find-button.active,
-.editor-find-button[aria-expanded="true"],
-.editor-find-button[aria-pressed="true"] {
+.editor-find-button[aria-expanded='true'],
+.editor-find-button[aria-pressed='true'] {
   color: var(--editor-foreground, var(--editor-find-strong-foreground-fallback));
 }
 
@@ -193,6 +193,6 @@
   transition: transform 120ms ease;
 }
 
-.editor-find-replace-toggle[aria-expanded="true"] svg {
+.editor-find-replace-toggle[aria-expanded='true'] svg {
   transform: rotate(90deg);
 }

@@ -1,217 +1,217 @@
-import { beforeAll, describe, expect, it, vi } from "vitest";
-import type { EditorTheme } from "@editor/core";
-import { createTextDiff, DiffView } from "../src";
-import { diffSyntaxBackend, projectDiffSyntaxTokens } from "../src/DiffView";
+import { beforeAll, describe, expect, it, vi } from 'vitest'
+import type { EditorTheme } from '@editor/core'
+import { createTextDiff, DiffView } from '../src'
+import { diffSyntaxBackend, projectDiffSyntaxTokens } from '../src/DiffView'
 import type {
   DiffFile,
   DiffSplitHandleContext,
   DiffSplitPaneOptions,
   DiffSyntaxBackend,
-} from "../src";
+} from '../src'
 
 beforeAll(() => {
-  installHighlightPolyfill();
-});
+  installHighlightPolyfill()
+})
 
-describe("DiffView split panes", () => {
-  it("renders a resizable handle between old and new panes", () => {
-    const { container } = renderDiffView();
-    const split = querySplit(container);
-    const children = Array.from(split.children);
-    const handle = children[1] as HTMLElement | undefined;
+describe('DiffView split panes', () => {
+  it('renders a resizable handle between old and new panes', () => {
+    const { container } = renderDiffView()
+    const split = querySplit(container)
+    const children = Array.from(split.children)
+    const handle = children[1] as HTMLElement | undefined
 
-    expect(children).toHaveLength(3);
-    expect(children[0]?.classList.contains("editor-diff-pane-old")).toBe(true);
-    expect(handle?.matches("[data-editor-pane-handle]")).toBe(true);
-    expect(handle?.getAttribute("role")).toBe("separator");
-    expect(children[2]?.classList.contains("editor-diff-pane-new")).toBe(true);
-  });
+    expect(children).toHaveLength(3)
+    expect(children[0]?.classList.contains('editor-diff-pane-old')).toBe(true)
+    expect(handle?.matches('[data-editor-pane-handle]')).toBe(true)
+    expect(handle?.getAttribute('role')).toBe('separator')
+    expect(children[2]?.classList.contains('editor-diff-pane-new')).toBe(true)
+  })
 
-  it("mounts custom split handles with file-aware context", () => {
+  it('mounts custom split handles with file-aware context', () => {
     const createHandle = vi.fn((context: DiffSplitHandleContext) => {
-      const handle = context.document.createElement("div");
-      handle.className = "custom-diff-handle";
-      return handle;
-    });
-    const { container } = renderDiffView({ createHandle });
+      const handle = context.document.createElement('div')
+      handle.className = 'custom-diff-handle'
+      return handle
+    })
+    const { container } = renderDiffView({ createHandle })
 
     expect(createHandle).toHaveBeenCalledWith(
       expect.objectContaining({
-        beforePaneId: "old",
-        afterPaneId: "new",
-        file: expect.objectContaining({ path: "note.txt" }),
-        orientation: "horizontal",
+        beforePaneId: 'old',
+        afterPaneId: 'new',
+        file: expect.objectContaining({ path: 'note.txt' }),
+        orientation: 'horizontal',
       }),
-    );
-    expect(container.querySelector(".custom-diff-handle")).not.toBeNull();
-    expect(container.querySelector(".editor-diff-split-handle")).toBeNull();
-  });
+    )
+    expect(container.querySelector('.custom-diff-handle')).not.toBeNull()
+    expect(container.querySelector('.editor-diff-split-handle')).toBeNull()
+  })
 
-  it("removes the handle when switching to stacked mode", () => {
-    const { container, diffView } = renderDiffView();
+  it('removes the handle when switching to stacked mode', () => {
+    const { container, diffView } = renderDiffView()
 
-    expect(container.querySelector("[data-editor-pane-handle]")).not.toBeNull();
+    expect(container.querySelector('[data-editor-pane-handle]')).not.toBeNull()
 
-    diffView.setMode("stacked");
+    diffView.setMode('stacked')
 
-    expect(container.querySelector("[data-editor-pane-handle]")).toBeNull();
-    expect(container.querySelector(".editor-diff-split")).toBeNull();
-    expect(container.querySelector(".editor-diff-pane-stacked")).not.toBeNull();
-  });
+    expect(container.querySelector('[data-editor-pane-handle]')).toBeNull()
+    expect(container.querySelector('.editor-diff-split')).toBeNull()
+    expect(container.querySelector('.editor-diff-pane-stacked')).not.toBeNull()
+  })
 
-  it("reveals next and previous hunks with wrapping", () => {
-    const { diffView } = renderDiffView({ file: multiHunkDiff() });
+  it('reveals next and previous hunks with wrapping', () => {
+    const { diffView } = renderDiffView({ file: multiHunkDiff() })
 
-    expect(diffView.getCurrentHunk()?.index).toBe(0);
-    expect(diffView.revealNextHunk()).toBe(true);
-    expect(diffView.getCurrentHunk()?.index).toBe(1);
-    expect(diffView.revealNextHunk()).toBe(false);
-    expect(diffView.revealNextHunk({ wrap: true })).toBe(true);
-    expect(diffView.getCurrentHunk()?.index).toBe(0);
-    expect(diffView.revealPreviousHunk({ wrap: true })).toBe(true);
-    expect(diffView.getCurrentHunk()?.index).toBe(1);
-  });
+    expect(diffView.getCurrentHunk()?.index).toBe(0)
+    expect(diffView.revealNextHunk()).toBe(true)
+    expect(diffView.getCurrentHunk()?.index).toBe(1)
+    expect(diffView.revealNextHunk()).toBe(false)
+    expect(diffView.revealNextHunk({ wrap: true })).toBe(true)
+    expect(diffView.getCurrentHunk()?.index).toBe(0)
+    expect(diffView.revealPreviousHunk({ wrap: true })).toBe(true)
+    expect(diffView.getCurrentHunk()?.index).toBe(1)
+  })
 
-  it("toggles expandable hunk rows from gutter clicks", () => {
+  it('toggles expandable hunk rows from gutter clicks', () => {
     const { container } = renderDiffView({
       file: prefixSkippedDiff(),
-      mode: "stacked",
-    });
-    const pane = queryPane(container, "stacked");
-    const view = queryVirtualizedView(pane);
+      mode: 'stacked',
+    })
+    const pane = queryPane(container, 'stacked')
+    const view = queryVirtualizedView(pane)
 
-    expect(pane.textContent).toContain("Show 2 unmodified lines");
+    expect(pane.textContent).toContain('Show 2 unmodified lines')
 
-    moveVirtualizedGutter(view, 0);
-    expect(view.style.cursor).toBe("pointer");
+    moveVirtualizedGutter(view, 0)
+    expect(view.style.cursor).toBe('pointer')
 
-    clickVirtualizedGutter(view, 0);
+    clickVirtualizedGutter(view, 0)
 
-    expect(pane.textContent).toContain("Hide 2 unmodified lines");
-    expect(pane.textContent).toContain("alpha");
-    expect(pane.textContent).toContain("beta");
+    expect(pane.textContent).toContain('Hide 2 unmodified lines')
+    expect(pane.textContent).toContain('alpha')
+    expect(pane.textContent).toContain('beta')
 
-    view.dispatchEvent(pointerEvent("mouseleave", 0));
-    expect(view.style.cursor).toBe("");
-  });
+    view.dispatchEvent(pointerEvent('mouseleave', 0))
+    expect(view.style.cursor).toBe('')
+  })
 
-  it("applies configured editor theme variables to panes", () => {
+  it('applies configured editor theme variables to panes', () => {
     const { container } = renderDiffView({
       theme: {
-        foregroundColor: "#abcdef",
-        syntax: { keyword: "#123456" },
+        foregroundColor: '#abcdef',
+        syntax: { keyword: '#123456' },
       },
-    });
-    const pane = container.querySelector<HTMLElement>(".editor-diff-text");
+    })
+    const pane = container.querySelector<HTMLElement>('.editor-diff-text')
 
-    expect(pane?.style.getPropertyValue("--editor-foreground")).toBe("#abcdef");
-    expect(pane?.style.getPropertyValue("--editor-syntax-keyword")).toBe("#123456");
-  });
+    expect(pane?.style.getPropertyValue('--editor-foreground')).toBe('#abcdef')
+    expect(pane?.style.getPropertyValue('--editor-syntax-keyword')).toBe('#123456')
+  })
 
-  it("projects full-file syntax tokens into split diff rows", () => {
+  it('projects full-file syntax tokens into split diff rows', () => {
     const tokens = projectDiffSyntaxTokens({
       rows: [
         {
           newLineNumber: 2,
           oldLineNumber: 2,
-          text: "beta",
-          type: "context",
+          text: 'beta',
+          type: 'context',
         },
       ],
-      side: "old",
+      side: 'old',
       sources: [
         {
           lineStarts: [0, 6, 11],
-          side: "old",
-          tokens: [{ start: 6, end: 10, style: { color: "red" } }],
+          side: 'old',
+          tokens: [{ start: 6, end: 10, style: { color: 'red' } }],
         },
       ],
-    });
+    })
 
     expect(tokens).toEqual([
       {
         start: 0,
         end: 4,
-        style: { color: "red" },
+        style: { color: 'red' },
       },
-    ]);
-  });
+    ])
+  })
 
-  it("projects stacked rows from old and new full-file token streams", () => {
+  it('projects stacked rows from old and new full-file token streams', () => {
     const tokens = projectDiffSyntaxTokens({
       rows: [
         {
           oldLineNumber: 1,
-          text: "old",
-          type: "deletion",
+          text: 'old',
+          type: 'deletion',
         },
         {
           newLineNumber: 1,
-          text: "new",
-          type: "addition",
+          text: 'new',
+          type: 'addition',
         },
       ],
-      side: "stacked",
+      side: 'stacked',
       sources: [
         {
           lineStarts: [0],
-          side: "old",
-          tokens: [{ start: 0, end: 3, style: { color: "red" } }],
+          side: 'old',
+          tokens: [{ start: 0, end: 3, style: { color: 'red' } }],
         },
         {
           lineStarts: [0],
-          side: "new",
-          tokens: [{ start: 0, end: 3, style: { color: "blue" } }],
+          side: 'new',
+          tokens: [{ start: 0, end: 3, style: { color: 'blue' } }],
         },
       ],
-    });
+    })
 
     expect(tokens).toEqual([
-      { start: 0, end: 3, style: { color: "red" } },
-      { start: 4, end: 7, style: { color: "blue" } },
-    ]);
-  });
+      { start: 0, end: 3, style: { color: 'red' } },
+      { start: 4, end: 7, style: { color: 'blue' } },
+    ])
+  })
 
-  it("passes full file text to the tree-sitter syntax backend", async () => {
-    const parsedTexts: string[] = [];
-    const syntaxBackend = createRecordingSyntaxBackend(parsedTexts);
+  it('passes full file text to the tree-sitter syntax backend', async () => {
+    const parsedTexts: string[] = []
+    const syntaxBackend = createRecordingSyntaxBackend(parsedTexts)
 
     renderDiffView({
       syntaxBackend,
       syntaxHighlight: true,
-    });
+    })
 
-    await flushPromises();
+    await flushPromises()
 
-    expect(parsedTexts).toContain("one\ntwo\n");
-  });
+    expect(parsedTexts).toContain('one\ntwo\n')
+  })
 
-  it("defaults syntax highlighting to tree-sitter instead of shiki", () => {
-    expect(diffSyntaxBackend({})).toEqual({ kind: "tree-sitter" });
-    expect(diffSyntaxBackend({ theme: { backgroundColor: "#ffffff" } })).toEqual({
-      kind: "tree-sitter",
-    });
+  it('defaults syntax highlighting to tree-sitter instead of shiki', () => {
+    expect(diffSyntaxBackend({})).toEqual({ kind: 'tree-sitter' })
+    expect(diffSyntaxBackend({ theme: { backgroundColor: '#ffffff' } })).toEqual({
+      kind: 'tree-sitter',
+    })
     expect(
       diffSyntaxBackend({
-        syntaxBackend: { kind: "shiki", shikiTheme: "github-light" },
-        theme: { backgroundColor: "#ffffff" },
+        syntaxBackend: { kind: 'shiki', shikiTheme: 'github-light' },
+        theme: { backgroundColor: '#ffffff' },
       }),
-    ).toEqual({ kind: "shiki", shikiTheme: "github-light" });
-  });
-});
+    ).toEqual({ kind: 'shiki', shikiTheme: 'github-light' })
+  })
+})
 
 type RenderDiffViewOptions = {
-  readonly createHandle?: DiffSplitPaneOptions["createHandle"];
-  readonly file?: DiffFile;
-  readonly mode?: "split" | "stacked";
-  readonly syntaxBackend?: DiffSyntaxBackend;
-  readonly syntaxHighlight?: boolean;
-  readonly theme?: EditorTheme | null;
-};
+  readonly createHandle?: DiffSplitPaneOptions['createHandle']
+  readonly file?: DiffFile
+  readonly mode?: 'split' | 'stacked'
+  readonly syntaxBackend?: DiffSyntaxBackend
+  readonly syntaxHighlight?: boolean
+  readonly theme?: EditorTheme | null
+}
 
 function renderDiffView(options: RenderDiffViewOptions = {}) {
-  const container = document.createElement("div");
-  document.body.appendChild(container);
+  const container = document.createElement('div')
+  document.body.appendChild(container)
   const diffView = new DiffView(container, {
     mode: options.mode,
     showFileList: false,
@@ -221,59 +221,59 @@ function renderDiffView(options: RenderDiffViewOptions = {}) {
     },
     syntaxHighlight: options.syntaxHighlight ?? false,
     theme: options.theme,
-  });
-  diffView.setFiles([options.file ?? singleHunkDiff()]);
-  return { container, diffView };
+  })
+  diffView.setFiles([options.file ?? singleHunkDiff()])
+  return { container, diffView }
 }
 
 function singleHunkDiff() {
   return createTextDiff({
-    oldFile: { path: "note.txt", text: "one\ntwo\n" },
-    newFile: { path: "note.txt", text: "one\nTWO\n" },
-  });
+    oldFile: { path: 'note.txt', text: 'one\ntwo\n' },
+    newFile: { path: 'note.txt', text: 'one\nTWO\n' },
+  })
 }
 
 function multiHunkDiff() {
   return createTextDiff({
     contextLines: 0,
-    oldFile: { path: "note.txt", text: "one\ntwo\nthree\nfour\nfive\nsix\n" },
-    newFile: { path: "note.txt", text: "ONE\ntwo\nthree\nFOUR\nfive\nsix\n" },
-  });
+    oldFile: { path: 'note.txt', text: 'one\ntwo\nthree\nfour\nfive\nsix\n' },
+    newFile: { path: 'note.txt', text: 'ONE\ntwo\nthree\nFOUR\nfive\nsix\n' },
+  })
 }
 
 function prefixSkippedDiff() {
   return createTextDiff({
     contextLines: 0,
-    oldFile: { path: "note.txt", text: "alpha\nbeta\ngamma\n" },
-    newFile: { path: "note.txt", text: "alpha\nbeta\nGAMMA\n" },
-  });
+    oldFile: { path: 'note.txt', text: 'alpha\nbeta\ngamma\n' },
+    newFile: { path: 'note.txt', text: 'alpha\nbeta\nGAMMA\n' },
+  })
 }
 
 function querySplit(container: HTMLElement): HTMLElement {
-  const split = container.querySelector<HTMLElement>(".editor-diff-split");
-  if (!split) throw new Error("Expected split diff");
-  return split;
+  const split = container.querySelector<HTMLElement>('.editor-diff-split')
+  if (!split) throw new Error('Expected split diff')
+  return split
 }
 
-function queryPane(container: HTMLElement, side: "old" | "new" | "stacked"): HTMLElement {
-  const pane = container.querySelector<HTMLElement>(`.editor-diff-pane-${side}`);
-  if (!pane) throw new Error(`Expected ${side} diff pane`);
-  return pane;
+function queryPane(container: HTMLElement, side: 'old' | 'new' | 'stacked'): HTMLElement {
+  const pane = container.querySelector<HTMLElement>(`.editor-diff-pane-${side}`)
+  if (!pane) throw new Error(`Expected ${side} diff pane`)
+  return pane
 }
 
 function queryVirtualizedView(container: HTMLElement): HTMLElement {
-  const view = container.querySelector<HTMLElement>(".editor-virtualized");
-  if (!view) throw new Error("Expected virtualized diff view");
-  return view;
+  const view = container.querySelector<HTMLElement>('.editor-virtualized')
+  if (!view) throw new Error('Expected virtualized diff view')
+  return view
 }
 
 function clickVirtualizedGutter(view: HTMLElement, y: number): void {
-  view.dispatchEvent(pointerEvent("mousedown", y));
-  view.dispatchEvent(pointerEvent("click", y));
+  view.dispatchEvent(pointerEvent('mousedown', y))
+  view.dispatchEvent(pointerEvent('click', y))
 }
 
 function moveVirtualizedGutter(view: HTMLElement, y: number): void {
-  view.dispatchEvent(pointerEvent("mousemove", y));
+  view.dispatchEvent(pointerEvent('mousemove', y))
 }
 
 function pointerEvent(type: string, clientY: number): MouseEvent {
@@ -282,15 +282,15 @@ function pointerEvent(type: string, clientY: number): MouseEvent {
     button: 0,
     clientY,
     detail: 1,
-  });
+  })
 }
 
 function createRecordingSyntaxBackend(parsedTexts: string[]): DiffSyntaxBackend {
   return {
-    kind: "tree-sitter",
+    kind: 'tree-sitter',
     provider: {
       createSession(options) {
-        parsedTexts.push(options.text);
+        parsedTexts.push(options.text)
         return {
           applyChange: async () => emptySyntaxResult(),
           dispose: () => undefined,
@@ -298,10 +298,10 @@ function createRecordingSyntaxBackend(parsedTexts: string[]): DiffSyntaxBackend 
           getSnapshotVersion: () => 0,
           getTokens: () => [],
           refresh: async () => emptySyntaxResult(),
-        };
+        }
       },
     },
-  };
+  }
 }
 
 function emptySyntaxResult() {
@@ -312,41 +312,41 @@ function emptySyntaxResult() {
     folds: [],
     injections: [],
     tokens: [],
-  };
+  }
 }
 
 async function flushPromises(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
+  await Promise.resolve()
+  await Promise.resolve()
 }
 
-type HighlightConstructor = new (...ranges: AbstractRange[]) => Highlight;
+type HighlightConstructor = new (...ranges: AbstractRange[]) => Highlight
 
 class TestHighlight {
-  private readonly ranges = new Set<AbstractRange>();
+  private readonly ranges = new Set<AbstractRange>()
 
   public constructor(...ranges: AbstractRange[]) {
-    for (const range of ranges) this.ranges.add(range);
+    for (const range of ranges) this.ranges.add(range)
   }
 
   public add(range: AbstractRange): this {
-    this.ranges.add(range);
-    return this;
+    this.ranges.add(range)
+    return this
   }
 
   public clear(): void {
-    this.ranges.clear();
+    this.ranges.clear()
   }
 
   public delete(range: AbstractRange): boolean {
-    return this.ranges.delete(range);
+    return this.ranges.delete(range)
   }
 }
 
 function installHighlightPolyfill(): void {
   const global = globalThis as typeof globalThis & {
-    Highlight?: HighlightConstructor;
-  };
-  if (global.Highlight) return;
-  global.Highlight = TestHighlight as unknown as HighlightConstructor;
+    Highlight?: HighlightConstructor
+  }
+  if (global.Highlight) return
+  global.Highlight = TestHighlight as unknown as HighlightConstructor
 }

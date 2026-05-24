@@ -5,10 +5,10 @@ import type {
   PieceTableTreeSnapshot,
   RealAnchor,
   ResolvedAnchor,
-} from "./pieceTableTypes";
-import { flattenPieces } from "./tree";
+} from './pieceTableTypes'
+import { flattenPieces } from './tree'
 
-export type { AnchorBias, RealAnchor, ResolvedAnchor, PieceTableEdit };
+export type { AnchorBias, RealAnchor, ResolvedAnchor, PieceTableEdit }
 
 export {
   Anchor,
@@ -18,17 +18,17 @@ export {
   compareAnchors,
   resolveAnchor,
   resolveAnchorLinear,
-} from "./anchors";
-export { applyBatchToPieceTable, deleteFromPieceTable, insertIntoPieceTable } from "./edits";
-export { offsetToPoint, pointToOffset } from "./positions";
+} from './anchors'
+export { applyBatchToPieceTable, deleteFromPieceTable, insertIntoPieceTable } from './edits'
+export { offsetToPoint, pointToOffset } from './positions'
 export {
   getPieceTableLength,
   getPieceTableOriginalText,
   getPieceTableText,
   forEachPieceTableTextChunk,
   pieceTableSnapshotsHaveSameText,
-} from "./reads";
-export { createPieceTableSnapshot } from "./snapshot";
+} from './reads'
+export { createPieceTableSnapshot } from './snapshot'
 
 export const debugPieceTable = (snapshot: PieceTableTreeSnapshot): Piece[] =>
-  flattenPieces(snapshot.root, []);
+  flattenPieces(snapshot.root, [])

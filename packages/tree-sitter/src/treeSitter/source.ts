@@ -1,166 +1,166 @@
-import { debugPieceTable, type PieceBufferId, type PieceTableSnapshot } from "@editor/core";
+import { debugPieceTable, type PieceBufferId, type PieceTableSnapshot } from '@editor/core'
 
 export type TreeSitterSourcePieceSpan = {
-  readonly chunkId: string;
-  readonly start: number;
-  readonly length: number;
-};
+  readonly chunkId: string
+  readonly start: number
+  readonly length: number
+}
 
 export type TreeSitterSourceChunkPayload =
   | {
-      readonly kind: "shared-utf16";
-      readonly chunkId: string;
-      readonly buffer: SharedArrayBuffer;
-      readonly length: number;
+      readonly kind: 'shared-utf16'
+      readonly chunkId: string
+      readonly buffer: SharedArrayBuffer
+      readonly length: number
     }
   | {
-      readonly kind: "string";
-      readonly chunkId: string;
-      readonly text: string;
-    };
+      readonly kind: 'string'
+      readonly chunkId: string
+      readonly text: string
+    }
 
 export type TreeSitterSourceDescriptor = {
-  readonly length: number;
-  readonly pieces: readonly TreeSitterSourcePieceSpan[];
-  readonly chunks: readonly TreeSitterSourceChunkPayload[];
-};
+  readonly length: number
+  readonly pieces: readonly TreeSitterSourcePieceSpan[]
+  readonly chunks: readonly TreeSitterSourceChunkPayload[]
+}
 
 export type TreeSitterSourceDescriptorOptions = {
-  readonly sentChunkIds?: ReadonlySet<string>;
-  readonly useSharedBuffers?: boolean;
-};
+  readonly sentChunkIds?: ReadonlySet<string>
+  readonly useSharedBuffers?: boolean
+}
 
 type ResolvedTreeSitterSourceChunk =
   | {
-      readonly kind: "shared-utf16";
-      readonly units: Uint16Array;
-      readonly length: number;
+      readonly kind: 'shared-utf16'
+      readonly units: Uint16Array
+      readonly length: number
     }
   | {
-      readonly kind: "string";
-      readonly text: string;
-      readonly length: number;
-    };
+      readonly kind: 'string'
+      readonly text: string
+      readonly length: number
+    }
 
-export type TreeSitterSourceCache = Map<string, Map<string, ResolvedTreeSitterSourceChunk>>;
+export type TreeSitterSourceCache = Map<string, Map<string, ResolvedTreeSitterSourceChunk>>
 
 export type TreeSitterInputChunk = {
-  readonly start: number;
-  readonly end: number;
-  readonly chunkStart: number;
-  readonly source: ResolvedTreeSitterSourceChunk;
-};
+  readonly start: number
+  readonly end: number
+  readonly chunkStart: number
+  readonly source: ResolvedTreeSitterSourceChunk
+}
 
 export type TreeSitterPieceTableInput = {
-  readonly length: number;
-  readonly chunks: readonly TreeSitterInputChunk[];
-  lastChunkIndex?: number;
-};
+  readonly length: number
+  readonly chunks: readonly TreeSitterInputChunk[]
+  lastChunkIndex?: number
+}
 
-const SOURCE_CHUNK_SIZE = 16 * 1024;
+const SOURCE_CHUNK_SIZE = 16 * 1024
 // web-tree-sitter copies parser callback text into a fixed 10KB UTF-16 buffer.
-const PARSER_READ_BATCH_CODE_UNITS = 4096;
-const UTF16_READ_BATCH = 8192;
+const PARSER_READ_BATCH_CODE_UNITS = 4096
+const UTF16_READ_BATCH = 8192
 
 export const createTreeSitterSourceDescriptor = (
   snapshot: PieceTableSnapshot,
   options: TreeSitterSourceDescriptorOptions = {},
 ): TreeSitterSourceDescriptor => {
-  const pieces: TreeSitterSourcePieceSpan[] = [];
-  const chunks: TreeSitterSourceChunkPayload[] = [];
-  const emittedChunkIds = new Set<string>();
-  const useSharedBuffers = options.useSharedBuffers ?? supportsSharedTreeSitterSource();
+  const pieces: TreeSitterSourcePieceSpan[] = []
+  const chunks: TreeSitterSourceChunkPayload[] = []
+  const emittedChunkIds = new Set<string>()
+  const useSharedBuffers = options.useSharedBuffers ?? supportsSharedTreeSitterSource()
 
   for (const piece of debugPieceTable(snapshot)) {
-    if (!piece.visible) continue;
+    if (!piece.visible) continue
     appendPieceSpans(snapshot, piece.buffer, piece.start, piece.length, {
       pieces,
       chunks,
       emittedChunkIds,
       sentChunkIds: options.sentChunkIds,
       useSharedBuffers,
-    });
+    })
   }
 
   return {
     length: snapshot.length,
     pieces,
     chunks,
-  };
-};
+  }
+}
 
 export const resolveTreeSitterSourceDescriptor = (
   cache: TreeSitterSourceCache,
   documentId: string,
   descriptor: TreeSitterSourceDescriptor,
 ): TreeSitterPieceTableInput => {
-  const chunks = resolveDescriptorChunks(ensureDocumentSourceCache(cache, documentId), descriptor);
+  const chunks = resolveDescriptorChunks(ensureDocumentSourceCache(cache, documentId), descriptor)
   return {
     length: descriptor.length,
     chunks,
-  };
-};
+  }
+}
 
 export const disposeTreeSitterSourceDocument = (
   cache: TreeSitterSourceCache,
   documentId: string,
 ): void => {
-  cache.delete(documentId);
-};
+  cache.delete(documentId)
+}
 
 export const clearTreeSitterSourceCache = (cache: TreeSitterSourceCache): void => {
-  cache.clear();
-};
+  cache.clear()
+}
 
 export const readTreeSitterPieceTableInput = (
   input: TreeSitterPieceTableInput,
   index: number,
 ): string | undefined => {
-  if (index < 0 || index >= input.length) return undefined;
+  if (index < 0 || index >= input.length) return undefined
 
-  const chunk = findChunkContainingWithCursor(input, index);
-  if (!chunk) return undefined;
+  const chunk = findChunkContainingWithCursor(input, index)
+  if (!chunk) return undefined
 
-  const sourceStart = chunk.chunkStart + index - chunk.start;
-  const sourceEnd = chunk.chunkStart + chunk.end - chunk.start;
+  const sourceStart = chunk.chunkStart + index - chunk.start
+  const sourceEnd = chunk.chunkStart + chunk.end - chunk.start
   const readEnd = safeParserReadEnd(
     chunk.source,
     sourceStart,
     Math.min(sourceEnd, sourceStart + PARSER_READ_BATCH_CODE_UNITS),
     sourceEnd,
-  );
-  return readResolvedChunkText(chunk.source, sourceStart, readEnd);
-};
+  )
+  return readResolvedChunkText(chunk.source, sourceStart, readEnd)
+}
 
 export const readTreeSitterInputRange = (
   input: TreeSitterPieceTableInput,
   startIndex: number,
   endIndex: number,
 ): string => {
-  if (endIndex <= startIndex) return "";
+  if (endIndex <= startIndex) return ''
 
-  const chunks: string[] = [];
+  const chunks: string[] = []
   for (const chunk of input.chunks) {
-    if (chunk.end <= startIndex) continue;
-    if (chunk.start >= endIndex) break;
+    if (chunk.end <= startIndex) continue
+    if (chunk.start >= endIndex) break
 
-    const start = Math.max(startIndex, chunk.start) - chunk.start;
-    const end = Math.min(endIndex, chunk.end) - chunk.start;
+    const start = Math.max(startIndex, chunk.start) - chunk.start
+    const end = Math.min(endIndex, chunk.end) - chunk.start
     chunks.push(
       readResolvedChunkText(chunk.source, chunk.chunkStart + start, chunk.chunkStart + end),
-    );
+    )
   }
 
-  return chunks.join("");
-};
+  return chunks.join('')
+}
 
 type PieceSpanBuilder = {
-  readonly pieces: TreeSitterSourcePieceSpan[];
-  readonly chunks: TreeSitterSourceChunkPayload[];
-  readonly emittedChunkIds: Set<string>;
-  readonly sentChunkIds?: ReadonlySet<string>;
-  readonly useSharedBuffers: boolean;
-};
+  readonly pieces: TreeSitterSourcePieceSpan[]
+  readonly chunks: TreeSitterSourceChunkPayload[]
+  readonly emittedChunkIds: Set<string>
+  readonly sentChunkIds?: ReadonlySet<string>
+  readonly useSharedBuffers: boolean
+}
 
 const appendPieceSpans = (
   snapshot: PieceTableSnapshot,
@@ -169,23 +169,23 @@ const appendPieceSpans = (
   length: number,
   builder: PieceSpanBuilder,
 ): void => {
-  const text = getSnapshotBufferText(snapshot, bufferId);
-  let offset = start;
-  let remaining = length;
+  const text = getSnapshotBufferText(snapshot, bufferId)
+  let offset = start
+  let remaining = length
 
   while (remaining > 0) {
-    const chunkStart = Math.floor(offset / SOURCE_CHUNK_SIZE) * SOURCE_CHUNK_SIZE;
-    const chunkLength = Math.min(text.length - chunkStart, SOURCE_CHUNK_SIZE);
-    const spanStart = offset - chunkStart;
-    const spanLength = Math.min(remaining, chunkLength - spanStart);
-    const chunkId = sourceChunkId(bufferId, chunkStart);
+    const chunkStart = Math.floor(offset / SOURCE_CHUNK_SIZE) * SOURCE_CHUNK_SIZE
+    const chunkLength = Math.min(text.length - chunkStart, SOURCE_CHUNK_SIZE)
+    const spanStart = offset - chunkStart
+    const spanLength = Math.min(remaining, chunkLength - spanStart)
+    const chunkId = sourceChunkId(bufferId, chunkStart)
 
-    builder.pieces.push({ chunkId, start: spanStart, length: spanLength });
-    appendChunkPayload(text, chunkId, chunkStart, chunkLength, builder);
-    offset += spanLength;
-    remaining -= spanLength;
+    builder.pieces.push({ chunkId, start: spanStart, length: spanLength })
+    appendChunkPayload(text, chunkId, chunkStart, chunkLength, builder)
+    offset += spanLength
+    remaining -= spanLength
   }
-};
+}
 
 const appendChunkPayload = (
   text: string,
@@ -194,111 +194,111 @@ const appendChunkPayload = (
   chunkLength: number,
   builder: PieceSpanBuilder,
 ): void => {
-  if (builder.sentChunkIds?.has(chunkId)) return;
-  if (builder.emittedChunkIds.has(chunkId)) return;
+  if (builder.sentChunkIds?.has(chunkId)) return
+  if (builder.emittedChunkIds.has(chunkId)) return
 
-  const chunkText = text.slice(chunkStart, chunkStart + chunkLength);
-  builder.emittedChunkIds.add(chunkId);
-  builder.chunks.push(createChunkPayload(chunkId, chunkText, builder.useSharedBuffers));
-};
+  const chunkText = text.slice(chunkStart, chunkStart + chunkLength)
+  builder.emittedChunkIds.add(chunkId)
+  builder.chunks.push(createChunkPayload(chunkId, chunkText, builder.useSharedBuffers))
+}
 
 const createChunkPayload = (
   chunkId: string,
   text: string,
   useSharedBuffers: boolean,
 ): TreeSitterSourceChunkPayload => {
-  if (!useSharedBuffers) return { kind: "string", chunkId, text };
+  if (!useSharedBuffers) return { kind: 'string', chunkId, text }
   return {
-    kind: "shared-utf16",
+    kind: 'shared-utf16',
     chunkId,
     buffer: createSharedUtf16Buffer(text),
     length: text.length,
-  };
-};
+  }
+}
 
 const createSharedUtf16Buffer = (text: string): SharedArrayBuffer => {
-  const buffer = new SharedArrayBuffer(text.length * Uint16Array.BYTES_PER_ELEMENT);
-  const units = new Uint16Array(buffer);
-  for (let index = 0; index < text.length; index++) units[index] = text.charCodeAt(index);
-  return buffer;
-};
+  const buffer = new SharedArrayBuffer(text.length * Uint16Array.BYTES_PER_ELEMENT)
+  const units = new Uint16Array(buffer)
+  for (let index = 0; index < text.length; index++) units[index] = text.charCodeAt(index)
+  return buffer
+}
 
-const sourceChunkId = (bufferId: string, chunkStart: number): string => `${bufferId}:${chunkStart}`;
+const sourceChunkId = (bufferId: string, chunkStart: number): string => `${bufferId}:${chunkStart}`
 
 const getSnapshotBufferText = (snapshot: PieceTableSnapshot, bufferId: PieceBufferId): string => {
-  const text = snapshot.buffers.chunks.get(bufferId);
-  if (text !== undefined) return text;
-  throw new Error("piece buffer not found");
-};
+  const text = snapshot.buffers.chunks.get(bufferId)
+  if (text !== undefined) return text
+  throw new Error('piece buffer not found')
+}
 
 const supportsSharedTreeSitterSource = (): boolean => {
-  if (typeof SharedArrayBuffer === "undefined") return false;
-  return Boolean((globalThis as { readonly crossOriginIsolated?: boolean }).crossOriginIsolated);
-};
+  if (typeof SharedArrayBuffer === 'undefined') return false
+  return Boolean((globalThis as { readonly crossOriginIsolated?: boolean }).crossOriginIsolated)
+}
 
 const ensureDocumentSourceCache = (
   cache: TreeSitterSourceCache,
   documentId: string,
 ): Map<string, ResolvedTreeSitterSourceChunk> => {
-  const existing = cache.get(documentId);
-  if (existing) return existing;
+  const existing = cache.get(documentId)
+  if (existing) return existing
 
-  const documentCache = new Map<string, ResolvedTreeSitterSourceChunk>();
-  cache.set(documentId, documentCache);
-  return documentCache;
-};
+  const documentCache = new Map<string, ResolvedTreeSitterSourceChunk>()
+  cache.set(documentId, documentCache)
+  return documentCache
+}
 
 const resolveDescriptorChunks = (
   cache: Map<string, ResolvedTreeSitterSourceChunk>,
   descriptor: TreeSitterSourceDescriptor,
 ): TreeSitterInputChunk[] => {
-  cacheChunkPayloads(cache, descriptor.chunks);
+  cacheChunkPayloads(cache, descriptor.chunks)
 
-  const chunks: TreeSitterInputChunk[] = [];
-  let documentOffset = 0;
+  const chunks: TreeSitterInputChunk[] = []
+  let documentOffset = 0
   for (const piece of descriptor.pieces) {
-    const source = cache.get(piece.chunkId);
-    if (!source) throw new Error(`Tree-sitter source chunk "${piece.chunkId}" is missing`);
+    const source = cache.get(piece.chunkId)
+    if (!source) throw new Error(`Tree-sitter source chunk "${piece.chunkId}" is missing`)
 
     chunks.push({
       start: documentOffset,
       end: documentOffset + piece.length,
       chunkStart: piece.start,
       source,
-    });
-    documentOffset += piece.length;
+    })
+    documentOffset += piece.length
   }
 
-  if (documentOffset !== descriptor.length) throw new Error("Tree-sitter source length mismatch");
-  return chunks;
-};
+  if (documentOffset !== descriptor.length) throw new Error('Tree-sitter source length mismatch')
+  return chunks
+}
 
 const cacheChunkPayloads = (
   cache: Map<string, ResolvedTreeSitterSourceChunk>,
   chunks: readonly TreeSitterSourceChunkPayload[],
 ): void => {
-  for (const chunk of chunks) cache.set(chunk.chunkId, resolveChunkPayload(chunk));
-};
+  for (const chunk of chunks) cache.set(chunk.chunkId, resolveChunkPayload(chunk))
+}
 
 const resolveChunkPayload = (
   chunk: TreeSitterSourceChunkPayload,
 ): ResolvedTreeSitterSourceChunk => {
-  if (chunk.kind === "string") {
-    return { kind: "string", text: chunk.text, length: chunk.text.length };
+  if (chunk.kind === 'string') {
+    return { kind: 'string', text: chunk.text, length: chunk.text.length }
   }
 
-  const units = new Uint16Array(chunk.buffer, 0, chunk.length);
-  return { kind: "shared-utf16", units, length: chunk.length };
-};
+  const units = new Uint16Array(chunk.buffer, 0, chunk.length)
+  return { kind: 'shared-utf16', units, length: chunk.length }
+}
 
 const readResolvedChunkText = (
   chunk: ResolvedTreeSitterSourceChunk,
   start: number,
   end: number,
 ): string => {
-  if (chunk.kind === "string") return chunk.text.slice(start, end);
-  return readUtf16Text(chunk.units, start, end);
-};
+  if (chunk.kind === 'string') return chunk.text.slice(start, end)
+  return readUtf16Text(chunk.units, start, end)
+}
 
 const safeParserReadEnd = (
   chunk: ResolvedTreeSitterSourceChunk,
@@ -306,74 +306,74 @@ const safeParserReadEnd = (
   end: number,
   maxEnd: number,
 ): number => {
-  if (end >= maxEnd || end <= start) return end;
+  if (end >= maxEnd || end <= start) return end
 
-  const lastCodeUnit = readResolvedChunkCodeUnit(chunk, end - 1);
-  if (!isHighSurrogate(lastCodeUnit)) return end;
-  return Math.max(start + 1, end - 1);
-};
+  const lastCodeUnit = readResolvedChunkCodeUnit(chunk, end - 1)
+  if (!isHighSurrogate(lastCodeUnit)) return end
+  return Math.max(start + 1, end - 1)
+}
 
 const readResolvedChunkCodeUnit = (chunk: ResolvedTreeSitterSourceChunk, index: number): number => {
-  if (chunk.kind === "string") return chunk.text.charCodeAt(index);
-  return chunk.units[index] ?? Number.NaN;
-};
+  if (chunk.kind === 'string') return chunk.text.charCodeAt(index)
+  return chunk.units[index] ?? Number.NaN
+}
 
-const isHighSurrogate = (codeUnit: number): boolean => codeUnit >= 0xd800 && codeUnit <= 0xdbff;
+const isHighSurrogate = (codeUnit: number): boolean => codeUnit >= 0xd800 && codeUnit <= 0xdbff
 
 const readUtf16Text = (units: Uint16Array, start: number, end: number): string => {
-  let text = "";
+  let text = ''
   for (let index = start; index < end; index += UTF16_READ_BATCH) {
-    text += String.fromCharCode(...units.subarray(index, Math.min(index + UTF16_READ_BATCH, end)));
+    text += String.fromCharCode(...units.subarray(index, Math.min(index + UTF16_READ_BATCH, end)))
   }
 
-  return text;
-};
+  return text
+}
 
 const findChunkContaining = (
   chunks: readonly TreeSitterInputChunk[],
   index: number,
 ): TreeSitterInputChunk | null => {
-  let low = 0;
-  let high = chunks.length - 1;
+  let low = 0
+  let high = chunks.length - 1
 
   while (low <= high) {
-    const middle = Math.floor((low + high) / 2);
-    const chunk = chunks[middle];
-    if (!chunk) return null;
+    const middle = Math.floor((low + high) / 2)
+    const chunk = chunks[middle]
+    if (!chunk) return null
 
     if (index < chunk.start) {
-      high = middle - 1;
-      continue;
+      high = middle - 1
+      continue
     }
 
     if (index >= chunk.end) {
-      low = middle + 1;
-      continue;
+      low = middle + 1
+      continue
     }
 
-    return chunk;
+    return chunk
   }
 
-  return null;
-};
+  return null
+}
 
 const findChunkContainingWithCursor = (
   input: TreeSitterPieceTableInput,
   index: number,
 ): TreeSitterInputChunk | null => {
-  const cachedIndex = input.lastChunkIndex;
-  const cached = cachedIndex === undefined ? null : input.chunks[cachedIndex];
-  if (cached && index >= cached.start && index < cached.end) return cached;
+  const cachedIndex = input.lastChunkIndex
+  const cached = cachedIndex === undefined ? null : input.chunks[cachedIndex]
+  if (cached && index >= cached.start && index < cached.end) return cached
 
   if (cachedIndex !== undefined) {
-    const next = input.chunks[cachedIndex + 1];
+    const next = input.chunks[cachedIndex + 1]
     if (next && index >= next.start && index < next.end) {
-      input.lastChunkIndex = cachedIndex + 1;
-      return next;
+      input.lastChunkIndex = cachedIndex + 1
+      return next
     }
   }
 
-  const chunk = findChunkContaining(input.chunks, index);
-  if (chunk) input.lastChunkIndex = input.chunks.indexOf(chunk);
-  return chunk;
-};
+  const chunk = findChunkContaining(input.chunks, index)
+  if (chunk) input.lastChunkIndex = input.chunks.indexOf(chunk)
+  return chunk
+}

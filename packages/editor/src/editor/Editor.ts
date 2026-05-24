@@ -64,7 +64,6 @@ import {
   type EditorFeatureContribution,
   type EditorFeatureContributionContext,
   type EditorFeatureContributionProvider,
-  type EditorGutterContribution,
   type EditorInjectedTextRowProviderContext,
   type EditorOverlaySide,
   type EditorPlugin,
@@ -195,6 +194,10 @@ export class Editor {
 
   private get documentVersion(): number {
     return this.document.documentVersion
+  }
+
+  private get textVersion(): number {
+    return this.document.textVersion
   }
 
   private get syntaxStatus(): EditorSyntaxStatus {
@@ -1079,7 +1082,7 @@ export class Editor {
       languageId: this.languageId,
       theme: this.resolvedTheme(),
       textSnapshot,
-      textVersion: this.documentVersion,
+      textVersion: this.textVersion,
       lineStarts: this.view.getLineStarts(),
       tokens: this.tokens,
       selections: this.inputSelection.resolveViewSelections(),

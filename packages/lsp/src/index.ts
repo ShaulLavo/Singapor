@@ -1,5 +1,5 @@
-export { defaultClientCapabilities, documentSyncModeFromCapabilities } from "./capabilities";
-export { LspClient, type LspClientConfig, type LspClientState } from "./client";
+export { defaultClientCapabilities, documentSyncModeFromCapabilities } from './capabilities'
+export { LspClient, type LspClientConfig, type LspClientState } from './client'
 export {
   createLspContentChanges,
   createLspContentChangesInSnapshot,
@@ -12,7 +12,7 @@ export {
   textEditToLspContentChange,
   textEditToLspContentChangeInSnapshot,
   type LspContentChangeOptions,
-} from "./positions";
+} from './positions'
 export {
   createLspPlugin,
   type LspPluginDocumentUriResolver,
@@ -20,13 +20,13 @@ export {
   type LspPluginOptions,
   type LspPluginRoute,
   type LspPluginStatus,
-} from "./plugin";
+} from './plugin'
 export {
   LspRequestCancelledError,
   LspResponseError,
   METHOD_NOT_FOUND,
   REQUEST_CANCELLED,
-} from "./protocol";
+} from './protocol'
 export {
   createWebSocketLspTransport,
   createWorkerLspTransport,
@@ -37,7 +37,7 @@ export {
   type LspWorkerLike,
   type LspWorkerMessageFormat,
   type LspWorkerTransportOptions,
-} from "./transports";
+} from './transports'
 export type {
   LspDocument,
   LspDocumentOpenOptions,
@@ -52,6 +52,6 @@ export type {
   LspUnhandledNotificationHandler,
   LspWorkspaceEditOptions,
   LspWorkspaceSnapshotEditOptions,
-} from "./types";
-export { LspWorkspace } from "./workspace";
-export type * as lsp from "vscode-languageserver-protocol";
+} from './types'
+export { LspWorkspace } from './workspace'
+export type * as lsp from 'vscode-languageserver-protocol'

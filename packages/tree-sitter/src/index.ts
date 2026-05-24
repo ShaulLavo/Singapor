@@ -11,7 +11,7 @@ export {
   type TreeSitterLanguageId,
   type TreeSitterLanguageRegistrationOptions,
   type TreeSitterLanguageResolver,
-} from "./treeSitter/registry";
+} from './treeSitter/registry'
 export type {
   BracketInfo,
   FoldRange,
@@ -20,7 +20,7 @@ export type {
   TreeSitterInjectionInfo,
   TreeSitterParseResult,
   TreeSitterPoint,
-} from "./treeSitter/types";
+} from './treeSitter/types'
 export {
   canUseTreeSitterWorker,
   createTreeSitterWorkerBackend,
@@ -34,7 +34,7 @@ export {
   type TreeSitterEditPayload,
   type TreeSitterParsePayload,
   type TreeSitterSelectionPayload,
-} from "./treeSitter/workerClient";
+} from './treeSitter/workerClient'
 export {
   createTreeSitterSourceDescriptor,
   readTreeSitterInputRange,
@@ -42,13 +42,13 @@ export {
   resolveTreeSitterSourceDescriptor,
   type TreeSitterSourceCache,
   type TreeSitterSourceDescriptor,
-} from "./treeSitter/source";
+} from './treeSitter/source'
 export {
   TreeSitterSyntaxSession,
   createTextDiffEdit,
   createTreeSitterEditPayload,
   type TreeSitterSyntaxSessionOptions,
-} from "./session";
+} from './session'
 export {
   expandTreeSitterSelection,
   selectTreeSitterToken,
@@ -56,172 +56,172 @@ export {
   type TreeSitterSelectionCommandOptions,
   type TreeSitterSelectionCommandResult,
   type TreeSitterSelectionExpansionState,
-} from "./structuralSelection";
+} from './structuralSelection'
 
 import type {
   EditorDisposable,
   EditorPlugin,
   EditorPluginContext,
   EditorSyntaxProvider,
-} from "@editor/core";
+} from '@editor/core'
 import type {
   TreeSitterLanguageAssets,
   TreeSitterLanguageContribution,
   TreeSitterLanguageDisposable,
   TreeSitterLanguageRegistrationOptions,
   TreeSitterLanguageResolver,
-} from "./treeSitter/registry";
-import { TreeSitterLanguageRegistry } from "./treeSitter/registry";
-import { TreeSitterSyntaxSession } from "./session";
-import { createTreeSitterWorkerBackend, type TreeSitterBackend } from "./treeSitter/workerClient";
+} from './treeSitter/registry'
+import { TreeSitterLanguageRegistry } from './treeSitter/registry'
+import { TreeSitterSyntaxSession } from './session'
+import { createTreeSitterWorkerBackend, type TreeSitterBackend } from './treeSitter/workerClient'
 
 export type TreeSitterSyntaxProviderOptions = {
-  readonly backend?: TreeSitterBackend;
-};
+  readonly backend?: TreeSitterBackend
+}
 
 export type TreeSitterSyntaxProvider = EditorSyntaxProvider &
   TreeSitterLanguageResolver & {
     registerLanguage(
       contribution: TreeSitterLanguageContribution,
       options?: TreeSitterLanguageRegistrationOptions,
-    ): TreeSitterLanguageDisposable;
-  };
+    ): TreeSitterLanguageDisposable
+  }
 
 export type TreeSitterLanguagePluginOptions = TreeSitterLanguageRegistrationOptions & {
-  readonly name?: string;
-};
+  readonly name?: string
+}
 
 type TreeSitterProviderRegistration = {
-  readonly provider: TreeSitterSyntaxProvider;
-  readonly contextReferences: WeakMap<EditorPluginContext, TreeSitterContextReference>;
-  readonly languageReferences: Map<string, TreeSitterLanguageReference>;
-};
+  readonly provider: TreeSitterSyntaxProvider
+  readonly contextReferences: WeakMap<EditorPluginContext, TreeSitterContextReference>
+  readonly languageReferences: Map<string, TreeSitterLanguageReference>
+}
 
 type TreeSitterContextReference = {
-  syntaxDisposable: EditorDisposable;
-  references: number;
-};
+  syntaxDisposable: EditorDisposable
+  references: number
+}
 
 type TreeSitterLanguageReference = {
-  disposable: TreeSitterLanguageDisposable;
-  references: number;
-};
+  disposable: TreeSitterLanguageDisposable
+  references: number
+}
 
-const DEFAULT_TREE_SITTER_PROVIDER_KEY = Symbol.for("@editor/tree-sitter/default-provider");
+const DEFAULT_TREE_SITTER_PROVIDER_KEY = Symbol.for('@editor/tree-sitter/default-provider')
 
 export const createTreeSitterSyntaxProvider = (
   options: TreeSitterSyntaxProviderOptions = {},
 ): TreeSitterSyntaxProvider => {
-  const registry = new TreeSitterLanguageRegistry();
-  const backend = options.backend ?? createTreeSitterWorkerBackend();
+  const registry = new TreeSitterLanguageRegistry()
+  const backend = options.backend ?? createTreeSitterWorkerBackend()
 
   return {
     createSession: (sessionOptions) => {
-      if (!sessionOptions.languageId) return null;
+      if (!sessionOptions.languageId) return null
       return new TreeSitterSyntaxSession({
         ...sessionOptions,
         languageId: sessionOptions.languageId,
         languageResolver: registry,
         backend,
-      });
+      })
     },
     registerLanguage: (contribution, registrationOptions) =>
       registry.registerLanguage(contribution, registrationOptions),
     resolveTreeSitterLanguage: (languageId) => registry.resolveTreeSitterLanguage(languageId),
-  };
-};
+  }
+}
 
 export const createTreeSitterLanguagePlugin = (
   contributions: readonly TreeSitterLanguageContribution[],
   options: TreeSitterLanguagePluginOptions = {},
 ): EditorPlugin => ({
-  name: options.name ?? "tree-sitter-languages",
+  name: options.name ?? 'tree-sitter-languages',
   activate(context) {
-    const registration = defaultProviderRegistration();
+    const registration = defaultProviderRegistration()
     return [
       retainSyntaxProvider(context, registration),
       ...contributions.map((contribution) => retainLanguage(registration, contribution)),
-    ];
+    ]
   },
-});
+})
 
 const defaultProviderRegistration = (): TreeSitterProviderRegistration => {
-  const state = globalThis as Record<PropertyKey, unknown>;
+  const state = globalThis as Record<PropertyKey, unknown>
   const existing = state[DEFAULT_TREE_SITTER_PROVIDER_KEY] as
     | TreeSitterProviderRegistration
-    | undefined;
-  if (existing) return existing;
+    | undefined
+  if (existing) return existing
 
   const registration = {
     provider: createTreeSitterSyntaxProvider(),
     contextReferences: new WeakMap<EditorPluginContext, TreeSitterContextReference>(),
     languageReferences: new Map<string, TreeSitterLanguageReference>(),
-  };
-  state[DEFAULT_TREE_SITTER_PROVIDER_KEY] = registration;
-  return registration;
-};
+  }
+  state[DEFAULT_TREE_SITTER_PROVIDER_KEY] = registration
+  return registration
+}
 
 const retainSyntaxProvider = (
   context: EditorPluginContext,
   registration: TreeSitterProviderRegistration,
 ): EditorDisposable => {
-  const existing = registration.contextReferences.get(context);
+  const existing = registration.contextReferences.get(context)
   if (existing) {
-    existing.references += 1;
-    return { dispose: () => releaseSyntaxProvider(context, registration) };
+    existing.references += 1
+    return { dispose: () => releaseSyntaxProvider(context, registration) }
   }
 
   registration.contextReferences.set(context, {
     syntaxDisposable: context.registerSyntaxProvider(registration.provider),
     references: 1,
-  });
+  })
   return {
     dispose: () => releaseSyntaxProvider(context, registration),
-  };
-};
+  }
+}
 
 const retainLanguage = (
   registration: TreeSitterProviderRegistration,
   contribution: TreeSitterLanguageContribution,
 ): EditorDisposable => {
-  const key = languageRegistrationKey(contribution);
-  const existing = registration.languageReferences.get(key);
+  const key = languageRegistrationKey(contribution)
+  const existing = registration.languageReferences.get(key)
   if (existing) {
-    existing.references += 1;
-    return { dispose: () => releaseLanguage(registration, key) };
+    existing.references += 1
+    return { dispose: () => releaseLanguage(registration, key) }
   }
 
   registration.languageReferences.set(key, {
     disposable: registration.provider.registerLanguage(contribution, { replace: true }),
     references: 1,
-  });
-  return { dispose: () => releaseLanguage(registration, key) };
-};
+  })
+  return { dispose: () => releaseLanguage(registration, key) }
+}
 
 const releaseSyntaxProvider = (
   context: EditorPluginContext,
   registration: TreeSitterProviderRegistration,
 ): void => {
-  const reference = registration.contextReferences.get(context);
-  if (!reference) return;
+  const reference = registration.contextReferences.get(context)
+  if (!reference) return
 
-  reference.references -= 1;
-  if (reference.references > 0) return;
+  reference.references -= 1
+  if (reference.references > 0) return
 
-  reference.syntaxDisposable.dispose();
-  registration.contextReferences.delete(context);
-};
+  reference.syntaxDisposable.dispose()
+  registration.contextReferences.delete(context)
+}
 
 const releaseLanguage = (registration: TreeSitterProviderRegistration, key: string): void => {
-  const reference = registration.languageReferences.get(key);
-  if (!reference) return;
+  const reference = registration.languageReferences.get(key)
+  if (!reference) return
 
-  reference.references -= 1;
-  if (reference.references > 0) return;
+  reference.references -= 1
+  if (reference.references > 0) return
 
-  reference.disposable.dispose();
-  registration.languageReferences.delete(key);
-};
+  reference.disposable.dispose()
+  registration.languageReferences.delete(key)
+}
 
 const languageRegistrationKey = (contribution: TreeSitterLanguageContribution): string =>
   JSON.stringify({
@@ -230,26 +230,26 @@ const languageRegistrationKey = (contribution: TreeSitterLanguageContribution): 
     extensions: sortedItems(contribution.extensions),
     id: contribution.id,
     loader: lazyLoaderSignature(contribution),
-  });
+  })
 
 const lazyLoaderSignature = (contribution: TreeSitterLanguageContribution): string | null => {
-  if (!("load" in contribution)) return null;
+  if (!('load' in contribution)) return null
 
-  return contribution.load?.toString() ?? null;
-};
+  return contribution.load?.toString() ?? null
+}
 
 const inlineAssetSignature = (
   contribution: TreeSitterLanguageContribution,
 ): TreeSitterLanguageAssets | null => {
-  if ("load" in contribution) return null;
+  if ('load' in contribution) return null
 
   return {
     foldQuerySource: contribution.foldQuerySource,
     highlightQuerySource: contribution.highlightQuerySource,
     injectionQuerySource: contribution.injectionQuerySource,
     wasmUrl: contribution.wasmUrl,
-  };
-};
+  }
+}
 
 const sortedItems = (items: readonly string[] | undefined): readonly string[] =>
-  (items ?? []).toSorted();
+  (items ?? []).toSorted()

@@ -1,61 +1,61 @@
 export type LatestAsyncRequestOptions<T> = {
-  readonly delayMs?: number;
-  readonly run: () => Promise<T>;
-  readonly apply: (result: T, startedAt: number) => void;
-  readonly fail?: (error: unknown, startedAt: number) => void;
-};
+  readonly delayMs?: number
+  readonly run: () => Promise<T>
+  readonly apply: (result: T, startedAt: number) => void
+  readonly fail?: (error: unknown, startedAt: number) => void
+}
 
 export class LatestAsyncRequest<T> {
-  private requestId = 0;
-  private timer: ReturnType<typeof setTimeout> | null = null;
-  private activeRequestId: number | null = null;
-  private disposed = false;
+  private requestId = 0
+  private timer: ReturnType<typeof setTimeout> | null = null
+  private activeRequestId: number | null = null
+  private disposed = false
 
   public isActive(): boolean {
-    return this.timer !== null || this.activeRequestId !== null;
+    return this.timer !== null || this.activeRequestId !== null
   }
 
   public schedule(options: LatestAsyncRequestOptions<T>): void {
-    if (this.disposed) return;
+    if (this.disposed) return
 
-    const requestId = this.nextRequestId();
-    const delayMs = normalizeDelay(options.delayMs);
+    const requestId = this.nextRequestId()
+    const delayMs = normalizeDelay(options.delayMs)
     if (delayMs === 0) {
-      this.start(requestId, options);
-      return;
+      this.start(requestId, options)
+      return
     }
 
     this.timer = setTimeout(() => {
-      this.timer = null;
-      this.start(requestId, options);
-    }, delayMs);
+      this.timer = null
+      this.start(requestId, options)
+    }, delayMs)
   }
 
   public cancel(): void {
-    this.requestId += 1;
-    this.activeRequestId = null;
-    this.clearTimer();
+    this.requestId += 1
+    this.activeRequestId = null
+    this.clearTimer()
   }
 
   public dispose(): void {
-    this.disposed = true;
-    this.cancel();
+    this.disposed = true
+    this.cancel()
   }
 
   private nextRequestId(): number {
-    this.cancel();
-    return this.requestId;
+    this.cancel()
+    return this.requestId
   }
 
   private start(requestId: number, options: LatestAsyncRequestOptions<T>): void {
-    if (!this.isCurrent(requestId)) return;
+    if (!this.isCurrent(requestId)) return
 
-    const startedAt = nowMs();
-    this.activeRequestId = requestId;
+    const startedAt = nowMs()
+    this.activeRequestId = requestId
     void options
       .run()
       .then((result) => this.apply(requestId, result, options, startedAt))
-      .catch((error) => this.fail(requestId, error, options, startedAt));
+      .catch((error) => this.fail(requestId, error, options, startedAt))
   }
 
   private apply(
@@ -64,9 +64,9 @@ export class LatestAsyncRequest<T> {
     options: LatestAsyncRequestOptions<T>,
     startedAt: number,
   ): void {
-    if (!this.isCurrent(requestId)) return;
-    this.clearActiveRequest(requestId);
-    options.apply(result, startedAt);
+    if (!this.isCurrent(requestId)) return
+    this.clearActiveRequest(requestId)
+    options.apply(result, startedAt)
   }
 
   private fail(
@@ -75,33 +75,33 @@ export class LatestAsyncRequest<T> {
     options: LatestAsyncRequestOptions<T>,
     startedAt: number,
   ): void {
-    if (!this.isCurrent(requestId)) return;
-    this.clearActiveRequest(requestId);
-    options.fail?.(error, startedAt);
+    if (!this.isCurrent(requestId)) return
+    this.clearActiveRequest(requestId)
+    options.fail?.(error, startedAt)
   }
 
   private clearActiveRequest(requestId: number): void {
-    if (this.activeRequestId !== requestId) return;
+    if (this.activeRequestId !== requestId) return
 
-    this.activeRequestId = null;
+    this.activeRequestId = null
   }
 
   private isCurrent(requestId: number): boolean {
-    if (this.disposed) return false;
-    return requestId === this.requestId;
+    if (this.disposed) return false
+    return requestId === this.requestId
   }
 
   private clearTimer(): void {
-    if (this.timer === null) return;
+    if (this.timer === null) return
 
-    clearTimeout(this.timer);
-    this.timer = null;
+    clearTimeout(this.timer)
+    this.timer = null
   }
 }
 
 const normalizeDelay = (delayMs: number | undefined): number => {
-  if (!delayMs || delayMs <= 0) return 0;
-  return delayMs;
-};
+  if (!delayMs || delayMs <= 0) return 0
+  return delayMs
+}
 
-const nowMs = (): number => globalThis.performance?.now() ?? Date.now();
+const nowMs = (): number => globalThis.performance?.now() ?? Date.now()

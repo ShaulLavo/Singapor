@@ -1,89 +1,89 @@
-import type { LspWorkerLike } from "@editor/lsp";
-import { describe, expect, it, vi } from "vitest";
-import { createTypeScriptLspServerSession } from "../src/server";
+import type { LspWorkerLike } from '@editor/lsp'
+import { describe, expect, it, vi } from 'vitest'
+import { createTypeScriptLspServerSession } from '../src/server'
 
-type Listener = (event: Event) => void;
+type Listener = (event: Event) => void
 
 class FakeWorker implements LspWorkerLike {
-  public readonly sent: unknown[] = [];
-  public terminated = false;
-  private readonly listeners = new Map<string, Set<Listener>>();
+  public readonly sent: unknown[] = []
+  public terminated = false
+  private readonly listeners = new Map<string, Set<Listener>>()
 
   public postMessage(message: unknown): void {
-    this.sent.push(message);
+    this.sent.push(message)
   }
 
-  public addEventListener(type: "message" | "error", handler: Listener): void {
-    this.listenersFor(type).add(handler);
+  public addEventListener(type: 'message' | 'error', handler: Listener): void {
+    this.listenersFor(type).add(handler)
   }
 
-  public removeEventListener(type: "message" | "error", handler: Listener): void {
-    this.listenersFor(type).delete(handler);
+  public removeEventListener(type: 'message' | 'error', handler: Listener): void {
+    this.listenersFor(type).delete(handler)
   }
 
   public terminate(): void {
-    this.terminated = true;
+    this.terminated = true
   }
 
   public receive(message: unknown): void {
-    const event = new MessageEvent("message", { data: message });
-    for (const listener of this.listenersFor("message")) listener(event);
+    const event = new MessageEvent('message', { data: message })
+    for (const listener of this.listenersFor('message')) listener(event)
   }
 
   private listenersFor(type: string): Set<Listener> {
-    let listeners = this.listeners.get(type);
-    if (listeners) return listeners;
+    let listeners = this.listeners.get(type)
+    if (listeners) return listeners
 
-    listeners = new Set();
-    this.listeners.set(type, listeners);
-    return listeners;
+    listeners = new Set()
+    this.listeners.set(type, listeners)
+    return listeners
   }
 }
 
-describe("createTypeScriptLspServerSession", () => {
-  it("bridges WebSocket JSON-RPC messages to a TypeScript LSP worker", () => {
-    const worker = new FakeWorker();
-    const send = vi.fn();
+describe('createTypeScriptLspServerSession', () => {
+  it('bridges WebSocket JSON-RPC messages to a TypeScript LSP worker', () => {
+    const worker = new FakeWorker()
+    const send = vi.fn()
     const session = createTypeScriptLspServerSession({
       send,
       workerFactory: () => worker,
-    });
+    })
     const initialize = JSON.stringify({
-      jsonrpc: "2.0",
+      jsonrpc: '2.0',
       id: 1,
-      method: "initialize",
+      method: 'initialize',
       params: {},
-    });
+    })
 
-    session.receive(initialize);
-    expect(worker.sent).toEqual([initialize]);
+    session.receive(initialize)
+    expect(worker.sent).toEqual([initialize])
 
     worker.receive({
-      jsonrpc: "2.0",
+      jsonrpc: '2.0',
       id: 1,
       result: { capabilities: { hoverProvider: true } },
-    });
+    })
 
     expect(JSON.parse(send.mock.calls[0]?.[0] as string)).toEqual({
-      jsonrpc: "2.0",
+      jsonrpc: '2.0',
       id: 1,
       result: { capabilities: { hoverProvider: true } },
-    });
+    })
 
-    session.dispose();
-    expect(worker.terminated).toBe(true);
-  });
+    session.dispose()
+    expect(worker.terminated).toBe(true)
+  })
 
-  it("decodes binary WebSocket messages before forwarding to the worker", () => {
-    const worker = new FakeWorker();
+  it('decodes binary WebSocket messages before forwarding to the worker', () => {
+    const worker = new FakeWorker()
     const session = createTypeScriptLspServerSession({
       send: vi.fn(),
       workerFactory: () => worker,
-    });
-    const message = '{"jsonrpc":"2.0","method":"initialized","params":{}}';
+    })
+    const message = '{"jsonrpc":"2.0","method":"initialized","params":{}}'
 
-    session.receive(new TextEncoder().encode(message));
+    session.receive(new TextEncoder().encode(message))
 
-    expect(worker.sent).toEqual([message]);
-  });
-});
+    expect(worker.sent).toEqual([message])
+  })
+})

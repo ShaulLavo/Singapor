@@ -1,32 +1,32 @@
-import type { EditorSyntaxSessionFactory, HighlightRegistry } from "./types";
+import type { EditorSyntaxSessionFactory, HighlightRegistry } from './types'
 
-export type EditorMountTimingObserver = (durationMs: number) => void;
+export type EditorMountTimingObserver = (durationMs: number) => void
 
-let editorInstanceCount = 0;
-let editorSyntaxSessionFactory: EditorSyntaxSessionFactory | undefined;
-let highlightRegistry: HighlightRegistry | undefined;
-const editorMountTimingObservers = new Set<EditorMountTimingObserver>();
+let editorInstanceCount = 0
+let editorSyntaxSessionFactory: EditorSyntaxSessionFactory | undefined
+let highlightRegistry: HighlightRegistry | undefined
+const editorMountTimingObservers = new Set<EditorMountTimingObserver>()
 
 export function nextEditorHighlightPrefix(): string {
-  return `editor-token-${editorInstanceCount++}`;
+  return `editor-token-${editorInstanceCount++}`
 }
 
 export function resetEditorInstanceCount(): void {
-  editorInstanceCount = 0;
+  editorInstanceCount = 0
 }
 
 export function observeEditorMountTiming(observer: EditorMountTimingObserver): () => void {
-  editorMountTimingObservers.add(observer);
+  editorMountTimingObservers.add(observer)
 
   return () => {
-    editorMountTimingObservers.delete(observer);
-  };
+    editorMountTimingObservers.delete(observer)
+  }
 }
 
 export function recordEditorMountTiming(durationMs: number): void {
-  if (editorMountTimingObservers.size === 0) return;
+  if (editorMountTimingObservers.size === 0) return
 
-  for (const observer of editorMountTimingObservers) observer(durationMs);
+  for (const observer of editorMountTimingObservers) observer(durationMs)
 }
 
 /**
@@ -35,19 +35,19 @@ export function recordEditorMountTiming(durationMs: number): void {
  * Pass `undefined` to revert to the default `CSS.highlights`.
  */
 export function setHighlightRegistry(registry: HighlightRegistry | undefined): void {
-  highlightRegistry = registry;
+  highlightRegistry = registry
 }
 
 export function getHighlightRegistry(): HighlightRegistry | undefined {
-  return highlightRegistry ?? globalThis.CSS?.highlights;
+  return highlightRegistry ?? globalThis.CSS?.highlights
 }
 
 export function setEditorSyntaxSessionFactory(
   factory: EditorSyntaxSessionFactory | undefined,
 ): void {
-  editorSyntaxSessionFactory = factory;
+  editorSyntaxSessionFactory = factory
 }
 
 export function getEditorSyntaxSessionFactory(): EditorSyntaxSessionFactory | undefined {
-  return editorSyntaxSessionFactory;
+  return editorSyntaxSessionFactory
 }

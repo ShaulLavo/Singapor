@@ -1,4 +1,4 @@
-export { createTypeScriptLspPlugin, type TypeScriptLspResolvedOptions } from "./plugin";
+export { createTypeScriptLspPlugin, type TypeScriptLspResolvedOptions } from './plugin'
 export type {
   TypeScriptLspDefinitionTarget,
   TypeScriptLspDiagnosticSummary,
@@ -6,4 +6,4 @@ export type {
   TypeScriptLspPluginOptions,
   TypeScriptLspSourceFile,
   TypeScriptLspStatus,
-} from "./types";
+} from './types'

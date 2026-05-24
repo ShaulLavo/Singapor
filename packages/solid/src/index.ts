@@ -21,87 +21,87 @@ import {
   type HiddenCharactersMode,
   type EditorTheme,
   type TextSnapshot,
-} from "@editor/core";
-import { batch, createEffect, createSignal, onCleanup, untrack, type Accessor } from "solid-js";
+} from '@editor/core'
+import { batch, createEffect, createSignal, onCleanup, untrack, type Accessor } from 'solid-js'
 
-export type SolidEditorReactiveValue<T> = T | Accessor<T>;
+export type SolidEditorReactiveValue<T> = T | Accessor<T>
 
 export type SolidEditorDocument = {
-  readonly documentId?: string;
-  readonly revision?: string | number;
-  readonly text: string;
-  readonly documentMode?: EditorDocumentMode;
-  readonly languageId?: EditorSyntaxLanguageId | null;
-  readonly scrollPosition?: EditorScrollPosition;
-};
+  readonly documentId?: string
+  readonly revision?: string | number
+  readonly text: string
+  readonly documentMode?: EditorDocumentMode
+  readonly languageId?: EditorSyntaxLanguageId | null
+  readonly scrollPosition?: EditorScrollPosition
+}
 
 export type SolidEditorSelection = {
-  readonly anchor: number;
-  readonly head?: number;
-  readonly reveal?: boolean;
-  readonly revealOffset?: number;
-};
+  readonly anchor: number
+  readonly head?: number
+  readonly reveal?: boolean
+  readonly revealOffset?: number
+}
 
-export type SolidEditorOptions = Omit<EditorOptions, "hiddenCharacters" | "onChange" | "theme"> & {
-  readonly document?: SolidEditorReactiveValue<SolidEditorDocument | null | undefined>;
-  readonly theme?: SolidEditorReactiveValue<EditorTheme | null | undefined>;
-  readonly hiddenCharacters?: SolidEditorReactiveValue<HiddenCharactersMode | undefined>;
-  readonly selection?: SolidEditorReactiveValue<SolidEditorSelection | null | undefined>;
-  readonly scrollPosition?: SolidEditorReactiveValue<EditorScrollPosition | null | undefined>;
-  readonly onChange?: EditorChangeHandler;
-};
+export type SolidEditorOptions = Omit<EditorOptions, 'hiddenCharacters' | 'onChange' | 'theme'> & {
+  readonly document?: SolidEditorReactiveValue<SolidEditorDocument | null | undefined>
+  readonly theme?: SolidEditorReactiveValue<EditorTheme | null | undefined>
+  readonly hiddenCharacters?: SolidEditorReactiveValue<HiddenCharactersMode | undefined>
+  readonly selection?: SolidEditorReactiveValue<SolidEditorSelection | null | undefined>
+  readonly scrollPosition?: SolidEditorReactiveValue<EditorScrollPosition | null | undefined>
+  readonly onChange?: EditorChangeHandler
+}
 
 export type SolidEditorCommands = {
-  focus(): void;
-  openDocument(document: EditorOpenDocumentOptions): void;
-  setText(text: string, options?: EditorSetTextOptions): void;
-  edit(editOrEdits: EditorEditInput, options?: EditorEditOptions): void;
-  setSelection(anchor: number, head?: number, reveal?: EditorSelectionRevealTarget): void;
-  setScrollPosition(scrollPosition: EditorScrollPosition): void;
-  dispatchCommand(command: EditorCommandId, context?: EditorCommandContext): boolean;
-  openFind(): boolean;
-  openFindReplace(): boolean;
-  closeFind(): boolean;
-  findNext(): boolean;
-  findPrevious(): boolean;
-  replaceOne(): boolean;
-  replaceAll(): boolean;
-  selectAllMatches(): boolean;
-};
+  focus(): void
+  openDocument(document: EditorOpenDocumentOptions): void
+  setText(text: string, options?: EditorSetTextOptions): void
+  edit(editOrEdits: EditorEditInput, options?: EditorEditOptions): void
+  setSelection(anchor: number, head?: number, reveal?: EditorSelectionRevealTarget): void
+  setScrollPosition(scrollPosition: EditorScrollPosition): void
+  dispatchCommand(command: EditorCommandId, context?: EditorCommandContext): boolean
+  openFind(): boolean
+  openFindReplace(): boolean
+  closeFind(): boolean
+  findNext(): boolean
+  findPrevious(): boolean
+  replaceOne(): boolean
+  replaceAll(): boolean
+  selectAllMatches(): boolean
+}
 
 export type SolidEditorController = {
-  mount(element: HTMLElement): void;
-  editor: Accessor<Editor | null>;
-  state: Accessor<EditorState | null>;
-  snapshot: Accessor<EditorViewSnapshot | null>;
-  textSnapshot: Accessor<TextSnapshot | null>;
-  text: Accessor<string>;
-  lastChange: Accessor<DocumentSessionChange | null>;
-  updateKind: Accessor<EditorViewContributionUpdateKind | null>;
-  dispose(): void;
-  readonly commands: SolidEditorCommands;
-};
+  mount(element: HTMLElement): void
+  editor: Accessor<Editor | null>
+  state: Accessor<EditorState | null>
+  snapshot: Accessor<EditorViewSnapshot | null>
+  textSnapshot: Accessor<TextSnapshot | null>
+  text: Accessor<string>
+  lastChange: Accessor<DocumentSessionChange | null>
+  updateKind: Accessor<EditorViewContributionUpdateKind | null>
+  dispose(): void
+  readonly commands: SolidEditorCommands
+}
 
 type SolidEditorRuntime = {
-  readonly getEditor: Accessor<Editor | null>;
-  readonly setEditor: (editor: Editor | null) => void;
-  readonly setState: (state: EditorState | null) => void;
-  readonly setSnapshot: (snapshot: EditorViewSnapshot | null) => void;
-  readonly setTextSnapshot: (snapshot: TextSnapshot | null) => void;
-  readonly setLastChange: (change: DocumentSessionChange | null) => void;
-  readonly setUpdateKind: (kind: EditorViewContributionUpdateKind | null) => void;
-};
+  readonly getEditor: Accessor<Editor | null>
+  readonly setEditor: (editor: Editor | null) => void
+  readonly setState: (state: EditorState | null) => void
+  readonly setSnapshot: (snapshot: EditorViewSnapshot | null) => void
+  readonly setTextSnapshot: (snapshot: TextSnapshot | null) => void
+  readonly setLastChange: (change: DocumentSessionChange | null) => void
+  readonly setUpdateKind: (kind: EditorViewContributionUpdateKind | null) => void
+}
 
-const NO_DOCUMENT = Symbol("no-document");
+const NO_DOCUMENT = Symbol('no-document')
 
 export function createEditor(options: SolidEditorOptions = {}): SolidEditorController {
-  const [editor, setEditor] = createSignal<Editor | null>(null);
-  const [state, setState] = createSignal<EditorState | null>(null);
-  const [snapshot, setSnapshot] = createSignal<EditorViewSnapshot | null>(null);
-  const [textSnapshot, setTextSnapshot] = createSignal<TextSnapshot | null>(null);
-  const text = createLazyTextAccessor(textSnapshot);
-  const [lastChange, setLastChange] = createSignal<DocumentSessionChange | null>(null);
-  const [updateKind, setUpdateKind] = createSignal<EditorViewContributionUpdateKind | null>(null);
+  const [editor, setEditor] = createSignal<Editor | null>(null)
+  const [state, setState] = createSignal<EditorState | null>(null)
+  const [snapshot, setSnapshot] = createSignal<EditorViewSnapshot | null>(null)
+  const [textSnapshot, setTextSnapshot] = createSignal<TextSnapshot | null>(null)
+  const text = createLazyTextAccessor(textSnapshot)
+  const [lastChange, setLastChange] = createSignal<DocumentSessionChange | null>(null)
+  const [updateKind, setUpdateKind] = createSignal<EditorViewContributionUpdateKind | null>(null)
   const runtime = {
     getEditor: editor,
     setEditor,
@@ -110,21 +110,21 @@ export function createEditor(options: SolidEditorOptions = {}): SolidEditorContr
     setTextSnapshot,
     setLastChange,
     setUpdateKind,
-  } satisfies SolidEditorRuntime;
-  const documentState = createDocumentState();
+  } satisfies SolidEditorRuntime
+  const documentState = createDocumentState()
 
   const dispose = (): void => {
-    disposeEditor(runtime);
-    documentState.clear();
-  };
+    disposeEditor(runtime)
+    documentState.clear()
+  }
 
   const mount = (element: HTMLElement): void => {
-    dispose();
-    mountEditor(element, options, runtime, documentState);
-  };
+    dispose()
+    mountEditor(element, options, runtime, documentState)
+  }
 
-  createReactiveEffects(options, runtime, documentState);
-  onCleanup(dispose);
+  createReactiveEffects(options, runtime, documentState)
+  onCleanup(dispose)
 
   return {
     mount,
@@ -137,27 +137,27 @@ export function createEditor(options: SolidEditorOptions = {}): SolidEditorContr
     updateKind,
     dispose,
     commands: createCommands(editor, documentState),
-  };
+  }
 }
 
 function createLazyTextAccessor(textSnapshot: Accessor<TextSnapshot | null>): Accessor<string> {
-  let cachedSnapshot: TextSnapshot | null = null;
-  let cachedText: string | undefined;
+  let cachedSnapshot: TextSnapshot | null = null
+  let cachedText: string | undefined
 
   return () => {
-    const snapshot = textSnapshot();
+    const snapshot = textSnapshot()
     if (!snapshot) {
-      cachedSnapshot = null;
-      cachedText = "";
-      return cachedText;
+      cachedSnapshot = null
+      cachedText = ''
+      return cachedText
     }
 
-    if (snapshot === cachedSnapshot && cachedText !== undefined) return cachedText;
+    if (snapshot === cachedSnapshot && cachedText !== undefined) return cachedText
 
-    cachedSnapshot = snapshot;
-    cachedText = snapshot.getText();
-    return cachedText;
-  };
+    cachedSnapshot = snapshot
+    cachedText = snapshot.getText()
+    return cachedText
+  }
 }
 
 function mountEditor(
@@ -166,23 +166,23 @@ function mountEditor(
   runtime: SolidEditorRuntime,
   documentState: SolidEditorDocumentState,
 ): void {
-  const instance = new Editor(element, createConstructorOptions(options, runtime));
+  const instance = new Editor(element, createConstructorOptions(options, runtime))
 
   batch(() => {
-    runtime.setEditor(instance);
-    runtime.setState(instance.getState());
-    runtime.setTextSnapshot(instance.getTextSnapshot());
-  });
+    runtime.setEditor(instance)
+    runtime.setState(instance.getState())
+    runtime.setTextSnapshot(instance.getTextSnapshot())
+  })
 
   untrack(() => {
-    syncDocument(instance, readReactive(options.document), documentState);
-    syncTheme(instance, readReactive(options.theme));
-    syncHiddenCharacters(instance, readReactive(options.hiddenCharacters));
-    syncEditability(instance, options.editability);
-    syncRangeDecorations(instance, options.rangeDecorations);
-    syncSelection(instance, readReactive(options.selection));
-    syncScrollPosition(instance, readReactive(options.scrollPosition));
-  });
+    syncDocument(instance, readReactive(options.document), documentState)
+    syncTheme(instance, readReactive(options.theme))
+    syncHiddenCharacters(instance, readReactive(options.hiddenCharacters))
+    syncEditability(instance, options.editability)
+    syncRangeDecorations(instance, options.rangeDecorations)
+    syncSelection(instance, readReactive(options.selection))
+    syncScrollPosition(instance, readReactive(options.scrollPosition))
+  })
 }
 
 function createConstructorOptions(
@@ -198,7 +198,7 @@ function createConstructorOptions(
     selection: _selection,
     theme,
     ...constructorOptions
-  } = options;
+  } = options
 
   return {
     ...constructorOptions,
@@ -206,10 +206,10 @@ function createConstructorOptions(
     theme: untrack(() => readReactive(theme) ?? undefined),
     plugins: [createSolidSyncPlugin(runtime), ...(plugins ?? [])],
     onChange: (state, change) => {
-      syncChange(runtime, state, change);
-      onChange?.(state, change);
+      syncChange(runtime, state, change)
+      onChange?.(state, change)
     },
-  };
+  }
 }
 
 function createReactiveEffects(
@@ -219,20 +219,20 @@ function createReactiveEffects(
 ): void {
   createEffect(() =>
     syncDocument(runtime.getEditor(), readReactive(options.document), documentState),
-  );
-  createEffect(() => syncTheme(runtime.getEditor(), readReactive(options.theme)));
+  )
+  createEffect(() => syncTheme(runtime.getEditor(), readReactive(options.theme)))
   createEffect(() =>
     syncHiddenCharacters(runtime.getEditor(), readReactive(options.hiddenCharacters)),
-  );
-  createEffect(() => syncEditability(runtime.getEditor(), options.editability));
-  createEffect(() => syncRangeDecorations(runtime.getEditor(), options.rangeDecorations));
-  createEffect(() => syncSelection(runtime.getEditor(), readReactive(options.selection)));
-  createEffect(() => syncScrollPosition(runtime.getEditor(), readReactive(options.scrollPosition)));
+  )
+  createEffect(() => syncEditability(runtime.getEditor(), options.editability))
+  createEffect(() => syncRangeDecorations(runtime.getEditor(), options.rangeDecorations))
+  createEffect(() => syncSelection(runtime.getEditor(), readReactive(options.selection)))
+  createEffect(() => syncScrollPosition(runtime.getEditor(), readReactive(options.scrollPosition)))
 }
 
 function createSolidSyncPlugin(runtime: SolidEditorRuntime): EditorPlugin {
   return {
-    name: "solid-editor-sync",
+    name: 'solid-editor-sync',
     activate: (context) =>
       context.registerViewContribution({
         createContribution: () => ({
@@ -240,7 +240,7 @@ function createSolidSyncPlugin(runtime: SolidEditorRuntime): EditorPlugin {
           dispose: () => undefined,
         }),
       }),
-  };
+  }
 }
 
 function syncSnapshot(
@@ -250,11 +250,11 @@ function syncSnapshot(
   change: DocumentSessionChange | null,
 ): void {
   batch(() => {
-    runtime.setSnapshot(snapshot);
-    runtime.setTextSnapshot(snapshot.textSnapshot ?? null);
-    runtime.setLastChange(change);
-    runtime.setUpdateKind(kind);
-  });
+    runtime.setSnapshot(snapshot)
+    runtime.setTextSnapshot(snapshot.textSnapshot ?? null)
+    runtime.setLastChange(change)
+    runtime.setUpdateKind(kind)
+  })
 }
 
 function syncChange(
@@ -262,13 +262,13 @@ function syncChange(
   state: EditorState,
   change: DocumentSessionChange | null,
 ): void {
-  const editor = runtime.getEditor();
+  const editor = runtime.getEditor()
 
   batch(() => {
-    runtime.setState(state);
-    runtime.setTextSnapshot(editor?.getTextSnapshot() ?? null);
-    runtime.setLastChange(change);
-  });
+    runtime.setState(state)
+    runtime.setTextSnapshot(editor?.getTextSnapshot() ?? null)
+    runtime.setLastChange(change)
+  })
 }
 
 function syncDocument(
@@ -276,15 +276,15 @@ function syncDocument(
   document: SolidEditorDocument | null | undefined,
   state: SolidEditorDocumentState,
 ): void {
-  if (!editor) return;
+  if (!editor) return
 
-  const key = documentKey(document);
-  if (key === state.key()) return;
+  const key = documentKey(document)
+  if (key === state.key()) return
 
-  state.setKey(key);
+  state.setKey(key)
   if (!document) {
-    editor.clearDocument();
-    return;
+    editor.clearDocument()
+    return
   }
 
   editor.openDocument({
@@ -293,81 +293,81 @@ function syncDocument(
     languageId: document.languageId,
     scrollPosition: document.scrollPosition,
     text: document.text,
-  });
+  })
 }
 
 function syncTheme(editor: Editor | null, theme: EditorTheme | null | undefined): void {
-  if (!editor) return;
+  if (!editor) return
 
-  editor.setTheme(theme);
+  editor.setTheme(theme)
 }
 
 function syncHiddenCharacters(
   editor: Editor | null,
   hiddenCharacters: HiddenCharactersMode | undefined,
 ): void {
-  if (!editor || hiddenCharacters === undefined) return;
+  if (!editor || hiddenCharacters === undefined) return
 
-  editor.setHiddenCharacters(hiddenCharacters);
+  editor.setHiddenCharacters(hiddenCharacters)
 }
 
 function syncEditability(
   editor: Editor | null,
-  editability: SolidEditorOptions["editability"],
+  editability: SolidEditorOptions['editability'],
 ): void {
-  if (!editor || editability === undefined) return;
+  if (!editor || editability === undefined) return
 
-  editor.setEditability(editability);
+  editor.setEditability(editability)
 }
 
 function syncRangeDecorations(
   editor: Editor | null,
   rangeDecorations: readonly EditorRangeDecoration[] | undefined,
 ): void {
-  if (!editor || rangeDecorations === undefined) return;
+  if (!editor || rangeDecorations === undefined) return
 
-  editor.setRangeDecorations(rangeDecorations);
+  editor.setRangeDecorations(rangeDecorations)
 }
 
 function syncSelection(
   editor: Editor | null,
   selection: SolidEditorSelection | null | undefined,
 ): void {
-  if (!editor || !selection) return;
+  if (!editor || !selection) return
 
-  editor.setSelection(selection.anchor, selection.head, solidSelectionRevealTarget(selection));
+  editor.setSelection(selection.anchor, selection.head, solidSelectionRevealTarget(selection))
 }
 
 function solidSelectionRevealTarget(
   selection: SolidEditorSelection,
 ): EditorSelectionRevealTarget | undefined {
-  if (selection.reveal === false) return { reveal: false };
+  if (selection.reveal === false) return { reveal: false }
 
-  return selection.revealOffset;
+  return selection.revealOffset
 }
 
 function syncScrollPosition(
   editor: Editor | null,
   scrollPosition: EditorScrollPosition | null | undefined,
 ): void {
-  if (!editor || !scrollPosition) return;
+  if (!editor || !scrollPosition) return
 
-  editor.setScrollPosition(scrollPosition);
+  editor.setScrollPosition(scrollPosition)
 }
 
 function disposeEditor(runtime: SolidEditorRuntime): void {
-  const editor = runtime.getEditor();
-  if (!editor) return;
+  const editor = runtime.getEditor()
+  if (!editor) return
 
-  editor.dispose();
+  editor.dispose()
   batch(() => {
-    runtime.setEditor(null);
-    runtime.setState(null);
-    runtime.setSnapshot(null);
-    runtime.setTextSnapshot(null);
-    runtime.setLastChange(null);
-    runtime.setUpdateKind(null);
-  });
+    runtime.setEditor(null)
+    runtime.setState(null)
+    runtime.setSnapshot(null)
+    runtime.setTextSnapshot(null)
+    runtime.setLastChange(null)
+    runtime.setUpdateKind(null)
+  })
 }
 
 function createCommands(
@@ -377,8 +377,8 @@ function createCommands(
   return {
     focus: () => editor()?.focus(),
     openDocument: (document) => {
-      documentState.setKey(documentKey(document));
-      editor()?.openDocument(document);
+      documentState.setKey(documentKey(document))
+      editor()?.openDocument(document)
     },
     setText: (text, options) => editor()?.setText(text, options),
     edit: (editOrEdits, options) => editor()?.edit(editOrEdits, options),
@@ -393,41 +393,41 @@ function createCommands(
     replaceOne: () => editor()?.replaceOne() ?? false,
     replaceAll: () => editor()?.replaceAll() ?? false,
     selectAllMatches: () => editor()?.selectAllMatches() ?? false,
-  };
+  }
 }
 
 type SolidEditorDocumentState = {
-  key(): SolidEditorDocumentKey;
-  setKey(key: SolidEditorDocumentKey): void;
-  clear(): void;
-};
+  key(): SolidEditorDocumentKey
+  setKey(key: SolidEditorDocumentKey): void
+  clear(): void
+}
 
-type SolidEditorDocumentKey = string | typeof NO_DOCUMENT;
+type SolidEditorDocumentKey = string | typeof NO_DOCUMENT
 
 function createDocumentState(): SolidEditorDocumentState {
-  let key: SolidEditorDocumentKey = NO_DOCUMENT;
+  let key: SolidEditorDocumentKey = NO_DOCUMENT
 
   return {
     key: () => key,
     setKey: (nextKey) => {
-      key = nextKey;
+      key = nextKey
     },
     clear: () => {
-      key = NO_DOCUMENT;
+      key = NO_DOCUMENT
     },
-  };
+  }
 }
 
 function documentKey(document: SolidEditorDocument | null | undefined): SolidEditorDocumentKey {
-  if (!document) return NO_DOCUMENT;
+  if (!document) return NO_DOCUMENT
 
-  return `${document.documentId ?? ""}\u0000${document.documentMode ?? ""}\u0000${
-    document.revision ?? ""
-  }`;
+  return `${document.documentId ?? ''}\u0000${document.documentMode ?? ''}\u0000${
+    document.revision ?? ''
+  }`
 }
 
 function readReactive<T>(value: SolidEditorReactiveValue<T> | undefined): T | undefined {
-  if (typeof value !== "function") return value;
+  if (typeof value !== 'function') return value
 
-  return (value as Accessor<T>)();
+  return (value as Accessor<T>)()
 }

@@ -1,4 +1,4 @@
-import { bufferPointToFoldPoint, foldPointToBufferPoint, type FoldMap } from "../foldMap";
+import { bufferPointToFoldPoint, foldPointToBufferPoint, type FoldMap } from '../foldMap'
 import {
   bufferColumnToVisualColumn,
   createDisplayRows,
@@ -8,17 +8,17 @@ import {
   type DisplayRow,
   type DisplayTextRow,
   type InjectedTextRow,
-} from "../displayTransforms";
-import type { TextSnapshot } from "../documentTextSnapshot";
-import type { TextEdit } from "../tokens";
-import { clamp } from "../style-utils";
-import { createLineStartOffsetIndex } from "./lineStartIndex";
+} from '../displayTransforms'
+import type { TextSnapshot } from '../documentTextSnapshot'
+import type { TextEdit } from '../tokens'
+import { clamp } from '../style-utils'
+import { createLineStartOffsetIndex } from './lineStartIndex'
 import {
   createRowHeightIndex,
   rowHeightIndexRowAtOffset,
   rowHeightIndexStart,
   type RowHeightIndex,
-} from "./rowHeightIndex";
+} from './rowHeightIndex'
 import {
   asFoldPoint,
   computeLineStarts,
@@ -28,35 +28,35 @@ import {
   indexFoldMarkersByStartRow,
   normalizeFoldMarkers,
   normalizeRowHeight,
-} from "./virtualizedTextViewHelpers";
-import type { FixedRowVirtualizerSnapshot } from "./fixedRowVirtualizer";
+} from './virtualizedTextViewHelpers'
+import type { FixedRowVirtualizerSnapshot } from './fixedRowVirtualizer'
 import type {
   MultiLineEditPatch,
   SameLineEditPatch,
   VirtualizedFoldMarker,
-} from "./virtualizedTextViewTypes";
-import type { VirtualizedTextViewInternal } from "./virtualizedTextViewInternals";
+} from './virtualizedTextViewTypes'
+import type { VirtualizedTextViewInternal } from './virtualizedTextViewInternals'
 
 export type FoldStateUpdate = {
-  readonly foldMapChanged: boolean;
-  readonly foldMarkersChanged: boolean;
-  readonly changed: boolean;
-};
+  readonly foldMapChanged: boolean
+  readonly foldMarkersChanged: boolean
+  readonly changed: boolean
+}
 
 export function setTextLayoutState(
   view: VirtualizedTextViewInternal,
   text: string,
   textSnapshot: TextSnapshot,
 ): { readonly lineCountChanged: boolean } {
-  const previousLineCount = view.lineStarts.length;
-  view.text = text;
-  view.textSnapshot = textSnapshot;
-  view.textLength = text.length;
-  view.textRevision += 1;
-  view.lineStarts = computeLineStarts(text);
-  view.lineStartOffsetIndex = null;
-  view.foldMap = foldMapMatchesText(view.foldMap, view.textLength) ? view.foldMap : null;
-  return { lineCountChanged: previousLineCount !== view.lineStarts.length };
+  const previousLineCount = view.lineStarts.length
+  view.text = text
+  view.textSnapshot = textSnapshot
+  view.textLength = text.length
+  view.textRevision += 1
+  view.lineStarts = computeLineStarts(text)
+  view.lineStartOffsetIndex = null
+  view.foldMap = foldMapMatchesText(view.foldMap, view.textLength) ? view.foldMap : null
+  return { lineCountChanged: previousLineCount !== view.lineStarts.length }
 }
 
 export function applySameLineTextLayout(
@@ -64,13 +64,13 @@ export function applySameLineTextLayout(
   patch: SameLineEditPatch,
   textSnapshot: TextSnapshot,
 ): void {
-  const delta = patch.text.length - patch.deleteLength;
-  view.textSnapshot = textSnapshot;
-  view.textLength = textSnapshot.length;
-  view.textRevision += 1;
-  view.foldMap = null;
-  shiftLineStartsAfterRow(view, patch.rowIndex, delta);
-  updateDisplayRowsAfterSameLineEdit(view, patch, delta);
+  const delta = patch.text.length - patch.deleteLength
+  view.textSnapshot = textSnapshot
+  view.textLength = textSnapshot.length
+  view.textRevision += 1
+  view.foldMap = null
+  shiftLineStartsAfterRow(view, patch.rowIndex, delta)
+  updateDisplayRowsAfterSameLineEdit(view, patch, delta)
 }
 
 export function applyMultiLineTextLayout(
@@ -79,13 +79,13 @@ export function applyMultiLineTextLayout(
   edit: TextEdit,
   textSnapshot: TextSnapshot,
 ): void {
-  view.textSnapshot = textSnapshot;
-  view.textLength = textSnapshot.length;
-  view.textRevision += 1;
-  view.foldMap = null;
-  view.lineStarts = lineStartsAfterMultiLineEdit(view.lineStarts, edit);
-  view.lineStartOffsetIndex = null;
-  updateDisplayRowsAfterMultiLineEdit(view, patch);
+  view.textSnapshot = textSnapshot
+  view.textLength = textSnapshot.length
+  view.textRevision += 1
+  view.foldMap = null
+  view.lineStarts = lineStartsAfterMultiLineEdit(view.lineStarts, edit)
+  view.lineStartOffsetIndex = null
+  updateDisplayRowsAfterMultiLineEdit(view, patch)
 }
 
 export function setFoldStateLayout(
@@ -93,35 +93,35 @@ export function setFoldStateLayout(
   markers: readonly VirtualizedFoldMarker[],
   foldMap: FoldMap | null,
 ): FoldStateUpdate {
-  const nextFoldMap = foldMapMatchesText(foldMap, view.textLength) ? foldMap : null;
-  const foldMapChanged = view.foldMap !== nextFoldMap;
+  const nextFoldMap = foldMapMatchesText(foldMap, view.textLength) ? foldMap : null
+  const foldMapChanged = view.foldMap !== nextFoldMap
   if (!foldMapChanged && markers.length === 0 && view.foldMarkers.length === 0) {
-    return { foldMapChanged: false, foldMarkersChanged: false, changed: false };
+    return { foldMapChanged: false, foldMarkersChanged: false, changed: false }
   }
 
-  const nextFoldMarkers = normalizeFoldMarkers(markers, view.textLength);
-  const foldMarkersChanged = !foldMarkersEqual(view.foldMarkers, nextFoldMarkers);
+  const nextFoldMarkers = normalizeFoldMarkers(markers, view.textLength)
+  const foldMarkersChanged = !foldMarkersEqual(view.foldMarkers, nextFoldMarkers)
   if (!foldMapChanged && !foldMarkersChanged) {
-    return { foldMapChanged: false, foldMarkersChanged: false, changed: false };
+    return { foldMapChanged: false, foldMarkersChanged: false, changed: false }
   }
 
   if (foldMarkersChanged) {
-    view.foldMarkers = nextFoldMarkers;
-    view.foldMarkerByStartRow = indexFoldMarkersByStartRow(nextFoldMarkers);
-    view.foldMarkerByKey = indexFoldMarkersByKey(nextFoldMarkers);
+    view.foldMarkers = nextFoldMarkers
+    view.foldMarkerByStartRow = indexFoldMarkersByStartRow(nextFoldMarkers)
+    view.foldMarkerByKey = indexFoldMarkersByKey(nextFoldMarkers)
   }
 
-  view.foldMap = nextFoldMap;
-  return { foldMapChanged, foldMarkersChanged, changed: true };
+  view.foldMap = nextFoldMap
+  return { foldMapChanged, foldMarkersChanged, changed: true }
 }
 
 export function rebuildDisplayRows(
   view: VirtualizedTextViewInternal,
   viewportColumns: number | null,
 ): void {
-  materializeViewText(view);
-  materializeLineStarts(view);
-  view.currentWrapColumn = view.wrapEnabled ? viewportColumns : null;
+  materializeViewText(view)
+  materializeLineStarts(view)
+  view.currentWrapColumn = view.wrapEnabled ? viewportColumns : null
   view.displayRows = createDisplayRows({
     text: view.text,
     lineStarts: view.lineStarts,
@@ -131,18 +131,18 @@ export function rebuildDisplayRows(
     blocks: view.blockRows,
     injectedTextRows: view.injectedTextRows,
     tabSize: view.tabSize,
-  });
+  })
 }
 
 export function refreshDisplayRowsForWrapWidth(
   view: VirtualizedTextViewInternal,
   viewportColumns: number,
 ): boolean {
-  if (!view.wrapEnabled) return false;
-  if (viewportColumns === view.currentWrapColumn) return false;
+  if (!view.wrapEnabled) return false
+  if (viewportColumns === view.currentWrapColumn) return false
 
-  rebuildDisplayRows(view, viewportColumns);
-  return true;
+  rebuildDisplayRows(view, viewportColumns)
+  return true
 }
 
 export function setWrapEnabledLayout(
@@ -150,12 +150,12 @@ export function setWrapEnabledLayout(
   enabled: boolean,
   viewportColumns: number | null,
 ): boolean {
-  if (view.wrapEnabled === enabled) return false;
+  if (view.wrapEnabled === enabled) return false
 
-  view.wrapEnabled = enabled;
-  view.currentWrapColumn = null;
-  rebuildDisplayRows(view, viewportColumns);
-  return true;
+  view.wrapEnabled = enabled
+  view.currentWrapColumn = null
+  rebuildDisplayRows(view, viewportColumns)
+  return true
 }
 
 export function setBlockRowsLayout(
@@ -163,8 +163,8 @@ export function setBlockRowsLayout(
   blockRows: readonly BlockRow[],
   viewportColumns: number | null,
 ): void {
-  view.blockRows = blockRows;
-  rebuildDisplayRows(view, viewportColumns);
+  view.blockRows = blockRows
+  rebuildDisplayRows(view, viewportColumns)
 }
 
 export function setInjectedTextRowsLayout(
@@ -172,8 +172,8 @@ export function setInjectedTextRowsLayout(
   injectedTextRows: readonly InjectedTextRow[],
   viewportColumns: number | null,
 ): void {
-  view.injectedTextRows = injectedTextRows;
-  rebuildDisplayRows(view, viewportColumns);
+  view.injectedTextRows = injectedTextRows
+  rebuildDisplayRows(view, viewportColumns)
 }
 
 export function updateVirtualizerRows(view: VirtualizedTextViewInternal): void {
@@ -182,59 +182,59 @@ export function updateVirtualizerRows(view: VirtualizedTextViewInternal): void {
     rowGap: view.rowGap,
     rowHeight: getRowHeight(view),
     rowSizes: rowSizes(view),
-  });
+  })
 }
 
 export function rowSizes(view: VirtualizedTextViewInternal): readonly number[] | undefined {
-  return variableRowHeightIndex(view)?.rowSizes;
+  return variableRowHeightIndex(view)?.rowSizes
 }
 
 export function hasVariableRows(view: VirtualizedTextViewInternal): boolean {
   for (const row of view.blockRows) {
-    if (row.heightPx !== undefined && row.heightPx !== view.metrics.rowHeight) return true;
-    if (normalizeBlockHeightRows(row.heightRows) !== 1) return true;
+    if (row.heightPx !== undefined && row.heightPx !== view.metrics.rowHeight) return true
+    if (normalizeBlockHeightRows(row.heightRows) !== 1) return true
   }
 
-  return false;
+  return false
 }
 
 export function rowTop(view: VirtualizedTextViewInternal, row: number): number {
-  const index = variableRowHeightIndex(view);
-  if (!index) return row * rowStride(view);
+  const index = variableRowHeightIndex(view)
+  if (!index) return row * rowStride(view)
 
-  return rowHeightIndexStart(index, row);
+  return rowHeightIndexStart(index, row)
 }
 
 export function rowHeight(view: VirtualizedTextViewInternal, row: number): number {
-  return variableRowHeightIndex(view)?.rowSizes[row] ?? getRowHeight(view);
+  return variableRowHeightIndex(view)?.rowSizes[row] ?? getRowHeight(view)
 }
 
 export function scrollPastEndPadding(
   view: VirtualizedTextViewInternal,
   viewportHeight: number,
 ): number {
-  const lastRow = visibleLineCount(view) - 1;
-  return Math.max(0, viewportHeight - rowHeight(view, lastRow));
+  const lastRow = visibleLineCount(view) - 1
+  return Math.max(0, viewportHeight - rowHeight(view, lastRow))
 }
 
 export function scrollableHeight(
   _view: VirtualizedTextViewInternal,
   snapshot: FixedRowVirtualizerSnapshot,
 ): number {
-  return snapshot.scrollHeight;
+  return snapshot.scrollHeight
 }
 
-export function displayRowKind(view: VirtualizedTextViewInternal, row: number): "text" | "block" {
-  return view.displayRows[row]?.kind ?? "text";
+export function displayRowKind(view: VirtualizedTextViewInternal, row: number): 'text' | 'block' {
+  return view.displayRows[row]?.kind ?? 'text'
 }
 
 export function visualColumnForOffset(view: VirtualizedTextViewInternal, offset: number): number {
-  const row = rowForOffset(view, offset);
-  const displayRow = view.displayRows[row];
-  if (!isDocumentTextDisplayRow(displayRow)) return 0;
+  const row = rowForOffset(view, offset)
+  const displayRow = view.displayRows[row]
+  if (!isDocumentTextDisplayRow(displayRow)) return 0
 
-  const localOffset = clamp(offset - displayRowStartOffset(view, row), 0, displayRow.text.length);
-  return bufferColumnToVisualColumn(displayRow.text, localOffset, view.tabSize);
+  const localOffset = clamp(offset - displayRowStartOffset(view, row), 0, displayRow.text.length)
+  return bufferColumnToVisualColumn(displayRow.text, localOffset, view.tabSize)
 }
 
 export function offsetForViewportColumn(
@@ -242,60 +242,60 @@ export function offsetForViewportColumn(
   row: number,
   visualColumn: number,
 ): number {
-  const displayRow = view.displayRows[row];
-  if (!displayRow) return view.textLength;
-  const startOffset = displayRowStartOffset(view, row);
-  if (!isDocumentTextDisplayRow(displayRow)) return startOffset;
+  const displayRow = view.displayRows[row]
+  if (!displayRow) return view.textLength
+  const startOffset = displayRowStartOffset(view, row)
+  if (!isDocumentTextDisplayRow(displayRow)) return startOffset
 
   const bufferColumn = visualColumnToBufferColumn(
     displayRow.text,
     visualColumn,
-    "nearest",
+    'nearest',
     view.tabSize,
-  );
-  return startOffset + clamp(bufferColumn, 0, displayRow.text.length);
+  )
+  return startOffset + clamp(bufferColumn, 0, displayRow.text.length)
 }
 
 export function lineStartOffset(view: VirtualizedTextViewInternal, row: number): number {
-  if (usesPlainDisplayRows(view)) return bufferLineStartOffset(view, row);
-  return displayRowStartOffset(view, row);
+  if (usesPlainDisplayRows(view)) return bufferLineStartOffset(view, row)
+  return displayRowStartOffset(view, row)
 }
 
 export function lineEndOffset(view: VirtualizedTextViewInternal, row: number): number {
-  if (usesPlainDisplayRows(view)) return bufferLineEndOffset(view, row);
-  return displayRowEndOffset(view, row);
+  if (usesPlainDisplayRows(view)) return bufferLineEndOffset(view, row)
+  return displayRowEndOffset(view, row)
 }
 
 export function bufferLineStartOffset(view: VirtualizedTextViewInternal, row: number): number {
-  if (row < 0 || row >= view.lineStarts.length) return view.textLength;
-  const offset = view.lineStartOffsetIndex?.offsetAt(row) ?? 0;
-  return (view.lineStarts[row] ?? 0) + offset;
+  if (row < 0 || row >= view.lineStarts.length) return view.textLength
+  const offset = view.lineStartOffsetIndex?.offsetAt(row) ?? 0
+  return (view.lineStarts[row] ?? 0) + offset
 }
 
 export function lineText(view: VirtualizedTextViewInternal, row: number): string {
-  return view.displayRows[row]?.text ?? "";
+  return view.displayRows[row]?.text ?? ''
 }
 
 function materializeViewText(view: VirtualizedTextViewInternal): void {
-  const text = view.textSnapshot.getText();
-  view.text = text;
-  view.textLength = text.length;
+  const text = view.textSnapshot.getText()
+  view.text = text
+  view.textLength = text.length
 }
 
 function bufferLineEndOffset(view: VirtualizedTextViewInternal, row: number): number {
-  if (row < 0) return view.textLength;
-  if (row >= view.lineStarts.length - 1) return view.textLength;
+  if (row < 0) return view.textLength
+  if (row >= view.lineStarts.length - 1) return view.textLength
 
-  return Math.max(bufferLineStartOffset(view, row), bufferLineStartOffset(view, row + 1) - 1);
+  return Math.max(bufferLineStartOffset(view, row), bufferLineStartOffset(view, row + 1) - 1)
 }
 
 export function materializeLineStarts(view: VirtualizedTextViewInternal): readonly number[] {
-  const offsetIndex = view.lineStartOffsetIndex;
-  if (!offsetIndex?.dirty) return view.lineStarts;
+  const offsetIndex = view.lineStartOffsetIndex
+  if (!offsetIndex?.dirty) return view.lineStarts
 
-  view.lineStarts = offsetIndex.materialize(view.lineStarts);
-  view.lineStartOffsetIndex = null;
-  return view.lineStarts;
+  view.lineStarts = offsetIndex.materialize(view.lineStarts)
+  view.lineStartOffsetIndex = null
+  return view.lineStarts
 }
 
 function shiftLineStartsAfterRow(
@@ -303,12 +303,12 @@ function shiftLineStartsAfterRow(
   rowIndex: number,
   delta: number,
 ): void {
-  if (delta === 0) return;
+  if (delta === 0) return
 
   const offsetIndex =
-    view.lineStartOffsetIndex ?? createLineStartOffsetIndex(view.lineStarts.length);
-  offsetIndex.addSuffix(rowIndex + 1, delta);
-  view.lineStartOffsetIndex = offsetIndex.dirty ? offsetIndex : null;
+    view.lineStartOffsetIndex ?? createLineStartOffsetIndex(view.lineStarts.length)
+  offsetIndex.addSuffix(rowIndex + 1, delta)
+  view.lineStartOffsetIndex = offsetIndex.dirty ? offsetIndex : null
 }
 
 function updateDisplayRowsAfterSameLineEdit(
@@ -316,11 +316,11 @@ function updateDisplayRowsAfterSameLineEdit(
   patch: SameLineEditPatch,
   delta: number,
 ): void {
-  const row = view.displayRows[patch.rowIndex];
-  if (!row) return;
-  if (row.kind !== "text") return;
+  const row = view.displayRows[patch.rowIndex]
+  if (!row) return
+  if (row.kind !== 'text') return
 
-  view.displayRows[patch.rowIndex] = updateTextDisplayRow(row, patch, delta);
+  view.displayRows[patch.rowIndex] = updateTextDisplayRow(row, patch, delta)
 }
 
 function updateDisplayRowsAfterMultiLineEdit(
@@ -331,14 +331,14 @@ function updateDisplayRowsAfterMultiLineEdit(
     view,
     patch.startRow,
     patch.startRow + patch.insertedLineBreaks,
-  );
+  )
   const suffix = shiftPlainDisplayRows(
     view.displayRows.slice(patch.endRow + 1),
     patch.insertedLineBreaks - (patch.endRow - patch.startRow),
     patch.delta,
-  );
+  )
 
-  view.displayRows = view.displayRows.slice(0, patch.startRow).concat(replacementRows, suffix);
+  view.displayRows = view.displayRows.slice(0, patch.startRow).concat(replacementRows, suffix)
 }
 
 function createPlainDisplayRowsForRange(
@@ -346,15 +346,15 @@ function createPlainDisplayRowsForRange(
   startRow: number,
   endRow: number,
 ): DisplayRow[] {
-  const rows: DisplayRow[] = [];
-  const lastRow = view.lineStarts.length - 1;
+  const rows: DisplayRow[] = []
+  const lastRow = view.lineStarts.length - 1
   for (let rowIndex = startRow; rowIndex <= endRow && rowIndex <= lastRow; rowIndex += 1) {
-    const startOffset = bufferLineStartOffset(view, rowIndex);
-    const endOffset = bufferLineEndOffset(view, rowIndex);
-    const text = view.textSnapshot.getTextInRange(startOffset, endOffset);
+    const startOffset = bufferLineStartOffset(view, rowIndex)
+    const endOffset = bufferLineEndOffset(view, rowIndex)
+    const text = view.textSnapshot.getTextInRange(startOffset, endOffset)
     rows.push({
-      kind: "text",
-      source: "document",
+      kind: 'text',
+      source: 'document',
       index: rowIndex,
       bufferRow: rowIndex,
       startOffset,
@@ -364,10 +364,10 @@ function createPlainDisplayRowsForRange(
       sourceStartColumn: 0,
       sourceEndColumn: text.length,
       wrapSegment: 0,
-    });
+    })
   }
 
-  return rows;
+  return rows
 }
 
 function shiftPlainDisplayRows(
@@ -375,18 +375,18 @@ function shiftPlainDisplayRows(
   rowDelta: number,
   offsetDelta: number,
 ): DisplayRow[] {
-  if (rowDelta === 0 && offsetDelta === 0) return [...rows];
+  if (rowDelta === 0 && offsetDelta === 0) return [...rows]
 
   return rows.map((row) => {
-    if (row.kind !== "text" || row.source !== "document") return row;
+    if (row.kind !== 'text' || row.source !== 'document') return row
     return {
       ...row,
       index: row.index + rowDelta,
       bufferRow: row.bufferRow + rowDelta,
       startOffset: row.startOffset + offsetDelta,
       endOffset: row.endOffset + offsetDelta,
-    };
-  });
+    }
+  })
 }
 
 function updateTextDisplayRow(
@@ -394,175 +394,173 @@ function updateTextDisplayRow(
   patch: SameLineEditPatch,
   delta: number,
 ): DisplayTextRow {
-  const suffixStart = patch.localFrom + patch.deleteLength;
-  const text = `${row.text.slice(0, patch.localFrom)}${patch.text}${row.text.slice(suffixStart)}`;
+  const suffixStart = patch.localFrom + patch.deleteLength
+  const text = `${row.text.slice(0, patch.localFrom)}${patch.text}${row.text.slice(suffixStart)}`
   return {
     ...row,
     endOffset: row.endOffset + delta,
     text,
     sourceText: text,
     sourceEndColumn: row.sourceEndColumn + delta,
-  };
+  }
 }
 
 function lineStartsAfterMultiLineEdit(lineStarts: readonly number[], edit: TextEdit): number[] {
-  const delta = edit.text.length - (edit.to - edit.from);
-  const next: number[] = [];
+  const delta = edit.text.length - (edit.to - edit.from)
+  const next: number[] = []
   for (const start of lineStarts) {
-    if (start <= edit.from) next.push(start);
+    if (start <= edit.from) next.push(start)
   }
 
-  forEachInsertedLineStart(edit, (start) => next.push(start));
+  forEachInsertedLineStart(edit, (start) => next.push(start))
 
   for (const start of lineStarts) {
-    if (start > edit.to) next.push(start + delta);
+    if (start > edit.to) next.push(start + delta)
   }
 
-  return next.length > 0 ? next : [0];
+  return next.length > 0 ? next : [0]
 }
 
 function forEachInsertedLineStart(edit: TextEdit, visit: (start: number) => void): void {
   for (let index = 0; index < edit.text.length; index += 1) {
-    if (edit.text[index] !== "\n") continue;
-    visit(edit.from + index + 1);
+    if (edit.text[index] !== '\n') continue
+    visit(edit.from + index + 1)
   }
 }
 
 function lineBreakCount(text: string): number {
-  let count = 0;
+  let count = 0
   for (let index = 0; index < text.length; index += 1) {
-    if (text[index] === "\n") count += 1;
+    if (text[index] === '\n') count += 1
   }
-  return count;
+  return count
 }
 
 export function sameLineEditPatch(
   view: VirtualizedTextViewInternal,
   edit: TextEdit,
 ): SameLineEditPatch | null {
-  if (view.foldMap) return null;
-  if (view.wrapEnabled || view.blockRows.length > 0 || view.injectedTextRows.length > 0)
-    return null;
-  if (edit.from < 0 || edit.to < edit.from || edit.to > view.textLength) return null;
-  if (edit.text.includes("\n")) return null;
+  if (view.foldMap) return null
+  if (view.wrapEnabled || view.blockRows.length > 0 || view.injectedTextRows.length > 0) return null
+  if (edit.from < 0 || edit.to < edit.from || edit.to > view.textLength) return null
+  if (edit.text.includes('\n')) return null
 
-  const rowIndex = bufferRowForOffset(view, edit.from);
-  if (rowIndex !== bufferRowForOffset(view, edit.to)) return null;
-  if (lineText(view, rowIndex).length > view.longLineChunkThreshold) return null;
+  const rowIndex = bufferRowForOffset(view, edit.from)
+  if (rowIndex !== bufferRowForOffset(view, edit.to)) return null
+  if (lineText(view, rowIndex).length > view.longLineChunkThreshold) return null
   return {
     rowIndex,
     localFrom: edit.from - lineStartOffset(view, rowIndex),
     deleteLength: edit.to - edit.from,
     text: edit.text,
-  };
+  }
 }
 
 export function multiLineEditPatch(
   view: VirtualizedTextViewInternal,
   edit: TextEdit,
 ): MultiLineEditPatch | null {
-  if (view.foldMap) return null;
-  if (view.wrapEnabled || view.blockRows.length > 0 || view.injectedTextRows.length > 0)
-    return null;
-  if (edit.from < 0 || edit.to < edit.from || edit.to > view.textLength) return null;
+  if (view.foldMap) return null
+  if (view.wrapEnabled || view.blockRows.length > 0 || view.injectedTextRows.length > 0) return null
+  if (edit.from < 0 || edit.to < edit.from || edit.to > view.textLength) return null
 
-  materializeLineStarts(view);
-  const startRow = bufferRowForOffset(view, edit.from);
-  const endRow = bufferRowForOffset(view, edit.to);
-  if (!edit.text.includes("\n") && startRow === endRow) return null;
+  materializeLineStarts(view)
+  const startRow = bufferRowForOffset(view, edit.from)
+  const endRow = bufferRowForOffset(view, edit.to)
+  if (!edit.text.includes('\n') && startRow === endRow) return null
   return {
     startRow,
     endRow,
     insertedLineBreaks: lineBreakCount(edit.text),
     delta: edit.text.length - (edit.to - edit.from),
-  };
+  }
 }
 
 export function rowForOffset(view: VirtualizedTextViewInternal, offset: number): number {
-  const bufferRow = bufferRowForOffset(view, offset);
-  if (!usesDisplayRowTransforms(view)) return foldVirtualRowForBufferRow(view, bufferRow);
+  const bufferRow = bufferRowForOffset(view, offset)
+  if (!usesDisplayRowTransforms(view)) return foldVirtualRowForBufferRow(view, bufferRow)
 
-  const displayRow = textDisplayRowForOffset(view, clamp(offset, 0, view.textLength));
-  if (displayRow) return displayRow.index;
+  const displayRow = textDisplayRowForOffset(view, clamp(offset, 0, view.textLength))
+  if (displayRow) return displayRow.index
 
-  return virtualRowForBufferRow(view, bufferRow);
+  return virtualRowForBufferRow(view, bufferRow)
 }
 
 export function bufferRowForOffset(view: VirtualizedTextViewInternal, offset: number): number {
-  const clamped = clamp(offset, 0, view.textLength);
-  let low = 0;
-  let high = view.lineStarts.length - 1;
+  const clamped = clamp(offset, 0, view.textLength)
+  let low = 0
+  let high = view.lineStarts.length - 1
 
   while (low <= high) {
-    const middle = Math.floor((low + high) / 2);
-    const start = bufferLineStartOffset(view, middle);
-    const next = bufferLineStartOffset(view, middle + 1);
+    const middle = Math.floor((low + high) / 2)
+    const start = bufferLineStartOffset(view, middle)
+    const next = bufferLineStartOffset(view, middle + 1)
     if (clamped < start) {
-      high = middle - 1;
-      continue;
+      high = middle - 1
+      continue
     }
     if (clamped >= next && middle + 1 < view.lineStarts.length) {
-      low = middle + 1;
-      continue;
+      low = middle + 1
+      continue
     }
-    return middle;
+    return middle
   }
 
-  return view.lineStarts.length - 1;
+  return view.lineStarts.length - 1
 }
 
 export function rowForViewportY(view: VirtualizedTextViewInternal, y: number): number {
-  const offset = view.scrollElement.scrollTop + y;
-  const index = variableRowHeightIndex(view);
-  if (!index) return fixedRowForOffset(view, offset);
+  const offset = view.scrollElement.scrollTop + y
+  const index = variableRowHeightIndex(view)
+  if (!index) return fixedRowForOffset(view, offset)
 
-  return rowHeightIndexRowAtOffset(index, offset);
+  return rowHeightIndexRowAtOffset(index, offset)
 }
 
 export function visibleLineCount(view: VirtualizedTextViewInternal): number {
-  return Math.max(1, view.displayRows.length);
+  return Math.max(1, view.displayRows.length)
 }
 
 export function foldVisibleLineCount(view: VirtualizedTextViewInternal): number {
-  if (!view.foldMap) return view.lineStarts.length;
+  if (!view.foldMap) return view.lineStarts.length
 
   const hidden = view.foldMap.ranges.reduce((count, range) => {
-    return count + Math.max(0, range.endPoint.row - range.startPoint.row);
-  }, 0);
-  return Math.max(1, view.lineStarts.length - hidden);
+    return count + Math.max(0, range.endPoint.row - range.startPoint.row)
+  }, 0)
+  return Math.max(1, view.lineStarts.length - hidden)
 }
 
 export function bufferRowForVirtualRow(view: VirtualizedTextViewInternal, row: number): number {
-  const displayRow = view.displayRows[row];
-  if (displayRow?.kind === "text") return displayRow.bufferRow;
-  if (displayRow?.kind === "block") return displayRow.anchorBufferRow;
-  return foldBufferRowForVisibleRow(view, row);
+  const displayRow = view.displayRows[row]
+  if (displayRow?.kind === 'text') return displayRow.bufferRow
+  if (displayRow?.kind === 'block') return displayRow.anchorBufferRow
+  return foldBufferRowForVisibleRow(view, row)
 }
 
 export function foldBufferRowForVisibleRow(view: VirtualizedTextViewInternal, row: number): number {
-  if (!view.foldMap) return clamp(row, 0, view.lineStarts.length - 1);
-  const point = foldPointToBufferPoint(view.foldMap, asFoldPoint({ row, column: 0 }));
-  return clamp(point.row, 0, view.lineStarts.length - 1);
+  if (!view.foldMap) return clamp(row, 0, view.lineStarts.length - 1)
+  const point = foldPointToBufferPoint(view.foldMap, asFoldPoint({ row, column: 0 }))
+  return clamp(point.row, 0, view.lineStarts.length - 1)
 }
 
 export function virtualRowForBufferRow(view: VirtualizedTextViewInternal, row: number): number {
-  if (!usesDisplayRowTransforms(view)) return foldVirtualRowForBufferRow(view, row);
+  if (!usesDisplayRowTransforms(view)) return foldVirtualRowForBufferRow(view, row)
 
-  const match = textDisplayRowForBufferRow(view.displayRows, row);
-  if (match) return match.index;
+  const match = textDisplayRowForBufferRow(view.displayRows, row)
+  if (match) return match.index
 
-  return transformedRowForProjectedBufferRow(view, row);
+  return transformedRowForProjectedBufferRow(view, row)
 }
 
 export function foldVirtualRowForBufferRow(view: VirtualizedTextViewInternal, row: number): number {
-  if (!view.foldMap) return clamp(row, 0, visibleLineCount(view) - 1);
+  if (!view.foldMap) return clamp(row, 0, visibleLineCount(view) - 1)
 
-  const point = bufferPointToFoldPoint(view.foldMap, { row, column: 0 });
-  return clamp(point.row, 0, visibleLineCount(view) - 1);
+  const point = bufferPointToFoldPoint(view.foldMap, { row, column: 0 })
+  return clamp(point.row, 0, visibleLineCount(view) - 1)
 }
 
 export function getRowHeight(view: VirtualizedTextViewInternal): number {
-  return normalizeRowHeight(view.metrics.rowHeight);
+  return normalizeRowHeight(view.metrics.rowHeight)
 }
 
 export function rowForSnapshotOffset(
@@ -570,184 +568,184 @@ export function rowForSnapshotOffset(
   snapshot: FixedRowVirtualizerSnapshot,
   y: number,
 ): number {
-  const offset = snapshot.scrollTop + y;
-  const index = variableRowHeightIndex(view);
-  if (!index) return fixedRowForOffset(view, offset);
+  const offset = snapshot.scrollTop + y
+  const index = variableRowHeightIndex(view)
+  if (!index) return fixedRowForOffset(view, offset)
 
-  return rowHeightIndexRowAtOffset(index, offset);
+  return rowHeightIndexRowAtOffset(index, offset)
 }
 
 function rowStride(view: VirtualizedTextViewInternal): number {
-  return getRowHeight(view) + view.rowGap;
+  return getRowHeight(view) + view.rowGap
 }
 
 function fixedRowForOffset(view: VirtualizedTextViewInternal, offset: number): number {
-  const rowHeight = getRowHeight(view);
-  const stride = rowHeight + view.rowGap;
-  const row = clamp(Math.floor(offset / stride), 0, visibleLineCount(view) - 1);
-  const rowBottom = row * stride + rowHeight;
-  if (offset < rowBottom) return row;
+  const rowHeight = getRowHeight(view)
+  const stride = rowHeight + view.rowGap
+  const row = clamp(Math.floor(offset / stride), 0, visibleLineCount(view) - 1)
+  const rowBottom = row * stride + rowHeight
+  if (offset < rowBottom) return row
 
-  return Math.min(row + 1, visibleLineCount(view) - 1);
+  return Math.min(row + 1, visibleLineCount(view) - 1)
 }
 
 function usesDisplayRowTransforms(view: VirtualizedTextViewInternal): boolean {
-  if (view.wrapEnabled) return true;
-  if (view.blockRows.length > 0) return true;
-  return view.injectedTextRows.length > 0;
+  if (view.wrapEnabled) return true
+  if (view.blockRows.length > 0) return true
+  return view.injectedTextRows.length > 0
 }
 
 function usesPlainDisplayRows(view: VirtualizedTextViewInternal): boolean {
-  if (view.foldMap) return false;
-  return !usesDisplayRowTransforms(view);
+  if (view.foldMap) return false
+  return !usesDisplayRowTransforms(view)
 }
 
 function displayRowStartOffset(view: VirtualizedTextViewInternal, row: number): number {
-  const displayRow = view.displayRows[row];
-  if (!displayRow) return view.textLength;
+  const displayRow = view.displayRows[row]
+  if (!displayRow) return view.textLength
   if (usesPlainDisplayRows(view) && isDocumentTextDisplayRow(displayRow))
-    return bufferLineStartOffset(view, displayRow.bufferRow);
+    return bufferLineStartOffset(view, displayRow.bufferRow)
 
-  return displayRow.startOffset;
+  return displayRow.startOffset
 }
 
 function displayRowEndOffset(view: VirtualizedTextViewInternal, row: number): number {
-  const displayRow = view.displayRows[row];
-  if (!displayRow) return view.textLength;
+  const displayRow = view.displayRows[row]
+  if (!displayRow) return view.textLength
   if (usesPlainDisplayRows(view) && isDocumentTextDisplayRow(displayRow))
-    return bufferLineEndOffset(view, displayRow.bufferRow);
+    return bufferLineEndOffset(view, displayRow.bufferRow)
 
-  return displayRow.endOffset;
+  return displayRow.endOffset
 }
 
 function normalizeBlockHeightRows(heightRows: number): number {
-  if (!Number.isFinite(heightRows) || heightRows <= 0) return 1;
-  return Math.max(1, Math.floor(heightRows));
+  if (!Number.isFinite(heightRows) || heightRows <= 0) return 1
+  return Math.max(1, Math.floor(heightRows))
 }
 
 function blockRowHeightPx(row: DisplayRow, rowHeight: number): number {
-  if (row.kind !== "block") return rowHeight;
-  return row.heightPx ?? row.heightRows * rowHeight;
+  if (row.kind !== 'block') return rowHeight
+  return row.heightPx ?? row.heightRows * rowHeight
 }
 
 function variableRowHeightIndex(view: VirtualizedTextViewInternal): RowHeightIndex | null {
-  const rowHeight = getRowHeight(view);
-  if (cachedRowHeightIndexValid(view, rowHeight)) return view.rowHeightIndex;
+  const rowHeight = getRowHeight(view)
+  if (cachedRowHeightIndexValid(view, rowHeight)) return view.rowHeightIndex
 
-  view.rowHeightIndexDisplayRows = view.displayRows;
-  view.rowHeightIndexRowHeight = rowHeight;
-  view.rowHeightIndexRowGap = view.rowGap;
-  view.rowHeightIndexVariable = hasVariableRows(view);
+  view.rowHeightIndexDisplayRows = view.displayRows
+  view.rowHeightIndexRowHeight = rowHeight
+  view.rowHeightIndexRowGap = view.rowGap
+  view.rowHeightIndexVariable = hasVariableRows(view)
   view.rowHeightIndex = view.rowHeightIndexVariable
     ? createRowHeightIndex(createRowSizes(view.displayRows, rowHeight), view.rowGap)
-    : null;
-  return view.rowHeightIndex;
+    : null
+  return view.rowHeightIndex
 }
 
 function cachedRowHeightIndexValid(view: VirtualizedTextViewInternal, rowHeight: number): boolean {
-  if (view.rowHeightIndexVariable === null) return false;
-  if (view.rowHeightIndexDisplayRows !== view.displayRows) return false;
-  if (view.rowHeightIndexRowHeight !== rowHeight) return false;
-  return view.rowHeightIndexRowGap === view.rowGap;
+  if (view.rowHeightIndexVariable === null) return false
+  if (view.rowHeightIndexDisplayRows !== view.displayRows) return false
+  if (view.rowHeightIndexRowHeight !== rowHeight) return false
+  return view.rowHeightIndexRowGap === view.rowGap
 }
 
 function createRowSizes(rows: readonly DisplayRow[], rowHeight: number): readonly number[] {
-  const sizes = Array.from({ length: rows.length }, () => rowHeight);
+  const sizes = Array.from({ length: rows.length }, () => rowHeight)
   for (let index = 0; index < rows.length; index += 1) {
-    sizes[index] = blockRowHeightPx(rows[index]!, rowHeight);
+    sizes[index] = blockRowHeightPx(rows[index]!, rowHeight)
   }
 
-  return sizes;
+  return sizes
 }
 
 function textDisplayRowForOffset(
   view: VirtualizedTextViewInternal,
   offset: number,
 ): DisplayTextRow | null {
-  const rows = view.displayRows;
-  const start = firstDisplayRowEndingAtOrAfter(rows, offset);
-  if (start === -1) return null;
+  const rows = view.displayRows
+  const start = firstDisplayRowEndingAtOrAfter(rows, offset)
+  if (start === -1) return null
 
   for (let index = start; index < rows.length; index += 1) {
-    const row = rows[index]!;
-    if (row.startOffset > offset) return null;
-    if (!isDocumentTextDisplayRow(row)) continue;
-    if (offset <= row.endOffset) return row;
+    const row = rows[index]!
+    if (row.startOffset > offset) return null
+    if (!isDocumentTextDisplayRow(row)) continue
+    if (offset <= row.endOffset) return row
   }
 
-  return null;
+  return null
 }
 
 function firstDisplayRowEndingAtOrAfter(rows: readonly DisplayRow[], offset: number): number {
-  let low = 0;
-  let high = rows.length - 1;
-  let result = rows.length;
+  let low = 0
+  let high = rows.length - 1
+  let result = rows.length
 
   while (low <= high) {
-    const middle = Math.floor((low + high) / 2);
+    const middle = Math.floor((low + high) / 2)
     if (rows[middle]!.endOffset >= offset) {
-      result = middle;
-      high = middle - 1;
-      continue;
+      result = middle
+      high = middle - 1
+      continue
     }
 
-    low = middle + 1;
+    low = middle + 1
   }
 
-  if (result === rows.length) return -1;
-  return result;
+  if (result === rows.length) return -1
+  return result
 }
 
 function textDisplayRowForBufferRow(
   rows: readonly DisplayRow[],
   bufferRow: number,
 ): DisplayTextRow | null {
-  const start = firstDisplayRowAtOrAfterBufferRow(rows, bufferRow);
-  if (start === -1) return null;
+  const start = firstDisplayRowAtOrAfterBufferRow(rows, bufferRow)
+  if (start === -1) return null
 
   for (let index = start; index < rows.length; index += 1) {
-    const row = rows[index]!;
-    const orderRow = displayRowBufferOrder(row);
-    if (orderRow > bufferRow) return null;
-    if (isDocumentTextDisplayRow(row) && row.bufferRow === bufferRow) return row;
+    const row = rows[index]!
+    const orderRow = displayRowBufferOrder(row)
+    if (orderRow > bufferRow) return null
+    if (isDocumentTextDisplayRow(row) && row.bufferRow === bufferRow) return row
   }
 
-  return null;
+  return null
 }
 
 function firstDisplayRowAtOrAfterBufferRow(rows: readonly DisplayRow[], bufferRow: number): number {
-  let low = 0;
-  let high = rows.length - 1;
-  let result = rows.length;
+  let low = 0
+  let high = rows.length - 1
+  let result = rows.length
 
   while (low <= high) {
-    const middle = Math.floor((low + high) / 2);
+    const middle = Math.floor((low + high) / 2)
     if (displayRowBufferOrder(rows[middle]!) >= bufferRow) {
-      result = middle;
-      high = middle - 1;
-      continue;
+      result = middle
+      high = middle - 1
+      continue
     }
 
-    low = middle + 1;
+    low = middle + 1
   }
 
-  if (result === rows.length) return -1;
-  return result;
+  if (result === rows.length) return -1
+  return result
 }
 
 function displayRowBufferOrder(row: DisplayRow): number {
-  if (row.kind === "text") return row.bufferRow;
-  return row.anchorBufferRow;
+  if (row.kind === 'text') return row.bufferRow
+  return row.anchorBufferRow
 }
 
 function transformedRowForProjectedBufferRow(
   view: VirtualizedTextViewInternal,
   row: number,
 ): number {
-  const foldedRow = foldVirtualRowForBufferRow(view, row);
-  const bufferRow = foldBufferRowForVisibleRow(view, foldedRow);
-  const match = textDisplayRowForBufferRow(view.displayRows, bufferRow);
-  if (match) return match.index;
+  const foldedRow = foldVirtualRowForBufferRow(view, row)
+  const bufferRow = foldBufferRowForVisibleRow(view, foldedRow)
+  const match = textDisplayRowForBufferRow(view.displayRows, bufferRow)
+  if (match) return match.index
 
-  return foldedRow;
+  return foldedRow
 }

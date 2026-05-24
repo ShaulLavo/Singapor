@@ -1,12 +1,12 @@
-import { describe, expect, it } from "vitest";
-import ts from "typescript";
-import { tsDiagnosticToLspDiagnostic } from "../src/tsDiagnostics";
+import { describe, expect, it } from 'vitest'
+import ts from 'typescript'
+import { tsDiagnosticToLspDiagnostic } from '../src/tsDiagnostics'
 
-describe("TypeScript diagnostic conversion", () => {
-  it("converts TypeScript offsets and categories to LSP diagnostics", () => {
-    const text = "const value: string = 1;\n";
-    const file = ts.createSourceFile("/src/index.ts", text, ts.ScriptTarget.ESNext);
-    const start = text.indexOf("1");
+describe('TypeScript diagnostic conversion', () => {
+  it('converts TypeScript offsets and categories to LSP diagnostics', () => {
+    const text = 'const value: string = 1;\n'
+    const file = ts.createSourceFile('/src/index.ts', text, ts.ScriptTarget.ESNext)
+    const start = text.indexOf('1')
 
     expect(
       tsDiagnosticToLspDiagnostic({
@@ -24,8 +24,8 @@ describe("TypeScript diagnostic conversion", () => {
       },
       severity: 1,
       code: 2322,
-      source: "typescript",
+      source: 'typescript',
       message: "Type 'number' is not assignable to type 'string'.",
-    });
-  });
-});
+    })
+  })
+})

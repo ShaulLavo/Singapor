@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import documentSessionSource from "../../editor/src/documentSession.ts?raw";
-import { TREE_SITTER_LANGUAGE_CONTRIBUTIONS } from "../../tree-sitter-languages/src/index.ts";
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import documentSessionSource from '../../editor/src/documentSession.ts?raw'
+import { TREE_SITTER_LANGUAGE_CONTRIBUTIONS } from '../../tree-sitter-languages/src/index.ts'
 
 import {
   applyBatchToPieceTable,
@@ -8,476 +8,476 @@ import {
   createPieceTableSnapshot,
   createSelectionSet,
   resolveSelection,
-} from "@editor/core";
+} from '@editor/core'
 import {
   expandTreeSitterSelection,
   resolveTreeSitterLanguageContribution,
   selectTreeSitterToken,
   shrinkTreeSitterSelection,
-} from "../src";
-import { createTreeSitterEditPayload } from "../src/session.ts";
+} from '../src'
+import { createTreeSitterEditPayload } from '../src/session.ts'
 import {
   disposeTreeSitterWorker,
   editWithTreeSitter,
   parseWithTreeSitter,
   queryRangeWithTreeSitter,
   registerTreeSitterLanguagesWithWorker,
-} from "../src/treeSitter/workerClient.ts";
+} from '../src/treeSitter/workerClient.ts'
 
-describe.skipIf(typeof Worker === "undefined")("tree-sitter worker client", () => {
+describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () => {
   beforeEach(async () => {
-    await registerDefaultLanguages();
-  });
+    await registerDefaultLanguages()
+  })
 
   afterEach(async () => {
-    await disposeTreeSitterWorker();
-  });
+    await disposeTreeSitterWorker()
+  })
 
-  it("parses and edits through the real browser Worker", async () => {
-    const documentId = "file.ts";
-    const snapshot = createPieceTableSnapshot("const answer = 1;\n");
+  it('parses and edits through the real browser Worker', async () => {
+    const documentId = 'file.ts'
+    const snapshot = createPieceTableSnapshot('const answer = 1;\n')
     const parsed = await parseWithTreeSitter({
       documentId,
       snapshotVersion: 1,
-      languageId: "typescript",
+      languageId: 'typescript',
       snapshot,
-    });
+    })
 
-    expect(parsed?.documentId).toBe(documentId);
-    expect(parsed?.snapshotVersion).toBe(1);
-    expect(parsed?.captures.length).toBeGreaterThan(0);
+    expect(parsed?.documentId).toBe(documentId)
+    expect(parsed?.snapshotVersion).toBe(1)
+    expect(parsed?.captures.length).toBeGreaterThan(0)
 
-    const edits = [{ from: 6, to: 12, text: "value" }];
-    const nextSnapshot = applyBatchToPieceTable(snapshot, edits);
+    const edits = [{ from: 6, to: 12, text: 'value' }]
+    const nextSnapshot = applyBatchToPieceTable(snapshot, edits)
     const payload = createTreeSitterEditPayload({
       documentId,
       previousSnapshotVersion: 1,
       snapshotVersion: 2,
-      languageId: "typescript",
+      languageId: 'typescript',
       previousSnapshot: snapshot,
       nextSnapshot,
       edits,
-    });
-    const edited = payload ? await editWithTreeSitter(payload) : undefined;
+    })
+    const edited = payload ? await editWithTreeSitter(payload) : undefined
 
-    expect(edited?.documentId).toBe(documentId);
-    expect(edited?.snapshotVersion).toBe(2);
-    expect(edited?.captures.length).toBeGreaterThan(0);
-  });
+    expect(edited?.documentId).toBe(documentId)
+    expect(edited?.snapshotVersion).toBe(2)
+    expect(edited?.captures.length).toBeGreaterThan(0)
+  })
 
-  it("highlights PascalCase TSX component tag names and reports JSX folds", async () => {
-    const documentId = "main.tsx";
+  it('highlights PascalCase TSX component tag names and reports JSX folds', async () => {
+    const documentId = 'main.tsx'
     const text = [
-      "const view = (",
-      "  <StrictMode>",
-      "    <QueryClientProvider client={queryClient}>",
-      "      <App />",
-      "    </QueryClientProvider>",
-      "  </StrictMode>",
-      ");",
-    ].join("\n");
-    const snapshot = createPieceTableSnapshot(text);
+      'const view = (',
+      '  <StrictMode>',
+      '    <QueryClientProvider client={queryClient}>',
+      '      <App />',
+      '    </QueryClientProvider>',
+      '  </StrictMode>',
+      ');',
+    ].join('\n')
+    const snapshot = createPieceTableSnapshot(text)
     const parsed = await parseWithTreeSitter({
       documentId,
       snapshotVersion: 1,
-      languageId: "typescript",
+      languageId: 'typescript',
       snapshot,
-    });
+    })
 
     expect(parsed?.captures).toContainEqual({
-      startIndex: text.indexOf("StrictMode"),
-      endIndex: text.indexOf("StrictMode") + "StrictMode".length,
-      captureName: "constructor",
-      languageId: "typescript",
-    });
+      startIndex: text.indexOf('StrictMode'),
+      endIndex: text.indexOf('StrictMode') + 'StrictMode'.length,
+      captureName: 'constructor',
+      languageId: 'typescript',
+    })
     expect(parsed?.captures).toContainEqual({
-      startIndex: text.indexOf("QueryClientProvider"),
-      endIndex: text.indexOf("QueryClientProvider") + "QueryClientProvider".length,
-      captureName: "constructor",
-      languageId: "typescript",
-    });
+      startIndex: text.indexOf('QueryClientProvider'),
+      endIndex: text.indexOf('QueryClientProvider') + 'QueryClientProvider'.length,
+      captureName: 'constructor',
+      languageId: 'typescript',
+    })
     expect(parsed?.folds).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           endLine: 5,
-          languageId: "typescript",
+          languageId: 'typescript',
           startLine: 1,
-          type: "jsx_element",
+          type: 'jsx_element',
         }),
         expect.objectContaining({
           endLine: 4,
-          languageId: "typescript",
+          languageId: 'typescript',
           startLine: 2,
-          type: "jsx_element",
+          type: 'jsx_element',
         }),
       ]),
-    );
-  });
+    )
+  })
 
-  it("returns highlights for a lower document range after a parse-only editor parse", async () => {
-    const documentId = "large-lower-range.ts";
+  it('returns highlights for a lower document range after a parse-only editor parse', async () => {
+    const documentId = 'large-lower-range.ts'
     const text = Array.from(
       { length: 12_000 },
       (_value, index) => `export const value${index} = ${index};`,
-    ).join("\n");
-    const snapshot = createPieceTableSnapshot(text);
+    ).join('\n')
+    const snapshot = createPieceTableSnapshot(text)
     await parseWithTreeSitter({
       documentId,
       snapshotVersion: 1,
-      languageId: "typescript",
-      resultMode: "parseOnly",
+      languageId: 'typescript',
+      resultMode: 'parseOnly',
       snapshot,
-    });
+    })
 
     const topResult = await queryRangeWithTreeSitter({
       documentId,
       snapshotVersion: 1,
-      languageId: "typescript",
+      languageId: 'typescript',
       includeHighlights: true,
       includeCaptures: false,
       range: { startIndex: 0, endIndex: 1_000 },
-    });
-    const target = text.indexOf("value10000");
+    })
+    const target = text.indexOf('value10000')
     const result = await queryRangeWithTreeSitter({
       documentId,
       snapshotVersion: 1,
-      languageId: "typescript",
+      languageId: 'typescript',
       includeHighlights: true,
       includeCaptures: false,
       range: { startIndex: target - 100, endIndex: target + 1_000 },
-    });
+    })
 
-    expect(topResult?.tokens?.length ?? 0).toBeGreaterThan(0);
+    expect(topResult?.tokens?.length ?? 0).toBeGreaterThan(0)
     expect(
       result?.tokens?.some((token) => token.start <= target && token.end >= target + 10) ?? false,
-    ).toBe(true);
-  });
+    ).toBe(true)
+  })
 
-  it("returns an unavailable edit result when the incremental base was evicted", async () => {
-    const documentId = "missing-incremental-base.ts";
-    const snapshot = createPieceTableSnapshot("const answer = 1;\n");
-    const edit = { from: 6, to: 12, text: "value" };
-    const nextSnapshot = applyBatchToPieceTable(snapshot, [edit]);
+  it('returns an unavailable edit result when the incremental base was evicted', async () => {
+    const documentId = 'missing-incremental-base.ts'
+    const snapshot = createPieceTableSnapshot('const answer = 1;\n')
+    const edit = { from: 6, to: 12, text: 'value' }
+    const nextSnapshot = applyBatchToPieceTable(snapshot, [edit])
     const payload = createTreeSitterEditPayload({
       documentId,
       previousSnapshotVersion: 99,
       snapshotVersion: 100,
-      languageId: "typescript",
+      languageId: 'typescript',
       previousSnapshot: snapshot,
       nextSnapshot,
       edits: [edit],
-      resultMode: "parseOnly",
-    });
+      resultMode: 'parseOnly',
+    })
 
-    const result = payload ? await editWithTreeSitter(payload) : "missing-payload";
+    const result = payload ? await editWithTreeSitter(payload) : 'missing-payload'
 
-    expect(result).toBeUndefined();
-  });
+    expect(result).toBeUndefined()
+  })
 
-  it("matches a full parse after same-line inserts before later rows", async () => {
-    const documentId = "same-line-insert.ts";
+  it('matches a full parse after same-line inserts before later rows', async () => {
+    const documentId = 'same-line-insert.ts'
     const text = [
-      "export function alpha() {",
-      "  return 1;",
-      "}",
-      "export function beta() {",
-      "  return alpha();",
-      "}",
-    ].join("\n");
-    const snapshot = createPieceTableSnapshot(text);
+      'export function alpha() {',
+      '  return 1;',
+      '}',
+      'export function beta() {',
+      '  return alpha();',
+      '}',
+    ].join('\n')
+    const snapshot = createPieceTableSnapshot(text)
     await parseWithTreeSitter({
       documentId,
       snapshotVersion: 1,
-      languageId: "typescript",
+      languageId: 'typescript',
       snapshot,
-    });
+    })
 
-    const editOffset = text.indexOf("return 1") + "return".length;
-    const edit = { from: editOffset, to: editOffset, text: " value" };
-    const nextSnapshot = applyBatchToPieceTable(snapshot, [edit]);
+    const editOffset = text.indexOf('return 1') + 'return'.length
+    const edit = { from: editOffset, to: editOffset, text: ' value' }
+    const nextSnapshot = applyBatchToPieceTable(snapshot, [edit])
     const payload = createTreeSitterEditPayload({
       documentId,
       previousSnapshotVersion: 1,
       snapshotVersion: 2,
-      languageId: "typescript",
+      languageId: 'typescript',
       previousSnapshot: snapshot,
       nextSnapshot,
       edits: [edit],
-    });
-    const incremental = payload ? await editWithTreeSitter(payload) : undefined;
+    })
+    const incremental = payload ? await editWithTreeSitter(payload) : undefined
     const full = await parseWithTreeSitter({
       documentId: `${documentId}:full`,
       snapshotVersion: 1,
-      languageId: "typescript",
+      languageId: 'typescript',
       snapshot: nextSnapshot,
-    });
+    })
 
     expect(captureSignature(incremental?.captures ?? [])).toEqual(
       captureSignature(full?.captures ?? []),
-    );
-  });
+    )
+  })
 
-  it("matches a full parse after inserting inside an identifier", async () => {
-    const documentId = "identifier-insert.ts";
+  it('matches a full parse after inserting inside an identifier', async () => {
+    const documentId = 'identifier-insert.ts'
     const text = [
       'export type DocumentSessionChangeKind = "edit" | "selection" | "undo" | "redo";',
-      "",
-      "export type EditorTimingMeasurement = {",
-      "  readonly name: string;",
-      "  readonly durationMs: number;",
-      "};",
-    ].join("\n");
-    const snapshot = createPieceTableSnapshot(text);
+      '',
+      'export type EditorTimingMeasurement = {',
+      '  readonly name: string;',
+      '  readonly durationMs: number;',
+      '};',
+    ].join('\n')
+    const snapshot = createPieceTableSnapshot(text)
     await parseWithTreeSitter({
       documentId,
       snapshotVersion: 1,
-      languageId: "typescript",
+      languageId: 'typescript',
       snapshot,
-    });
+    })
 
-    const editOffset = text.indexOf("Document") + "Docume".length;
-    const edit = { from: editOffset, to: editOffset, text: "f" };
-    const nextSnapshot = applyBatchToPieceTable(snapshot, [edit]);
+    const editOffset = text.indexOf('Document') + 'Docume'.length
+    const edit = { from: editOffset, to: editOffset, text: 'f' }
+    const nextSnapshot = applyBatchToPieceTable(snapshot, [edit])
     const payload = createTreeSitterEditPayload({
       documentId,
       previousSnapshotVersion: 1,
       snapshotVersion: 2,
-      languageId: "typescript",
+      languageId: 'typescript',
       previousSnapshot: snapshot,
       nextSnapshot,
       edits: [edit],
-    });
-    const incremental = payload ? await editWithTreeSitter(payload) : undefined;
+    })
+    const incremental = payload ? await editWithTreeSitter(payload) : undefined
     const full = await parseWithTreeSitter({
       documentId: `${documentId}:full`,
       snapshotVersion: 1,
-      languageId: "typescript",
+      languageId: 'typescript',
       snapshot: nextSnapshot,
-    });
+    })
 
     expect(captureSignature(incremental?.captures ?? [])).toEqual(
       captureSignature(full?.captures ?? []),
-    );
-  });
+    )
+  })
 
-  it("matches a full parse after inserting inside the real document session source", async () => {
-    const documentId = "document-session-source.ts";
-    const snapshot = createPieceTableSnapshot(documentSessionSource);
+  it('matches a full parse after inserting inside the real document session source', async () => {
+    const documentId = 'document-session-source.ts'
+    const snapshot = createPieceTableSnapshot(documentSessionSource)
     await parseWithTreeSitter({
       documentId,
       snapshotVersion: 1,
-      languageId: "typescript",
+      languageId: 'typescript',
       snapshot,
-    });
+    })
 
-    const kindOffset = documentSessionSource.indexOf("readonly kind");
-    expect(kindOffset).toBeGreaterThanOrEqual(0);
+    const kindOffset = documentSessionSource.indexOf('readonly kind')
+    expect(kindOffset).toBeGreaterThanOrEqual(0)
 
-    const editOffset = kindOffset + "readonly ki".length;
-    const edit = { from: editOffset, to: editOffset, text: "g" };
-    const nextSnapshot = applyBatchToPieceTable(snapshot, [edit]);
+    const editOffset = kindOffset + 'readonly ki'.length
+    const edit = { from: editOffset, to: editOffset, text: 'g' }
+    const nextSnapshot = applyBatchToPieceTable(snapshot, [edit])
     const payload = createTreeSitterEditPayload({
       documentId,
       previousSnapshotVersion: 1,
       snapshotVersion: 2,
-      languageId: "typescript",
+      languageId: 'typescript',
       previousSnapshot: snapshot,
       nextSnapshot,
       edits: [edit],
-    });
-    const incremental = payload ? await editWithTreeSitter(payload) : undefined;
+    })
+    const incremental = payload ? await editWithTreeSitter(payload) : undefined
     const full = await parseWithTreeSitter({
       documentId: `${documentId}:full`,
       snapshotVersion: 1,
-      languageId: "typescript",
+      languageId: 'typescript',
       snapshot: nextSnapshot,
-    });
+    })
 
     expect(captureSignature(incremental?.captures ?? [])).toEqual(
       captureSignature(full?.captures ?? []),
-    );
-  });
+    )
+  })
 
-  it("highlights injected script and style content", async () => {
-    const documentId = "index.html";
-    const text = "<style>.x { color: red; }</style><script>const a = 1;</script>";
-    const snapshot = createPieceTableSnapshot(text);
+  it('highlights injected script and style content', async () => {
+    const documentId = 'index.html'
+    const text = '<style>.x { color: red; }</style><script>const a = 1;</script>'
+    const snapshot = createPieceTableSnapshot(text)
     const parsed = await parseWithTreeSitter({
       documentId,
       snapshotVersion: 1,
-      languageId: "html",
+      languageId: 'html',
       snapshot,
-    });
+    })
 
     expect(parsed?.injections.map((injection) => injection.languageId).sort()).toEqual([
-      "css",
-      "javascript",
-    ]);
-    expect(parsed?.captures.some((capture) => capture.languageId === "css")).toBe(true);
-    expect(parsed?.captures.some((capture) => capture.languageId === "javascript")).toBe(true);
-  });
+      'css',
+      'javascript',
+    ])
+    expect(parsed?.captures.some((capture) => capture.languageId === 'css')).toBe(true)
+    expect(parsed?.captures.some((capture) => capture.languageId === 'javascript')).toBe(true)
+  })
 
-  it("can skip highlight captures while retaining structural results", async () => {
-    const documentId = "index.html";
+  it('can skip highlight captures while retaining structural results', async () => {
+    const documentId = 'index.html'
     const text = [
-      "<style>",
-      ".x {",
-      "  color: red;",
-      "}",
-      "</style>",
-      "<script>",
-      "const a = 1;",
-      "</script>",
-    ].join("\n");
-    const snapshot = createPieceTableSnapshot(text);
+      '<style>',
+      '.x {',
+      '  color: red;',
+      '}',
+      '</style>',
+      '<script>',
+      'const a = 1;',
+      '</script>',
+    ].join('\n')
+    const snapshot = createPieceTableSnapshot(text)
     const parsed = await parseWithTreeSitter({
       documentId,
       snapshotVersion: 1,
-      languageId: "html",
+      languageId: 'html',
       includeHighlights: false,
       snapshot,
-    });
+    })
 
-    expect(parsed?.captures).toEqual([]);
-    expect(parsed?.folds.length).toBeGreaterThan(0);
+    expect(parsed?.captures).toEqual([])
+    expect(parsed?.folds.length).toBeGreaterThan(0)
     expect(parsed?.injections.map((injection) => injection.languageId).sort()).toEqual([
-      "css",
-      "javascript",
-    ]);
-  });
+      'css',
+      'javascript',
+    ])
+  })
 
-  it("parses a consumer-registered language id", async () => {
+  it('parses a consumer-registered language id', async () => {
     const javascript = await resolveTreeSitterLanguageContribution(
       TREE_SITTER_LANGUAGE_CONTRIBUTIONS.find((contribution) => {
-        return contribution.id === "javascript";
+        return contribution.id === 'javascript'
       })!,
-    );
+    )
     await registerTreeSitterLanguagesWithWorker([
       {
         ...javascript,
-        id: "consumer-javascript",
-        extensions: [".consumer-js"],
-        aliases: ["consumer-javascript"],
+        id: 'consumer-javascript',
+        extensions: ['.consumer-js'],
+        aliases: ['consumer-javascript'],
       },
-    ]);
+    ])
 
-    const text = "const answer = 1;\n";
-    const snapshot = createPieceTableSnapshot(text);
+    const text = 'const answer = 1;\n'
+    const snapshot = createPieceTableSnapshot(text)
     const parsed = await parseWithTreeSitter({
-      documentId: "file.consumer-js",
+      documentId: 'file.consumer-js',
       snapshotVersion: 1,
-      languageId: "consumer-javascript",
+      languageId: 'consumer-javascript',
       snapshot,
-    });
+    })
 
-    expect(parsed?.languageId).toBe("consumer-javascript");
-    expect(parsed?.captures.length).toBeGreaterThan(0);
-    expect(parsed?.captures.some((capture) => capture.languageId === "consumer-javascript")).toBe(
+    expect(parsed?.languageId).toBe('consumer-javascript')
+    expect(parsed?.captures.length).toBeGreaterThan(0)
+    expect(parsed?.captures.some((capture) => capture.languageId === 'consumer-javascript')).toBe(
       true,
-    );
-  });
+    )
+  })
 
-  it("highlights injected tagged template content", async () => {
-    const documentId = "template.ts";
+  it('highlights injected tagged template content', async () => {
+    const documentId = 'template.ts'
     const text = [
-      "const view = html`<style>.x { color: red; }</style><main>${name}</main>`;",
+      'const view = html`<style>.x { color: red; }</style><main>${name}</main>`;',
       'const data = json`{"ok": true}`;',
-    ].join("\n");
-    const snapshot = createPieceTableSnapshot(text);
+    ].join('\n')
+    const snapshot = createPieceTableSnapshot(text)
     const parsed = await parseWithTreeSitter({
       documentId,
       snapshotVersion: 1,
-      languageId: "typescript",
+      languageId: 'typescript',
       snapshot,
-    });
+    })
     const languages = Array.from(
       new Set(parsed?.injections.map((injection) => injection.languageId)),
-    ).toSorted();
+    ).toSorted()
 
-    expect(languages).toEqual(["css", "html", "json"]);
-    expect(parsed?.captures.some((capture) => capture.languageId === "html")).toBe(true);
-    expect(parsed?.captures.some((capture) => capture.languageId === "css")).toBe(true);
-    expect(parsed?.captures.some((capture) => capture.languageId === "json")).toBe(true);
-  });
+    expect(languages).toEqual(['css', 'html', 'json'])
+    expect(parsed?.captures.some((capture) => capture.languageId === 'html')).toBe(true)
+    expect(parsed?.captures.some((capture) => capture.languageId === 'css')).toBe(true)
+    expect(parsed?.captures.some((capture) => capture.languageId === 'json')).toBe(true)
+  })
 
-  it("keeps injected layers active after edits outside injected content", async () => {
-    const documentId = "index.html";
-    const text = "<style>.x { color: red; }</style>";
-    const snapshot = createPieceTableSnapshot(text);
+  it('keeps injected layers active after edits outside injected content', async () => {
+    const documentId = 'index.html'
+    const text = '<style>.x { color: red; }</style>'
+    const snapshot = createPieceTableSnapshot(text)
     await parseWithTreeSitter({
       documentId,
       snapshotVersion: 1,
-      languageId: "html",
+      languageId: 'html',
       snapshot,
-    });
+    })
 
-    const edits = [{ from: text.length, to: text.length, text: "\n<main>Hello</main>" }];
-    const nextSnapshot = applyBatchToPieceTable(snapshot, edits);
+    const edits = [{ from: text.length, to: text.length, text: '\n<main>Hello</main>' }]
+    const nextSnapshot = applyBatchToPieceTable(snapshot, edits)
     const payload = createTreeSitterEditPayload({
       documentId,
       previousSnapshotVersion: 1,
       snapshotVersion: 2,
-      languageId: "html",
+      languageId: 'html',
       previousSnapshot: snapshot,
       nextSnapshot,
       edits,
-    });
-    const edited = payload ? await editWithTreeSitter(payload) : undefined;
+    })
+    const edited = payload ? await editWithTreeSitter(payload) : undefined
 
-    expect(edited?.injections.map((injection) => injection.languageId)).toContain("css");
-    expect(edited?.captures.some((capture) => capture.languageId === "css")).toBe(true);
-  });
+    expect(edited?.injections.map((injection) => injection.languageId)).toContain('css')
+    expect(edited?.captures.some((capture) => capture.languageId === 'css')).toBe(true)
+  })
 
-  it("updates injected layers after edits inside injected content", async () => {
-    const documentId = "index.html";
-    const text = "<style>.x { color: red; }</style>";
-    const snapshot = createPieceTableSnapshot(text);
+  it('updates injected layers after edits inside injected content', async () => {
+    const documentId = 'index.html'
+    const text = '<style>.x { color: red; }</style>'
+    const snapshot = createPieceTableSnapshot(text)
     await parseWithTreeSitter({
       documentId,
       snapshotVersion: 1,
-      languageId: "html",
+      languageId: 'html',
       snapshot,
-    });
+    })
 
-    const cssStart = text.indexOf(".x");
-    const cssEnd = text.indexOf("</style>");
-    const nextCss = ".x {\n  color: blue;\n}";
-    const edits = [{ from: cssStart, to: cssEnd, text: nextCss }];
-    const nextSnapshot = applyBatchToPieceTable(snapshot, edits);
+    const cssStart = text.indexOf('.x')
+    const cssEnd = text.indexOf('</style>')
+    const nextCss = '.x {\n  color: blue;\n}'
+    const edits = [{ from: cssStart, to: cssEnd, text: nextCss }]
+    const nextSnapshot = applyBatchToPieceTable(snapshot, edits)
     const payload = createTreeSitterEditPayload({
       documentId,
       previousSnapshotVersion: 1,
       snapshotVersion: 2,
-      languageId: "html",
+      languageId: 'html',
       previousSnapshot: snapshot,
       nextSnapshot,
       edits,
-    });
-    const edited = payload ? await editWithTreeSitter(payload) : undefined;
-    const colorStart = cssStart + nextCss.indexOf("color");
+    })
+    const edited = payload ? await editWithTreeSitter(payload) : undefined
+    const colorStart = cssStart + nextCss.indexOf('color')
 
-    expect(edited?.injections.map((injection) => injection.languageId)).toContain("css");
+    expect(edited?.injections.map((injection) => injection.languageId)).toContain('css')
     expect(
       edited?.captures.some((capture) => {
-        if (capture.languageId !== "css") return false;
-        if (capture.startIndex !== colorStart) return false;
-        return capture.endIndex === colorStart + "color".length;
+        if (capture.languageId !== 'css') return false
+        if (capture.startIndex !== colorStart) return false
+        return capture.endIndex === colorStart + 'color'.length
       }),
-    ).toBe(true);
-  });
+    ).toBe(true)
+  })
 
-  it("groups combined injections into one injected layer", async () => {
+  it('groups combined injections into one injected layer', async () => {
     const typescript = await resolveTreeSitterLanguageContribution(
       TREE_SITTER_LANGUAGE_CONTRIBUTIONS.find((contribution) => {
-        return contribution.id === "typescript";
+        return contribution.id === 'typescript'
       })!,
-    );
+    )
     await registerTreeSitterLanguagesWithWorker([
       {
         ...typescript,
-        id: "combined-typescript",
-        extensions: [".combined-ts"],
-        aliases: ["combined-typescript"],
+        id: 'combined-typescript',
+        extensions: ['.combined-ts'],
+        aliases: ['combined-typescript'],
         injectionQuerySource: `
           (call_expression
             function: (identifier) @_name
@@ -488,110 +488,110 @@ describe.skipIf(typeof Worker === "undefined")("tree-sitter worker client", () =
             (#set! injection.combined))
         `,
       },
-    ]);
+    ])
 
-    const text = "const styles = css`.x { color: ${theme.color}; background: red; }`;";
-    const snapshot = createPieceTableSnapshot(text);
+    const text = 'const styles = css`.x { color: ${theme.color}; background: red; }`;'
+    const snapshot = createPieceTableSnapshot(text)
     const parsed = await parseWithTreeSitter({
-      documentId: "style.combined-ts",
+      documentId: 'style.combined-ts',
       snapshotVersion: 1,
-      languageId: "combined-typescript",
+      languageId: 'combined-typescript',
       snapshot,
-    });
+    })
 
-    const cssInjections = parsed?.injections.filter((injection) => injection.languageId === "css");
-    expect(cssInjections).toHaveLength(1);
-    expect(parsed?.captures.some((capture) => capture.languageId === "css")).toBe(true);
-  });
+    const cssInjections = parsed?.injections.filter((injection) => injection.languageId === 'css')
+    expect(cssInjections).toHaveLength(1)
+    expect(parsed?.captures.some((capture) => capture.languageId === 'css')).toBe(true)
+  })
 
-  it("expands and shrinks structural selections through the cached syntax tree", async () => {
-    const documentId = "file.ts";
-    const snapshot = createPieceTableSnapshot("const answer = 1;\n");
+  it('expands and shrinks structural selections through the cached syntax tree', async () => {
+    const documentId = 'file.ts'
+    const snapshot = createPieceTableSnapshot('const answer = 1;\n')
     await parseWithTreeSitter({
       documentId,
       snapshotVersion: 1,
-      languageId: "typescript",
+      languageId: 'typescript',
       snapshot,
-    });
+    })
 
-    const selections = createSelectionSet([createAnchorSelection(snapshot, 7)]);
+    const selections = createSelectionSet([createAnchorSelection(snapshot, 7)])
     const token = await selectTreeSitterToken({
       documentId,
-      languageId: "typescript",
+      languageId: 'typescript',
       snapshotVersion: 1,
       snapshot,
       selections,
-    });
+    })
     const expanded = await expandTreeSitterSelection({
       documentId,
-      languageId: "typescript",
+      languageId: 'typescript',
       snapshotVersion: 1,
       snapshot,
       selections: token.selections,
       state: token.state,
-    });
+    })
     const shrunk = shrinkTreeSitterSelection({
       documentId,
-      languageId: "typescript",
+      languageId: 'typescript',
       snapshotVersion: 1,
       snapshot,
       selections: expanded.selections,
       state: expanded.state,
-    });
+    })
 
-    const tokenRange = resolveSelection(snapshot, token.selections.selections[0]!);
-    const expandedRange = resolveSelection(snapshot, expanded.selections.selections[0]!);
-    const shrunkRange = resolveSelection(snapshot, shrunk.selections.selections[0]!);
-    expect(tokenRange).toMatchObject({ startOffset: 6, endOffset: 12 });
-    expect(expandedRange.endOffset - expandedRange.startOffset).toBeGreaterThan(6);
-    expect(shrunkRange).toMatchObject({ startOffset: 6, endOffset: 12 });
-  });
+    const tokenRange = resolveSelection(snapshot, token.selections.selections[0]!)
+    const expandedRange = resolveSelection(snapshot, expanded.selections.selections[0]!)
+    const shrunkRange = resolveSelection(snapshot, shrunk.selections.selections[0]!)
+    expect(tokenRange).toMatchObject({ startOffset: 6, endOffset: 12 })
+    expect(expandedRange.endOffset - expandedRange.startOffset).toBeGreaterThan(6)
+    expect(shrunkRange).toMatchObject({ startOffset: 6, endOffset: 12 })
+  })
 
-  it("selects tokens inside injected content through the injected layer", async () => {
-    const documentId = "index.html";
-    const text = "<style>.x { color: red; }</style>";
-    const snapshot = createPieceTableSnapshot(text);
+  it('selects tokens inside injected content through the injected layer', async () => {
+    const documentId = 'index.html'
+    const text = '<style>.x { color: red; }</style>'
+    const snapshot = createPieceTableSnapshot(text)
     await parseWithTreeSitter({
       documentId,
       snapshotVersion: 1,
-      languageId: "html",
+      languageId: 'html',
       snapshot,
-    });
+    })
 
-    const offset = text.indexOf("color");
-    const selections = createSelectionSet([createAnchorSelection(snapshot, offset)]);
+    const offset = text.indexOf('color')
+    const selections = createSelectionSet([createAnchorSelection(snapshot, offset)])
     const token = await selectTreeSitterToken({
       documentId,
-      languageId: "html",
+      languageId: 'html',
       snapshotVersion: 1,
       snapshot,
       selections,
-    });
+    })
 
-    const tokenRange = resolveSelection(snapshot, token.selections.selections[0]!);
-    expect(tokenRange).toMatchObject({ startOffset: offset, endOffset: offset + "color".length });
-  });
-});
+    const tokenRange = resolveSelection(snapshot, token.selections.selections[0]!)
+    expect(tokenRange).toMatchObject({ startOffset: offset, endOffset: offset + 'color'.length })
+  })
+})
 
 async function registerDefaultLanguages(): Promise<void> {
   const descriptors = await Promise.all(
     TREE_SITTER_LANGUAGE_CONTRIBUTIONS.map(resolveTreeSitterLanguageContribution),
-  );
-  await registerTreeSitterLanguagesWithWorker(descriptors);
+  )
+  await registerTreeSitterLanguagesWithWorker(descriptors)
 }
 
 type CaptureSignatureInput = {
-  readonly startIndex: number;
-  readonly endIndex: number;
-  readonly captureName: string;
-  readonly languageId?: string;
-};
+  readonly startIndex: number
+  readonly endIndex: number
+  readonly captureName: string
+  readonly languageId?: string
+}
 
 function captureSignature(captures: readonly CaptureSignatureInput[]): string[] {
   return captures
     .map((capture) => {
-      const languageId = capture.languageId ?? "";
-      return `${capture.startIndex}:${capture.endIndex}:${capture.captureName}:${languageId}`;
+      const languageId = capture.languageId ?? ''
+      return `${capture.startIndex}:${capture.endIndex}:${capture.captureName}:${languageId}`
     })
-    .sort();
+    .sort()
 }

@@ -1,53 +1,53 @@
-import type { DocumentSessionChange } from "../documentSession";
-import type { EditorViewContributionUpdateKind } from "../plugins";
-import type { ResolvedSelection } from "../selections";
+import type { DocumentSessionChange } from '../documentSession'
+import type { EditorViewContributionUpdateKind } from '../plugins'
+import type { ResolvedSelection } from '../selections'
 
-const SYNTAX_EDIT_DEBOUNCE_MS = 75;
+const SYNTAX_EDIT_DEBOUNCE_MS = 75
 
 export type SessionChangeOptions = {
-  readonly syncDomSelection?: boolean;
-  readonly revealOffset?: number;
-  readonly revealBlock?: "nearest" | "end";
-};
+  readonly syncDomSelection?: boolean
+  readonly revealOffset?: number
+  readonly revealBlock?: 'nearest' | 'end'
+}
 
 export type VisualColumnView = {
-  visualColumnForOffset(offset: number): number;
-};
+  visualColumnForOffset(offset: number): number
+}
 
 export function syntaxRefreshDelay(change: DocumentSessionChange | null): number {
-  if (!change || change.edits.length === 0) return 0;
-  return SYNTAX_EDIT_DEBOUNCE_MS;
+  if (!change || change.edits.length === 0) return 0
+  return SYNTAX_EDIT_DEBOUNCE_MS
 }
 
 export function viewContributionKindForChange(
   change: DocumentSessionChange,
 ): EditorViewContributionUpdateKind {
-  if (change.kind === "selection") return "selection";
-  return "content";
+  if (change.kind === 'selection') return 'selection'
+  return 'content'
 }
 
-export function indentTimingName(direction: "indent" | "outdent"): string {
-  return direction === "indent" ? "input.indent" : "input.outdent";
+export function indentTimingName(direction: 'indent' | 'outdent'): string {
+  return direction === 'indent' ? 'input.indent' : 'input.outdent'
 }
 
 export function removeArrayItem<T>(items: T[], item: T): void {
-  const index = items.indexOf(item);
-  if (index === -1) return;
+  const index = items.indexOf(item)
+  if (index === -1) return
 
-  items.splice(index, 1);
+  items.splice(index, 1)
 }
 
 export function eventTargetInsideBlockSurface(target: EventTarget | null): boolean {
-  if (!(target instanceof Element)) return false;
-  return target.closest("[data-editor-block-surface]") !== null;
+  if (!(target instanceof Element)) return false
+  return target.closest('[data-editor-block-surface]') !== null
 }
 
 export function selectionGoalColumn(selection: ResolvedSelection, view: VisualColumnView): number {
-  if (selection.goal.kind === "horizontal") return selection.goal.x;
-  if (selection.goal.kind === "horizontalRange") return selection.goal.headX;
-  return view.visualColumnForOffset(selection.headOffset);
+  if (selection.goal.kind === 'horizontal') return selection.goal.x
+  if (selection.goal.kind === 'horizontalRange') return selection.goal.headX
+  return view.visualColumnForOffset(selection.headOffset)
 }
 
 export function capitalize(value: string): string {
-  return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
+  return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`
 }

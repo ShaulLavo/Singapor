@@ -1,12 +1,12 @@
-import type { BlockLane, BlockRow } from "../displayTransforms";
+import type { BlockLane, BlockRow } from '../displayTransforms'
 import type {
   EditorBlock,
   EditorBlockMountContext,
   EditorBlockProvider,
   EditorBlockProviderContext,
-} from "../editorBlocks";
-import type { EditorDisposable } from "../plugins";
-import type { VirtualizedTextView } from "../virtualization/virtualizedTextView";
+} from '../editorBlocks'
+import type { EditorDisposable } from '../plugins'
+import type { VirtualizedTextView } from '../virtualization/virtualizedTextView'
 import {
   addEditorBlockMeasurementKey,
   applyEditorBlockMeasurementBounds,
@@ -28,42 +28,42 @@ import {
   type ResolvedEditorBlockLaneSurface,
   type ResolvedEditorBlockSize,
   type ResolvedEditorBlockSurface,
-} from "./editorBlockSurfaces";
+} from './editorBlockSurfaces'
 
 export type EditorBlockSurfaceControllerOptions = {
-  readonly view: VirtualizedTextView;
-  getDocumentId(): string | null;
-  getText(): string;
-  focusEditor(): void;
-  setSelection(anchor: number, head: number): void;
-  notifyLayout(): void;
-};
+  readonly view: VirtualizedTextView
+  getDocumentId(): string | null
+  getText(): string
+  focusEditor(): void
+  setSelection(anchor: number, head: number): void
+  notifyLayout(): void
+}
 
 export class EditorBlockSurfaceController {
-  private readonly editorBlockSurfaces = new Map<string, ResolvedEditorBlockSurface>();
-  private readonly editorBlockLaneSurfaces = new Map<string, ResolvedEditorBlockLaneSurface>();
-  private readonly editorBlockMeasuredSizes = new Map<string, number>();
-  private editorBlockRows: readonly BlockRow[] = [];
-  private editorBlockLanes: readonly BlockLane[] = [];
-  private editorBlockRevision = 0;
-  private editorBlockMeasureTimeout: ReturnType<typeof setTimeout> | null = null;
+  private readonly editorBlockSurfaces = new Map<string, ResolvedEditorBlockSurface>()
+  private readonly editorBlockLaneSurfaces = new Map<string, ResolvedEditorBlockLaneSurface>()
+  private readonly editorBlockMeasuredSizes = new Map<string, number>()
+  private editorBlockRows: readonly BlockRow[] = []
+  private editorBlockLanes: readonly BlockLane[] = []
+  private editorBlockRevision = 0
+  private editorBlockMeasureTimeout: ReturnType<typeof setTimeout> | null = null
 
   constructor(private readonly options: EditorBlockSurfaceControllerOptions) {}
 
   sync(providers: readonly EditorBlockProvider[]): void {
     if (providers.length === 0) {
-      this.clear();
-      return;
+      this.clear()
+      return
     }
 
-    const context = this.createEditorBlockProviderContext();
-    const resolution = this.resolveEditorBlockRows(providers, context);
+    const context = this.createEditorBlockProviderContext()
+    const resolution = this.resolveEditorBlockRows(providers, context)
     this.applyEditorBlockRows(
       resolution.rows,
       resolution.surfaces,
       resolution.lanes,
       resolution.laneSurfaces,
-    );
+    )
   }
 
   clear(): void {
@@ -72,69 +72,69 @@ export class EditorBlockSurfaceController {
       this.editorBlockLanes.length === 0 &&
       this.editorBlockMeasuredSizes.size === 0
     )
-      return;
+      return
 
-    this.editorBlockRows = [];
-    this.editorBlockLanes = [];
-    this.editorBlockSurfaces.clear();
-    this.editorBlockLaneSurfaces.clear();
-    this.editorBlockMeasuredSizes.clear();
-    this.options.view.setBlockRows([]);
-    this.options.view.setBlockLanes([]);
+    this.editorBlockRows = []
+    this.editorBlockLanes = []
+    this.editorBlockSurfaces.clear()
+    this.editorBlockLaneSurfaces.clear()
+    this.editorBlockMeasuredSizes.clear()
+    this.options.view.setBlockRows([])
+    this.options.view.setBlockLanes([])
   }
 
   dispose(): void {
-    this.cancelScheduledEditorBlockMeasurementUpdate();
+    this.cancelScheduledEditorBlockMeasurementUpdate()
   }
 
   readonly mountRow = (
     container: HTMLElement,
     row: { readonly id: string },
   ): void | EditorDisposable => {
-    const surface = this.editorBlockSurfaces.get(row.id);
-    if (!surface) return undefined;
+    const surface = this.editorBlockSurfaces.get(row.id)
+    if (!surface) return undefined
 
-    container.dataset.editorBlockSurface = surface.slot;
+    container.dataset.editorBlockSurface = surface.slot
     return this.mountEditorBlockSurface(container, surface, () =>
       surface.surface.mount(container, this.createEditorBlockMountContext(surface, container)),
-    );
-  };
+    )
+  }
 
   readonly mountLane = (
     container: HTMLElement,
     lane: { readonly id: string },
   ): void | EditorDisposable => {
-    const surface = this.editorBlockLaneSurfaces.get(lane.id);
-    if (!surface) return undefined;
+    const surface = this.editorBlockLaneSurfaces.get(lane.id)
+    if (!surface) return undefined
 
-    container.dataset.editorBlockSurface = surface.slot;
+    container.dataset.editorBlockSurface = surface.slot
     return this.mountEditorBlockSurface(container, surface, () =>
       surface.surface.mount(container, this.createEditorBlockMountContext(surface, container)),
-    );
-  };
+    )
+  }
 
   private createEditorBlockProviderContext(): EditorBlockProviderContext {
     return {
       documentId: this.options.getDocumentId(),
       text: this.options.getText(),
       lineCount: this.options.view.getLineCount(),
-    };
+    }
   }
 
   private resolveEditorBlockRows(
     providers: readonly EditorBlockProvider[],
     context: EditorBlockProviderContext,
   ): {
-    readonly rows: readonly BlockRow[];
-    readonly surfaces: ReadonlyMap<string, ResolvedEditorBlockSurface>;
-    readonly lanes: readonly BlockLane[];
-    readonly laneSurfaces: ReadonlyMap<string, ResolvedEditorBlockLaneSurface>;
+    readonly rows: readonly BlockRow[]
+    readonly surfaces: ReadonlyMap<string, ResolvedEditorBlockSurface>
+    readonly lanes: readonly BlockLane[]
+    readonly laneSurfaces: ReadonlyMap<string, ResolvedEditorBlockLaneSurface>
   } {
-    const revision = this.nextEditorBlockRevision();
-    const rows: BlockRow[] = [];
-    const lanes: BlockLane[] = [];
-    const surfaces = new Map<string, ResolvedEditorBlockSurface>();
-    const laneSurfaces = new Map<string, ResolvedEditorBlockLaneSurface>();
+    const revision = this.nextEditorBlockRevision()
+    const rows: BlockRow[] = []
+    const lanes: BlockLane[] = []
+    const surfaces = new Map<string, ResolvedEditorBlockSurface>()
+    const laneSurfaces = new Map<string, ResolvedEditorBlockLaneSurface>()
 
     providers.forEach((provider, providerIndex) => {
       this.appendProviderBlockSurfaces(
@@ -146,15 +146,15 @@ export class EditorBlockSurfaceController {
         surfaces,
         lanes,
         laneSurfaces,
-      );
-    });
+      )
+    })
 
-    return { rows, surfaces, lanes, laneSurfaces };
+    return { rows, surfaces, lanes, laneSurfaces }
   }
 
   private nextEditorBlockRevision(): number {
-    this.editorBlockRevision += 1;
-    return this.editorBlockRevision;
+    this.editorBlockRevision += 1
+    return this.editorBlockRevision
   }
 
   private appendProviderBlockSurfaces(
@@ -170,70 +170,70 @@ export class EditorBlockSurfaceController {
     for (const block of provider.getBlocks(context)) {
       this.appendEditorBlockSurfaceRow(
         block,
-        "top",
+        'top',
         providerIndex,
         revision,
         context.lineCount,
         rows,
         surfaces,
-      );
+      )
       this.appendEditorBlockSurfaceRow(
         block,
-        "bottom",
+        'bottom',
         providerIndex,
         revision,
         context.lineCount,
         rows,
         surfaces,
-      );
+      )
       this.appendEditorBlockSurfaceLane(
         block,
-        "left",
+        'left',
         providerIndex,
         revision,
         context.lineCount,
         lanes,
         laneSurfaces,
-      );
+      )
       this.appendEditorBlockSurfaceLane(
         block,
-        "right",
+        'right',
         providerIndex,
         revision,
         context.lineCount,
         lanes,
         laneSurfaces,
-      );
+      )
     }
   }
 
   private appendEditorBlockSurfaceRow(
     block: EditorBlock,
-    slot: "top" | "bottom",
+    slot: 'top' | 'bottom',
     providerIndex: number,
     revision: number,
     lineCount: number,
     rows: BlockRow[],
     surfaces: Map<string, ResolvedEditorBlockSurface>,
   ): void {
-    const surface = block[slot];
-    if (!surface) return;
-    if (!validEditorBlockId(block.id)) return;
+    const surface = block[slot]
+    if (!surface) return
+    if (!validEditorBlockId(block.id)) return
 
-    const measureKey = editorBlockSurfaceMeasureKey(providerIndex, block.id, slot);
+    const measureKey = editorBlockSurfaceMeasureKey(providerIndex, block.id, slot)
     const size = resolveEditorBlockSize(
       surface.height,
       measureKey,
-      "height",
+      'height',
       this.editorBlockMeasuredSizes,
-    );
-    if (!size) return;
+    )
+    if (!size) return
 
-    const rowId = editorBlockSurfaceRowId(revision, providerIndex, block.id, slot);
-    const anchorBufferRow = editorBlockSurfaceAnchorRow(block.anchor, slot, lineCount);
-    if (anchorBufferRow === null) return;
+    const rowId = editorBlockSurfaceRowId(revision, providerIndex, block.id, slot)
+    const anchorBufferRow = editorBlockSurfaceAnchorRow(block.anchor, slot, lineCount)
+    if (anchorBufferRow === null) return
 
-    surfaces.set(rowId, { rowId, block, surface, slot, anchorBufferRow, size });
+    surfaces.set(rowId, { rowId, block, surface, slot, anchorBufferRow, size })
     rows.push({
       id: rowId,
       anchorBufferRow,
@@ -241,35 +241,35 @@ export class EditorBlockSurfaceController {
       heightRows: 1,
       heightPx: size.px,
       ...(size.measure ? { heightMeasured: true } : {}),
-    });
+    })
   }
 
   private appendEditorBlockSurfaceLane(
     block: EditorBlock,
-    slot: "left" | "right",
+    slot: 'left' | 'right',
     providerIndex: number,
     revision: number,
     lineCount: number,
     lanes: BlockLane[],
     laneSurfaces: Map<string, ResolvedEditorBlockLaneSurface>,
   ): void {
-    const surface = block[slot];
-    if (!surface) return;
-    if (!validEditorBlockId(block.id)) return;
+    const surface = block[slot]
+    if (!surface) return
+    if (!validEditorBlockId(block.id)) return
 
-    const measureKey = editorBlockSurfaceMeasureKey(providerIndex, block.id, slot);
+    const measureKey = editorBlockSurfaceMeasureKey(providerIndex, block.id, slot)
     const size = resolveEditorBlockSize(
       surface.width,
       measureKey,
-      "width",
+      'width',
       this.editorBlockMeasuredSizes,
-    );
-    if (!size) return;
+    )
+    if (!size) return
 
-    const range = editorBlockSurfaceAnchorRange(block.anchor, lineCount);
-    if (range === null) return;
+    const range = editorBlockSurfaceAnchorRange(block.anchor, lineCount)
+    if (range === null) return
 
-    const laneId = editorBlockSurfaceLaneId(revision, providerIndex, block.id, slot);
+    const laneId = editorBlockSurfaceLaneId(revision, providerIndex, block.id, slot)
     laneSurfaces.set(laneId, {
       laneId,
       block,
@@ -278,7 +278,7 @@ export class EditorBlockSurfaceController {
       startBufferRow: range.startRow,
       endBufferRow: range.endRow,
       size,
-    });
+    })
     lanes.push({
       id: laneId,
       startBufferRow: range.startRow,
@@ -286,7 +286,7 @@ export class EditorBlockSurfaceController {
       placement: slot,
       widthPx: size.px,
       ...(size.measure ? { widthMeasured: true } : {}),
-    });
+    })
   }
 
   private applyEditorBlockRows(
@@ -295,15 +295,15 @@ export class EditorBlockSurfaceController {
     lanes: readonly BlockLane[],
     laneSurfaces: ReadonlyMap<string, ResolvedEditorBlockLaneSurface>,
   ): void {
-    this.editorBlockRows = rows;
-    this.editorBlockLanes = lanes;
-    this.editorBlockSurfaces.clear();
-    this.editorBlockLaneSurfaces.clear();
-    for (const [rowId, surface] of surfaces) this.editorBlockSurfaces.set(rowId, surface);
-    for (const [laneId, surface] of laneSurfaces) this.editorBlockLaneSurfaces.set(laneId, surface);
-    this.pruneMeasuredEditorBlockSizes(surfaces, laneSurfaces);
-    this.options.view.setBlockRows(rows);
-    this.options.view.setBlockLanes(lanes);
+    this.editorBlockRows = rows
+    this.editorBlockLanes = lanes
+    this.editorBlockSurfaces.clear()
+    this.editorBlockLaneSurfaces.clear()
+    for (const [rowId, surface] of surfaces) this.editorBlockSurfaces.set(rowId, surface)
+    for (const [laneId, surface] of laneSurfaces) this.editorBlockLaneSurfaces.set(laneId, surface)
+    this.pruneMeasuredEditorBlockSizes(surfaces, laneSurfaces)
+    this.options.view.setBlockRows(rows)
+    this.options.view.setBlockLanes(lanes)
   }
 
   private createEditorBlockMountContext(
@@ -319,7 +319,7 @@ export class EditorBlockSurfaceController {
       focusEditor: () => this.options.focusEditor(),
       setSelection: (anchor, head) => this.options.setSelection(anchor, head),
       requestMeasure: () => this.measureEditorBlockSurface(surface, container),
-    };
+    }
   }
 
   private mountEditorBlockSurface(
@@ -327,122 +327,122 @@ export class EditorBlockSurfaceController {
     surface: ResolvedEditorBlockSurface | ResolvedEditorBlockLaneSurface,
     mount: () => void | EditorDisposable,
   ): EditorDisposable {
-    const measurement = surface.size.measure;
+    const measurement = surface.size.measure
     if (!measurement) {
-      const disposable = mount();
-      return disposableOnce(() => disposable?.dispose());
+      const disposable = mount()
+      return disposableOnce(() => disposable?.dispose())
     }
 
-    applyEditorBlockMeasurementBounds(container, measurement);
-    const disposable = mount();
+    applyEditorBlockMeasurementBounds(container, measurement)
+    const disposable = mount()
 
     const observer = createEditorBlockResizeObserver((entries) => {
-      const measuredSize = resizeObserverMeasuredSize(entries, container, measurement.dimension);
-      if (measuredSize === null) return;
+      const measuredSize = resizeObserverMeasuredSize(entries, container, measurement.dimension)
+      if (measuredSize === null) return
 
-      this.setMeasuredEditorBlockSize(measurement, measuredSize);
-    });
-    observer?.observe(container);
-    this.measureEditorBlockSurface(surface, container);
+      this.setMeasuredEditorBlockSize(measurement, measuredSize)
+    })
+    observer?.observe(container)
+    this.measureEditorBlockSurface(surface, container)
 
     return disposableOnce(() => {
-      observer?.disconnect();
-      disposable?.dispose();
-    });
+      observer?.disconnect()
+      disposable?.dispose()
+    })
   }
 
   private measureEditorBlockSurface(
     surface: ResolvedEditorBlockSurface | ResolvedEditorBlockLaneSurface,
     container: HTMLElement,
   ): void {
-    const measurement = surface.size.measure;
-    if (!measurement) return;
+    const measurement = surface.size.measure
+    if (!measurement) return
 
     this.setMeasuredEditorBlockSize(
       measurement,
       elementMeasuredEditorBlockSize(container, measurement.dimension),
-    );
+    )
   }
 
   private setMeasuredEditorBlockSize(
     measurement: EditorBlockMeasurement,
     measuredPx: number,
   ): void {
-    const next = clampEditorBlockMeasuredSize(measuredPx, measurement);
-    if (this.editorBlockMeasuredSizes.get(measurement.key) === next) return;
+    const next = clampEditorBlockMeasuredSize(measuredPx, measurement)
+    if (this.editorBlockMeasuredSizes.get(measurement.key) === next) return
 
-    this.editorBlockMeasuredSizes.set(measurement.key, next);
-    this.scheduleEditorBlockMeasurementUpdate();
+    this.editorBlockMeasuredSizes.set(measurement.key, next)
+    this.scheduleEditorBlockMeasurementUpdate()
   }
 
   private scheduleEditorBlockMeasurementUpdate(): void {
-    if (this.editorBlockMeasureTimeout !== null) return;
+    if (this.editorBlockMeasureTimeout !== null) return
 
     this.editorBlockMeasureTimeout = setTimeout(() => {
-      this.editorBlockMeasureTimeout = null;
-      this.applyMeasuredEditorBlockSizes();
-    }, 0);
+      this.editorBlockMeasureTimeout = null
+      this.applyMeasuredEditorBlockSizes()
+    }, 0)
   }
 
   private cancelScheduledEditorBlockMeasurementUpdate(): void {
-    if (this.editorBlockMeasureTimeout === null) return;
+    if (this.editorBlockMeasureTimeout === null) return
 
-    clearTimeout(this.editorBlockMeasureTimeout);
-    this.editorBlockMeasureTimeout = null;
+    clearTimeout(this.editorBlockMeasureTimeout)
+    this.editorBlockMeasureTimeout = null
   }
 
   private applyMeasuredEditorBlockSizes(): void {
-    let changed = false;
+    let changed = false
     const rows = this.editorBlockRows.map((row) => {
-      const surface = this.editorBlockSurfaces.get(row.id);
-      if (!surface) return row;
+      const surface = this.editorBlockSurfaces.get(row.id)
+      if (!surface) return row
 
-      const heightPx = this.currentEditorBlockSizePx(surface.size);
-      if (row.heightPx === heightPx) return row;
+      const heightPx = this.currentEditorBlockSizePx(surface.size)
+      if (row.heightPx === heightPx) return row
 
-      changed = true;
-      return { ...row, heightPx };
-    });
+      changed = true
+      return { ...row, heightPx }
+    })
     const lanes = this.editorBlockLanes.map((lane) => {
-      const surface = this.editorBlockLaneSurfaces.get(lane.id);
-      if (!surface) return lane;
+      const surface = this.editorBlockLaneSurfaces.get(lane.id)
+      if (!surface) return lane
 
-      const widthPx = this.currentEditorBlockSizePx(surface.size);
-      if (lane.widthPx === widthPx) return lane;
+      const widthPx = this.currentEditorBlockSizePx(surface.size)
+      if (lane.widthPx === widthPx) return lane
 
-      changed = true;
-      return { ...lane, widthPx };
-    });
-    if (!changed) return;
+      changed = true
+      return { ...lane, widthPx }
+    })
+    if (!changed) return
 
-    this.editorBlockRows = rows;
-    this.editorBlockLanes = lanes;
-    this.options.view.setBlockRows(rows);
-    this.options.view.setBlockLanes(lanes);
-    this.options.notifyLayout();
+    this.editorBlockRows = rows
+    this.editorBlockLanes = lanes
+    this.options.view.setBlockRows(rows)
+    this.options.view.setBlockLanes(lanes)
+    this.options.notifyLayout()
   }
 
   private currentEditorBlockSizePx(size: ResolvedEditorBlockSize): number {
-    const measurement = size.measure;
-    if (!measurement) return size.px;
+    const measurement = size.measure
+    if (!measurement) return size.px
 
     return initialMeasuredEditorBlockSize(
       measurement,
       this.editorBlockMeasuredSizes.get(measurement.key),
-    );
+    )
   }
 
   private pruneMeasuredEditorBlockSizes(
     surfaces: ReadonlyMap<string, ResolvedEditorBlockSurface>,
     laneSurfaces: ReadonlyMap<string, ResolvedEditorBlockLaneSurface>,
   ): void {
-    const keys = new Set<string>();
-    for (const surface of surfaces.values()) addEditorBlockMeasurementKey(keys, surface.size);
-    for (const surface of laneSurfaces.values()) addEditorBlockMeasurementKey(keys, surface.size);
+    const keys = new Set<string>()
+    for (const surface of surfaces.values()) addEditorBlockMeasurementKey(keys, surface.size)
+    for (const surface of laneSurfaces.values()) addEditorBlockMeasurementKey(keys, surface.size)
 
     for (const key of this.editorBlockMeasuredSizes.keys()) {
-      if (keys.has(key)) continue;
-      this.editorBlockMeasuredSizes.delete(key);
+      if (keys.has(key)) continue
+      this.editorBlockMeasuredSizes.delete(key)
     }
   }
 }

@@ -1,4 +1,4 @@
-@import "@editor/panes/style.css";
+@import '@editor/panes/style.css';
 
 .editor-diff-view,
 .editor-diff-row,
@@ -70,33 +70,33 @@
   background: #37373d;
 }
 
-.editor-diff-file-button[aria-pressed="true"] {
+.editor-diff-file-button[aria-pressed='true'] {
   background: #094771;
   color: #fff;
 }
 
 .editor-diff-file-button::before {
   color: var(--editor-diff-modified);
-  content: "M";
+  content: 'M';
   display: inline-block;
   margin-right: 6px;
   width: 1.25em;
 }
 
-.editor-diff-file-button[data-change-type="add"]::before {
+.editor-diff-file-button[data-change-type='add']::before {
   color: var(--editor-diff-added);
-  content: "A";
+  content: 'A';
 }
 
-.editor-diff-file-button[data-change-type="delete"]::before {
+.editor-diff-file-button[data-change-type='delete']::before {
   color: var(--editor-diff-deleted);
-  content: "D";
+  content: 'D';
 }
 
-.editor-diff-file-button[data-change-type="rename"]::before,
-.editor-diff-file-button[data-change-type="rename-change"]::before {
+.editor-diff-file-button[data-change-type='rename']::before,
+.editor-diff-file-button[data-change-type='rename-change']::before {
   color: var(--editor-diff-modified);
-  content: "R";
+  content: 'R';
 }
 
 .editor-diff-content {
@@ -147,38 +147,38 @@
 .editor-diff-split .editor-resizable-pane-handle::before,
 .editor-diff-split-handle-line {
   background: var(--editor-diff-split-handle);
-  content: "";
+  content: '';
   display: block;
   width: 1px;
 }
 
 .editor-diff-split .editor-resizable-pane-handle::after {
   background: transparent;
-  content: "";
+  content: '';
   inset: 0 -4px;
   position: absolute;
 }
 
 .editor-diff-split
   .editor-resizable-pane-handle:is(
-    [data-editor-pane-handle-state="hover"],
-    [data-editor-pane-handle-state="focus"],
-    [data-editor-pane-handle-state="dragging"]
+    [data-editor-pane-handle-state='hover'],
+    [data-editor-pane-handle-state='focus'],
+    [data-editor-pane-handle-state='dragging']
   ) {
   background: color-mix(in srgb, var(--editor-diff-modified) 12%, transparent);
 }
 
 .editor-diff-split
   .editor-resizable-pane-handle:is(
-    [data-editor-pane-handle-state="hover"],
-    [data-editor-pane-handle-state="focus"],
-    [data-editor-pane-handle-state="dragging"]
+    [data-editor-pane-handle-state='hover'],
+    [data-editor-pane-handle-state='focus'],
+    [data-editor-pane-handle-state='dragging']
   )::before,
 .editor-diff-split
   .editor-resizable-pane-handle:is(
-    [data-editor-pane-handle-state="hover"],
-    [data-editor-pane-handle-state="focus"],
-    [data-editor-pane-handle-state="dragging"]
+    [data-editor-pane-handle-state='hover'],
+    [data-editor-pane-handle-state='focus'],
+    [data-editor-pane-handle-state='dragging']
   )
   .editor-diff-split-handle-line {
   background: var(--editor-diff-modified);

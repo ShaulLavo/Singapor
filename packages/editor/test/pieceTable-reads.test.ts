@@ -1,46 +1,46 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from 'vitest'
 
-import { insertIntoPieceTable } from "../src/pieceTable/edits.ts";
-import { createPieceTableSnapshot } from "../src/pieceTable/pieceTable.ts";
+import { insertIntoPieceTable } from '../src/pieceTable/edits.ts'
+import { createPieceTableSnapshot } from '../src/pieceTable/pieceTable.ts'
 import {
   ensureValidRange,
   forEachPieceTableTextChunk,
   getPieceTableLength,
   getPieceTableOriginalText,
   getPieceTableText,
-} from "../src/pieceTable/reads.ts";
+} from '../src/pieceTable/reads.ts'
 
-describe("piece table reads", () => {
-  it("reads snapshot length, original text, full text, and ranges", () => {
-    const initial = createPieceTableSnapshot("abcdef");
-    const edited = insertIntoPieceTable(initial, 3, "XX");
+describe('piece table reads', () => {
+  it('reads snapshot length, original text, full text, and ranges', () => {
+    const initial = createPieceTableSnapshot('abcdef')
+    const edited = insertIntoPieceTable(initial, 3, 'XX')
 
-    expect(getPieceTableLength(edited)).toBe(8);
-    expect(getPieceTableOriginalText(edited)).toBe("abcdef");
-    expect(getPieceTableText(edited)).toBe("abcXXdef");
-    expect(getPieceTableText(edited, 2, 6)).toBe("cXXd");
-    expect(getPieceTableText(edited, 2, 2)).toBe("");
-  });
+    expect(getPieceTableLength(edited)).toBe(8)
+    expect(getPieceTableOriginalText(edited)).toBe('abcdef')
+    expect(getPieceTableText(edited)).toBe('abcXXdef')
+    expect(getPieceTableText(edited, 2, 6)).toBe('cXXd')
+    expect(getPieceTableText(edited, 2, 2)).toBe('')
+  })
 
-  it("visits visible text chunks without materializing the joined range", () => {
-    const initial = createPieceTableSnapshot("abcdef");
-    const edited = insertIntoPieceTable(initial, 3, "XX");
-    const chunks: string[] = [];
+  it('visits visible text chunks without materializing the joined range', () => {
+    const initial = createPieceTableSnapshot('abcdef')
+    const edited = insertIntoPieceTable(initial, 3, 'XX')
+    const chunks: string[] = []
 
     forEachPieceTableTextChunk(edited, (text, start, end) => {
-      chunks.push(`${start}:${end}:${text}`);
-    });
+      chunks.push(`${start}:${end}:${text}`)
+    })
 
-    expect(chunks.join("|")).toBe("0:3:abc|3:5:XX|5:8:def");
-    expect(chunks.length).toBeGreaterThan(1);
-  });
+    expect(chunks.join('|')).toBe('0:3:abc|3:5:XX|5:8:def')
+    expect(chunks.length).toBeGreaterThan(1)
+  })
 
-  it("validates read ranges", () => {
-    const snapshot = createPieceTableSnapshot("abc");
+  it('validates read ranges', () => {
+    const snapshot = createPieceTableSnapshot('abc')
 
-    expect(() => ensureValidRange(snapshot, 0, 3)).not.toThrow();
-    expect(() => ensureValidRange(snapshot, -1, 1)).toThrow(RangeError);
-    expect(() => ensureValidRange(snapshot, 2, 1)).toThrow(RangeError);
-    expect(() => getPieceTableText(snapshot, 0, 4)).toThrow(RangeError);
-  });
-});
+    expect(() => ensureValidRange(snapshot, 0, 3)).not.toThrow()
+    expect(() => ensureValidRange(snapshot, -1, 1)).toThrow(RangeError)
+    expect(() => ensureValidRange(snapshot, 2, 1)).toThrow(RangeError)
+    expect(() => getPieceTableText(snapshot, 0, 4)).toThrow(RangeError)
+  })
+})

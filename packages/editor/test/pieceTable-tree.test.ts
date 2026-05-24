@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from 'vitest'
 
-import { createInitialBuffers, createOriginalPiece } from "../src/pieceTable/buffers.ts";
-import { PIECE_ORDER_STEP } from "../src/pieceTable/orders.ts";
-import type { SplitContext } from "../src/pieceTable/internalTypes.ts";
+import { createInitialBuffers, createOriginalPiece } from '../src/pieceTable/buffers.ts'
+import { PIECE_ORDER_STEP } from '../src/pieceTable/orders.ts'
+import type { SplitContext } from '../src/pieceTable/internalTypes.ts'
 import {
   collectTextInRange,
   createNode,
@@ -15,47 +15,47 @@ import {
   splitByVisibleOffset,
   visibleLengthBetweenOrders,
   visiblePrefixBeforeOrder,
-} from "../src/pieceTable/tree.ts";
+} from '../src/pieceTable/tree.ts'
 
-describe("piece table tree", () => {
-  it("builds trees, collects ranges, and finds visible pieces", () => {
-    const buffers = createInitialBuffers("abcdef");
-    const piece = createOriginalPiece(buffers)!;
-    const tree = createTreeFromPieces([piece]);
-    const chunks: string[] = [];
+describe('piece table tree', () => {
+  it('builds trees, collects ranges, and finds visible pieces', () => {
+    const buffers = createInitialBuffers('abcdef')
+    const piece = createOriginalPiece(buffers)!
+    const tree = createTreeFromPieces([piece])
+    const chunks: string[] = []
 
-    collectTextInRange(tree, buffers, 1, 5, chunks);
+    collectTextInRange(tree, buffers, 1, 5, chunks)
 
-    expect(getSubtreeVisibleLength(tree)).toBe(6);
-    expect(chunks.join("")).toBe("bcde");
-    expect(findVisiblePieceContainingOffset(tree, 3)?.piece).toEqual(piece);
-    expect(visiblePrefixBeforeOrder(tree, piece.order)).toBe(0);
+    expect(getSubtreeVisibleLength(tree)).toBe(6)
+    expect(chunks.join('')).toBe('bcde')
+    expect(findVisiblePieceContainingOffset(tree, 3)?.piece).toEqual(piece)
+    expect(visiblePrefixBeforeOrder(tree, piece.order)).toBe(0)
     expect(
       visibleLengthBetweenOrders(tree, Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY),
-    ).toBe(6);
-  });
+    ).toBe(6)
+  })
 
-  it("splits pieces by visible offset and records reverse-index changes", () => {
-    const buffers = createInitialBuffers("abcdef");
-    const tree = createNode(createOriginalPiece(buffers)!);
-    const context: SplitContext = { changes: [], normalizeOrders: false };
-    const { left, right } = splitByVisibleOffset(tree, 2, buffers, context);
+  it('splits pieces by visible offset and records reverse-index changes', () => {
+    const buffers = createInitialBuffers('abcdef')
+    const tree = createNode(createOriginalPiece(buffers)!)
+    const context: SplitContext = { changes: [], normalizeOrders: false }
+    const { left, right } = splitByVisibleOffset(tree, 2, buffers, context)
 
-    expect(flattenPieces(left, []).map((piece) => piece.length)).toEqual([2]);
-    expect(flattenPieces(right, []).map((piece) => piece.length)).toEqual([4]);
-    expect(context.changes).toHaveLength(3);
-  });
+    expect(flattenPieces(left, []).map((piece) => piece.length)).toEqual([2])
+    expect(flattenPieces(right, []).map((piece) => piece.length)).toEqual([4])
+    expect(context.changes).toHaveLength(3)
+  })
 
-  it("marks trees invisible and normalizes orders without mutating the source tree", () => {
-    const buffers = createInitialBuffers("abc");
-    const tree = createNode({ ...createOriginalPiece(buffers)!, order: 1 });
-    const changes: SplitContext["changes"] = [];
-    const invisible = markTreeInvisible(tree, changes);
-    const normalized = normalizePieceOrders(invisible, { value: PIECE_ORDER_STEP });
+  it('marks trees invisible and normalizes orders without mutating the source tree', () => {
+    const buffers = createInitialBuffers('abc')
+    const tree = createNode({ ...createOriginalPiece(buffers)!, order: 1 })
+    const changes: SplitContext['changes'] = []
+    const invisible = markTreeInvisible(tree, changes)
+    const normalized = normalizePieceOrders(invisible, { value: PIECE_ORDER_STEP })
 
-    expect(tree.piece.visible).toBe(true);
-    expect(invisible?.piece.visible).toBe(false);
-    expect(changes).toHaveLength(1);
-    expect(normalized?.piece.order).toBe(PIECE_ORDER_STEP);
-  });
-});
+    expect(tree.piece.visible).toBe(true)
+    expect(invisible?.piece.visible).toBe(false)
+    expect(changes).toHaveLength(1)
+    expect(normalized?.piece.order).toBe(PIECE_ORDER_STEP)
+  })
+})

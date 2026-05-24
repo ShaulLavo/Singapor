@@ -1,508 +1,506 @@
-import { createDocumentSession, type Editor, type EditorResolvedSelection } from "@editor/core";
-import { act, createElement, useLayoutEffect, type ReactElement } from "react";
-import { createRoot } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createDocumentSession, type Editor, type EditorResolvedSelection } from '@editor/core'
+import { act, createElement, useLayoutEffect, type ReactElement } from 'react'
+import { createRoot } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   EditorHost,
   useEditor,
   useEditorSelector,
   type ReactEditorController,
   type ReactEditorOptions,
-} from "../src";
+} from '../src'
 
 class MockHighlight extends Set<Range> {}
 
 type MountedEditor = {
-  readonly controller: ReactEditorController;
-  readonly host: HTMLElement;
-  render(options: ReactEditorOptions): void;
-  dispose(): void;
-};
+  readonly controller: ReactEditorController
+  readonly host: HTMLElement
+  render(options: ReactEditorOptions): void
+  dispose(): void
+}
 
 type ActEnvironment = typeof globalThis & {
-  IS_REACT_ACT_ENVIRONMENT?: boolean;
-};
+  IS_REACT_ACT_ENVIRONMENT?: boolean
+}
 
 type Diagnostic = {
-  readonly name: string;
-};
+  readonly name: string
+}
 
 type DiagnosticGlobal = typeof globalThis & {
-  __EDITOR_PERFORMANCE_DIAGNOSTICS__?: ((diagnostic: Diagnostic) => void) | null;
-};
+  __EDITOR_PERFORMANCE_DIAGNOSTICS__?: ((diagnostic: Diagnostic) => void) | null
+}
 
-const EMPTY_SELECTIONS: readonly EditorResolvedSelection[] = [];
+const EMPTY_SELECTIONS: readonly EditorResolvedSelection[] = []
 
 beforeEach(() => {
-  (globalThis as ActEnvironment).IS_REACT_ACT_ENVIRONMENT = true;
+  ;(globalThis as ActEnvironment).IS_REACT_ACT_ENVIRONMENT = true
   // @ts-expect-error happy-dom does not provide Highlight.
-  globalThis.Highlight = MockHighlight;
-});
+  globalThis.Highlight = MockHighlight
+})
 
 afterEach(() => {
-  Reflect.deleteProperty(globalThis, "Highlight");
-  Reflect.deleteProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT");
-  Reflect.deleteProperty(globalThis, "__EDITOR_PERFORMANCE_DIAGNOSTICS__");
-  document.body.replaceChildren();
-});
+  Reflect.deleteProperty(globalThis, 'Highlight')
+  Reflect.deleteProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT')
+  Reflect.deleteProperty(globalThis, '__EDITOR_PERFORMANCE_DIAGNOSTICS__')
+  document.body.replaceChildren()
+})
 
-describe("useEditor", () => {
-  it("mounts, initializes the store, and disposes with the React tree", () => {
+describe('useEditor', () => {
+  it('mounts, initializes the store, and disposes with the React tree', () => {
     const mounted = mountReactEditor({
-      document: { text: "alpha", documentId: "a.ts", revision: 1 },
-    });
+      document: { text: 'alpha', documentId: 'a.ts', revision: 1 },
+    })
 
-    expect(mounted.controller.getEditor()).not.toBeNull();
-    expect(mounted.controller.getText()).toBe("alpha");
-    expect(mounted.controller.getState()?.length).toBe(5);
-    expect(mounted.controller.getSnapshot()?.text).toBe("alpha");
+    expect(mounted.controller.getEditor()).not.toBeNull()
+    expect(mounted.controller.getText()).toBe('alpha')
+    expect(mounted.controller.getState()?.length).toBe(5)
+    expect(mounted.controller.getSnapshot()?.text).toBe('alpha')
 
-    mounted.dispose();
+    mounted.dispose()
 
-    expect(mounted.controller.getEditor()).toBeNull();
-    expect(mounted.controller.getState()).toBeNull();
-    expect(mounted.controller.getSnapshot()).toBeNull();
-    expect(mounted.controller.getText()).toBe("");
-  });
+    expect(mounted.controller.getEditor()).toBeNull()
+    expect(mounted.controller.getState()).toBeNull()
+    expect(mounted.controller.getSnapshot()).toBeNull()
+    expect(mounted.controller.getText()).toBe('')
+  })
 
-  it("syncs state and last change after editor commands", () => {
+  it('syncs state and last change after editor commands', () => {
     const mounted = mountReactEditor({
-      document: { text: "alpha", documentId: "a.ts", revision: 1 },
-    });
+      document: { text: 'alpha', documentId: 'a.ts', revision: 1 },
+    })
 
-    act(() => mounted.controller.commands.edit({ from: 5, to: 5, text: "!" }));
+    act(() => mounted.controller.commands.edit({ from: 5, to: 5, text: '!' }))
 
-    expect(mounted.controller.getText()).toBe("alpha!");
-    expect(mounted.controller.getState()?.length).toBe(6);
-    expect(mounted.controller.getLastChange()?.kind).toBe("edit");
-    expect(mounted.controller.getSnapshot()?.text).toBe("alpha!");
+    expect(mounted.controller.getText()).toBe('alpha!')
+    expect(mounted.controller.getState()?.length).toBe(6)
+    expect(mounted.controller.getLastChange()?.kind).toBe('edit')
+    expect(mounted.controller.getSnapshot()?.text).toBe('alpha!')
 
-    mounted.dispose();
-  });
+    mounted.dispose()
+  })
 
-  it("does not materialize full text during store sync until text is read", () => {
-    const diagnostics = collectDiagnostics();
+  it('does not materialize full text during store sync until text is read', () => {
+    const diagnostics = collectDiagnostics()
     const mounted = mountReactEditor({
-      document: { text: "alpha", documentId: "a.ts", revision: 1 },
-    });
-    diagnostics.length = 0;
+      document: { text: 'alpha', documentId: 'a.ts', revision: 1 },
+    })
+    diagnostics.length = 0
 
-    act(() => mounted.controller.commands.edit({ from: 5, to: 5, text: "!" }));
+    act(() => mounted.controller.commands.edit({ from: 5, to: 5, text: '!' }))
 
-    expect(textSnapshotReads(diagnostics)).toHaveLength(0);
-    expect(mounted.controller.getTextSnapshot()?.length).toBe(6);
-    expect(textSnapshotReads(diagnostics)).toHaveLength(0);
-    expect(mounted.controller.getText()).toBe("alpha!");
-    expect(textSnapshotReads(diagnostics)).toHaveLength(1);
+    expect(textSnapshotReads(diagnostics)).toHaveLength(0)
+    expect(mounted.controller.getTextSnapshot()?.length).toBe(6)
+    expect(textSnapshotReads(diagnostics)).toHaveLength(0)
+    expect(mounted.controller.getText()).toBe('alpha!')
+    expect(textSnapshotReads(diagnostics)).toHaveLength(1)
 
-    mounted.dispose();
-  });
+    mounted.dispose()
+  })
 
-  it("syncs full view snapshots on selection updates", () => {
+  it('syncs full view snapshots on selection updates', () => {
     const mounted = mountReactEditor({
-      document: { text: "alpha", documentId: "a.ts", revision: 1 },
-    });
+      document: { text: 'alpha', documentId: 'a.ts', revision: 1 },
+    })
 
-    act(() => mounted.controller.commands.setSelection(1, 4));
+    act(() => mounted.controller.commands.setSelection(1, 4))
 
-    expect(mounted.controller.getUpdateKind()).toBe("selection");
+    expect(mounted.controller.getUpdateKind()).toBe('selection')
     expect(mounted.controller.getSnapshot()?.selections[0]).toMatchObject({
       anchorOffset: 1,
       headOffset: 4,
       startOffset: 1,
       endOffset: 4,
-    });
+    })
 
-    mounted.dispose();
-  });
+    mounted.dispose()
+  })
 
-  it("can update selection without revealing it through commands", () => {
-    const text = Array.from({ length: 80 }, (_value, index) => `line ${index}`).join("\n");
+  it('can update selection without revealing it through commands', () => {
+    const text = Array.from({ length: 80 }, (_value, index) => `line ${index}`).join('\n')
     const mounted = mountReactEditor({
-      document: { text, documentId: "long.txt", revision: 1 },
-    });
-    const editor = editorElement(mounted.host);
-    expect(editor).not.toBeNull();
-    mockEditorViewport(editor!, 80, 40, 2_000);
+      document: { text, documentId: 'long.txt', revision: 1 },
+    })
+    const editor = editorElement(mounted.host)
+    expect(editor).not.toBeNull()
+    mockEditorViewport(editor!, 80, 40, 2_000)
 
-    act(() => mounted.controller.commands.setSelection(0));
-    editor!.scrollTop = 0;
-    act(() =>
-      mounted.controller.commands.setSelection(text.length, text.length, { reveal: false }),
-    );
+    act(() => mounted.controller.commands.setSelection(0))
+    editor!.scrollTop = 0
+    act(() => mounted.controller.commands.setSelection(text.length, text.length, { reveal: false }))
 
-    expect(mounted.controller.getState()?.cursor).toEqual({ row: 79, column: 7 });
-    expect(editor!.scrollTop).toBe(0);
+    expect(mounted.controller.getState()?.cursor).toEqual({ row: 79, column: 7 })
+    expect(editor!.scrollTop).toBe(0)
 
-    mounted.dispose();
-  });
+    mounted.dispose()
+  })
 
-  it("can skip React store snapshot sync for lightweight editor hosts", () => {
+  it('can skip React store snapshot sync for lightweight editor hosts', () => {
     const mounted = mountReactEditor({
-      document: { text: "alpha", documentId: "a.ts", revision: 1 },
-      storeSync: "none",
-    });
+      document: { text: 'alpha', documentId: 'a.ts', revision: 1 },
+      storeSync: 'none',
+    })
 
-    expect(mounted.controller.getEditor()).not.toBeNull();
-    expect(mounted.controller.getText()).toBe("alpha");
-    expect(mounted.controller.getSnapshot()).toBeNull();
+    expect(mounted.controller.getEditor()).not.toBeNull()
+    expect(mounted.controller.getText()).toBe('alpha')
+    expect(mounted.controller.getSnapshot()).toBeNull()
 
-    act(() => mounted.controller.commands.setSelection(1, 4));
-    act(() => mounted.controller.commands.edit({ from: 5, to: 5, text: "!" }));
+    act(() => mounted.controller.commands.setSelection(1, 4))
+    act(() => mounted.controller.commands.edit({ from: 5, to: 5, text: '!' }))
 
-    expect(mounted.controller.getText()).toBe("alpha!");
-    expect(mounted.controller.getState()?.length).toBe(6);
-    expect(mounted.controller.getUpdateKind()).toBeNull();
-    expect(mounted.controller.getSnapshot()).toBeNull();
+    expect(mounted.controller.getText()).toBe('alpha!')
+    expect(mounted.controller.getState()?.length).toBe(6)
+    expect(mounted.controller.getUpdateKind()).toBeNull()
+    expect(mounted.controller.getSnapshot()).toBeNull()
 
-    mounted.dispose();
-  });
+    mounted.dispose()
+  })
 
-  it("does not clobber local edits until document identity or revision changes", () => {
+  it('does not clobber local edits until document identity or revision changes', () => {
     const mounted = mountReactEditor({
-      document: { text: "alpha", documentId: "a.ts", revision: 1 },
-    });
+      document: { text: 'alpha', documentId: 'a.ts', revision: 1 },
+    })
 
-    act(() => mounted.controller.commands.edit({ from: 5, to: 5, text: "!" }));
+    act(() => mounted.controller.commands.edit({ from: 5, to: 5, text: '!' }))
     mounted.render({
-      document: { text: "server alpha", documentId: "a.ts", revision: 1 },
-    });
+      document: { text: 'server alpha', documentId: 'a.ts', revision: 1 },
+    })
 
-    expect(mounted.controller.getText()).toBe("alpha!");
+    expect(mounted.controller.getText()).toBe('alpha!')
 
     mounted.render({
-      document: { text: "server beta", documentId: "a.ts", revision: 2 },
-    });
+      document: { text: 'server beta', documentId: 'a.ts', revision: 2 },
+    })
 
-    expect(mounted.controller.getText()).toBe("server beta");
-    expect(mounted.controller.getSnapshot()?.documentId).toBe("a.ts");
+    expect(mounted.controller.getText()).toBe('server beta')
+    expect(mounted.controller.getSnapshot()?.documentId).toBe('a.ts')
 
-    mounted.dispose();
-  });
+    mounted.dispose()
+  })
 
-  it("incrementally syncs controlled generated document text without reopening", () => {
+  it('incrementally syncs controlled generated document text without reopening', () => {
     const mounted = mountReactEditor({
       document: {
-        documentId: "generated:/a.ts",
-        documentMode: "static",
-        languageId: "typescript",
-        revision: "initial-hash",
-        text: "alpha",
-        textSyncMode: "incremental",
+        documentId: 'generated:/a.ts',
+        documentMode: 'static',
+        languageId: 'typescript',
+        revision: 'initial-hash',
+        text: 'alpha',
+        textSyncMode: 'incremental',
       },
-    });
-    const instance = mounted.controller.getEditor();
-    expect(instance).not.toBeNull();
-    const openSpy = vi.spyOn(instance as Editor, "openDocument");
-    const syncSpy = vi.spyOn(instance as Editor, "syncText");
+    })
+    const instance = mounted.controller.getEditor()
+    expect(instance).not.toBeNull()
+    const openSpy = vi.spyOn(instance as Editor, 'openDocument')
+    const syncSpy = vi.spyOn(instance as Editor, 'syncText')
 
     mounted.render({
       document: {
-        documentId: "generated:/a.ts",
-        documentMode: "static",
-        languageId: "typescript",
-        revision: "next-hash",
-        text: "alpha beta",
-        textSyncMode: "incremental",
+        documentId: 'generated:/a.ts',
+        documentMode: 'static',
+        languageId: 'typescript',
+        revision: 'next-hash',
+        text: 'alpha beta',
+        textSyncMode: 'incremental',
       },
-    });
+    })
 
-    expect(openSpy).not.toHaveBeenCalled();
+    expect(openSpy).not.toHaveBeenCalled()
     expect(syncSpy).toHaveBeenCalledWith(
-      "alpha beta",
+      'alpha beta',
       expect.objectContaining({
-        documentMode: "static",
-        languageId: "typescript",
+        documentMode: 'static',
+        languageId: 'typescript',
       }),
-    );
-    expect(mounted.controller.getText()).toBe("alpha beta");
-    expect(mounted.controller.getLastChange()?.kind).toBe("edit");
+    )
+    expect(mounted.controller.getText()).toBe('alpha beta')
+    expect(mounted.controller.getLastChange()?.kind).toBe('edit')
     expect(mounted.controller.getState()).toMatchObject({
-      documentId: "generated:/a.ts",
-      documentMode: "static",
-    });
+      documentId: 'generated:/a.ts',
+      documentMode: 'static',
+    })
 
-    mounted.dispose();
-  });
+    mounted.dispose()
+  })
 
-  it("reattaches cached document sessions with text and undo history intact", () => {
-    const alphaSession = createDocumentSession("alpha");
-    const betaSession = createDocumentSession("beta");
+  it('reattaches cached document sessions with text and undo history intact', () => {
+    const alphaSession = createDocumentSession('alpha')
+    const betaSession = createDocumentSession('beta')
     const mounted = mountReactEditor({
       document: {
-        documentId: "a.ts",
+        documentId: 'a.ts',
         revision: 1,
         session: alphaSession,
         text: alphaSession.getText(),
       },
-    });
+    })
 
-    act(() => mounted.controller.commands.edit({ from: 5, to: 5, text: "!" }));
+    act(() => mounted.controller.commands.edit({ from: 5, to: 5, text: '!' }))
 
-    expect(alphaSession.getText()).toBe("alpha!");
-    expect(mounted.controller.getState()?.isDirty).toBe(true);
+    expect(alphaSession.getText()).toBe('alpha!')
+    expect(mounted.controller.getState()?.isDirty).toBe(true)
 
     mounted.render({
       document: {
-        documentId: "b.ts",
+        documentId: 'b.ts',
         revision: 1,
         session: betaSession,
         text: betaSession.getText(),
       },
-    });
+    })
     mounted.render({
       document: {
-        documentId: "a.ts",
+        documentId: 'a.ts',
         revision: 1,
         session: alphaSession,
         text: alphaSession.getText(),
       },
-    });
+    })
 
-    expect(mounted.controller.getText()).toBe("alpha!");
-    expect(mounted.controller.getState()?.canUndo).toBe(true);
+    expect(mounted.controller.getText()).toBe('alpha!')
+    expect(mounted.controller.getState()?.canUndo).toBe(true)
 
-    act(() => mounted.controller.commands.dispatchCommand("undo"));
+    act(() => mounted.controller.commands.dispatchCommand('undo'))
 
-    expect(mounted.controller.getText()).toBe("alpha");
-    expect(mounted.controller.getState()?.isDirty).toBe(false);
+    expect(mounted.controller.getText()).toBe('alpha')
+    expect(mounted.controller.getState()?.isDirty).toBe(false)
 
-    mounted.dispose();
-  });
+    mounted.dispose()
+  })
 
-  it("keeps live document sessions attached across revision-only renders", () => {
-    const session = createDocumentSession("alpha");
+  it('keeps live document sessions attached across revision-only renders', () => {
+    const session = createDocumentSession('alpha')
     const mounted = mountReactEditor({
       document: {
-        documentId: "a.ts",
+        documentId: 'a.ts',
         revision: 1,
         session,
         text: session.getText(),
       },
-    });
-    const instance = mounted.controller.getEditor();
-    expect(instance).not.toBeNull();
-    const attachSpy = vi.spyOn(instance as Editor, "attachSession");
+    })
+    const instance = mounted.controller.getEditor()
+    expect(instance).not.toBeNull()
+    const attachSpy = vi.spyOn(instance as Editor, 'attachSession')
 
     mounted.render({
       document: {
-        documentId: "a.ts",
+        documentId: 'a.ts',
         revision: 2,
         session,
-        text: "stale prop text",
+        text: 'stale prop text',
       },
-    });
+    })
 
-    expect(attachSpy).not.toHaveBeenCalled();
-    expect(mounted.controller.getText()).toBe("alpha");
+    expect(attachSpy).not.toHaveBeenCalled()
+    expect(mounted.controller.getText()).toBe('alpha')
 
-    mounted.dispose();
-  });
+    mounted.dispose()
+  })
 
-  it("applies targeted reactive options without recreating the editor", () => {
+  it('applies targeted reactive options without recreating the editor', () => {
     const mounted = mountReactEditor({
-      document: { text: "alpha", documentId: "a.ts", revision: 1 },
-      hiddenCharacters: "hidden",
+      document: { text: 'alpha', documentId: 'a.ts', revision: 1 },
+      hiddenCharacters: 'hidden',
       scrollPosition: { top: 0, left: 0 },
       selection: { anchor: 0, head: 0 },
-      theme: { backgroundColor: "#111111" },
-    });
-    const instance = mounted.controller.getEditor();
+      theme: { backgroundColor: '#111111' },
+    })
+    const instance = mounted.controller.getEditor()
 
-    expect(instance).not.toBeNull();
+    expect(instance).not.toBeNull()
 
-    const setHiddenSpy = vi.spyOn(instance as Editor, "setHiddenCharacters");
+    const setHiddenSpy = vi.spyOn(instance as Editor, 'setHiddenCharacters')
     mounted.render({
-      document: { text: "alpha", documentId: "a.ts", revision: 1 },
-      hiddenCharacters: "show",
+      document: { text: 'alpha', documentId: 'a.ts', revision: 1 },
+      hiddenCharacters: 'show',
       scrollPosition: { top: 12, left: 4 },
       selection: { anchor: 1, head: 3 },
-      theme: { backgroundColor: "#222222" },
-    });
+      theme: { backgroundColor: '#222222' },
+    })
 
-    expect(mounted.controller.getEditor()).toBe(instance);
-    expect(editorElement(mounted.host)?.style.getPropertyValue("--editor-background")).toBe(
-      "#222222",
-    );
-    expect(setHiddenSpy).toHaveBeenCalledWith("show");
+    expect(mounted.controller.getEditor()).toBe(instance)
+    expect(editorElement(mounted.host)?.style.getPropertyValue('--editor-background')).toBe(
+      '#222222',
+    )
+    expect(setHiddenSpy).toHaveBeenCalledWith('show')
     expect(mounted.controller.getSnapshot()?.selections[0]).toMatchObject({
       anchorOffset: 1,
       headOffset: 3,
-    });
-    expect(instance?.getScrollPosition()).toEqual({ top: 12, left: 4 });
+    })
+    expect(instance?.getScrollPosition()).toEqual({ top: 12, left: 4 })
 
-    mounted.dispose();
-  });
+    mounted.dispose()
+  })
 
-  it("applies keymap changes without recreating the editor", () => {
+  it('applies keymap changes without recreating the editor', () => {
     const mounted = mountReactEditor({
-      document: { text: "alpha", documentId: "a.ts", revision: 1 },
+      document: { text: 'alpha', documentId: 'a.ts', revision: 1 },
       keymap: { enabled: false },
-    });
-    const instance = mounted.controller.getEditor();
+    })
+    const instance = mounted.controller.getEditor()
 
-    expect(instance).not.toBeNull();
+    expect(instance).not.toBeNull()
 
-    const setKeymapSpy = vi.spyOn(instance as Editor, "setKeymap");
+    const setKeymapSpy = vi.spyOn(instance as Editor, 'setKeymap')
     const keymap = {
       defaultBindings: false,
       layers: [],
-    };
+    }
 
     mounted.render({
-      document: { text: "alpha", documentId: "a.ts", revision: 1 },
+      document: { text: 'alpha', documentId: 'a.ts', revision: 1 },
       keymap,
-    });
+    })
 
-    expect(mounted.controller.getEditor()).toBe(instance);
-    expect(setKeymapSpy).toHaveBeenCalledWith(keymap);
+    expect(mounted.controller.getEditor()).toBe(instance)
+    expect(setKeymapSpy).toHaveBeenCalledWith(keymap)
 
-    mounted.dispose();
-  });
+    mounted.dispose()
+  })
 
-  it("exports a command facade that safely handles missing editor instances", () => {
-    const mounted = mountReactEditor();
-    const { controller } = mounted;
+  it('exports a command facade that safely handles missing editor instances', () => {
+    const mounted = mountReactEditor()
+    const { controller } = mounted
 
-    mounted.dispose();
+    mounted.dispose()
 
-    expect(controller.commands.dispatchCommand("selectAll")).toBe(false);
-    expect(controller.commands.openFind()).toBe(false);
-    expect(() => controller.commands.focus()).not.toThrow();
-  });
+    expect(controller.commands.dispatchCommand('selectAll')).toBe(false)
+    expect(controller.commands.openFind()).toBe(false)
+    expect(() => controller.commands.focus()).not.toThrow()
+  })
 
-  it("only rerenders selector subscribers whose selected value changes", () => {
+  it('only rerenders selector subscribers whose selected value changes', () => {
     const renders = {
       text: 0,
       length: 0,
       selections: 0,
-    };
-    let controller!: ReactEditorController;
-    const host = document.createElement("div");
-    const root = createRoot(host);
-    document.body.append(host);
+    }
+    let controller!: ReactEditorController
+    const host = document.createElement('div')
+    const root = createRoot(host)
+    document.body.append(host)
 
     act(() => {
       root.render(
         createElement(FineGrainedHarness, {
           onController: (nextController) => {
-            controller = nextController;
+            controller = nextController
           },
           renders,
         }),
-      );
-    });
+      )
+    })
 
-    const mountedRenders = { ...renders };
+    const mountedRenders = { ...renders }
 
-    act(() => controller.commands.setSelection(1, 4));
+    act(() => controller.commands.setSelection(1, 4))
 
-    expect(renders.text).toBe(mountedRenders.text);
-    expect(renders.length).toBe(mountedRenders.length);
-    expect(renders.selections).toBe(mountedRenders.selections + 1);
+    expect(renders.text).toBe(mountedRenders.text)
+    expect(renders.length).toBe(mountedRenders.length)
+    expect(renders.selections).toBe(mountedRenders.selections + 1)
 
-    const selectionRenders = { ...renders };
+    const selectionRenders = { ...renders }
 
-    act(() => controller.commands.edit({ from: 5, to: 5, text: "!" }));
+    act(() => controller.commands.edit({ from: 5, to: 5, text: '!' }))
 
-    expect(renders.text).toBe(selectionRenders.text + 1);
-    expect(renders.length).toBe(selectionRenders.length + 1);
-    expect(renders.selections).toBe(selectionRenders.selections);
+    expect(renders.text).toBe(selectionRenders.text + 1)
+    expect(renders.length).toBe(selectionRenders.length + 1)
+    expect(renders.selections).toBe(selectionRenders.selections)
 
-    act(() => root.unmount());
-    host.remove();
-  });
-});
+    act(() => root.unmount())
+    host.remove()
+  })
+})
 
 function ReactEditorHarness({
   options,
   onController,
 }: {
-  readonly options: ReactEditorOptions;
-  readonly onController: (controller: ReactEditorController) => void;
+  readonly options: ReactEditorOptions
+  readonly onController: (controller: ReactEditorController) => void
 }): ReactElement {
-  const controller = useEditor(options);
+  const controller = useEditor(options)
 
   useLayoutEffect(() => {
-    onController(controller);
-  }, [controller, onController]);
+    onController(controller)
+  }, [controller, onController])
 
-  return createElement(EditorHost, { controller });
+  return createElement(EditorHost, { controller })
 }
 
 function FineGrainedHarness({
   onController,
   renders,
 }: {
-  readonly onController: (controller: ReactEditorController) => void;
-  readonly renders: { text: number; length: number; selections: number };
+  readonly onController: (controller: ReactEditorController) => void
+  readonly renders: { text: number; length: number; selections: number }
 }): ReactElement {
   const controller = useEditor({
-    document: { text: "alpha", documentId: "a.ts", revision: 1 },
-  });
+    document: { text: 'alpha', documentId: 'a.ts', revision: 1 },
+  })
 
   useLayoutEffect(() => {
-    onController(controller);
-  }, [controller, onController]);
+    onController(controller)
+  }, [controller, onController])
 
   return createElement(
-    "div",
+    'div',
     null,
     createElement(EditorHost, { controller }),
     createElement(TextProbe, { controller, renders }),
     createElement(LengthProbe, { controller, renders }),
     createElement(SelectionProbe, { controller, renders }),
-  );
+  )
 }
 
 function TextProbe({
   controller,
   renders,
 }: {
-  readonly controller: ReactEditorController;
-  readonly renders: { text: number };
+  readonly controller: ReactEditorController
+  readonly renders: { text: number }
 }): null {
-  renders.text += 1;
-  const text = useEditorSelector(controller, (snapshot) => snapshot.text);
-  void text;
-  return null;
+  renders.text += 1
+  const text = useEditorSelector(controller, (snapshot) => snapshot.text)
+  void text
+  return null
 }
 
 function LengthProbe({
   controller,
   renders,
 }: {
-  readonly controller: ReactEditorController;
-  readonly renders: { length: number };
+  readonly controller: ReactEditorController
+  readonly renders: { length: number }
 }): null {
-  renders.length += 1;
-  const length = useEditorSelector(controller, (snapshot) => snapshot.state?.length ?? 0);
-  void length;
-  return null;
+  renders.length += 1
+  const length = useEditorSelector(controller, (snapshot) => snapshot.state?.length ?? 0)
+  void length
+  return null
 }
 
 function SelectionProbe({
   controller,
   renders,
 }: {
-  readonly controller: ReactEditorController;
-  readonly renders: { selections: number };
+  readonly controller: ReactEditorController
+  readonly renders: { selections: number }
 }): null {
-  renders.selections += 1;
+  renders.selections += 1
   const selections = useEditorSelector(
     controller,
     (snapshot) => snapshot.snapshot?.selections ?? EMPTY_SELECTIONS,
     selectionsEqual,
-  );
-  void selections;
-  return null;
+  )
+  void selections
+  return null
 }
 
 function mountReactEditor(options: ReactEditorOptions = {}): MountedEditor {
-  let controller!: ReactEditorController;
-  const host = document.createElement("div");
-  const root = createRoot(host);
-  document.body.append(host);
+  let controller!: ReactEditorController
+  const host = document.createElement('div')
+  const root = createRoot(host)
+  document.body.append(host)
 
   const render = (nextOptions: ReactEditorOptions): void => {
     act(() => {
@@ -510,30 +508,30 @@ function mountReactEditor(options: ReactEditorOptions = {}): MountedEditor {
         createElement(ReactEditorHarness, {
           options: nextOptions,
           onController: (nextController) => {
-            controller = nextController;
+            controller = nextController
           },
         }),
-      );
-    });
-  };
+      )
+    })
+  }
 
-  render(options);
+  render(options)
 
   return {
     get controller() {
-      return controller;
+      return controller
     },
     host,
     render,
     dispose: () => {
-      act(() => root.unmount());
-      host.remove();
+      act(() => root.unmount())
+      host.remove()
     },
-  };
+  }
 }
 
 function editorElement(host: HTMLElement): HTMLElement | null {
-  return host.querySelector<HTMLElement>(".editor");
+  return host.querySelector<HTMLElement>('.editor')
 }
 
 function mockEditorViewport(
@@ -542,9 +540,9 @@ function mockEditorViewport(
   height: number,
   scrollHeight = 200,
 ): void {
-  Object.defineProperty(element, "clientHeight", { configurable: true, value: height });
-  Object.defineProperty(element, "scrollHeight", { configurable: true, value: scrollHeight });
-  Object.defineProperty(element, "getBoundingClientRect", {
+  Object.defineProperty(element, 'clientHeight', { configurable: true, value: height })
+  Object.defineProperty(element, 'scrollHeight', { configurable: true, value: scrollHeight })
+  Object.defineProperty(element, 'getBoundingClientRect', {
     configurable: true,
     value: () => ({
       bottom: height,
@@ -557,36 +555,36 @@ function mockEditorViewport(
       y: 0,
       toJSON: () => ({}),
     }),
-  });
+  })
 }
 
 function selectionsEqual(
   current: readonly EditorResolvedSelection[],
   next: readonly EditorResolvedSelection[],
 ): boolean {
-  if (current.length !== next.length) return false;
+  if (current.length !== next.length) return false
 
   return current.every((selection, index) => {
-    const nextSelection = next[index];
-    if (!nextSelection) return false;
+    const nextSelection = next[index]
+    if (!nextSelection) return false
 
     return (
       selection.anchorOffset === nextSelection.anchorOffset &&
       selection.headOffset === nextSelection.headOffset &&
       selection.startOffset === nextSelection.startOffset &&
       selection.endOffset === nextSelection.endOffset
-    );
-  });
+    )
+  })
 }
 
 function collectDiagnostics(): Diagnostic[] {
-  const diagnostics: Diagnostic[] = [];
-  (globalThis as DiagnosticGlobal).__EDITOR_PERFORMANCE_DIAGNOSTICS__ = (diagnostic) => {
-    diagnostics.push(diagnostic);
-  };
-  return diagnostics;
+  const diagnostics: Diagnostic[] = []
+  ;(globalThis as DiagnosticGlobal).__EDITOR_PERFORMANCE_DIAGNOSTICS__ = (diagnostic) => {
+    diagnostics.push(diagnostic)
+  }
+  return diagnostics
 }
 
 function textSnapshotReads(diagnostics: readonly Diagnostic[]): readonly Diagnostic[] {
-  return diagnostics.filter((diagnostic) => diagnostic.name === "textSnapshot.getText");
+  return diagnostics.filter((diagnostic) => diagnostic.name === 'textSnapshot.getText')
 }

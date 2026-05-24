@@ -4,154 +4,154 @@ import {
   rowHeightIndexRowAtOffset,
   rowHeightIndexStart,
   type RowHeightIndex,
-} from "./rowHeightIndex";
+} from './rowHeightIndex'
 
 export type FixedRowVisibleRange = {
-  readonly start: number;
-  readonly end: number;
-};
+  readonly start: number
+  readonly end: number
+}
 
 export type FixedRowVirtualItem = {
-  readonly index: number;
-  readonly start: number;
-  readonly size: number;
-};
+  readonly index: number
+  readonly start: number
+  readonly size: number
+}
 
 export type FixedRowVirtualizerSnapshot = {
-  readonly scrollTop: number;
-  readonly scrollLeft: number;
-  readonly viewportWidth: number;
-  readonly viewportHeight: number;
-  readonly borderBoxWidth: number;
-  readonly borderBoxHeight: number;
-  readonly totalSize: number;
-  readonly scrollHeight: number;
-  readonly nativeScrollHeight: number;
-  readonly nativeScrollTop: number;
-  readonly visibleRange: FixedRowVisibleRange;
-  readonly virtualItems: readonly FixedRowVirtualItem[];
-};
+  readonly scrollTop: number
+  readonly scrollLeft: number
+  readonly viewportWidth: number
+  readonly viewportHeight: number
+  readonly borderBoxWidth: number
+  readonly borderBoxHeight: number
+  readonly totalSize: number
+  readonly scrollHeight: number
+  readonly nativeScrollHeight: number
+  readonly nativeScrollTop: number
+  readonly visibleRange: FixedRowVisibleRange
+  readonly virtualItems: readonly FixedRowVirtualItem[]
+}
 
 export type FixedRowVirtualizerOptions = {
-  readonly count: number;
-  readonly rowHeight: number;
-  readonly rowGap?: number;
-  readonly rowSizes?: readonly number[];
-  readonly overscan?: number;
-  readonly enabled?: boolean;
-  readonly maxScrollHeight?: number;
-};
+  readonly count: number
+  readonly rowHeight: number
+  readonly rowGap?: number
+  readonly rowSizes?: readonly number[]
+  readonly overscan?: number
+  readonly enabled?: boolean
+  readonly maxScrollHeight?: number
+}
 
 export type FixedRowScrollMetrics = {
-  readonly scrollTop: number;
-  readonly viewportHeight: number;
-  readonly borderBoxHeight?: number;
-  readonly borderBoxWidth?: number;
-  readonly scrollLeft?: number;
-  readonly viewportWidth?: number;
-};
+  readonly scrollTop: number
+  readonly viewportHeight: number
+  readonly borderBoxHeight?: number
+  readonly borderBoxWidth?: number
+  readonly scrollLeft?: number
+  readonly viewportWidth?: number
+}
 
-export type FixedRowVirtualizerChangeHandler = (snapshot: FixedRowVirtualizerSnapshot) => void;
+export type FixedRowVirtualizerChangeHandler = (snapshot: FixedRowVirtualizerSnapshot) => void
 
 export type FixedRowVirtualizerAttachOptions = {
-  readonly readInitialScrollPosition?: boolean;
-};
+  readonly readInitialScrollPosition?: boolean
+}
 
 type AttachedScrollElement = {
-  readonly element: HTMLElement;
-  readonly onScroll: () => void;
-  readonly resizeObserver: ResizeObserver | null;
-};
+  readonly element: HTMLElement
+  readonly onScroll: () => void
+  readonly resizeObserver: ResizeObserver | null
+}
 
-const DEFAULT_ROW_HEIGHT = 1;
-const DEFAULT_ROW_GAP = 0;
+const DEFAULT_ROW_HEIGHT = 1
+const DEFAULT_ROW_GAP = 0
 // Keep native spacer heights below browser element-size caps while preserving logical scroll size.
-const DEFAULT_MAX_SCROLL_HEIGHT = 16_000_000;
+const DEFAULT_MAX_SCROLL_HEIGHT = 16_000_000
 
 export function computeFixedRowTotalSize(
   count: number,
   rowHeight: number,
   rowGap?: number,
 ): number {
-  const normalizedCount = normalizeCount(count);
-  const normalizedRowHeight = normalizeRowHeight(rowHeight);
-  const normalizedRowGap = normalizeRowGap(rowGap);
-  return normalizedCount * normalizedRowHeight + totalRowGap(normalizedCount, normalizedRowGap);
+  const normalizedCount = normalizeCount(count)
+  const normalizedRowHeight = normalizeRowHeight(rowHeight)
+  const normalizedRowGap = normalizeRowGap(rowGap)
+  return normalizedCount * normalizedRowHeight + totalRowGap(normalizedCount, normalizedRowGap)
 }
 
 export function computeFixedRowVisibleRange(options: {
-  readonly count: number;
-  readonly rowHeight: number;
-  readonly rowGap?: number;
-  readonly scrollTop: number;
-  readonly viewportHeight: number;
-  readonly enabled?: boolean;
+  readonly count: number
+  readonly rowHeight: number
+  readonly rowGap?: number
+  readonly scrollTop: number
+  readonly viewportHeight: number
+  readonly enabled?: boolean
 }): FixedRowVisibleRange {
-  const count = normalizeCount(options.count);
-  if (options.enabled === false || count === 0) return { start: 0, end: 0 };
+  const count = normalizeCount(options.count)
+  if (options.enabled === false || count === 0) return { start: 0, end: 0 }
 
-  const rowHeight = normalizeRowHeight(options.rowHeight);
-  const rowGap = normalizeRowGap(options.rowGap);
-  const scrollTop = Math.max(0, normalizeNumber(options.scrollTop));
-  const viewportHeight = Math.max(0, normalizeNumber(options.viewportHeight));
-  const start = fixedRowIndexAtOffset(count, rowHeight, rowGap, scrollTop);
-  const rawEnd = fixedRowIndexAfterOffset(count, rowHeight, rowGap, scrollTop + viewportHeight);
-  const end = clamp(Math.max(start + 1, rawEnd), start + 1, count);
-  return { start, end };
+  const rowHeight = normalizeRowHeight(options.rowHeight)
+  const rowGap = normalizeRowGap(options.rowGap)
+  const scrollTop = Math.max(0, normalizeNumber(options.scrollTop))
+  const viewportHeight = Math.max(0, normalizeNumber(options.viewportHeight))
+  const start = fixedRowIndexAtOffset(count, rowHeight, rowGap, scrollTop)
+  const rawEnd = fixedRowIndexAfterOffset(count, rowHeight, rowGap, scrollTop + viewportHeight)
+  const end = clamp(Math.max(start + 1, rawEnd), start + 1, count)
+  return { start, end }
 }
 
 export function computeFixedRowVirtualItems(options: {
-  readonly count: number;
-  readonly rowHeight: number;
-  readonly rowGap?: number;
-  readonly range: FixedRowVisibleRange;
-  readonly overscan?: number;
-  readonly enabled?: boolean;
+  readonly count: number
+  readonly rowHeight: number
+  readonly rowGap?: number
+  readonly range: FixedRowVisibleRange
+  readonly overscan?: number
+  readonly enabled?: boolean
 }): FixedRowVirtualItem[] {
-  const count = normalizeCount(options.count);
-  if (options.enabled === false || count === 0) return [];
+  const count = normalizeCount(options.count)
+  if (options.enabled === false || count === 0) return []
 
-  const rowHeight = normalizeRowHeight(options.rowHeight);
-  const rowGap = normalizeRowGap(options.rowGap);
-  const window = computeOverscannedRange(count, options.range, options.overscan);
-  const items: FixedRowVirtualItem[] = [];
+  const rowHeight = normalizeRowHeight(options.rowHeight)
+  const rowGap = normalizeRowGap(options.rowGap)
+  const window = computeOverscannedRange(count, options.range, options.overscan)
+  const items: FixedRowVirtualItem[] = []
 
   for (let index = window.start; index < window.end; index += 1) {
-    items.push(createVirtualItem(index, rowHeight, rowGap));
+    items.push(createVirtualItem(index, rowHeight, rowGap))
   }
 
-  return items;
+  return items
 }
 
 export class FixedRowVirtualizer {
-  private options: NormalizedFixedRowVirtualizerOptions;
-  private scrollTop = 0;
-  private scrollLeft = 0;
-  private viewportWidth = 0;
-  private viewportHeight = 0;
-  private borderBoxWidth = 0;
-  private borderBoxHeight = 0;
-  private attached: AttachedScrollElement | null = null;
-  private changeHandler: FixedRowVirtualizerChangeHandler | null = null;
-  private scrollAnimationFrame = 0;
-  private itemCache = new Map<number, FixedRowVirtualItem>();
-  private cachedRowHeight = DEFAULT_ROW_HEIGHT;
-  private cachedRowGap = DEFAULT_ROW_GAP;
-  private logicalScrollProperties: LogicalScrollProperties | null = null;
+  private options: NormalizedFixedRowVirtualizerOptions
+  private scrollTop = 0
+  private scrollLeft = 0
+  private viewportWidth = 0
+  private viewportHeight = 0
+  private borderBoxWidth = 0
+  private borderBoxHeight = 0
+  private attached: AttachedScrollElement | null = null
+  private changeHandler: FixedRowVirtualizerChangeHandler | null = null
+  private scrollAnimationFrame = 0
+  private itemCache = new Map<number, FixedRowVirtualItem>()
+  private cachedRowHeight = DEFAULT_ROW_HEIGHT
+  private cachedRowGap = DEFAULT_ROW_GAP
+  private logicalScrollProperties: LogicalScrollProperties | null = null
 
   public constructor(options: FixedRowVirtualizerOptions) {
-    this.options = normalizeOptions(options);
-    this.cachedRowHeight = this.options.rowHeight;
-    this.cachedRowGap = this.options.rowGap;
+    this.options = normalizeOptions(options)
+    this.cachedRowHeight = this.options.rowHeight
+    this.cachedRowGap = this.options.rowGap
   }
 
   public updateOptions(options: Partial<FixedRowVirtualizerOptions>): void {
-    const next = normalizeOptions({ ...denormalizeOptions(this.options), ...options });
-    this.updateCacheForFixedRows(next.rowHeight, next.rowGap);
-    this.options = next;
-    this.scrollTop = clampScrollTopForGeometry(this.scrollTop, this.scrollGeometry());
-    this.syncAttachedNativeScrollTop();
-    this.emitChange();
+    const next = normalizeOptions({ ...denormalizeOptions(this.options), ...options })
+    this.updateCacheForFixedRows(next.rowHeight, next.rowGap)
+    this.options = next
+    this.scrollTop = clampScrollTopForGeometry(this.scrollTop, this.scrollGeometry())
+    this.syncAttachedNativeScrollTop()
+    this.emitChange()
   }
 
   public attachScrollElement(
@@ -159,63 +159,63 @@ export class FixedRowVirtualizer {
     onChange?: FixedRowVirtualizerChangeHandler,
     options: FixedRowVirtualizerAttachOptions = {},
   ): void {
-    this.detachScrollElement();
-    this.changeHandler = onChange ?? null;
+    this.detachScrollElement()
+    this.changeHandler = onChange ?? null
 
-    const onScroll = (): void => this.scheduleScrollSync();
-    const resizeObserver = createResizeObserver((entries) => this.syncFromResizeEntries(entries));
-    this.attached = { element, onScroll, resizeObserver };
+    const onScroll = (): void => this.scheduleScrollSync()
+    const resizeObserver = createResizeObserver((entries) => this.syncFromResizeEntries(entries))
+    this.attached = { element, onScroll, resizeObserver }
     this.logicalScrollProperties = installLogicalScrollProperties(element, {
       getScrollHeight: () => this.scrollGeometry().scrollHeight,
       getScrollTop: () => this.scrollTop,
       setScrollTop: (value) => this.setScrollTopFromElement(value),
-    });
+    })
 
-    element.addEventListener("scroll", onScroll, { passive: true });
-    resizeObserver?.observe(element);
+    element.addEventListener('scroll', onScroll, { passive: true })
+    resizeObserver?.observe(element)
     if (options.readInitialScrollPosition !== false) {
-      this.syncScrollPositionFromElement();
+      this.syncScrollPositionFromElement()
     }
   }
 
   public detachScrollElement(): void {
-    const attached = this.attached;
-    if (!attached) return;
+    const attached = this.attached
+    if (!attached) return
 
-    attached.element.removeEventListener("scroll", attached.onScroll);
-    attached.resizeObserver?.disconnect();
-    this.logicalScrollProperties?.restore();
-    this.logicalScrollProperties = null;
-    this.cancelScheduledScrollSync();
-    this.attached = null;
+    attached.element.removeEventListener('scroll', attached.onScroll)
+    attached.resizeObserver?.disconnect()
+    this.logicalScrollProperties?.restore()
+    this.logicalScrollProperties = null
+    this.cancelScheduledScrollSync()
+    this.attached = null
   }
 
   public dispose(): void {
-    this.detachScrollElement();
-    this.changeHandler = null;
-    this.itemCache.clear();
+    this.detachScrollElement()
+    this.changeHandler = null
+    this.itemCache.clear()
   }
 
   public setScrollMetrics(metrics: FixedRowScrollMetrics): void {
-    const nextViewportHeight = Math.max(0, normalizeNumber(metrics.viewportHeight));
-    const nextScrollLeft = optionalNonNegative(metrics.scrollLeft, this.scrollLeft);
-    const nextViewportWidth = optionalNonNegative(metrics.viewportWidth, this.viewportWidth);
+    const nextViewportHeight = Math.max(0, normalizeNumber(metrics.viewportHeight))
+    const nextScrollLeft = optionalNonNegative(metrics.scrollLeft, this.scrollLeft)
+    const nextViewportWidth = optionalNonNegative(metrics.viewportWidth, this.viewportWidth)
     const nextBorderBoxWidth = optionalBorderBoxMetric(
       metrics.borderBoxWidth,
       this.borderBoxWidth,
       nextViewportWidth,
       metrics.viewportWidth,
-    );
+    )
     const nextBorderBoxHeight = optionalBorderBoxMetric(
       metrics.borderBoxHeight,
       this.borderBoxHeight,
       nextViewportHeight,
       metrics.viewportHeight,
-    );
+    )
     const nextScrollTop = normalizeScrollTopForMetrics(
       metrics.scrollTop,
       this.scrollGeometry(nextViewportHeight),
-    );
+    )
     if (
       nextScrollTop === this.scrollTop &&
       nextScrollLeft === this.scrollLeft &&
@@ -224,22 +224,22 @@ export class FixedRowVirtualizer {
       nextBorderBoxWidth === this.borderBoxWidth &&
       nextBorderBoxHeight === this.borderBoxHeight
     )
-      return;
+      return
 
-    this.scrollTop = nextScrollTop;
-    this.scrollLeft = nextScrollLeft;
-    this.viewportWidth = nextViewportWidth;
-    this.viewportHeight = nextViewportHeight;
-    this.borderBoxWidth = nextBorderBoxWidth;
-    this.borderBoxHeight = nextBorderBoxHeight;
-    this.syncAttachedNativeScrollTop();
-    this.emitChange();
+    this.scrollTop = nextScrollTop
+    this.scrollLeft = nextScrollLeft
+    this.viewportWidth = nextViewportWidth
+    this.viewportHeight = nextViewportHeight
+    this.borderBoxWidth = nextBorderBoxWidth
+    this.borderBoxHeight = nextBorderBoxHeight
+    this.syncAttachedNativeScrollTop()
+    this.emitChange()
   }
 
   public getSnapshot(): FixedRowVirtualizerSnapshot {
-    const visibleRange = this.getVisibleRange();
-    const totalSize = computeTotalSize(this.options);
-    const geometry = this.scrollGeometry(this.viewportHeight, totalSize);
+    const visibleRange = this.getVisibleRange()
+    const totalSize = computeTotalSize(this.options)
+    const geometry = this.scrollGeometry(this.viewportHeight, totalSize)
     return {
       scrollTop: this.scrollTop,
       scrollLeft: this.scrollLeft,
@@ -253,7 +253,7 @@ export class FixedRowVirtualizer {
       nativeScrollTop: nativeScrollTopForLogical(this.scrollTop, geometry),
       visibleRange,
       virtualItems: this.getVirtualItems(visibleRange),
-    };
+    }
   }
 
   private getVisibleRange(): FixedRowVisibleRange {
@@ -263,7 +263,7 @@ export class FixedRowVirtualizer {
         scrollTop: this.scrollTop,
         viewportHeight: this.viewportHeight,
         enabled: this.options.enabled,
-      });
+      })
     }
 
     return computeFixedRowVisibleRange({
@@ -273,60 +273,60 @@ export class FixedRowVirtualizer {
       scrollTop: this.scrollTop,
       viewportHeight: this.viewportHeight,
       enabled: this.options.enabled,
-    });
+    })
   }
 
   private getVirtualItems(range: FixedRowVisibleRange): readonly FixedRowVirtualItem[] {
-    const count = this.options.count;
+    const count = this.options.count
     if (!this.options.enabled || count === 0) {
-      this.itemCache.clear();
-      return [];
+      this.itemCache.clear()
+      return []
     }
 
-    const window = computeOverscannedRange(count, range, this.options.overscan);
+    const window = computeOverscannedRange(count, range, this.options.overscan)
     if (this.options.rowHeightIndex)
-      return collectVariableVirtualItems(this.options.rowHeightIndex, window);
+      return collectVariableVirtualItems(this.options.rowHeightIndex, window)
 
-    this.pruneItemCache(window);
-    return this.collectVirtualItems(window);
+    this.pruneItemCache(window)
+    return this.collectVirtualItems(window)
   }
 
   private collectVirtualItems(range: FixedRowVisibleRange): FixedRowVirtualItem[] {
-    const items: FixedRowVirtualItem[] = [];
+    const items: FixedRowVirtualItem[] = []
     for (let index = range.start; index < range.end; index += 1) {
-      items.push(this.getCachedVirtualItem(index));
+      items.push(this.getCachedVirtualItem(index))
     }
 
-    return items;
+    return items
   }
 
   private getCachedVirtualItem(index: number): FixedRowVirtualItem {
-    const existing = this.itemCache.get(index);
-    if (existing) return existing;
+    const existing = this.itemCache.get(index)
+    if (existing) return existing
 
-    const item = createVirtualItem(index, this.options.rowHeight, this.options.rowGap);
-    this.itemCache.set(index, item);
-    return item;
+    const item = createVirtualItem(index, this.options.rowHeight, this.options.rowGap)
+    this.itemCache.set(index, item)
+    return item
   }
 
   private pruneItemCache(range: FixedRowVisibleRange): void {
     for (const index of this.itemCache.keys()) {
-      if (index >= range.start && index < range.end) continue;
-      this.itemCache.delete(index);
+      if (index >= range.start && index < range.end) continue
+      this.itemCache.delete(index)
     }
   }
 
   private updateCacheForFixedRows(rowHeight: number, rowGap: number): void {
-    if (rowHeight === this.cachedRowHeight && rowGap === this.cachedRowGap) return;
+    if (rowHeight === this.cachedRowHeight && rowGap === this.cachedRowGap) return
 
-    this.cachedRowHeight = rowHeight;
-    this.cachedRowGap = rowGap;
-    this.itemCache.clear();
+    this.cachedRowHeight = rowHeight
+    this.cachedRowGap = rowGap
+    this.itemCache.clear()
   }
 
   private syncScrollPositionFromElement(): void {
-    const element = this.attached?.element;
-    if (!element) return;
+    const element = this.attached?.element
+    if (!element) return
 
     this.setScrollMetrics({
       scrollTop: this.logicalScrollTopFromNativeElement(),
@@ -335,17 +335,17 @@ export class FixedRowVirtualizer {
       borderBoxWidth: this.borderBoxWidth,
       viewportHeight: this.viewportHeight,
       viewportWidth: this.viewportWidth,
-    });
+    })
   }
 
   private syncFromResizeEntries(entries: readonly ResizeObserverEntry[]): void {
-    const element = this.attached?.element;
-    if (!element) return;
+    const element = this.attached?.element
+    if (!element) return
 
-    const entry = resizeEntryForElement(entries, element);
-    if (!entry) return;
+    const entry = resizeEntryForElement(entries, element)
+    if (!entry) return
 
-    const size = resizeEntrySize(entry);
+    const size = resizeEntrySize(entry)
     this.setScrollMetrics({
       scrollTop: this.logicalScrollTopFromNativeElement(size.content.height),
       scrollLeft: element.scrollLeft,
@@ -353,40 +353,40 @@ export class FixedRowVirtualizer {
       borderBoxWidth: size.border.width,
       viewportHeight: size.content.height,
       viewportWidth: size.content.width,
-    });
+    })
   }
 
   private scheduleScrollSync(): void {
-    if (this.scrollAnimationFrame !== 0) return;
+    if (this.scrollAnimationFrame !== 0) return
 
     this.scrollAnimationFrame = requestFrame(() => {
-      this.scrollAnimationFrame = 0;
-      this.syncScrollPositionFromElement();
-    });
+      this.scrollAnimationFrame = 0
+      this.syncScrollPositionFromElement()
+    })
   }
 
   private cancelScheduledScrollSync(): void {
-    if (this.scrollAnimationFrame === 0) return;
+    if (this.scrollAnimationFrame === 0) return
 
-    cancelFrame(this.scrollAnimationFrame);
-    this.scrollAnimationFrame = 0;
+    cancelFrame(this.scrollAnimationFrame)
+    this.scrollAnimationFrame = 0
   }
 
   private emitChange(): void {
-    this.changeHandler?.(this.getSnapshot());
+    this.changeHandler?.(this.getSnapshot())
   }
 
   private scrollGeometry(
     viewportHeight = this.viewportHeight,
     totalSize?: number,
   ): FixedRowScrollGeometry {
-    return scrollGeometryForOptions(this.options, viewportHeight, totalSize);
+    return scrollGeometryForOptions(this.options, viewportHeight, totalSize)
   }
 
   private logicalScrollTopFromNativeElement(viewportHeight = this.viewportHeight): number {
     const nativeScrollTop =
-      this.logicalScrollProperties?.readNativeScrollTop() ?? this.attached?.element.scrollTop ?? 0;
-    return logicalScrollTopForNative(nativeScrollTop, this.scrollGeometry(viewportHeight));
+      this.logicalScrollProperties?.readNativeScrollTop() ?? this.attached?.element.scrollTop ?? 0
+    return logicalScrollTopForNative(nativeScrollTop, this.scrollGeometry(viewportHeight))
   }
 
   private setScrollTopFromElement(value: number): void {
@@ -397,16 +397,16 @@ export class FixedRowVirtualizer {
       scrollTop: value,
       viewportHeight: this.viewportHeight,
       viewportWidth: this.viewportWidth,
-    });
+    })
   }
 
   private syncAttachedNativeScrollTop(): void {
-    const properties = this.logicalScrollProperties;
-    if (!properties) return;
+    const properties = this.logicalScrollProperties
+    if (!properties) return
 
     properties.writeNativeScrollTop(
       nativeScrollTopForLogical(this.scrollTop, this.scrollGeometry()),
-    );
+    )
   }
 }
 
@@ -415,11 +415,11 @@ function computeOverscannedRange(
   range: FixedRowVisibleRange,
   overscan: number | undefined,
 ): FixedRowVisibleRange {
-  const normalizedOverscan = normalizeOverscan(overscan);
+  const normalizedOverscan = normalizeOverscan(overscan)
   return {
     start: clamp(range.start - normalizedOverscan, 0, count),
     end: clamp(range.end + normalizedOverscan, 0, count),
-  };
+  }
 }
 
 function createVirtualItem(index: number, rowHeight: number, rowGap: number): FixedRowVirtualItem {
@@ -427,22 +427,22 @@ function createVirtualItem(index: number, rowHeight: number, rowGap: number): Fi
     index,
     start: index * (rowHeight + rowGap),
     size: rowHeight,
-  };
+  }
 }
 
 type NormalizedFixedRowVirtualizerOptions = Required<
-  Omit<FixedRowVirtualizerOptions, "rowSizes">
+  Omit<FixedRowVirtualizerOptions, 'rowSizes'>
 > & {
-  readonly rowSizes: readonly number[] | null;
-  readonly rowHeightIndex: RowHeightIndex | null;
-};
+  readonly rowSizes: readonly number[] | null
+  readonly rowHeightIndex: RowHeightIndex | null
+}
 
 function normalizeOptions(
   options: FixedRowVirtualizerOptions,
 ): NormalizedFixedRowVirtualizerOptions {
-  const count = normalizeCount(options.count);
-  const rowGap = normalizeRowGap(options.rowGap);
-  const rowSizes = normalizeRowSizes(options.rowSizes, count);
+  const count = normalizeCount(options.count)
+  const rowGap = normalizeRowGap(options.rowGap)
+  const rowSizes = normalizeRowSizes(options.rowSizes, count)
   return {
     count,
     rowHeight: normalizeRowHeight(options.rowHeight),
@@ -452,7 +452,7 @@ function normalizeOptions(
     overscan: normalizeOverscan(options.overscan),
     enabled: options.enabled ?? true,
     maxScrollHeight: normalizeMaxScrollHeight(options.maxScrollHeight),
-  };
+  }
 }
 
 function denormalizeOptions(
@@ -466,58 +466,58 @@ function denormalizeOptions(
     overscan: options.overscan,
     enabled: options.enabled,
     maxScrollHeight: options.maxScrollHeight,
-  };
+  }
 }
 
 function computeTotalSize(options: NormalizedFixedRowVirtualizerOptions): number {
-  if (options.rowHeightIndex) return options.rowHeightIndex.totalSize;
+  if (options.rowHeightIndex) return options.rowHeightIndex.totalSize
 
-  return computeFixedRowTotalSize(options.count, options.rowHeight, options.rowGap);
+  return computeFixedRowTotalSize(options.count, options.rowHeight, options.rowGap)
 }
 
 type FixedRowScrollGeometry = {
-  readonly scrollHeight: number;
-  readonly nativeScrollHeight: number;
-  readonly maxScrollTop: number;
-  readonly maxNativeScrollTop: number;
-};
+  readonly scrollHeight: number
+  readonly nativeScrollHeight: number
+  readonly maxScrollTop: number
+  readonly maxNativeScrollTop: number
+}
 
 function scrollGeometryForOptions(
   options: NormalizedFixedRowVirtualizerOptions,
   viewportHeight: number,
   totalSize = computeTotalSize(options),
 ): FixedRowScrollGeometry {
-  const normalizedViewportHeight = Math.max(0, normalizeNumber(viewportHeight));
-  const scrollHeight = totalSize + scrollPaddingEnd(options, normalizedViewportHeight);
+  const normalizedViewportHeight = Math.max(0, normalizeNumber(viewportHeight))
+  const scrollHeight = totalSize + scrollPaddingEnd(options, normalizedViewportHeight)
   const nativeScrollHeight = nativeScrollHeightFor(
     scrollHeight,
     normalizedViewportHeight,
     options.maxScrollHeight,
-  );
+  )
 
   return {
     scrollHeight,
     nativeScrollHeight,
     maxScrollTop: Math.max(0, scrollHeight - normalizedViewportHeight),
     maxNativeScrollTop: Math.max(0, nativeScrollHeight - normalizedViewportHeight),
-  };
+  }
 }
 
 function scrollPaddingEnd(
   options: NormalizedFixedRowVirtualizerOptions,
   viewportHeight: number,
 ): number {
-  if (options.count === 0) return 0;
+  if (options.count === 0) return 0
 
-  return Math.max(0, viewportHeight - lastRowHeight(options));
+  return Math.max(0, viewportHeight - lastRowHeight(options))
 }
 
 function lastRowHeight(options: NormalizedFixedRowVirtualizerOptions): number {
   if (options.rowHeightIndex) {
-    return options.rowHeightIndex.rowSizes.at(-1) ?? DEFAULT_ROW_HEIGHT;
+    return options.rowHeightIndex.rowSizes.at(-1) ?? DEFAULT_ROW_HEIGHT
   }
 
-  return options.rowHeight;
+  return options.rowHeight
 }
 
 function nativeScrollHeightFor(
@@ -525,75 +525,75 @@ function nativeScrollHeightFor(
   viewportHeight: number,
   maxScrollHeight: number,
 ): number {
-  if (scrollHeight <= maxScrollHeight) return scrollHeight;
+  if (scrollHeight <= maxScrollHeight) return scrollHeight
 
-  return Math.max(viewportHeight, maxScrollHeight);
+  return Math.max(viewportHeight, maxScrollHeight)
 }
 
 function nativeScrollTopForLogical(scrollTop: number, geometry: FixedRowScrollGeometry): number {
-  const logical = clampScrollTopForGeometry(scrollTop, geometry);
-  if (geometry.maxScrollTop <= geometry.maxNativeScrollTop) return logical;
-  if (geometry.maxScrollTop === 0 || geometry.maxNativeScrollTop === 0) return 0;
+  const logical = clampScrollTopForGeometry(scrollTop, geometry)
+  if (geometry.maxScrollTop <= geometry.maxNativeScrollTop) return logical
+  if (geometry.maxScrollTop === 0 || geometry.maxNativeScrollTop === 0) return 0
 
-  return (logical / geometry.maxScrollTop) * geometry.maxNativeScrollTop;
+  return (logical / geometry.maxScrollTop) * geometry.maxNativeScrollTop
 }
 
 function logicalScrollTopForNative(
   nativeScrollTop: number,
   geometry: FixedRowScrollGeometry,
 ): number {
-  const native = clamp(nativeScrollTop, 0, geometry.maxNativeScrollTop);
-  if (geometry.maxScrollTop <= geometry.maxNativeScrollTop) return native;
-  if (geometry.maxScrollTop === 0 || geometry.maxNativeScrollTop === 0) return 0;
+  const native = clamp(nativeScrollTop, 0, geometry.maxNativeScrollTop)
+  if (geometry.maxScrollTop <= geometry.maxNativeScrollTop) return native
+  if (geometry.maxScrollTop === 0 || geometry.maxNativeScrollTop === 0) return 0
 
-  return (native / geometry.maxNativeScrollTop) * geometry.maxScrollTop;
+  return (native / geometry.maxNativeScrollTop) * geometry.maxScrollTop
 }
 
 function clampScrollTopForGeometry(scrollTop: number, geometry: FixedRowScrollGeometry): number {
-  return clamp(scrollTop, 0, geometry.maxScrollTop);
+  return clamp(scrollTop, 0, geometry.maxScrollTop)
 }
 
 function normalizeScrollTopForMetrics(scrollTop: number, geometry: FixedRowScrollGeometry): number {
-  const normalized = Math.max(0, normalizeNumber(scrollTop));
-  if (geometry.scrollHeight === geometry.maxScrollTop) return normalized;
-  return clampScrollTopForGeometry(normalized, geometry);
+  const normalized = Math.max(0, normalizeNumber(scrollTop))
+  if (geometry.scrollHeight === geometry.maxScrollTop) return normalized
+  return clampScrollTopForGeometry(normalized, geometry)
 }
 
 function computeVariableRowVisibleRange(options: {
-  readonly rowHeightIndex: RowHeightIndex;
-  readonly scrollTop: number;
-  readonly viewportHeight: number;
-  readonly enabled?: boolean;
+  readonly rowHeightIndex: RowHeightIndex
+  readonly scrollTop: number
+  readonly viewportHeight: number
+  readonly enabled?: boolean
 }): FixedRowVisibleRange {
-  const count = options.rowHeightIndex.rowSizes.length;
-  if (options.enabled === false || count === 0) return { start: 0, end: 0 };
+  const count = options.rowHeightIndex.rowSizes.length
+  if (options.enabled === false || count === 0) return { start: 0, end: 0 }
 
-  const scrollTop = Math.max(0, normalizeNumber(options.scrollTop));
-  const viewportHeight = Math.max(0, normalizeNumber(options.viewportHeight));
-  const start = rowHeightIndexRowAtOffset(options.rowHeightIndex, scrollTop);
+  const scrollTop = Math.max(0, normalizeNumber(options.scrollTop))
+  const viewportHeight = Math.max(0, normalizeNumber(options.viewportHeight))
+  const start = rowHeightIndexRowAtOffset(options.rowHeightIndex, scrollTop)
   const end = clamp(
     rowHeightIndexRowAfterOffset(options.rowHeightIndex, scrollTop + viewportHeight),
     start + 1,
     count,
-  );
-  return { start, end };
+  )
+  return { start, end }
 }
 
 function collectVariableVirtualItems(
   rowHeightIndex: RowHeightIndex,
   range: FixedRowVisibleRange,
 ): FixedRowVirtualItem[] {
-  const items: FixedRowVirtualItem[] = [];
+  const items: FixedRowVirtualItem[] = []
 
   for (let index = range.start; index < range.end; index += 1) {
     items.push({
       index,
       start: rowHeightIndexStart(rowHeightIndex, index),
       size: rowHeightIndex.rowSizes[index] ?? DEFAULT_ROW_HEIGHT,
-    });
+    })
   }
 
-  return items;
+  return items
 }
 
 function fixedRowIndexAtOffset(
@@ -602,11 +602,11 @@ function fixedRowIndexAtOffset(
   rowGap: number,
   offset: number,
 ): number {
-  const stride = rowHeight + rowGap;
-  const index = clamp(Math.floor(offset / stride), 0, count - 1);
-  const rowBottom = index * stride + rowHeight;
-  if (offset < rowBottom) return index;
-  return Math.min(index + 1, count - 1);
+  const stride = rowHeight + rowGap
+  const index = clamp(Math.floor(offset / stride), 0, count - 1)
+  const rowBottom = index * stride + rowHeight
+  if (offset < rowBottom) return index
+  return Math.min(index + 1, count - 1)
 }
 
 function fixedRowIndexAfterOffset(
@@ -615,61 +615,61 @@ function fixedRowIndexAfterOffset(
   rowGap: number,
   offset: number,
 ): number {
-  const stride = rowHeight + rowGap;
-  const index = clamp(Math.floor(offset / stride), 0, count);
-  const rowStart = index * stride;
-  if (offset <= rowStart) return index;
-  return Math.min(index + 1, count);
+  const stride = rowHeight + rowGap
+  const index = clamp(Math.floor(offset / stride), 0, count)
+  const rowStart = index * stride
+  if (offset <= rowStart) return index
+  return Math.min(index + 1, count)
 }
 
 function totalRowGap(count: number, rowGap: number): number {
-  return Math.max(0, count - 1) * rowGap;
+  return Math.max(0, count - 1) * rowGap
 }
 
 function normalizeRowSizes(
   rowSizes: readonly number[] | undefined,
   count: number,
 ): readonly number[] | null {
-  if (!rowSizes || rowSizes.length !== count) return null;
-  return rowSizes.map(normalizeRowHeight);
+  if (!rowSizes || rowSizes.length !== count) return null
+  return rowSizes.map(normalizeRowHeight)
 }
 
 function normalizeCount(value: number): number {
-  if (!Number.isFinite(value) || value <= 0) return 0;
-  return Math.floor(value);
+  if (!Number.isFinite(value) || value <= 0) return 0
+  return Math.floor(value)
 }
 
 function normalizeRowHeight(value: number): number {
-  if (!Number.isFinite(value) || value <= 0) return DEFAULT_ROW_HEIGHT;
-  return value;
+  if (!Number.isFinite(value) || value <= 0) return DEFAULT_ROW_HEIGHT
+  return value
 }
 
 function normalizeRowGap(value: number | undefined): number {
-  if (!Number.isFinite(value) || value === undefined || value < 0) return DEFAULT_ROW_GAP;
-  return value;
+  if (!Number.isFinite(value) || value === undefined || value < 0) return DEFAULT_ROW_GAP
+  return value
 }
 
 function normalizeOverscan(value: number | undefined): number {
-  if (!Number.isFinite(value) || value === undefined || value <= 0) return 0;
-  return Math.floor(value);
+  if (!Number.isFinite(value) || value === undefined || value <= 0) return 0
+  return Math.floor(value)
 }
 
 function normalizeMaxScrollHeight(value: number | undefined): number {
   if (!Number.isFinite(value) || value === undefined || value <= 0) {
-    return DEFAULT_MAX_SCROLL_HEIGHT;
+    return DEFAULT_MAX_SCROLL_HEIGHT
   }
 
-  return Math.floor(value);
+  return Math.floor(value)
 }
 
 function normalizeNumber(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  return value;
+  if (!Number.isFinite(value)) return 0
+  return value
 }
 
 function optionalNonNegative(value: number | undefined, fallback: number): number {
-  if (value === undefined) return fallback;
-  return Math.max(0, normalizeNumber(value));
+  if (value === undefined) return fallback
+  return Math.max(0, normalizeNumber(value))
 }
 
 function optionalBorderBoxMetric(
@@ -678,13 +678,13 @@ function optionalBorderBoxMetric(
   viewportValue: number,
   rawViewportValue: number | undefined,
 ): number {
-  if (value !== undefined) return Math.max(0, normalizeNumber(value));
-  if (rawViewportValue !== undefined) return viewportValue;
-  return current;
+  if (value !== undefined) return Math.max(0, normalizeNumber(value))
+  if (rawViewportValue !== undefined) return viewportValue
+  return current
 }
 
 function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
+  return Math.min(max, Math.max(min, value))
 }
 
 function resizeEntryForElement(
@@ -692,118 +692,118 @@ function resizeEntryForElement(
   element: Element,
 ): ResizeObserverEntry | null {
   for (const entry of entries) {
-    if (entry.target === element) return entry;
+    if (entry.target === element) return entry
   }
 
-  return entries[0] ?? null;
+  return entries[0] ?? null
 }
 
 function resizeEntrySize(entry: ResizeObserverEntry): {
   readonly content: {
-    readonly width: number;
-    readonly height: number;
-  };
+    readonly width: number
+    readonly height: number
+  }
   readonly border: {
-    readonly width: number;
-    readonly height: number;
-  };
+    readonly width: number
+    readonly height: number
+  }
 } {
   const content = resizeObserverBox(entry.contentBoxSize) ?? {
     width: entry.contentRect.width,
     height: entry.contentRect.height,
-  };
-  const border = resizeObserverBox(entry.borderBoxSize) ?? content;
-  return { content, border };
+  }
+  const border = resizeObserverBox(entry.borderBoxSize) ?? content
+  return { content, border }
 }
 
 function resizeObserverBox(
-  size: ResizeObserverEntry["contentBoxSize"],
+  size: ResizeObserverEntry['contentBoxSize'],
 ): { readonly width: number; readonly height: number } | null {
-  const box = Array.isArray(size) ? size[0] : size;
-  if (!box) return null;
-  return { width: box.inlineSize, height: box.blockSize };
+  const box = Array.isArray(size) ? size[0] : size
+  if (!box) return null
+  return { width: box.inlineSize, height: box.blockSize }
 }
 
 function createResizeObserver(callback: ResizeObserverCallback): ResizeObserver | null {
-  if (typeof ResizeObserver === "undefined") return null;
-  return new ResizeObserver(callback);
+  if (typeof ResizeObserver === 'undefined') return null
+  return new ResizeObserver(callback)
 }
 
 function requestFrame(callback: FrameRequestCallback): number {
-  if (typeof requestAnimationFrame === "function") return requestAnimationFrame(callback);
-  return setTimeout(() => callback(nowMs()), 0) as unknown as number;
+  if (typeof requestAnimationFrame === 'function') return requestAnimationFrame(callback)
+  return setTimeout(() => callback(nowMs()), 0) as unknown as number
 }
 
 function cancelFrame(handle: number): void {
-  if (typeof cancelAnimationFrame === "function") {
-    cancelAnimationFrame(handle);
-    return;
+  if (typeof cancelAnimationFrame === 'function') {
+    cancelAnimationFrame(handle)
+    return
   }
 
-  clearTimeout(handle);
+  clearTimeout(handle)
 }
 
 function nowMs(): DOMHighResTimeStamp {
-  return globalThis.performance?.now() ?? Date.now();
+  return globalThis.performance?.now() ?? Date.now()
 }
 
 type LogicalScrollProperties = {
-  restore(): void;
-  readNativeScrollTop(): number;
-  writeNativeScrollTop(value: number): void;
-};
+  restore(): void
+  readNativeScrollTop(): number
+  writeNativeScrollTop(value: number): void
+}
 
 type LogicalScrollPropertyHandlers = {
-  getScrollHeight(): number;
-  getScrollTop(): number;
-  setScrollTop(value: number): void;
-};
+  getScrollHeight(): number
+  getScrollTop(): number
+  setScrollTop(value: number): void
+}
 
 function installLogicalScrollProperties(
   element: HTMLElement,
   handlers: LogicalScrollPropertyHandlers,
 ): LogicalScrollProperties {
-  const originalScrollTop = Object.getOwnPropertyDescriptor(element, "scrollTop");
-  const originalScrollHeight = Object.getOwnPropertyDescriptor(element, "scrollHeight");
-  const nativeScrollTop = createNativeScrollTopAccess(element);
-  const scrollTopGet = (): number => handlers.getScrollTop();
-  const scrollTopSet = (value: number): void => handlers.setScrollTop(value);
-  const scrollHeightGet = (): number => handlers.getScrollHeight();
+  const originalScrollTop = Object.getOwnPropertyDescriptor(element, 'scrollTop')
+  const originalScrollHeight = Object.getOwnPropertyDescriptor(element, 'scrollHeight')
+  const nativeScrollTop = createNativeScrollTopAccess(element)
+  const scrollTopGet = (): number => handlers.getScrollTop()
+  const scrollTopSet = (value: number): void => handlers.setScrollTop(value)
+  const scrollHeightGet = (): number => handlers.getScrollHeight()
 
-  tryDefineProperty(element, "scrollTop", {
+  tryDefineProperty(element, 'scrollTop', {
     configurable: true,
     get: scrollTopGet,
     set: scrollTopSet,
-  });
-  tryDefineProperty(element, "scrollHeight", {
+  })
+  tryDefineProperty(element, 'scrollHeight', {
     configurable: true,
     get: scrollHeightGet,
-  });
+  })
 
   return {
     readNativeScrollTop: nativeScrollTop.read,
     writeNativeScrollTop: nativeScrollTop.write,
     restore: () => {
-      restoreInstalledProperty(element, "scrollTop", originalScrollTop, scrollTopGet, scrollTopSet);
-      restoreInstalledProperty(element, "scrollHeight", originalScrollHeight, scrollHeightGet);
+      restoreInstalledProperty(element, 'scrollTop', originalScrollTop, scrollTopGet, scrollTopSet)
+      restoreInstalledProperty(element, 'scrollHeight', originalScrollHeight, scrollHeightGet)
     },
-  };
+  }
 }
 
 function createNativeScrollTopAccess(element: HTMLElement): {
-  readonly read: () => number;
-  readonly write: (value: number) => void;
+  readonly read: () => number
+  readonly write: (value: number) => void
 } {
-  const descriptor = findPropertyDescriptor(element, "scrollTop");
-  let fallback = 0;
+  const descriptor = findPropertyDescriptor(element, 'scrollTop')
+  let fallback = 0
 
   return {
     read: () => normalizeNumber(readNativeScrollTop(element, descriptor, fallback)),
     write: (value) => {
-      fallback = Math.max(0, normalizeNumber(value));
-      writeNativeScrollTop(element, descriptor, fallback);
+      fallback = Math.max(0, normalizeNumber(value))
+      writeNativeScrollTop(element, descriptor, fallback)
     },
-  };
+  }
 }
 
 function readNativeScrollTop(
@@ -811,8 +811,8 @@ function readNativeScrollTop(
   descriptor: PropertyDescriptor | undefined,
   fallback: number,
 ): number {
-  if (descriptor?.get) return descriptor.get.call(element) as number;
-  return fallback;
+  if (descriptor?.get) return descriptor.get.call(element) as number
+  return fallback
 }
 
 function writeNativeScrollTop(
@@ -821,51 +821,51 @@ function writeNativeScrollTop(
   value: number,
 ): void {
   if (descriptor?.set) {
-    descriptor.set.call(element, value);
-    return;
+    descriptor.set.call(element, value)
+    return
   }
 }
 
 function findPropertyDescriptor(
   element: HTMLElement,
-  property: "scrollTop",
+  property: 'scrollTop',
 ): PropertyDescriptor | undefined {
-  let current: unknown = element;
+  let current: unknown = element
   while (current) {
-    const descriptor = Object.getOwnPropertyDescriptor(current, property);
-    if (descriptor) return descriptor;
-    current = Object.getPrototypeOf(current);
+    const descriptor = Object.getOwnPropertyDescriptor(current, property)
+    if (descriptor) return descriptor
+    current = Object.getPrototypeOf(current)
   }
 
-  return undefined;
+  return undefined
 }
 
 function tryDefineProperty(
   element: HTMLElement,
-  property: "scrollTop" | "scrollHeight",
+  property: 'scrollTop' | 'scrollHeight',
   descriptor: PropertyDescriptor,
 ): void {
   try {
-    Object.defineProperty(element, property, descriptor);
+    Object.defineProperty(element, property, descriptor)
   } catch {
-    return;
+    return
   }
 }
 
 function restoreInstalledProperty(
   element: HTMLElement,
-  property: "scrollTop" | "scrollHeight",
+  property: 'scrollTop' | 'scrollHeight',
   original: PropertyDescriptor | undefined,
   installedGet: (() => number) | undefined,
   installedSet?: (value: number) => void,
 ): void {
-  const current = Object.getOwnPropertyDescriptor(element, property);
-  if (!current || current.get !== installedGet || current.set !== installedSet) return;
+  const current = Object.getOwnPropertyDescriptor(element, property)
+  if (!current || current.get !== installedGet || current.set !== installedSet) return
 
   if (original) {
-    Object.defineProperty(element, property, original);
-    return;
+    Object.defineProperty(element, property, original)
+    return
   }
 
-  Reflect.deleteProperty(element, property);
+  Reflect.deleteProperty(element, property)
 }

@@ -58,27 +58,27 @@
   width: var(--editor-scope-line-width);
 }
 
-.editor-scope-line[data-editor-scope-line-level="0"] {
+.editor-scope-line[data-editor-scope-line-level='0'] {
   background: var(--editor-scope-line-color-0);
 }
 
-.editor-scope-line[data-editor-scope-line-level="1"] {
+.editor-scope-line[data-editor-scope-line-level='1'] {
   background: var(--editor-scope-line-color-1);
 }
 
-.editor-scope-line[data-editor-scope-line-level="2"] {
+.editor-scope-line[data-editor-scope-line-level='2'] {
   background: var(--editor-scope-line-color-2);
 }
 
-.editor-scope-line[data-editor-scope-line-level="3"] {
+.editor-scope-line[data-editor-scope-line-level='3'] {
   background: var(--editor-scope-line-color-3);
 }
 
-.editor-scope-line[data-editor-scope-line-level="4"] {
+.editor-scope-line[data-editor-scope-line-level='4'] {
   background: var(--editor-scope-line-color-4);
 }
 
-.editor-scope-line[data-editor-scope-line-level="5"] {
+.editor-scope-line[data-editor-scope-line-level='5'] {
   background: var(--editor-scope-line-color-5);
 }
 
@@ -86,26 +86,26 @@
   background: var(--editor-scope-line-active-color);
 }
 
-.editor-scope-line-active[data-editor-scope-line-level="0"] {
+.editor-scope-line-active[data-editor-scope-line-level='0'] {
   background: var(--editor-scope-line-active-color-0);
 }
 
-.editor-scope-line-active[data-editor-scope-line-level="1"] {
+.editor-scope-line-active[data-editor-scope-line-level='1'] {
   background: var(--editor-scope-line-active-color-1);
 }
 
-.editor-scope-line-active[data-editor-scope-line-level="2"] {
+.editor-scope-line-active[data-editor-scope-line-level='2'] {
   background: var(--editor-scope-line-active-color-2);
 }
 
-.editor-scope-line-active[data-editor-scope-line-level="3"] {
+.editor-scope-line-active[data-editor-scope-line-level='3'] {
   background: var(--editor-scope-line-active-color-3);
 }
 
-.editor-scope-line-active[data-editor-scope-line-level="4"] {
+.editor-scope-line-active[data-editor-scope-line-level='4'] {
   background: var(--editor-scope-line-active-color-4);
 }
 
-.editor-scope-line-active[data-editor-scope-line-level="5"] {
+.editor-scope-line-active[data-editor-scope-line-level='5'] {
   background: var(--editor-scope-line-active-color-5);
 }

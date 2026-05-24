@@ -1,8 +1,8 @@
-import { lspPositionToOffset, offsetToLspPosition, type LspClient } from "@editor/lsp";
-import type * as lsp from "vscode-languageserver-protocol";
+import { lspPositionToOffset, offsetToLspPosition, type LspClient } from '@editor/lsp'
+import type * as lsp from 'vscode-languageserver-protocol'
 
-import { documentUriToFileName } from "./paths";
-import type { LanguageServerDefinitionTarget, LanguageServerNavigationKind } from "./types";
+import { documentUriToFileName } from './paths'
+import type { LanguageServerDefinitionTarget, LanguageServerNavigationKind } from './types'
 
 /**
  * Half-open `[start, end)` offset range into the editor text buffer. Used
@@ -11,9 +11,9 @@ import type { LanguageServerDefinitionTarget, LanguageServerNavigationKind } fro
  * user is already hovering.
  */
 export type OffsetRange = {
-  readonly start: number;
-  readonly end: number;
-};
+  readonly start: number
+  readonly end: number
+}
 
 /**
  * Inputs required to issue a `textDocument/definition` request against the
@@ -21,16 +21,16 @@ export type OffsetRange = {
  * (`offset` into `text`) and converted to an LSP `Position` internally.
  */
 export type DefinitionRequest = {
-  readonly uri: lsp.DocumentUri;
-  readonly text: string;
-  readonly offset: number;
-  readonly signal?: AbortSignal;
-};
+  readonly uri: lsp.DocumentUri
+  readonly text: string
+  readonly offset: number
+  readonly signal?: AbortSignal
+}
 
 export type NavigationRequest = DefinitionRequest & {
-  readonly kind: LanguageServerNavigationKind;
-  readonly includeDeclaration?: boolean;
-};
+  readonly kind: LanguageServerNavigationKind
+  readonly includeDeclaration?: boolean
+}
 
 /**
  * Normalized response from {@link requestDefinition}. The LSP protocol
@@ -40,8 +40,8 @@ export type NavigationRequest = DefinitionRequest & {
  * resolvable targets.
  */
 export type DefinitionResult = {
-  readonly targets: readonly LanguageServerDefinitionTarget[];
-};
+  readonly targets: readonly LanguageServerDefinitionTarget[]
+}
 
 /**
  * Minimum editor surface required by {@link navigateToDefinition}. Matches
@@ -50,18 +50,18 @@ export type DefinitionResult = {
  * module decoupled from `@editor/core`'s full contribution surface.
  */
 export type NavigationEditor = {
-  readonly text: string;
-  setSelection(anchor: number, head: number, timingName: string, revealOffset?: number): void;
-  focusEditor(): void;
-};
+  readonly text: string
+  setSelection(anchor: number, head: number, timingName: string, revealOffset?: number): void
+  focusEditor(): void
+}
 
-const SET_SELECTION_TIMING_NAME = "languageServer.goToDefinition";
+const SET_SELECTION_TIMING_NAME = 'languageServer.goToDefinition'
 
-const REQUEST_METHODS: Record<Exclude<LanguageServerNavigationKind, "references">, string> = {
-  definition: "textDocument/definition",
-  implementation: "textDocument/implementation",
-  typeDefinition: "textDocument/typeDefinition",
-};
+const REQUEST_METHODS: Record<Exclude<LanguageServerNavigationKind, 'references'>, string> = {
+  definition: 'textDocument/definition',
+  implementation: 'textDocument/implementation',
+  typeDefinition: 'textDocument/typeDefinition',
+}
 
 /**
  * Issue a `textDocument/definition` request and normalize the response
@@ -73,14 +73,14 @@ export async function requestDefinition(
   client: LspClient,
   request: DefinitionRequest,
 ): Promise<DefinitionResult> {
-  return requestNavigationTargets(client, { ...request, kind: "definition" });
+  return requestNavigationTargets(client, { ...request, kind: 'definition' })
 }
 
 export async function requestNavigationTargets(
   client: LspClient,
   request: NavigationRequest,
 ): Promise<DefinitionResult> {
-  if (request.kind === "references") return requestReferences(client, request);
+  if (request.kind === 'references') return requestReferences(client, request)
 
   const raw = await client.request<lsp.Location[] | lsp.Location | lsp.LocationLink[] | null>(
     REQUEST_METHODS[request.kind],
@@ -89,8 +89,8 @@ export async function requestNavigationTargets(
       position: offsetToLspPosition(request.text, request.offset),
     } satisfies lsp.TextDocumentPositionParams,
     request.signal ? { signal: request.signal } : undefined,
-  );
-  return { targets: definitionTargets(raw) };
+  )
+  return { targets: definitionTargets(raw) }
 }
 
 async function requestReferences(
@@ -98,7 +98,7 @@ async function requestReferences(
   request: NavigationRequest,
 ): Promise<DefinitionResult> {
   const raw = await client.request<lsp.Location[] | null>(
-    "textDocument/references",
+    'textDocument/references',
     {
       textDocument: { uri: request.uri },
       position: offsetToLspPosition(request.text, request.offset),
@@ -107,8 +107,8 @@ async function requestReferences(
       },
     } satisfies lsp.ReferenceParams,
     request.signal ? { signal: request.signal } : undefined,
-  );
-  return { targets: definitionTargets(raw) };
+  )
+  return { targets: definitionTargets(raw) }
 }
 
 /**
@@ -122,7 +122,7 @@ export function navigateToDefinition(
   target: LanguageServerDefinitionTarget,
   editor: NavigationEditor,
 ): void {
-  navigateToTarget(target, editor, SET_SELECTION_TIMING_NAME);
+  navigateToTarget(target, editor, SET_SELECTION_TIMING_NAME)
 }
 
 export function navigateToTarget(
@@ -130,10 +130,10 @@ export function navigateToTarget(
   editor: NavigationEditor,
   timingName: string,
 ): void {
-  const start = lspPositionToOffset(editor.text, target.range.start);
-  const end = lspPositionToOffset(editor.text, target.range.end);
-  editor.setSelection(start, end, timingName, start);
-  editor.focusEditor();
+  const start = lspPositionToOffset(editor.text, target.range.start)
+  const end = lspPositionToOffset(editor.text, target.range.end)
+  editor.setSelection(start, end, timingName, start)
+  editor.focusEditor()
 }
 
 /**
@@ -145,7 +145,7 @@ export function preferredDefinitionTarget(
   activeUri: lsp.DocumentUri,
   result: DefinitionResult,
 ): LanguageServerDefinitionTarget | null {
-  return preferredTarget(activeUri, result.targets);
+  return preferredTarget(activeUri, result.targets)
 }
 
 export function preferredReferenceTarget(
@@ -156,15 +156,15 @@ export function preferredReferenceTarget(
 ): LanguageServerDefinitionTarget | null {
   const sourceRange =
     identifierRangeAtOffset(activeText, sourceOffset) ??
-    ({ start: sourceOffset, end: sourceOffset } satisfies OffsetRange);
+    ({ start: sourceOffset, end: sourceOffset } satisfies OffsetRange)
   const sameDocumentTargets = result.targets.flatMap((target) =>
     targetWithOffset(activeUri, activeText, target),
-  );
-  const nextTarget = sameDocumentTargets.find((target) => target.start > sourceRange.end);
-  if (nextTarget) return nextTarget.target;
+  )
+  const nextTarget = sameDocumentTargets.find((target) => target.start > sourceRange.end)
+  if (nextTarget) return nextTarget.target
 
-  const otherTarget = sameDocumentTargets.find((target) => !rangesOverlap(sourceRange, target));
-  return otherTarget?.target ?? preferredTarget(activeUri, result.targets);
+  const otherTarget = sameDocumentTargets.find((target) => !rangesOverlap(sourceRange, target))
+  return otherTarget?.target ?? preferredTarget(activeUri, result.targets)
 }
 
 /**
@@ -182,8 +182,8 @@ export function preferredJumpableDefinitionTarget(
 ): LanguageServerDefinitionTarget | null {
   const targets = result.targets.filter(
     (target) => !targetIsSourceRange(activeUri, activeText, sourceRange, target),
-  );
-  return preferredTarget(activeUri, targets);
+  )
+  return preferredTarget(activeUri, targets)
 }
 
 /**
@@ -195,18 +195,18 @@ export function preferredJumpableDefinitionTarget(
  * behaves intuitively when the cursor is immediately after the name.
  */
 export function identifierRangeAtOffset(text: string, offset: number): OffsetRange | null {
-  const clamped = Math.max(0, Math.min(offset, text.length));
-  const index = identifierIndexAtOffset(text, clamped);
-  if (index === null) return null;
+  const clamped = Math.max(0, Math.min(offset, text.length))
+  const index = identifierIndexAtOffset(text, clamped)
+  if (index === null) return null
 
-  let start = index;
-  while (start > 0 && isIdentifierCharacter(text[start - 1] ?? "")) start -= 1;
+  let start = index
+  while (start > 0 && isIdentifierCharacter(text[start - 1] ?? '')) start -= 1
 
-  let end = index + 1;
-  while (end < text.length && isIdentifierCharacter(text[end] ?? "")) end += 1;
+  let end = index + 1
+  while (end < text.length && isIdentifierCharacter(text[end] ?? '')) end += 1
 
-  if (end <= start) return null;
-  return { start, end };
+  if (end <= start) return null
+  return { start, end }
 }
 
 function preferredTarget(
@@ -215,10 +215,10 @@ function preferredTarget(
 ): LanguageServerDefinitionTarget | null {
   return (
     targets.find((target) => target.uri === activeUri) ??
-    targets.find((target) => !target.path.includes("/node_modules/")) ??
+    targets.find((target) => !target.path.includes('/node_modules/')) ??
     targets[0] ??
     null
-  );
+  )
 }
 
 function targetWithOffset(
@@ -226,9 +226,9 @@ function targetWithOffset(
   activeText: string,
   target: LanguageServerDefinitionTarget,
 ): readonly (OffsetRange & {
-  readonly target: LanguageServerDefinitionTarget;
+  readonly target: LanguageServerDefinitionTarget
 })[] {
-  if (target.uri !== activeUri) return [];
+  if (target.uri !== activeUri) return []
 
   return [
     {
@@ -236,7 +236,7 @@ function targetWithOffset(
       end: lspPositionToOffset(activeText, target.range.end),
       target,
     },
-  ];
+  ]
 }
 
 function targetIsSourceRange(
@@ -245,50 +245,50 @@ function targetIsSourceRange(
   sourceRange: OffsetRange,
   target: LanguageServerDefinitionTarget,
 ): boolean {
-  if (target.uri !== activeUri) return false;
+  if (target.uri !== activeUri) return false
 
-  const targetStart = lspPositionToOffset(activeText, target.range.start);
-  const targetEnd = lspPositionToOffset(activeText, target.range.end);
-  return rangesOverlap(sourceRange, { start: targetStart, end: targetEnd });
+  const targetStart = lspPositionToOffset(activeText, target.range.start)
+  const targetEnd = lspPositionToOffset(activeText, target.range.end)
+  return rangesOverlap(sourceRange, { start: targetStart, end: targetEnd })
 }
 
 function rangesOverlap(left: OffsetRange, right: OffsetRange): boolean {
-  return left.start < right.end && right.start < left.end;
+  return left.start < right.end && right.start < left.end
 }
 
 function definitionTargets(
   result: lsp.Location[] | lsp.Location | lsp.LocationLink[] | null,
 ): readonly LanguageServerDefinitionTarget[] {
-  if (!result) return [];
-  const items = Array.isArray(result) ? result : [result];
-  return items.flatMap(definitionTarget);
+  if (!result) return []
+  const items = Array.isArray(result) ? result : [result]
+  return items.flatMap(definitionTarget)
 }
 
 function definitionTarget(
   item: lsp.Location | lsp.LocationLink,
 ): readonly LanguageServerDefinitionTarget[] {
-  const uri = "targetUri" in item ? item.targetUri : item.uri;
-  const range = "targetSelectionRange" in item ? item.targetSelectionRange : item.range;
-  const fileName = documentUriToFileName(uri);
-  if (!fileName) return [];
+  const uri = 'targetUri' in item ? item.targetUri : item.uri
+  const range = 'targetSelectionRange' in item ? item.targetSelectionRange : item.range
+  const fileName = documentUriToFileName(uri)
+  if (!fileName) return []
 
   return [
     {
       uri,
-      path: fileName.replace(/^\/+/, ""),
+      path: fileName.replace(/^\/+/, ''),
       range,
     },
-  ];
+  ]
 }
 
 function identifierIndexAtOffset(text: string, offset: number): number | null {
-  if (isIdentifierCharacter(text[offset] ?? "")) return offset;
-  if (offset > 0 && isIdentifierCharacter(text[offset - 1] ?? "")) return offset - 1;
-  return null;
+  if (isIdentifierCharacter(text[offset] ?? '')) return offset
+  if (offset > 0 && isIdentifierCharacter(text[offset - 1] ?? '')) return offset - 1
+  return null
 }
 
 function isIdentifierCharacter(value: string): boolean {
-  return /^[A-Za-z0-9_$]$/.test(value);
+  return /^[A-Za-z0-9_$]$/.test(value)
 }
 
 /**
@@ -297,5 +297,5 @@ function isIdentifierCharacter(value: string): boolean {
  * previously-stored "last link range" without an extra null check.
  */
 export function sameOffsetRange(left: OffsetRange | null, right: OffsetRange): boolean {
-  return left?.start === right.start && left.end === right.end;
+  return left?.start === right.start && left.end === right.end
 }

@@ -1,125 +1,134 @@
-import type { DocumentSession } from "../documentSession";
+import type { DocumentSession } from '../documentSession'
 import {
   createStringTextSnapshot,
   defineLazyTextProperty,
   type DocumentTextSnapshot,
   type TextSnapshot,
-} from "../documentTextSnapshot";
+} from '../documentTextSnapshot'
 import {
   createEditorDocumentSession,
   normalizeEditorDocumentMode,
   normalizeEditorEditability,
   type ResetOwnedDocumentOptions,
-} from "./editorDocument";
+} from './editorDocument'
 import type {
   EditorDocumentMode,
   EditorEditability,
   EditorOpenDocumentOptions,
   EditorSessionOptions,
-} from "./types";
-import type { EditorSyntaxLanguageId } from "../syntax/session";
+} from './types'
+import type { EditorSyntaxLanguageId } from '../syntax/session'
 
 export type EditorDocumentControllerOptions = {
-  readonly defaultDocumentMode?: EditorDocumentMode;
-  readonly defaultEditability?: EditorEditability;
-  readonly highlightPrefix: string;
-};
+  readonly defaultDocumentMode?: EditorDocumentMode
+  readonly defaultEditability?: EditorEditability
+  readonly highlightPrefix: string
+}
 
 export type EditorDocumentAttachment = {
-  readonly documentVersion: number;
-  readonly internalDocumentId: string;
-  readonly languageId: EditorSyntaxLanguageId | null;
-  readonly session: DocumentSession;
-  readonly textSnapshot: DocumentTextSnapshot;
-  readonly text: string;
-};
+  readonly documentVersion: number
+  readonly internalDocumentId: string
+  readonly languageId: EditorSyntaxLanguageId | null
+  readonly session: DocumentSession
+  readonly textSnapshot: DocumentTextSnapshot
+  readonly text: string
+}
 
 export class EditorDocumentController {
-  private readonly defaultDocumentMode: EditorDocumentMode | undefined;
-  private readonly highlightPrefix: string;
-  private currentTextSnapshot: TextSnapshot = createStringTextSnapshot("");
-  private currentSession: DocumentSession | null = null;
-  private currentSessionOptions: EditorSessionOptions = {};
-  private currentDocumentId: string | null = null;
-  private currentDocumentMode: EditorDocumentMode;
-  private currentEditability: EditorEditability;
-  private currentLanguageId: EditorSyntaxLanguageId | null = null;
-  private currentDocumentVersion = 0;
+  private readonly defaultDocumentMode: EditorDocumentMode | undefined
+  private readonly highlightPrefix: string
+  private currentTextSnapshot: TextSnapshot = createStringTextSnapshot('')
+  private currentSession: DocumentSession | null = null
+  private currentSessionOptions: EditorSessionOptions = {}
+  private currentDocumentId: string | null = null
+  private currentDocumentMode: EditorDocumentMode
+  private currentEditability: EditorEditability
+  private currentLanguageId: EditorSyntaxLanguageId | null = null
+  private currentDocumentVersion = 0
+  private currentTextVersion = 0
 
   constructor(options: EditorDocumentControllerOptions) {
-    this.defaultDocumentMode = options.defaultDocumentMode;
-    this.highlightPrefix = options.highlightPrefix;
-    this.currentDocumentMode = normalizeEditorDocumentMode(options.defaultDocumentMode);
-    this.currentEditability = normalizeEditorEditability(options.defaultEditability);
+    this.defaultDocumentMode = options.defaultDocumentMode
+    this.highlightPrefix = options.highlightPrefix
+    this.currentDocumentMode = normalizeEditorDocumentMode(options.defaultDocumentMode)
+    this.currentEditability = normalizeEditorEditability(options.defaultEditability)
   }
 
   get text(): string {
-    return this.currentTextSnapshot.getText();
+    return this.currentTextSnapshot.getText()
   }
 
   get textSnapshot(): TextSnapshot {
-    return this.currentTextSnapshot;
+    return this.currentTextSnapshot
   }
 
   get session(): DocumentSession | null {
-    return this.currentSession;
+    return this.currentSession
   }
 
   get sessionOptions(): EditorSessionOptions {
-    return this.currentSessionOptions;
+    return this.currentSessionOptions
   }
 
   get documentId(): string | null {
-    return this.currentDocumentId;
+    return this.currentDocumentId
   }
 
   get documentMode(): EditorDocumentMode {
-    return this.currentDocumentMode;
+    return this.currentDocumentMode
   }
 
   get editability(): EditorEditability {
-    return this.currentEditability;
+    return this.currentEditability
   }
 
   get languageId(): EditorSyntaxLanguageId | null {
-    return this.currentLanguageId;
+    return this.currentLanguageId
   }
 
   get documentVersion(): number {
-    return this.currentDocumentVersion;
+    return this.currentDocumentVersion
+  }
+
+  get textVersion(): number {
+    return this.currentTextVersion
   }
 
   setRenderedText(text: string): void {
-    this.currentTextSnapshot = createStringTextSnapshot(text);
+    this.currentTextSnapshot = createStringTextSnapshot(text)
+    this.currentTextVersion += 1
   }
 
   setRenderedTextSnapshot(textSnapshot: TextSnapshot): void {
-    this.currentTextSnapshot = textSnapshot;
+    if (this.currentTextSnapshot === textSnapshot) return
+
+    this.currentTextSnapshot = textSnapshot
+    this.currentTextVersion += 1
   }
 
   setEditability(editability: EditorEditability): boolean {
-    const next = normalizeEditorEditability(editability);
-    if (this.currentEditability === next) return false;
+    const next = normalizeEditorEditability(editability)
+    if (this.currentEditability === next) return false
 
-    this.currentEditability = next;
-    return true;
+    this.currentEditability = next
+    return true
   }
 
   canEditDocument(): boolean {
-    return this.currentEditability === "editable" && this.currentDocumentMode === "session";
+    return this.currentEditability === 'editable' && this.currentDocumentMode === 'session'
   }
 
   attachSession(
     session: DocumentSession,
     options: EditorSessionOptions = {},
   ): EditorDocumentAttachment {
-    this.currentDocumentVersion += 1;
-    this.currentDocumentId = options.documentId ?? null;
-    this.currentDocumentMode = "session";
-    this.currentLanguageId = options.languageId ?? null;
-    this.currentSession = session;
-    this.currentSessionOptions = options;
-    this.currentTextSnapshot = session.getTextSnapshot();
+    this.currentDocumentVersion += 1
+    this.currentDocumentId = options.documentId ?? null
+    this.currentDocumentMode = 'session'
+    this.currentLanguageId = options.languageId ?? null
+    this.currentSession = session
+    this.currentSessionOptions = options
+    this.currentTextSnapshot = session.getTextSnapshot()
 
     return this.createAttachment({
       documentVersion: this.currentDocumentVersion,
@@ -127,39 +136,39 @@ export class EditorDocumentController {
       languageId: this.currentLanguageId,
       session,
       textSnapshot: session.getTextSnapshot(),
-    });
+    })
   }
 
   detachSession(): void {
-    this.currentSession = null;
-    this.currentSessionOptions = {};
+    this.currentSession = null
+    this.currentSessionOptions = {}
   }
 
   clear(): number {
-    this.currentDocumentVersion += 1;
-    this.currentDocumentId = null;
-    this.currentDocumentMode = normalizeEditorDocumentMode(this.defaultDocumentMode);
-    this.currentLanguageId = null;
-    this.currentTextSnapshot = createStringTextSnapshot("");
-    this.detachSession();
-    return this.currentDocumentVersion;
+    this.currentDocumentVersion += 1
+    this.currentDocumentId = null
+    this.currentDocumentMode = normalizeEditorDocumentMode(this.defaultDocumentMode)
+    this.currentLanguageId = null
+    this.currentTextSnapshot = createStringTextSnapshot('')
+    this.detachSession()
+    return this.currentDocumentVersion
   }
 
   resetOwnedDocument(
     document: EditorOpenDocumentOptions,
     options: ResetOwnedDocumentOptions,
   ): EditorDocumentAttachment {
-    this.currentDocumentVersion += 1;
+    this.currentDocumentVersion += 1
     this.currentDocumentId =
       options.documentId ??
-      (options.persistentIdentity ? this.generatedDocumentId(this.currentDocumentVersion) : null);
+      (options.persistentIdentity ? this.generatedDocumentId(this.currentDocumentVersion) : null)
     this.currentDocumentMode = normalizeEditorDocumentMode(
       document.documentMode ?? this.defaultDocumentMode,
-    );
-    this.currentLanguageId = document.languageId ?? null;
-    this.currentSession = createEditorDocumentSession(document.text, this.currentDocumentMode);
-    this.currentSessionOptions = {};
-    this.currentTextSnapshot = this.currentSession.getTextSnapshot();
+    )
+    this.currentLanguageId = document.languageId ?? null
+    this.currentSession = createEditorDocumentSession(document.text, this.currentDocumentMode)
+    this.currentSessionOptions = {}
+    this.currentTextSnapshot = this.currentSession.getTextSnapshot()
 
     return this.createAttachment({
       documentVersion: this.currentDocumentVersion,
@@ -167,24 +176,24 @@ export class EditorDocumentController {
       languageId: this.currentLanguageId,
       session: this.currentSession,
       textSnapshot: this.currentSession.getTextSnapshot(),
-    });
+    })
   }
 
   currentSessionDocumentId(): string {
-    return this.currentDocumentId ?? this.generatedOpenSessionId(this.currentDocumentVersion);
+    return this.currentDocumentId ?? this.generatedOpenSessionId(this.currentDocumentVersion)
   }
 
   private generatedDocumentId(documentVersion: number): string {
-    return `${this.highlightPrefix}-document-${documentVersion}`;
+    return `${this.highlightPrefix}-document-${documentVersion}`
   }
 
   private generatedOpenSessionId(documentVersion: number): string {
-    return `${this.highlightPrefix}-open-${documentVersion}`;
+    return `${this.highlightPrefix}-open-${documentVersion}`
   }
 
   private createAttachment(
-    attachment: Omit<EditorDocumentAttachment, "text">,
+    attachment: Omit<EditorDocumentAttachment, 'text'>,
   ): EditorDocumentAttachment {
-    return defineLazyTextProperty(attachment);
+    return defineLazyTextProperty(attachment)
   }
 }

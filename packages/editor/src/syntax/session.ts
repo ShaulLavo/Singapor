@@ -1,87 +1,87 @@
-import type { DocumentSessionChange } from "../documentSession";
-import type { DocumentTextSnapshot } from "../documentTextSnapshot";
-import type { PieceTableSnapshot } from "../pieceTable/pieceTableTypes";
-import type { EditorToken } from "../tokens";
+import type { DocumentSessionChange } from '../documentSession'
+import type { DocumentTextSnapshot } from '../documentTextSnapshot'
+import type { PieceTableSnapshot } from '../pieceTable/pieceTableTypes'
+import type { EditorToken } from '../tokens'
 
-export type EditorSyntaxLanguageId = string;
+export type EditorSyntaxLanguageId = string
 
 export type EditorSyntaxCapture = {
-  readonly startIndex: number;
-  readonly endIndex: number;
-  readonly captureName: string;
-  readonly languageId?: EditorSyntaxLanguageId;
-};
+  readonly startIndex: number
+  readonly endIndex: number
+  readonly captureName: string
+  readonly languageId?: EditorSyntaxLanguageId
+}
 
 export type FoldRange = {
-  readonly startIndex: number;
-  readonly endIndex: number;
-  readonly startLine: number;
-  readonly endLine: number;
-  readonly type: string;
-  readonly languageId?: EditorSyntaxLanguageId;
-};
+  readonly startIndex: number
+  readonly endIndex: number
+  readonly startLine: number
+  readonly endLine: number
+  readonly type: string
+  readonly languageId?: EditorSyntaxLanguageId
+}
 
 export type BracketInfo = {
-  readonly index: number;
-  readonly char: string;
-  readonly depth: number;
-};
+  readonly index: number
+  readonly char: string
+  readonly depth: number
+}
 
 export type EditorSyntaxError = {
-  readonly startIndex: number;
-  readonly endIndex: number;
-  readonly message: string;
-  readonly isMissing: boolean;
-};
+  readonly startIndex: number
+  readonly endIndex: number
+  readonly message: string
+  readonly isMissing: boolean
+}
 
 export type EditorSyntaxInjection = {
-  readonly parentLanguageId: EditorSyntaxLanguageId;
-  readonly languageId: EditorSyntaxLanguageId;
-  readonly startIndex: number;
-  readonly endIndex: number;
-};
+  readonly parentLanguageId: EditorSyntaxLanguageId
+  readonly languageId: EditorSyntaxLanguageId
+  readonly startIndex: number
+  readonly endIndex: number
+}
 
 export type EditorSyntaxResult = {
-  readonly captures: readonly EditorSyntaxCapture[];
-  readonly folds: readonly FoldRange[];
-  readonly brackets: readonly BracketInfo[];
-  readonly errors: readonly EditorSyntaxError[];
-  readonly injections: readonly EditorSyntaxInjection[];
-  readonly tokens: readonly EditorToken[];
-};
+  readonly captures: readonly EditorSyntaxCapture[]
+  readonly folds: readonly FoldRange[]
+  readonly brackets: readonly BracketInfo[]
+  readonly errors: readonly EditorSyntaxError[]
+  readonly injections: readonly EditorSyntaxInjection[]
+  readonly tokens: readonly EditorToken[]
+}
 
 export type EditorSyntaxRange = {
-  readonly startIndex: number;
-  readonly endIndex: number;
-};
+  readonly startIndex: number
+  readonly endIndex: number
+}
 
 export type EditorSyntaxSessionOptions = {
-  readonly documentId: string;
-  readonly languageId: EditorSyntaxLanguageId | null;
-  readonly includeHighlights?: boolean;
-  readonly includeCaptures?: boolean;
-  readonly syntaxMode?: "full" | "range";
-  readonly text: string;
-  readonly textSnapshot?: DocumentTextSnapshot;
-  readonly snapshot: PieceTableSnapshot;
-};
+  readonly documentId: string
+  readonly languageId: EditorSyntaxLanguageId | null
+  readonly includeHighlights?: boolean
+  readonly includeCaptures?: boolean
+  readonly syntaxMode?: 'full' | 'range'
+  readonly text: string
+  readonly textSnapshot?: DocumentTextSnapshot
+  readonly snapshot: PieceTableSnapshot
+}
 
 export type EditorSyntaxSession = {
-  refresh(snapshot: PieceTableSnapshot, text?: string): Promise<EditorSyntaxResult>;
-  applyChange(change: DocumentSessionChange): Promise<EditorSyntaxResult>;
-  canQueryRange?(): boolean;
-  queryRange?(range: EditorSyntaxRange): Promise<EditorSyntaxResult>;
-  getResult(): EditorSyntaxResult;
-  getTokens(): readonly EditorToken[];
-  getSnapshotVersion(): number;
-  dispose(): void;
-};
+  refresh(snapshot: PieceTableSnapshot, text?: string): Promise<EditorSyntaxResult>
+  applyChange(change: DocumentSessionChange): Promise<EditorSyntaxResult>
+  canQueryRange?(): boolean
+  queryRange?(range: EditorSyntaxRange): Promise<EditorSyntaxResult>
+  getResult(): EditorSyntaxResult
+  getTokens(): readonly EditorToken[]
+  getSnapshotVersion(): number
+  dispose(): void
+}
 
 export type EditorSyntaxProvider = {
-  createSession(options: EditorSyntaxSessionOptions): EditorSyntaxSession | null;
-};
+  createSession(options: EditorSyntaxSessionOptions): EditorSyntaxSession | null
+}
 
-export const createEditorSyntaxSession = (): EditorSyntaxSession => createEmptySyntaxSession();
+export const createEditorSyntaxSession = (): EditorSyntaxSession => createEmptySyntaxSession()
 
 export const createEmptySyntaxSession = (): EditorSyntaxSession => ({
   refresh: async () => createEmptySyntaxResult(),
@@ -90,7 +90,7 @@ export const createEmptySyntaxSession = (): EditorSyntaxSession => ({
   getTokens: () => [],
   getSnapshotVersion: () => 0,
   dispose: () => undefined,
-});
+})
 
 export const createEmptySyntaxResult = (): EditorSyntaxResult => ({
   captures: [],
@@ -99,11 +99,11 @@ export const createEmptySyntaxResult = (): EditorSyntaxResult => ({
   errors: [],
   injections: [],
   tokens: [],
-});
+})
 
 export const isEditorSyntaxLanguage = (
   languageId: string | null | undefined,
 ): languageId is EditorSyntaxLanguageId => {
-  if (!languageId) return false;
-  return languageId.trim().length > 0;
-};
+  if (!languageId) return false
+  return languageId.trim().length > 0
+}

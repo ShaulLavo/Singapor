@@ -1,41 +1,41 @@
-import { Constants } from "./minimapCharSheet";
+import { Constants } from './minimapCharSheet'
 import type {
   MinimapMetrics,
   MinimapRenderLayout,
   MinimapViewport,
   ResolvedMinimapOptions,
-} from "./types";
-import { RenderMinimap } from "./types";
+} from './types'
+import { RenderMinimap } from './types'
 
-export const MINIMAP_GUTTER_WIDTH = 2;
-export const MINIMAP_RIGHT_GUTTER_WIDTH = 8;
+export const MINIMAP_GUTTER_WIDTH = 2
+export const MINIMAP_RIGHT_GUTTER_WIDTH = 8
 
 export type MinimapFrameLayout = {
-  readonly scrollTop: number;
-  readonly scrollHeight: number;
-  readonly sliderNeeded: boolean;
-  readonly computedSliderRatio: number;
-  readonly sliderTop: number;
-  readonly sliderHeight: number;
-  readonly topPaddingLineCount: number;
-  readonly startLineNumber: number;
-  readonly endLineNumber: number;
-};
+  readonly scrollTop: number
+  readonly scrollHeight: number
+  readonly sliderNeeded: boolean
+  readonly computedSliderRatio: number
+  readonly sliderTop: number
+  readonly sliderHeight: number
+  readonly topPaddingLineCount: number
+  readonly startLineNumber: number
+  readonly endLineNumber: number
+}
 
 export function computeRenderLayout(options: {
-  readonly minimap: ResolvedMinimapOptions;
-  readonly metrics: MinimapMetrics;
-  readonly viewport: MinimapViewport;
-  readonly lineCount: number;
+  readonly minimap: ResolvedMinimapOptions
+  readonly metrics: MinimapMetrics
+  readonly viewport: MinimapViewport
+  readonly lineCount: number
 }): MinimapRenderLayout {
-  const pixelRatio = Math.max(1, options.metrics.devicePixelRatio);
-  const height = Math.max(0, options.viewport.clientHeight);
+  const pixelRatio = Math.max(1, options.metrics.devicePixelRatio)
+  const height = Math.max(0, options.viewport.clientHeight)
   const baseCharHeight = options.minimap.renderCharacters
     ? Constants.BASE_CHAR_HEIGHT
-    : Constants.BASE_CHAR_HEIGHT + 1;
+    : Constants.BASE_CHAR_HEIGHT + 1
   const configuredScale =
-    pixelRatio >= 2 ? Math.round(options.minimap.scale * 2) : options.minimap.scale;
-  const baseCanvasInnerHeight = Math.floor(pixelRatio * height);
+    pixelRatio >= 2 ? Math.round(options.minimap.scale * 2) : options.minimap.scale
+  const baseCanvasInnerHeight = Math.floor(pixelRatio * height)
   const fitted = computeFittedScale({
     baseCharHeight,
     canvasInnerHeight: baseCanvasInnerHeight,
@@ -45,19 +45,19 @@ export function computeRenderLayout(options: {
     minimap: options.minimap,
     pixelRatio,
     rowHeight: options.metrics.rowHeight,
-  });
-  const layoutCharWidth = fitted.scale / pixelRatio / fitted.widthMultiplier;
+  })
+  const layoutCharWidth = fitted.scale / pixelRatio / fitted.widthMultiplier
   const width = computeMinimapWidth({
     charWidth: layoutCharWidth,
     maxColumn: options.minimap.maxColumn,
     viewportWidth: options.viewport.clientWidth,
     characterWidth: options.metrics.characterWidth,
-  });
-  const baseCanvasInnerWidth = Math.floor(pixelRatio * width);
-  const canvasInnerWidth = Math.floor(baseCanvasInnerWidth * fitted.widthMultiplier);
+  })
+  const baseCanvasInnerWidth = Math.floor(pixelRatio * width)
+  const canvasInnerWidth = Math.floor(baseCanvasInnerWidth * fitted.widthMultiplier)
   const canvasInnerHeight = fitted.heightIsEditorHeight
     ? Math.ceil(Math.max(baseCanvasInnerHeight, fitted.documentMinimapHeight))
-    : baseCanvasInnerHeight;
+    : baseCanvasInnerHeight
 
   return {
     width,
@@ -76,72 +76,69 @@ export function computeRenderLayout(options: {
         ? RenderMinimap.Text
         : RenderMinimap.Blocks
       : RenderMinimap.None,
-  };
+  }
 }
 
 export function computeFrameLayout(options: {
-  readonly renderLayout: MinimapRenderLayout;
-  readonly viewport: MinimapViewport;
-  readonly lineCount: number;
-  readonly realLineCount: number;
-  readonly previous: MinimapFrameLayout | null;
+  readonly renderLayout: MinimapRenderLayout
+  readonly viewport: MinimapViewport
+  readonly lineCount: number
+  readonly realLineCount: number
+  readonly previous: MinimapFrameLayout | null
 }): MinimapFrameLayout {
-  if (options.renderLayout.heightIsEditorHeight) return containedFrameLayout(options);
-  return proportionalFrameLayout(options);
+  if (options.renderLayout.heightIsEditorHeight) return containedFrameLayout(options)
+  return proportionalFrameLayout(options)
 }
 
 export function yForLineNumber(
-  frame: Pick<MinimapFrameLayout, "startLineNumber" | "topPaddingLineCount">,
+  frame: Pick<MinimapFrameLayout, 'startLineNumber' | 'topPaddingLineCount'>,
   lineNumber: number,
   minimapLineHeight: number,
 ): number {
-  return (lineNumber - frame.startLineNumber + frame.topPaddingLineCount) * minimapLineHeight;
+  return (lineNumber - frame.startLineNumber + frame.topPaddingLineCount) * minimapLineHeight
 }
 
 function computeFittedScale(options: {
-  readonly minimap: ResolvedMinimapOptions;
-  readonly baseCharHeight: number;
-  readonly canvasInnerHeight: number;
-  readonly configuredScale: number;
-  readonly height: number;
-  readonly pixelRatio: number;
-  readonly rowHeight: number;
-  readonly lineCount: number;
+  readonly minimap: ResolvedMinimapOptions
+  readonly baseCharHeight: number
+  readonly canvasInnerHeight: number
+  readonly configuredScale: number
+  readonly height: number
+  readonly pixelRatio: number
+  readonly rowHeight: number
+  readonly lineCount: number
 }): {
-  readonly scale: number;
-  readonly lineHeight: number;
-  readonly widthMultiplier: number;
-  readonly isSampling: boolean;
-  readonly heightIsEditorHeight: boolean;
-  readonly documentMinimapHeight: number;
+  readonly scale: number
+  readonly lineHeight: number
+  readonly widthMultiplier: number
+  readonly isSampling: boolean
+  readonly heightIsEditorHeight: boolean
+  readonly documentMinimapHeight: number
 } {
-  const lineHeight = options.baseCharHeight * options.configuredScale;
-  if (options.minimap.size === "proportional") {
-    return fittedScale(options.configuredScale, lineHeight, 1, false, false, 0);
+  const lineHeight = options.baseCharHeight * options.configuredScale
+  if (options.minimap.size === 'proportional') {
+    return fittedScale(options.configuredScale, lineHeight, 1, false, false, 0)
   }
 
-  const desiredRatio = options.lineCount / Math.max(1, options.canvasInnerHeight);
-  if (desiredRatio > 1) return fittedScale(1, 1, 1, true, true, options.canvasInnerHeight);
+  const desiredRatio = options.lineCount / Math.max(1, options.canvasInnerHeight)
+  if (desiredRatio > 1) return fittedScale(1, 1, 1, true, true, options.canvasInnerHeight)
 
-  if (options.minimap.size === "fit") {
-    const documentHeight = Math.ceil(options.lineCount * lineHeight);
+  if (options.minimap.size === 'fit') {
+    const documentHeight = Math.ceil(options.lineCount * lineHeight)
     if (documentHeight <= options.canvasInnerHeight) {
-      return fittedScale(options.configuredScale, lineHeight, 1, false, false, documentHeight);
+      return fittedScale(options.configuredScale, lineHeight, 1, false, false, documentHeight)
     }
   }
 
-  const maxScale = options.configuredScale + 1;
+  const maxScale = options.configuredScale + 1
   const fillLineHeight = Math.min(
     options.rowHeight * options.pixelRatio,
     Math.max(1, Math.floor(1 / desiredRatio)),
-  );
-  const scale = Math.min(
-    maxScale,
-    Math.max(1, Math.floor(fillLineHeight / options.baseCharHeight)),
-  );
+  )
+  const scale = Math.min(maxScale, Math.max(1, Math.floor(fillLineHeight / options.baseCharHeight)))
   const widthMultiplier =
-    scale > options.configuredScale ? Math.min(2, scale / options.configuredScale) : 1;
-  const typicalViewportLineCount = options.height / Math.max(1, options.rowHeight);
+    scale > options.configuredScale ? Math.min(2, scale / options.configuredScale) : 1
+  const typicalViewportLineCount = options.height / Math.max(1, options.rowHeight)
   return fittedScale(
     scale,
     fillLineHeight,
@@ -149,7 +146,7 @@ function computeFittedScale(options: {
     false,
     true,
     Math.ceil(Math.max(typicalViewportLineCount, options.lineCount) * fillLineHeight),
-  );
+  )
 }
 
 function fittedScale(
@@ -167,45 +164,45 @@ function fittedScale(
     isSampling,
     heightIsEditorHeight,
     documentMinimapHeight,
-  };
+  }
 }
 
 function computeMinimapWidth(options: {
-  readonly charWidth: number;
-  readonly maxColumn: number;
-  readonly viewportWidth: number;
-  readonly characterWidth: number;
+  readonly charWidth: number
+  readonly maxColumn: number
+  readonly viewportWidth: number
+  readonly characterWidth: number
 }): number {
-  const availableWidth = Math.max(0, options.viewportWidth);
-  const minimapMaxWidth = Math.floor(options.maxColumn * options.charWidth);
+  const availableWidth = Math.max(0, options.viewportWidth)
+  const minimapMaxWidth = Math.floor(options.maxColumn * options.charWidth)
   const proportionalWidth = Math.floor(
     ((availableWidth - 2) * options.charWidth) / (options.characterWidth + options.charWidth),
-  );
+  )
   return Math.min(
     minimapMaxWidth,
     Math.max(0, proportionalWidth) + MINIMAP_GUTTER_WIDTH + MINIMAP_RIGHT_GUTTER_WIDTH,
-  );
+  )
 }
 
 function containedFrameLayout(options: {
-  readonly renderLayout: MinimapRenderLayout;
-  readonly viewport: MinimapViewport;
-  readonly lineCount: number;
-  readonly realLineCount: number;
+  readonly renderLayout: MinimapRenderLayout
+  readonly viewport: MinimapViewport
+  readonly lineCount: number
+  readonly realLineCount: number
 }): MinimapFrameLayout {
-  const logicalScrollHeight = Math.max(1, options.realLineCount * options.renderLayout.lineHeight);
+  const logicalScrollHeight = Math.max(1, options.realLineCount * options.renderLayout.lineHeight)
   const sliderHeight = Math.max(
     1,
     Math.floor(
       (options.viewport.clientHeight * options.viewport.clientHeight) / logicalScrollHeight,
     ),
-  );
-  const maxSliderTop = Math.max(0, options.renderLayout.height - sliderHeight);
+  )
+  const maxSliderTop = Math.max(0, options.renderLayout.height - sliderHeight)
   const ratio =
-    maxSliderTop / Math.max(1, options.viewport.scrollHeight - options.viewport.clientHeight);
+    maxSliderTop / Math.max(1, options.viewport.scrollHeight - options.viewport.clientHeight)
   const maxLinesFitting = Math.floor(
     options.renderLayout.canvasInnerHeight / options.renderLayout.lineHeight,
-  );
+  )
 
   return {
     scrollTop: options.viewport.scrollTop,
@@ -217,25 +214,25 @@ function containedFrameLayout(options: {
     topPaddingLineCount: 0,
     startLineNumber: 1,
     endLineNumber: Math.min(options.lineCount, maxLinesFitting),
-  };
+  }
 }
 
 function proportionalFrameLayout(options: {
-  readonly renderLayout: MinimapRenderLayout;
-  readonly viewport: MinimapViewport;
-  readonly lineCount: number;
-  readonly previous: MinimapFrameLayout | null;
+  readonly renderLayout: MinimapRenderLayout
+  readonly viewport: MinimapViewport
+  readonly lineCount: number
+  readonly previous: MinimapFrameLayout | null
 }): MinimapFrameLayout {
-  const lineHeight = options.renderLayout.lineHeight;
+  const lineHeight = options.renderLayout.lineHeight
   const pixelRatio =
-    options.renderLayout.canvasInnerHeight / Math.max(1, options.renderLayout.canvasOuterHeight);
-  const minimapLinesFitting = Math.floor(options.renderLayout.canvasInnerHeight / lineHeight);
-  const viewportLineCount = options.viewport.clientHeight / Math.max(1, lineHeight);
-  const sliderHeight = Math.floor((viewportLineCount * lineHeight) / pixelRatio);
-  const maxSliderTop = Math.max(0, options.renderLayout.height - sliderHeight);
+    options.renderLayout.canvasInnerHeight / Math.max(1, options.renderLayout.canvasOuterHeight)
+  const minimapLinesFitting = Math.floor(options.renderLayout.canvasInnerHeight / lineHeight)
+  const viewportLineCount = options.viewport.clientHeight / Math.max(1, lineHeight)
+  const sliderHeight = Math.floor((viewportLineCount * lineHeight) / pixelRatio)
+  const maxSliderTop = Math.max(0, options.renderLayout.height - sliderHeight)
   const ratio =
-    maxSliderTop / Math.max(1, options.viewport.scrollHeight - options.viewport.clientHeight);
-  const sliderTop = options.viewport.scrollTop * ratio;
+    maxSliderTop / Math.max(1, options.viewport.scrollHeight - options.viewport.clientHeight)
+  const sliderTop = options.viewport.scrollTop * ratio
 
   if (minimapLinesFitting >= options.lineCount) {
     return frame(
@@ -247,11 +244,11 @@ function proportionalFrameLayout(options: {
       0,
       1,
       options.lineCount,
-    );
+    )
   }
 
-  const startLineNumber = proportionalStartLine(options, sliderTop, pixelRatio);
-  const endLineNumber = Math.min(options.lineCount, startLineNumber + minimapLinesFitting - 1);
+  const startLineNumber = proportionalStartLine(options, sliderTop, pixelRatio)
+  const endLineNumber = Math.min(options.lineCount, startLineNumber + minimapLinesFitting - 1)
   return frame(
     options.viewport,
     true,
@@ -261,30 +258,30 @@ function proportionalFrameLayout(options: {
     0,
     startLineNumber,
     endLineNumber,
-  );
+  )
 }
 
 function proportionalStartLine(
   options: {
-    readonly renderLayout: MinimapRenderLayout;
-    readonly viewport: MinimapViewport;
-    readonly previous: MinimapFrameLayout | null;
+    readonly renderLayout: MinimapRenderLayout
+    readonly viewport: MinimapViewport
+    readonly previous: MinimapFrameLayout | null
   },
   sliderTop: number,
   pixelRatio: number,
 ): number {
-  const visibleStart = Math.max(1, options.viewport.visibleStart + 1);
+  const visibleStart = Math.max(1, options.viewport.visibleStart + 1)
   const raw = Math.max(
     1,
     Math.floor(visibleStart - (sliderTop * pixelRatio) / options.renderLayout.lineHeight),
-  );
-  const previous = options.previous;
-  if (!previous || previous.scrollHeight !== options.viewport.scrollHeight) return raw;
+  )
+  const previous = options.previous
+  if (!previous || previous.scrollHeight !== options.viewport.scrollHeight) return raw
   if (previous.scrollTop > options.viewport.scrollTop)
-    return Math.min(raw, previous.startLineNumber);
+    return Math.min(raw, previous.startLineNumber)
   if (previous.scrollTop < options.viewport.scrollTop)
-    return Math.max(raw, previous.startLineNumber);
-  return raw;
+    return Math.max(raw, previous.startLineNumber)
+  return raw
 }
 
 function frame(
@@ -307,5 +304,5 @@ function frame(
     topPaddingLineCount,
     startLineNumber,
     endLineNumber,
-  };
+  }
 }

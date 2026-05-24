@@ -1,12 +1,12 @@
-import { defineConfig } from "vitest/config";
+import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   test: {
     browser: {
       headless: true,
-      provider: "playwright",
-      instances: [{ browser: "chromium" }],
+      provider: 'playwright',
+      instances: [{ browser: 'chromium' }],
     },
-    environmentMatchGlobs: [["test/**/*.test.ts", "happy-dom"]],
+    environmentMatchGlobs: [['test/**/*.test.ts', 'happy-dom']],
   },
-});
+})

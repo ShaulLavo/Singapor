@@ -1,155 +1,155 @@
-import { MinimapWorkerRenderer } from "./renderer";
-import type { MinimapWorkerRequest, MinimapWorkerResponse } from "./types";
+import { MinimapWorkerRenderer } from './renderer'
+import type { MinimapWorkerRequest, MinimapWorkerResponse } from './types'
 
-const renderer = new MinimapWorkerRenderer();
+const renderer = new MinimapWorkerRenderer()
 
 globalThis.onmessage = (event: MessageEvent<MinimapWorkerRequest>): void => {
-  const request = event.data;
+  const request = event.data
   try {
-    measureWorkerRequest(request, () => handleRequest(request));
+    measureWorkerRequest(request, () => handleRequest(request))
   } catch (error) {
-    post({ type: "error", message: errorMessage(error) });
+    post({ type: 'error', message: errorMessage(error) })
   }
-};
+}
 
 function handleRequest(request: MinimapWorkerRequest): void {
   switch (request.type) {
-    case "init":
+    case 'init':
       renderer.init({
         mainCanvas: request.mainCanvas,
         decorationsCanvas: request.decorationsCanvas,
         options: request.options,
         styles: request.baseStyles,
-      });
-      return;
-    case "updateBaseStyles":
-      renderer.setBaseStyles(request.baseStyles);
-      return;
-    case "openDocument":
-    case "replaceDocument":
-      renderer.setDocument(request.document);
-      return;
-    case "applyEdit":
-      renderer.applyEdit(request.edit, request.document);
-      return;
-    case "applyEdits":
-      renderer.applyEdits(request.edits, request.document);
-      return;
-    case "updateTokens":
-      renderer.setTokens(request.tokens);
-      return;
-    case "updateTokenRange":
-      renderer.updateTokenRange(request.patch);
-      return;
-    case "updateSelection":
-      renderer.setSelections(request.selections);
-      return;
-    case "updateDecorations":
-      renderer.setDecorations(request.decorations);
-      return;
-    case "updateExternalDecorations":
-      renderer.setExternalDecorations(request.decorations);
-      return;
-    case "updateLayout": {
-      const layout = renderer.updateLayout(request.metrics, request.viewport);
-      if (layout) post({ type: "layout", sequence: 0, layout });
-      return;
+      })
+      return
+    case 'updateBaseStyles':
+      renderer.setBaseStyles(request.baseStyles)
+      return
+    case 'openDocument':
+    case 'replaceDocument':
+      renderer.setDocument(request.document)
+      return
+    case 'applyEdit':
+      renderer.applyEdit(request.edit, request.document)
+      return
+    case 'applyEdits':
+      renderer.applyEdits(request.edits, request.document)
+      return
+    case 'updateTokens':
+      renderer.setTokens(request.tokens)
+      return
+    case 'updateTokenRange':
+      renderer.updateTokenRange(request.patch)
+      return
+    case 'updateSelection':
+      renderer.setSelections(request.selections)
+      return
+    case 'updateDecorations':
+      renderer.setDecorations(request.decorations)
+      return
+    case 'updateExternalDecorations':
+      renderer.setExternalDecorations(request.decorations)
+      return
+    case 'updateLayout': {
+      const layout = renderer.updateLayout(request.metrics, request.viewport)
+      if (layout) post({ type: 'layout', sequence: 0, layout })
+      return
     }
-    case "updateViewport":
-      renderer.updateViewport(request.viewport);
-      return;
-    case "render":
-      postRender(request.sequence);
-      return;
-    case "dispose":
-      renderer.dispose();
-      return;
+    case 'updateViewport':
+      renderer.updateViewport(request.viewport)
+      return
+    case 'render':
+      postRender(request.sequence)
+      return
+    case 'dispose':
+      renderer.dispose()
+      return
   }
 }
 
 function postRender(sequence: number): void {
-  const result = renderer.render();
-  if (!result) return;
+  const result = renderer.render()
+  if (!result) return
 
   post({
-    type: "rendered",
+    type: 'rendered',
     sequence,
     sliderNeeded: result.sliderNeeded,
     sliderTop: result.sliderTop,
     sliderHeight: result.sliderHeight,
     shadowVisible: result.shadowVisible,
-  });
+  })
 }
 
 function post(response: MinimapWorkerResponse): void {
-  globalThis.postMessage(response);
+  globalThis.postMessage(response)
 }
 
 function errorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return String(error);
+  if (error instanceof Error) return error.message
+  return String(error)
 }
 
 type MinimapWorkerDiagnostic = {
-  readonly name: string;
-  readonly durationMs?: number;
-  readonly detail?: Readonly<Record<string, unknown>>;
-};
+  readonly name: string
+  readonly durationMs?: number
+  readonly detail?: Readonly<Record<string, unknown>>
+}
 
 type MinimapWorkerDiagnosticSink =
   | ((diagnostic: MinimapWorkerDiagnostic) => void)
   | {
-      readonly enabled?: boolean;
-      readonly record?: (diagnostic: MinimapWorkerDiagnostic) => void;
-    };
+      readonly enabled?: boolean
+      readonly record?: (diagnostic: MinimapWorkerDiagnostic) => void
+    }
 
 type MinimapWorkerDiagnosticGlobal = typeof globalThis & {
-  __EDITOR_PERFORMANCE_DIAGNOSTICS__?: MinimapWorkerDiagnosticSink | null;
-};
+  __EDITOR_PERFORMANCE_DIAGNOSTICS__?: MinimapWorkerDiagnosticSink | null
+}
 
 function measureWorkerRequest(request: MinimapWorkerRequest, run: () => void): void {
-  const sink = minimapWorkerDiagnosticSink();
+  const sink = minimapWorkerDiagnosticSink()
   if (!sink) {
-    run();
-    return;
+    run()
+    return
   }
 
-  const start = nowMs();
+  const start = nowMs()
   try {
-    run();
+    run()
   } finally {
     recordMinimapWorkerDiagnostic(sink, {
-      name: "minimap.worker.request",
+      name: 'minimap.worker.request',
       durationMs: nowMs() - start,
       detail: { request: request.type },
-    });
+    })
   }
 }
 
 function minimapWorkerDiagnosticSink(): MinimapWorkerDiagnosticSink | null {
-  const sink = minimapWorkerDiagnosticGlobal().__EDITOR_PERFORMANCE_DIAGNOSTICS__;
-  if (!sink) return null;
-  if (typeof sink === "function") return sink;
-  if (sink.enabled !== true && typeof sink.record !== "function") return null;
-  return sink;
+  const sink = minimapWorkerDiagnosticGlobal().__EDITOR_PERFORMANCE_DIAGNOSTICS__
+  if (!sink) return null
+  if (typeof sink === 'function') return sink
+  if (sink.enabled !== true && typeof sink.record !== 'function') return null
+  return sink
 }
 
 function recordMinimapWorkerDiagnostic(
   sink: MinimapWorkerDiagnosticSink,
   diagnostic: MinimapWorkerDiagnostic,
 ): void {
-  if (typeof sink === "function") {
-    sink(diagnostic);
-    return;
+  if (typeof sink === 'function') {
+    sink(diagnostic)
+    return
   }
 
-  sink.record?.(diagnostic);
+  sink.record?.(diagnostic)
 }
 
 function minimapWorkerDiagnosticGlobal(): MinimapWorkerDiagnosticGlobal {
-  return globalThis as MinimapWorkerDiagnosticGlobal;
+  return globalThis as MinimapWorkerDiagnosticGlobal
 }
 
 function nowMs(): number {
-  return globalThis.performance?.now() ?? Date.now();
+  return globalThis.performance?.now() ?? Date.now()
 }

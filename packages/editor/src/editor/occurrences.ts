@@ -1,30 +1,30 @@
-import type { DocumentSessionChange } from "../documentSession";
-import type { ResolvedSelection } from "../selections";
-import { wordRangeAtOffset } from "./textRanges";
+import type { DocumentSessionChange } from '../documentSession'
+import type { ResolvedSelection } from '../selections'
+import { wordRangeAtOffset } from './textRanges'
 
 export type ExactOccurrenceRange = {
-  readonly start: number;
-  readonly end: number;
-};
+  readonly start: number
+  readonly end: number
+}
 
 export type OccurrenceSelectionChange = {
-  readonly change: DocumentSessionChange;
-  readonly revealOffset: number;
-};
+  readonly change: DocumentSessionChange
+  readonly revealOffset: number
+}
 
 export type OccurrenceQuery = {
-  readonly query: string;
-  readonly range: ExactOccurrenceRange;
-};
+  readonly query: string
+  readonly range: ExactOccurrenceRange
+}
 
 export function getOccurrenceQuery(
   text: string,
   selections: readonly ResolvedSelection[],
 ): string | null {
-  const selection = selections.find((candidate) => !candidate.collapsed);
-  if (!selection) return null;
+  const selection = selections.find((candidate) => !candidate.collapsed)
+  if (!selection) return null
 
-  return text.slice(selection.startOffset, selection.endOffset);
+  return text.slice(selection.startOffset, selection.endOffset)
 }
 
 export function occurrenceQueryForSelection(
@@ -32,29 +32,29 @@ export function occurrenceQueryForSelection(
   selection: ResolvedSelection,
 ): OccurrenceQuery | null {
   if (!selection.collapsed) {
-    const query = text.slice(selection.startOffset, selection.endOffset);
-    if (query.length === 0) return null;
-    return { query, range: { start: selection.startOffset, end: selection.endOffset } };
+    const query = text.slice(selection.startOffset, selection.endOffset)
+    if (query.length === 0) return null
+    return { query, range: { start: selection.startOffset, end: selection.endOffset } }
   }
 
-  const range = wordRangeAtOffset(text, selection.headOffset);
-  if (range.start === range.end) return null;
-  return { query: text.slice(range.start, range.end), range };
+  const range = wordRangeAtOffset(text, selection.headOffset)
+  if (range.start === range.end) return null
+  return { query: text.slice(range.start, range.end), range }
 }
 
 export function findAllExactOccurrences(
   text: string,
   query: string,
 ): readonly ExactOccurrenceRange[] {
-  if (query.length === 0) return [];
+  if (query.length === 0) return []
 
-  const ranges: ExactOccurrenceRange[] = [];
-  let index = text.indexOf(query);
+  const ranges: ExactOccurrenceRange[] = []
+  let index = text.indexOf(query)
   while (index !== -1) {
-    ranges.push({ start: index, end: index + query.length });
-    index = text.indexOf(query, index + query.length);
+    ranges.push({ start: index, end: index + query.length })
+    index = text.indexOf(query, index + query.length)
   }
-  return ranges;
+  return ranges
 }
 
 export function findNextExactOccurrence(
@@ -62,17 +62,17 @@ export function findNextExactOccurrence(
   query: string,
   selections: readonly ResolvedSelection[],
 ): ExactOccurrenceRange | null {
-  if (query.length === 0) return null;
+  if (query.length === 0) return null
 
   const selected = selections.map((selection) => ({
     start: selection.startOffset,
     end: selection.endOffset,
-  }));
-  const searchStart = selected.reduce((offset, range) => Math.max(offset, range.end), 0);
+  }))
+  const searchStart = selected.reduce((offset, range) => Math.max(offset, range.end), 0)
   return (
     findExactOccurrenceFrom(text, query, selected, searchStart) ??
     findExactOccurrenceFrom(text, query, selected, 0, searchStart)
-  );
+  )
 }
 
 export function findNextExactOccurrenceFromRange(
@@ -81,19 +81,19 @@ export function findNextExactOccurrenceFromRange(
   selected: readonly ExactOccurrenceRange[],
   range: ExactOccurrenceRange,
 ): ExactOccurrenceRange | null {
-  if (query.length === 0) return null;
+  if (query.length === 0) return null
 
   return (
     findExactOccurrenceFrom(text, query, selected, range.end) ??
     findExactOccurrenceFrom(text, query, selected, 0, range.end)
-  );
+  )
 }
 
 export function occurrenceSelectTimingName(
-  command: "editor.action.selectHighlights" | "editor.action.changeAll",
+  command: 'editor.action.selectHighlights' | 'editor.action.changeAll',
 ): string {
-  if (command === "editor.action.selectHighlights") return "input.selectHighlights";
-  return "input.changeAll";
+  if (command === 'editor.action.selectHighlights') return 'input.selectHighlights'
+  return 'input.changeAll'
 }
 
 function findExactOccurrenceFrom(
@@ -103,17 +103,17 @@ function findExactOccurrenceFrom(
   start: number,
   end = text.length,
 ): ExactOccurrenceRange | null {
-  let index = text.indexOf(query, start);
+  let index = text.indexOf(query, start)
 
   while (index !== -1 && index < end) {
-    const range = { start: index, end: index + query.length };
-    if (!selected.some((selection) => rangesOverlap(selection, range))) return range;
-    index = text.indexOf(query, index + 1);
+    const range = { start: index, end: index + query.length }
+    if (!selected.some((selection) => rangesOverlap(selection, range))) return range
+    index = text.indexOf(query, index + 1)
   }
 
-  return null;
+  return null
 }
 
 function rangesOverlap(left: ExactOccurrenceRange, right: ExactOccurrenceRange): boolean {
-  return left.start < right.end && right.start < left.end;
+  return left.start < right.end && right.start < left.end
 }
