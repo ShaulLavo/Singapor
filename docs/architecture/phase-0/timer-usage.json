@@ -1,0 +1,262 @@
+{
+  "reviewPolicy": "Production timers must name why they are scheduler-safe or why they remain legacy debt.",
+  "schemaVersion": 1,
+  "timers": [
+    {
+      "api": "requestAnimationFrame",
+      "file": "packages/diff/src/DiffView.ts",
+      "id": "packages/diff/src/DiffView.ts:requestAnimationFrame:4af589aed6",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 548,
+      "snippet": "this.root.ownerDocument.defaultView?.requestAnimationFrame(flushPendingScroll) ?? 0"
+    },
+    {
+      "api": "requestAnimationFrame",
+      "file": "packages/diff/src/DiffView.ts",
+      "id": "packages/diff/src/DiffView.ts:requestAnimationFrame:766819852c",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 607,
+      "snippet": "view.requestAnimationFrame(() => (this.syncingScroll = false))"
+    },
+    {
+      "api": "requestAnimationFrame",
+      "file": "packages/diff/src/DiffView.ts",
+      "id": "packages/diff/src/DiffView.ts:requestAnimationFrame:92a921a246",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 540,
+      "snippet": "this.root.ownerDocument.defaultView?.requestAnimationFrame(flushPendingScroll) ?? 0"
+    },
+    {
+      "api": "setTimeout",
+      "file": "packages/editor/src/editor/blockSurfaceController.ts",
+      "id": "packages/editor/src/editor/blockSurfaceController.ts:setTimeout:81986effee",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 381,
+      "snippet": "this.editorBlockMeasureTimeout = setTimeout(() => {"
+    },
+    {
+      "api": "setTimeout",
+      "file": "packages/editor/src/editor/inputSelectionController.ts",
+      "id": "packages/editor/src/editor/inputSelectionController.ts:setTimeout:26e3ecf7df",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 933,
+      "snippet": "next.timerId = view.setTimeout(() => {"
+    },
+    {
+      "api": "setTimeout",
+      "file": "packages/editor/src/editor/latestAsyncRequest.ts",
+      "id": "packages/editor/src/editor/latestAsyncRequest.ts:setTimeout:6ac56d91b9",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 28,
+      "snippet": "this.timer = setTimeout(() => {"
+    },
+    {
+      "api": "requestAnimationFrame",
+      "file": "packages/editor/src/editor/mouseSelection.ts",
+      "id": "packages/editor/src/editor/mouseSelection.ts:requestAnimationFrame:e2ace6097b",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 28,
+      "snippet": "if (typeof requestAnimationFrame === 'function') return requestAnimationFrame(callback)"
+    },
+    {
+      "api": "setTimeout",
+      "file": "packages/editor/src/editor/mouseSelection.ts",
+      "id": "packages/editor/src/editor/mouseSelection.ts:setTimeout:ed35f29fb4",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 29,
+      "snippet": "return setTimeout(() => callback(nowMs()), 0) as unknown as number"
+    },
+    {
+      "api": "requestAnimationFrame",
+      "file": "packages/editor/src/virtualization/fixedRowVirtualizer.ts",
+      "id": "packages/editor/src/virtualization/fixedRowVirtualizer.ts:requestAnimationFrame:f20775aa16",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 733,
+      "snippet": "if (typeof requestAnimationFrame === 'function') return requestAnimationFrame(callback)"
+    },
+    {
+      "api": "setTimeout",
+      "file": "packages/editor/src/virtualization/fixedRowVirtualizer.ts",
+      "id": "packages/editor/src/virtualization/fixedRowVirtualizer.ts:setTimeout:2ac189eec3",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 734,
+      "snippet": "return setTimeout(() => callback(nowMs()), 0) as unknown as number"
+    },
+    {
+      "api": "queueMicrotask",
+      "file": "packages/editor/src/virtualization/virtualizedTextViewBlockLanes.ts",
+      "id": "packages/editor/src/virtualization/virtualizedTextViewBlockLanes.ts:queueMicrotask:0516a35ad4",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 351,
+      "snippet": "globalThis.queueMicrotask(dispose)"
+    },
+    {
+      "api": "queueMicrotask",
+      "file": "packages/editor/src/virtualization/virtualizedTextViewBlockLanes.ts",
+      "id": "packages/editor/src/virtualization/virtualizedTextViewBlockLanes.ts:queueMicrotask:fe11580af4",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 346,
+      "snippet": "window.queueMicrotask(dispose)"
+    },
+    {
+      "api": "setTimeout",
+      "file": "packages/editor/src/virtualization/virtualizedTextViewBlockLanes.ts",
+      "id": "packages/editor/src/virtualization/virtualizedTextViewBlockLanes.ts:setTimeout:d557a847dc",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 360,
+      "snippet": "globalThis.setTimeout(dispose, 0)"
+    },
+    {
+      "api": "setTimeout",
+      "file": "packages/editor/src/virtualization/virtualizedTextViewBlockLanes.ts",
+      "id": "packages/editor/src/virtualization/virtualizedTextViewBlockLanes.ts:setTimeout:f43f0022f3",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 356,
+      "snippet": "window.setTimeout(dispose, 0)"
+    },
+    {
+      "api": "setTimeout",
+      "file": "packages/language-server/src/completionController.ts",
+      "id": "packages/language-server/src/completionController.ts:setTimeout:64c2a2a5f8",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 138,
+      "snippet": "this.completionTimer = setTimeout(() => {"
+    },
+    {
+      "api": "setTimeout",
+      "file": "packages/language-server/src/hoverDefinitionController.ts",
+      "id": "packages/language-server/src/hoverDefinitionController.ts:setTimeout:386e85fc93",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 220,
+      "snippet": "this.hoverTimer = setTimeout(() => {"
+    },
+    {
+      "api": "setTimeout",
+      "file": "packages/language-server/src/tooltip.ts",
+      "id": "packages/language-server/src/tooltip.ts:setTimeout:422dee9eec",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 148,
+      "snippet": "hideTimer = setTimeout(() => {"
+    },
+    {
+      "api": "setTimeout",
+      "file": "packages/language-server/src/tooltip.ts",
+      "id": "packages/language-server/src/tooltip.ts:setTimeout:8897e8362f",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 426,
+      "snippet": "setTimeout(() => {"
+    },
+    {
+      "api": "setTimeout",
+      "file": "packages/lsp/src/client.ts",
+      "id": "packages/lsp/src/client.ts:setTimeout:373e9c94c5",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 305,
+      "snippet": "const timeout = setTimeout(() => this.timeoutRequest(id), options.timeoutMs ?? this.timeoutMs)"
+    },
+    {
+      "api": "requestAnimationFrame",
+      "file": "packages/minimap/src/plugin.ts",
+      "id": "packages/minimap/src/plugin.ts:requestAnimationFrame:cac4e5564e",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 401,
+      "snippet": "if (typeof requestAnimationFrame === 'function') return requestAnimationFrame(callback)"
+    },
+    {
+      "api": "setTimeout",
+      "file": "packages/minimap/src/plugin.ts",
+      "id": "packages/minimap/src/plugin.ts:setTimeout:32fb906cca",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 402,
+      "snippet": "return setTimeout(callback, 16) as unknown as number"
+    },
+    {
+      "api": "requestAnimationFrame",
+      "file": "packages/minimap/src/workerClient.ts",
+      "id": "packages/minimap/src/workerClient.ts:requestAnimationFrame:c4115df822",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 1117,
+      "snippet": "if (typeof requestAnimationFrame === 'function') return requestAnimationFrame(callback)"
+    },
+    {
+      "api": "requestIdleCallback",
+      "file": "packages/minimap/src/workerClient.ts",
+      "id": "packages/minimap/src/workerClient.ts:requestIdleCallback:6753245618",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 194,
+      "snippet": "this.idleFlushHandle = requestIdleCallback("
+    },
+    {
+      "api": "setTimeout",
+      "file": "packages/minimap/src/workerClient.ts",
+      "id": "packages/minimap/src/workerClient.ts:setTimeout:11cd2971a7",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 1118,
+      "snippet": "return setTimeout(callback, 16) as unknown as number"
+    },
+    {
+      "api": "setTimeout",
+      "file": "packages/minimap/src/workerClient.ts",
+      "id": "packages/minimap/src/workerClient.ts:setTimeout:89fea3429d",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 183,
+      "snippet": "this.quietFlushTimer = setTimeout(this.flushDeferredUpdate, MINIMAP_UPDATE_QUIET_DELAY_MS)"
+    },
+    {
+      "api": "setTimeout",
+      "file": "packages/minimap/src/workerClient.ts",
+      "id": "packages/minimap/src/workerClient.ts:setTimeout:e78f7d349f",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 185,
+      "snippet": "this.maxFlushTimer = setTimeout(this.flushDeferredUpdate, MINIMAP_UPDATE_MAX_DELAY_MS)"
+    },
+    {
+      "api": "requestAnimationFrame",
+      "file": "packages/scope-lines/src/index.ts",
+      "id": "packages/scope-lines/src/index.ts:requestAnimationFrame:c412fa7808",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 143,
+      "snippet": "this.pendingContentFrame = view.requestAnimationFrame(this.flushContentUpdate)"
+    },
+    {
+      "api": "setTimeout",
+      "file": "packages/typescript-lsp/src/completionController.ts",
+      "id": "packages/typescript-lsp/src/completionController.ts:setTimeout:a317504d0b",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 138,
+      "snippet": "this.completionTimer = setTimeout(() => {"
+    },
+    {
+      "api": "setTimeout",
+      "file": "packages/typescript-lsp/src/hoverDefinitionController.ts",
+      "id": "packages/typescript-lsp/src/hoverDefinitionController.ts:setTimeout:646a8b7275",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 220,
+      "snippet": "this.hoverTimer = setTimeout(() => {"
+    },
+    {
+      "api": "setTimeout",
+      "file": "packages/typescript-lsp/src/tooltip.ts",
+      "id": "packages/typescript-lsp/src/tooltip.ts:setTimeout:1b32e06c5c",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 426,
+      "snippet": "setTimeout(() => {"
+    },
+    {
+      "api": "setTimeout",
+      "file": "packages/typescript-lsp/src/tooltip.ts",
+      "id": "packages/typescript-lsp/src/tooltip.ts:setTimeout:d07b468af8",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 148,
+      "snippet": "hideTimer = setTimeout(() => {"
+    },
+    {
+      "api": "setTimeout",
+      "file": "packages/typescript-lsp/src/typescriptLsp.worker.ts",
+      "id": "packages/typescript-lsp/src/typescriptLsp.worker.ts:setTimeout:c3b02c6bab",
+      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
+      "line": 287,
+      "snippet": "const timer = setTimeout(() => {"
+    }
+  ]
+}

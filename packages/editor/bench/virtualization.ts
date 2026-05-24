@@ -59,6 +59,7 @@ function createView(document: Document): VirtualizedTextView {
   document.body.appendChild(container)
   const view = new VirtualizedTextView(container, {
     rowHeight: ROW_HEIGHT,
+    textMetrics: { rowHeight: ROW_HEIGHT, characterWidth: 8 },
     overscan: 12,
     longLineChunkSize: LONG_LINE_CHUNK_SIZE,
     longLineChunkThreshold: LONG_LINE_CHUNK_SIZE,

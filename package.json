@@ -13,6 +13,8 @@
 		"lint": "turbo lint",
 		"format": "turbo format",
 		"format:check": "turbo format:check",
+		"health": "bun scripts/architecture-health.mjs",
+		"health:write": "bun scripts/architecture-health.mjs --write",
 		"test": "turbo test"
 	},
 	"devDependencies": {
