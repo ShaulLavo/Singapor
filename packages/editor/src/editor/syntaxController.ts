@@ -9,6 +9,7 @@ import type { EditorTheme } from '../theme'
 import { editorThemesEqual } from '../theme'
 import type { EditorToken, TextEdit } from '../tokens'
 import { foldRangeKey } from './folds'
+import type { EditorSyntaxStatus } from './types'
 import {
   appendEditorTokenIndexEntry,
   createEditorTokenIndexBuilder,
@@ -91,7 +92,7 @@ const syntaxWorkTags = (
 })
 
 export class EditorSyntaxController {
-  private syntaxStatus: 'plain' | 'loading' | 'ready' | 'error' = 'plain'
+  private syntaxStatus: EditorSyntaxStatus = 'plain'
   private syntaxSession: EditorSyntaxSession | null = null
   private highlighterSession: EditorHighlighterSession | null = null
   private providerHighlighterTheme: EditorTheme | null = null
@@ -134,7 +135,7 @@ export class EditorSyntaxController {
 
   constructor(private readonly options: EditorSyntaxControllerOptions) {}
 
-  get status(): 'plain' | 'loading' | 'ready' | 'error' {
+  get status(): EditorSyntaxStatus {
     return this.syntaxStatus
   }
 
@@ -555,7 +556,7 @@ export class EditorSyntaxController {
     if (loadResult.contentVersion !== this.syntaxContentVersion) return false
 
     const result = loadResult.result
-    this.syntaxStatus = 'ready'
+    this.syntaxStatus = result.degraded ? 'degraded' : 'ready'
     if (loadResult.updatesDocument) this.markSyntaxDocumentCurrent(loadResult.contentVersion)
     const nextTokens = this.highlighterSession
       ? this.currentTokens

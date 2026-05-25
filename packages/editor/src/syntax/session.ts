@@ -1,7 +1,7 @@
 import type { DocumentSessionChange } from '../documentSession'
 import type { DocumentTextSnapshot } from '../documentTextSnapshot'
 import type { PieceTableSnapshot } from '../pieceTable/pieceTableTypes'
-import type { EditorToken } from '../tokens'
+import type { EditorToken, TextEdit } from '../tokens'
 
 export type EditorSyntaxLanguageId = string
 
@@ -41,18 +41,80 @@ export type EditorSyntaxInjection = {
   readonly endIndex: number
 }
 
+export type EditorSyntaxRange = {
+  readonly startIndex: number
+  readonly endIndex: number
+}
+
+export type EditorSyntaxSnapshotTag = {
+  readonly documentId: string | null
+  readonly length: number | null
+  readonly version: number
+}
+
+export type EditorSyntaxMode = 'full' | 'range' | 'none'
+
+export type EditorSyntaxLanguageConfiguration = {
+  readonly includeCaptures: boolean
+  readonly includeHighlights: boolean
+  readonly languageId: EditorSyntaxLanguageId | null
+  readonly mode: EditorSyntaxMode
+}
+
+export type EditorSyntaxEditSummary = {
+  readonly edits: readonly TextEdit[]
+  readonly kind: DocumentSessionChange['kind']
+}
+
+export type EditorSyntaxServiceRequest = {
+  readonly editSummary: EditorSyntaxEditSummary | null
+  readonly language: EditorSyntaxLanguageConfiguration
+  readonly requestedRanges: readonly EditorSyntaxRange[]
+  readonly snapshot: PieceTableSnapshot
+  readonly snapshotTag: EditorSyntaxSnapshotTag
+  readonly textSnapshot?: DocumentTextSnapshot
+}
+
+export type EditorSyntaxProjectionTag = {
+  readonly language: EditorSyntaxLanguageConfiguration
+  readonly requestedRanges: readonly EditorSyntaxRange[]
+  readonly snapshot: EditorSyntaxSnapshotTag
+}
+
+export type EditorSyntaxDegradedState =
+  | {
+      readonly kind: 'language-unavailable'
+      readonly message?: string
+    }
+  | {
+      readonly kind: 'provider-unavailable'
+      readonly message?: string
+    }
+  | {
+      readonly kind: 'range-unavailable'
+      readonly message?: string
+    }
+  | {
+      readonly kind: 'request-failed'
+      readonly message: string
+    }
+
 export type EditorSyntaxResult = {
   readonly captures: readonly EditorSyntaxCapture[]
   readonly folds: readonly FoldRange[]
   readonly brackets: readonly BracketInfo[]
   readonly errors: readonly EditorSyntaxError[]
   readonly injections: readonly EditorSyntaxInjection[]
+  readonly degraded: EditorSyntaxDegradedState | null
+  readonly projection: EditorSyntaxProjectionTag
   readonly tokens: readonly EditorToken[]
 }
 
-export type EditorSyntaxRange = {
-  readonly startIndex: number
-  readonly endIndex: number
+export type EditorSyntaxResultOptions = {
+  readonly degraded?: EditorSyntaxDegradedState | null
+  readonly language?: Partial<EditorSyntaxLanguageConfiguration>
+  readonly requestedRanges?: readonly EditorSyntaxRange[]
+  readonly snapshot?: Partial<EditorSyntaxSnapshotTag>
 }
 
 export type EditorSyntaxSessionOptions = {
@@ -92,12 +154,41 @@ export const createEmptySyntaxSession = (): EditorSyntaxSession => ({
   dispose: () => undefined,
 })
 
-export const createEmptySyntaxResult = (): EditorSyntaxResult => ({
+export const createSyntaxSnapshotTag = (
+  snapshot: Partial<EditorSyntaxSnapshotTag> = {},
+): EditorSyntaxSnapshotTag => ({
+  documentId: snapshot.documentId ?? null,
+  length: snapshot.length ?? null,
+  version: snapshot.version ?? 0,
+})
+
+export const createSyntaxLanguageConfiguration = (
+  language: Partial<EditorSyntaxLanguageConfiguration> = {},
+): EditorSyntaxLanguageConfiguration => ({
+  includeCaptures: language.includeCaptures ?? false,
+  includeHighlights: language.includeHighlights ?? false,
+  languageId: language.languageId ?? null,
+  mode: language.mode ?? 'none',
+})
+
+export const createSyntaxProjectionTag = (
+  options: EditorSyntaxResultOptions = {},
+): EditorSyntaxProjectionTag => ({
+  language: createSyntaxLanguageConfiguration(options.language),
+  requestedRanges: options.requestedRanges ?? [],
+  snapshot: createSyntaxSnapshotTag(options.snapshot),
+})
+
+export const createEmptySyntaxResult = (
+  options: EditorSyntaxResultOptions = {},
+): EditorSyntaxResult => ({
   captures: [],
+  degraded: options.degraded ?? null,
   folds: [],
   brackets: [],
   errors: [],
   injections: [],
+  projection: createSyntaxProjectionTag(options),
   tokens: [],
 })
 

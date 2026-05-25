@@ -47,7 +47,7 @@ export type EditorSessionOptions = {
   readonly scrollPosition?: EditorScrollPosition
 }
 
-export type EditorSyntaxStatus = 'plain' | 'loading' | 'ready' | 'error'
+export type EditorSyntaxStatus = 'plain' | 'loading' | 'ready' | 'degraded' | 'error'
 
 export type EditorState = {
   readonly documentId: string | null

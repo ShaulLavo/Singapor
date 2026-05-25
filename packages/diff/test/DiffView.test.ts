@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type { EditorTheme } from '@editor/core/rendering'
+import { createEmptySyntaxResult } from '@editor/core/syntax'
 import { createTextDiff, DiffView } from '../src'
 import { diffSyntaxBackend, projectDiffSyntaxTokens } from '../src/DiffView'
 import type {
@@ -305,14 +306,7 @@ function createRecordingSyntaxBackend(parsedTexts: string[]): DiffSyntaxBackend 
 }
 
 function emptySyntaxResult() {
-  return {
-    brackets: [],
-    captures: [],
-    errors: [],
-    folds: [],
-    injections: [],
-    tokens: [],
-  }
+  return createEmptySyntaxResult()
 }
 
 async function flushPromises(): Promise<void> {

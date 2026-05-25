@@ -9,6 +9,8 @@ import {
   type TextEdit,
 } from '@editor/core/document'
 import {
+  createEmptySyntaxResult,
+  type EditorSyntaxDegradedState,
   type EditorSyntaxRange,
   type EditorSyntaxResult,
   type EditorSyntaxSession,
@@ -55,7 +57,7 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
   private parsedSnapshotVersion = 0
   private textSnapshot: DocumentTextSnapshot
   private snapshot: PieceTableSnapshot
-  private result: EditorSyntaxResult = createEmptySyntaxResult()
+  private result: EditorSyntaxResult
   private languageRegistrationPromise: Promise<boolean> | null = null
 
   public constructor(options: TreeSitterSyntaxSessionOptions) {
@@ -69,6 +71,7 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
       options.textSnapshot ?? createDocumentTextSnapshot(options.snapshot, options.fullText)
     this.snapshot = options.snapshot
     this.backend = options.backend ?? createTreeSitterWorkerBackend()
+    this.result = this.createEmptyResult({ snapshot: options.snapshot, snapshotVersion: 0 })
   }
 
   public async refresh(
@@ -147,8 +150,12 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
   }
 
   public async queryRange(range: EditorSyntaxRange): Promise<EditorSyntaxResult> {
-    if (!this.backend.queryRange) return this.result
-    if (!this.canQueryRange()) return createEmptySyntaxResult()
+    if (!this.backend.queryRange) {
+      return this.createRangeUnavailableResult(range, 'Tree-sitter range queries are unavailable')
+    }
+    if (!this.canQueryRange()) {
+      return this.createRangeUnavailableResult(range, 'Tree-sitter document has not been parsed')
+    }
 
     const result = await this.backend.queryRange({
       documentId: this.documentId,
@@ -250,7 +257,14 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
   ): EditorSyntaxResult {
     this.textSnapshot = textSnapshot
     this.snapshot = snapshot
-    this.result = createEmptySyntaxResult()
+    this.result = this.createEmptyResult({
+      degraded: {
+        kind: 'language-unavailable',
+        message: `Tree-sitter language "${this.languageId}" is unavailable`,
+      },
+      snapshot,
+      snapshotVersion: this.snapshotVersion,
+    })
     return this.result
   }
 
@@ -267,9 +281,18 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
     this.textSnapshot = textSnapshot
     this.snapshot = snapshot
     this.parsedSnapshotVersion = result.snapshotVersion
-    if (isTreeSitterParseAckResult(result)) return this.result
+    if (isTreeSitterParseAckResult(result)) {
+      this.result = this.createEmptyResult({
+        snapshot,
+        snapshotVersion: result.snapshotVersion,
+      })
+      return this.result
+    }
 
-    this.result = treeSitterParseResultToEditorSyntaxResult(result)
+    this.result = treeSitterParseResultToEditorSyntaxResult(
+      result,
+      this.resultContext(snapshot, []),
+    )
     return this.result
   }
 
@@ -281,8 +304,67 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
     if (result.snapshotVersion !== this.parsedSnapshotVersion) return this.result
     if (!sameSyntaxRange(result.range, range)) return this.result
 
-    this.result = treeSitterParseResultToEditorSyntaxResult(result)
+    this.result = treeSitterParseResultToEditorSyntaxResult(
+      result,
+      this.resultContext(this.snapshot, [range]),
+    )
     return this.result
+  }
+
+  private createRangeUnavailableResult(
+    range: EditorSyntaxRange,
+    message: string,
+  ): EditorSyntaxResult {
+    return this.createEmptyResult({
+      degraded: { kind: 'range-unavailable', message },
+      requestedRanges: [range],
+      snapshot: this.snapshot,
+      snapshotVersion: this.parsedSnapshotVersion,
+    })
+  }
+
+  private createEmptyResult(options: {
+    readonly degraded?: EditorSyntaxDegradedState | null
+    readonly requestedRanges?: readonly EditorSyntaxRange[]
+    readonly snapshot: PieceTableSnapshot
+    readonly snapshotVersion: number
+  }): EditorSyntaxResult {
+    return createEmptySyntaxResult({
+      degraded: options.degraded,
+      language: this.languageConfiguration(),
+      requestedRanges: options.requestedRanges,
+      snapshot: this.snapshotTag(options.snapshot, options.snapshotVersion),
+    })
+  }
+
+  private resultContext(
+    snapshot: PieceTableSnapshot,
+    requestedRanges: readonly EditorSyntaxRange[],
+  ): TreeSitterSyntaxResultContext {
+    return {
+      includeCaptures: this.includeCaptures,
+      includeHighlights: this.includeHighlights,
+      mode: this.syntaxMode,
+      requestedRanges,
+      snapshotLength: snapshot.length,
+    }
+  }
+
+  private languageConfiguration() {
+    return {
+      includeCaptures: this.includeCaptures,
+      includeHighlights: this.includeHighlights,
+      languageId: this.languageId,
+      mode: this.syntaxMode,
+    }
+  }
+
+  private snapshotTag(snapshot: PieceTableSnapshot, snapshotVersion: number) {
+    return {
+      documentId: this.documentId,
+      length: snapshot.length,
+      version: snapshotVersion,
+    }
   }
 }
 
@@ -384,24 +466,39 @@ const changeEditsApplyToSnapshot = (
   }
 }
 
+type TreeSitterSyntaxResultContext = {
+  readonly includeCaptures: boolean
+  readonly includeHighlights: boolean
+  readonly mode: 'full' | 'range'
+  readonly requestedRanges: readonly EditorSyntaxRange[]
+  readonly snapshotLength: number
+}
+
 const treeSitterParseResultToEditorSyntaxResult = (
   result: TreeSitterParseResult,
+  context: TreeSitterSyntaxResultContext,
 ): EditorSyntaxResult => ({
   captures: result.captures,
+  degraded: null,
   folds: result.folds,
   brackets: result.brackets,
   errors: result.errors,
   injections: result.injections,
+  projection: {
+    language: {
+      includeCaptures: context.includeCaptures,
+      includeHighlights: context.includeHighlights,
+      languageId: result.languageId,
+      mode: context.mode,
+    },
+    requestedRanges: context.requestedRanges,
+    snapshot: {
+      documentId: result.documentId,
+      length: context.snapshotLength,
+      version: result.snapshotVersion,
+    },
+  },
   tokens: result.tokens ?? treeSitterCapturesToEditorTokens(result.captures),
-})
-
-const createEmptySyntaxResult = (): EditorSyntaxResult => ({
-  captures: [],
-  folds: [],
-  brackets: [],
-  errors: [],
-  injections: [],
-  tokens: [],
 })
 
 const isTreeSitterParseAckResult = (

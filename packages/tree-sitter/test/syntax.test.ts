@@ -351,6 +351,85 @@ describe('Tree-sitter syntax capture conversion', () => {
     expect(result.tokens).toEqual(tokens)
   })
 
+  it('tags full syntax results with snapshot and language configuration', async () => {
+    const text = 'const a = 1;'
+    const snapshot = createPieceTableSnapshot(text)
+    const backend = {
+      disposeDocument: () => undefined,
+      edit: async () => undefined,
+      parse: async (payload) => createParseResult(payload),
+      registerLanguages: async () => undefined,
+      select: async () => undefined,
+    } satisfies TreeSitterBackend
+    const session = new TreeSitterSyntaxSession({
+      backend,
+      documentId: 'file.ts',
+      languageId: 'typescript',
+      snapshot,
+      fullText: text,
+    })
+
+    const result = await session.refresh(snapshot, text)
+
+    expect(result.degraded).toBeNull()
+    expect(result.projection).toEqual({
+      language: {
+        includeCaptures: true,
+        includeHighlights: true,
+        languageId: 'typescript',
+        mode: 'full',
+      },
+      requestedRanges: [],
+      snapshot: {
+        documentId: 'file.ts',
+        length: text.length,
+        version: 1,
+      },
+    })
+  })
+
+  it('returns typed degraded syntax when a language cannot be resolved', async () => {
+    let parseCount = 0
+    const text = 'select 1;'
+    const snapshot = createPieceTableSnapshot(text)
+    const backend = {
+      disposeDocument: () => undefined,
+      edit: async () => undefined,
+      parse: async (payload) => {
+        parseCount += 1
+        return createParseResult(payload)
+      },
+      registerLanguages: async () => undefined,
+      select: async () => undefined,
+    } satisfies TreeSitterBackend
+    const session = new TreeSitterSyntaxSession({
+      backend,
+      documentId: 'query.sql',
+      languageId: 'sql',
+      languageResolver: {
+        resolveTreeSitterLanguage: async () => null,
+      },
+      snapshot,
+      fullText: text,
+    })
+
+    const result = await session.refresh(snapshot, text)
+
+    expect(parseCount).toBe(0)
+    expect(result.degraded).toMatchObject({
+      kind: 'language-unavailable',
+    })
+    expect(result.projection.snapshot).toEqual({
+      documentId: 'query.sql',
+      length: text.length,
+      version: 1,
+    })
+    expect(result.projection.language).toMatchObject({
+      languageId: 'sql',
+      mode: 'full',
+    })
+  })
+
   it('preserves capture-returning behavior by default', async () => {
     const parsePayloads: TreeSitterBackendParsePayload[] = []
     const captures = [{ startIndex: 0, endIndex: 5, captureName: 'keyword.declaration' }]
@@ -413,7 +492,18 @@ describe('Tree-sitter syntax capture conversion', () => {
 
     expect(parsePayloads[0]?.resultMode).toBe('parseOnly')
     expect(refreshed.tokens).toEqual([])
+    expect(refreshed.projection).toMatchObject({
+      language: { languageId: 'typescript', mode: 'range' },
+      requestedRanges: [],
+      snapshot: { documentId: 'file.ts', length: text.length, version: 1 },
+    })
     expect(rangePayloads[0]?.range).toEqual({ startIndex: 0, endIndex: 6 })
+    expect(ranged.projection.requestedRanges).toEqual([{ startIndex: 0, endIndex: 6 }])
+    expect(ranged.projection.snapshot).toEqual({
+      documentId: 'file.ts',
+      length: text.length,
+      version: 1,
+    })
     expect(ranged.tokens).toEqual(tokens)
   })
 

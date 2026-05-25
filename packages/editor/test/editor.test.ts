@@ -4,11 +4,12 @@ import { createEditorFindPlugin } from '../../find/src/index.ts'
 import { createFoldGutterPlugin, createLineGutterPlugin } from '../../gutters/src/index.ts'
 import { createMergeConflictPlugin, Editor, type EditorState } from '../src/editor'
 import { createDocumentSession, type DocumentSessionChange } from '../src/public/document'
-import type {
-  EditorSyntaxRange,
-  EditorSyntaxResult,
-  EditorSyntaxSession,
-  EditorSyntaxSessionOptions,
+import {
+  createEmptySyntaxResult,
+  type EditorSyntaxRange,
+  type EditorSyntaxResult,
+  type EditorSyntaxSession,
+  type EditorSyntaxSessionOptions,
 } from '../src/public/syntax'
 import type {
   EditorBlock,
@@ -67,11 +68,8 @@ function createSyntaxResult(
   folds: EditorSyntaxResult['folds'] = [],
 ) {
   return {
-    captures: [],
+    ...createEmptySyntaxResult(),
     folds,
-    brackets: [],
-    errors: [],
-    injections: [],
     tokens,
   } satisfies EditorSyntaxResult
 }
