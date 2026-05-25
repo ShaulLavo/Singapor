@@ -375,7 +375,21 @@ Purpose: make input correctness independent of browser event timing accidents.
 
 ## Phase 7: Folds, Blocks, and Decorations
 
+Status: in progress
+
 Purpose: consolidate display features as projections instead of special cases.
+
+Initial slice:
+
+- Added an internal typed display projection registry for folds, row decorations, range decorations,
+  block rows, injected rows, and gutters.
+- Routed syntax folds, editor row decorations, range decorations, block rows/lanes, injected rows,
+  and gutters through the registry with owner, snapshot/version source, invalidation range,
+  layer/priority, and disposal metadata.
+- Rejected invalid, nested, and overlapping fold projections at registry ingestion, with syntax
+  folds filtered before fold interaction state consumes the projection set.
+- Added registry and editor conflict-order tests for deterministic decoration and multi-provider fold
+  projection composition.
 
 ### Work
 
@@ -384,6 +398,7 @@ Purpose: consolidate display features as projections instead of special cases.
   - row decorations
   - range decorations
   - block rows
+  - block lanes
   - injected rows
   - gutters
 - Make each projection name:
@@ -393,11 +408,10 @@ Purpose: consolidate display features as projections instead of special cases.
   - priority/layer
   - disposal behavior
 - Move fold state into one owner.
-- Decide whether nested folds are supported. If they are not, make rejection explicit instead of
-  hiding it in normalization.
+- Reject nested and overlapping fold projections explicitly instead of hiding them in normalization.
 - Make block rows and injected rows part of the view model input.
 - Add dense decoration tests that prove the system does not allocate anchors per token.
-- Add conflict tests for overlapping projections from multiple providers.
+- Add conflict tests for overlapping non-fold projections from multiple providers.
 
 ### Must Delete
 

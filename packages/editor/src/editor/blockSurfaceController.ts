@@ -6,7 +6,6 @@ import type {
   EditorBlockProviderContext,
 } from '../editorBlocks'
 import type { EditorDisposable } from '../plugins'
-import type { VirtualizedTextView } from '../virtualization/virtualizedTextView'
 import {
   addEditorBlockMeasurementKey,
   applyEditorBlockMeasurementBounds,
@@ -31,9 +30,11 @@ import {
 } from './editorBlockSurfaces'
 
 export type EditorBlockSurfaceControllerOptions = {
-  readonly view: VirtualizedTextView
   getDocumentId(): string | null
+  getLineCount(): number
   materializeFullText(): string
+  applyBlockRows(rows: readonly BlockRow[]): void
+  applyBlockLanes(lanes: readonly BlockLane[]): void
   focusEditor(): void
   setSelection(anchor: number, head: number): void
   notifyLayout(): void
@@ -79,8 +80,8 @@ export class EditorBlockSurfaceController {
     this.editorBlockSurfaces.clear()
     this.editorBlockLaneSurfaces.clear()
     this.editorBlockMeasuredSizes.clear()
-    this.options.view.setBlockRows([])
-    this.options.view.setBlockLanes([])
+    this.options.applyBlockRows([])
+    this.options.applyBlockLanes([])
   }
 
   dispose(): void {
@@ -117,7 +118,7 @@ export class EditorBlockSurfaceController {
     return {
       documentId: this.options.getDocumentId(),
       text: this.options.materializeFullText(),
-      lineCount: this.options.view.getLineCount(),
+      lineCount: this.options.getLineCount(),
     }
   }
 
@@ -302,8 +303,8 @@ export class EditorBlockSurfaceController {
     for (const [rowId, surface] of surfaces) this.editorBlockSurfaces.set(rowId, surface)
     for (const [laneId, surface] of laneSurfaces) this.editorBlockLaneSurfaces.set(laneId, surface)
     this.pruneMeasuredEditorBlockSizes(surfaces, laneSurfaces)
-    this.options.view.setBlockRows(rows)
-    this.options.view.setBlockLanes(lanes)
+    this.options.applyBlockRows(rows)
+    this.options.applyBlockLanes(lanes)
   }
 
   private createEditorBlockMountContext(
@@ -417,8 +418,8 @@ export class EditorBlockSurfaceController {
 
     this.editorBlockRows = rows
     this.editorBlockLanes = lanes
-    this.options.view.setBlockRows(rows)
-    this.options.view.setBlockLanes(lanes)
+    this.options.applyBlockRows(rows)
+    this.options.applyBlockLanes(lanes)
     this.options.notifyLayout()
   }
 

@@ -1993,6 +1993,65 @@ describe('Editor', () => {
     })
   })
 
+  describe('editor injected text row provider plugins', () => {
+    it('updates and clears injected rows from provider projections', () => {
+      let listener: () => void = () => undefined
+      let invalidationDisposed = false
+      let label = 'draft'
+      const providerContexts: unknown[] = []
+      const plugin: EditorPlugin = {
+        activate: (context) =>
+          context.registerInjectedTextRowProvider({
+            getInjectedTextRows: (providerContext) => {
+              providerContexts.push({
+                documentId: providerContext.documentId,
+                lineCount: providerContext.lineCount,
+                text: providerContext.text,
+              })
+              return [
+                {
+                  id: 'note',
+                  anchorBufferRow: 0,
+                  placement: 'before',
+                  text: label,
+                  className: `injected-${label}`,
+                },
+              ]
+            },
+            onDidChangeInjectedTextRows: (nextListener) => {
+              listener = nextListener
+              return {
+                dispose: () => {
+                  invalidationDisposed = true
+                },
+              }
+            },
+          }),
+      }
+
+      editor.dispose()
+      editor = new Editor(container, { defaultText: 'one\ntwo', plugins: [plugin] })
+
+      expect(providerContexts.at(-1)).toEqual({
+        documentId: null,
+        lineCount: 2,
+        text: 'one\ntwo',
+      })
+      expect(rowsContainingText('draft')).toHaveLength(1)
+
+      label = 'updated'
+      listener()
+
+      expect(rowsContainingText('draft')).toHaveLength(0)
+      expect(rowsContainingText('updated')).toHaveLength(1)
+
+      editor.setPlugins([])
+
+      expect(invalidationDisposed).toBe(true)
+      expect(rowsContainingText('updated')).toHaveLength(0)
+    })
+  })
+
   describe('editor feature plugins', () => {
     it('registers editor commands and receives document changes', () => {
       let commandCalls = 0
@@ -2137,6 +2196,36 @@ describe('Editor', () => {
       expect(container.querySelector('[data-editor-virtual-row="1"]')?.className).toContain(
         'third-row',
       )
+    })
+
+    it('keeps row decoration conflict order stable when a source updates', () => {
+      let featureContext: EditorFeatureContributionContext | null = null
+      const plugin: EditorPlugin = {
+        activate: (context) =>
+          context.registerEditorFeatureContribution({
+            createContribution: (context) => {
+              featureContext = context
+              return { dispose: () => undefined }
+            },
+          }),
+      }
+
+      editor.dispose()
+      editor = new Editor(container, { defaultText: 'one', plugins: [plugin] })
+
+      featureContext?.setRowDecorations('first', new Map([[0, { className: 'first-row' }]]))
+      featureContext?.setRowDecorations('second', new Map([[0, { className: 'second-row' }]]))
+      featureContext?.setRowDecorations('first', new Map([[0, { className: 'updated-row' }]]))
+
+      const className = container.querySelector<HTMLElement>(
+        '[data-editor-virtual-row="0"]',
+      )?.className
+      const updatedIndex = className?.indexOf('updated-row') ?? -1
+      const secondIndex = className?.indexOf('second-row') ?? -1
+
+      expect(updatedIndex).toBeGreaterThanOrEqual(0)
+      expect(secondIndex).toBeGreaterThanOrEqual(0)
+      expect(updatedIndex).toBeLessThan(secondIndex)
     })
   })
 
@@ -5145,6 +5234,55 @@ describe('Editor', () => {
 
       expect(foldToggle().dataset.editorFoldState).toBe('expanded')
       expect(editorRoot().textContent).toContain('  y();')
+    })
+
+    it('rejects nested syntax fold projections before fold state consumption', async () => {
+      const text = 'if (x) {\n  if (y) {\n    z();\n  }\n}\na();'
+      const outerEnd = text.indexOf('\na();')
+      const innerStart = text.indexOf('if (y)')
+      const innerEnd = text.indexOf('\n  }', innerStart)
+      const events: ViewContributionEvent[] = []
+      editor.dispose()
+      editor = new Editor(container, {
+        plugins: withTestGutterPlugins(createViewContributionPlugin(events)),
+      })
+      setEditorSyntaxSessionFactory(() =>
+        createMockSyntaxSession({
+          refresh: async () =>
+            createSyntaxResult(
+              [],
+              [
+                {
+                  startIndex: innerStart,
+                  endIndex: innerEnd,
+                  startLine: 1,
+                  endLine: 3,
+                  type: 'inner_block',
+                  languageId: 'typescript',
+                },
+                {
+                  startIndex: 0,
+                  endIndex: outerEnd,
+                  startLine: 0,
+                  endLine: 4,
+                  type: 'outer_block',
+                  languageId: 'typescript',
+                },
+              ],
+            ),
+        }),
+      )
+
+      editor.openDocument({ documentId: 'main.ts', languageId: 'typescript', text })
+      await flushMicrotasks()
+
+      expect(latestFoldMarkers(events)).toHaveLength(1)
+      expect(latestFoldMarkers(events)[0]).toMatchObject({
+        endOffset: outerEnd,
+        endRow: 4,
+        startOffset: 0,
+        startRow: 0,
+      })
     })
 
     it('folds, unfolds, and toggles syntax folds through the editor API', async () => {

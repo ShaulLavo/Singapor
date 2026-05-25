@@ -3,7 +3,13 @@ import {
   type DocumentSession,
   type DocumentSessionChange,
 } from '../documentSession'
-import { projectSyntaxFoldsThroughLineEdit } from './folds'
+import {
+  foldRangesEqual,
+  projectSyntaxFoldsThroughLineEdit,
+  rejectNestedOrOverlappingFoldRanges,
+  type FoldRangeRejection,
+  type SyntaxFoldProjection,
+} from './folds'
 import { EditorFoldState } from './foldState'
 import { EditorKeymapController } from './keymap'
 import { EditorBlockSurfaceController } from './blockSurfaceController'
@@ -16,6 +22,13 @@ import { measureEditorPerformance } from './performanceDiagnostics'
 import type { EditorCommandContext, EditorCommandId } from './commands'
 import { normalizeEditorEditInput } from './editInput'
 import { EditorCommandRouter } from './commandRouter'
+import {
+  EditorDisplayProjectionRegistry,
+  FULL_DISPLAY_PROJECTION_INVALIDATION,
+  NO_DISPLAY_PROJECTION_DISPOSAL,
+  type EditorDisplayProjection,
+  type EditorDisplayProjectionSource,
+} from './displayProjectionRegistry'
 import { getHighlightRegistry, nextEditorHighlightPrefix, recordEditorMountTiming } from './runtime'
 import {
   DOCUMENT_START_SCROLL_POSITION,
@@ -55,7 +68,7 @@ import type {
 import { EditorViewContributionController } from './viewContributions'
 import type { FoldMap } from '../foldMap'
 import { normalizeTabSize } from '../displayTransforms'
-import type { InjectedTextRow } from '../displayTransforms'
+import type { BlockLane, BlockRow, InjectedTextRow } from '../displayTransforms'
 import { offsetToPoint } from '../pieceTable/positions'
 import {
   EditorPluginHost,
@@ -64,6 +77,7 @@ import {
   type EditorFeatureContribution,
   type EditorFeatureContributionContext,
   type EditorFeatureContributionProvider,
+  type EditorGutterContribution,
   type EditorInjectedTextRowProviderContext,
   type EditorLogError,
   type EditorLogInput,
@@ -115,6 +129,14 @@ const VISIBLE_SYNTAX_LEAD_CHARS = 250_000
 const VISIBLE_SYNTAX_MAX_LEAD_CHARS = 750_000
 const VISIBLE_SYNTAX_SCROLL_DELAY_MS = 16
 const BACKGROUND_SYNTAX_WARM_DELAY_MS = 80
+const SYNTAX_FOLD_PROJECTION_OWNER = 'editor.folds.syntax'
+const DIRECT_RANGE_DECORATION_OWNER = 'editor.rangeDecorations.direct'
+const DIRECT_ROW_DECORATION_OWNER = 'editor.rowDecorations.direct'
+const FEATURE_ROW_DECORATION_OWNER_PREFIX = 'editor.rowDecorations.feature:'
+const PLUGIN_BLOCK_ROWS_PROJECTION_OWNER = 'editor.blockRows.plugins'
+const PLUGIN_BLOCK_LANES_PROJECTION_OWNER = 'editor.blockLanes.plugins'
+const PLUGIN_GUTTER_PROJECTION_OWNER = 'editor.gutters.plugins'
+const PLUGIN_INJECTED_ROWS_PROJECTION_OWNER = 'editor.injectedRows.plugins'
 
 type SyntaxScrollDirection = -1 | 0 | 1
 
@@ -143,20 +165,15 @@ export class Editor {
   private readonly keymap: EditorKeymapController
   private readonly viewContributions: EditorViewContributionController
   private readonly secondaryWork = new EditorSecondaryWorkScheduler()
+  private readonly displayProjections = new EditorDisplayProjectionRegistry()
   private readonly highlightPrefix: string
   private sessionChangeVersion = 0
   private blockSurfaces!: EditorBlockSurfaceController
   private readonly syntax: EditorSyntaxController
   private readonly inputSelection: InputSelectionController
   private configuredTheme: EditorTheme | null = null
-  private rangeDecorations: readonly EditorRangeDecoration[] = []
   private appliedRangeDecorationNames: readonly string[] = []
   private appliedInjectedTextRows: readonly InjectedTextRow[] = []
-  private directRowDecorations: ReadonlyMap<number, VirtualizedTextRowDecoration> = new Map()
-  private readonly rowDecorationSources = new Map<
-    string,
-    ReadonlyMap<number, VirtualizedTextRowDecoration>
-  >()
   private readonly tabSize: number
 
   private get text(): string {
@@ -224,10 +241,11 @@ export class Editor {
       defaultEditability: options.editability,
       highlightPrefix: this.highlightPrefix,
     })
+    this.setGutterProjection(this.pluginHost.getGutterContributions())
     this.view = new VirtualizedTextView(container, {
       className: 'editor',
       highlightRegistry: getHighlightRegistry(),
-      gutterContributions: this.pluginHost.getGutterContributions(),
+      gutterContributions: this.composedGutterContributions(),
       cursorLineHighlight: options.cursorLineHighlight,
       hiddenCharacters: options.hiddenCharacters,
       lineHeight: options.lineHeight,
@@ -243,9 +261,11 @@ export class Editor {
     this.foldState = new EditorFoldState(this.view, () => this.session?.getSnapshot() ?? null)
     this.el = this.view.scrollElement
     this.blockSurfaces = new EditorBlockSurfaceController({
-      view: this.view,
       getDocumentId: () => this.documentId,
+      getLineCount: () => this.view.getLineCount(),
       materializeFullText: () => this.text,
+      applyBlockRows: (rows) => this.applyBlockRowsProjection(rows),
+      applyBlockLanes: (lanes) => this.applyBlockLanesProjection(lanes),
       focusEditor: () => this.focus(),
       setSelection: (anchor, head) =>
         this.inputSelection.applyFindSelection(anchor, head, 'editor.block.setSelection', head),
@@ -375,6 +395,7 @@ export class Editor {
   setContent(text: string): void {
     this.text = text
     this.view.setText(text)
+    this.retagDisplayProjectionSources()
     this.syncEditorBlocks()
     this.syncInjectedTextRows()
     this.setTokens([])
@@ -399,6 +420,7 @@ export class Editor {
   applyEdit(edit: TextEdit, tokens: readonly EditorToken[], textSnapshot?: TextSnapshot): void {
     const nextTextSnapshot = textSnapshot ?? this.legacyEditTextSnapshot(edit)
     this.document.setRenderedTextSnapshot(nextTextSnapshot)
+    this.retagDisplayProjectionSources()
     measureEditorPerformance('editor.view.applyEdit', () =>
       this.view.applyEdit(edit, nextTextSnapshot),
     )
@@ -427,7 +449,8 @@ export class Editor {
   }
 
   setSyntaxFolds(folds: readonly FoldRange[]): void {
-    this.foldState.setSyntaxFolds(folds)
+    this.setSyntaxFoldProjection(folds)
+    this.syncFoldStateFromProjections()
   }
 
   toggleFold(offset?: number): boolean {
@@ -739,9 +762,18 @@ export class Editor {
   }
 
   setRangeDecorations(decorations: readonly EditorRangeDecoration[]): void {
-    if (sameEditorRangeDecorations(this.rangeDecorations, decorations)) return
+    if (sameEditorRangeDecorations(this.directRangeDecorations(), decorations)) return
 
-    this.rangeDecorations = decorations
+    this.displayProjections.set({
+      kind: 'rangeDecorations',
+      owner: DIRECT_RANGE_DECORATION_OWNER,
+      source: this.currentDisplayProjectionSource(),
+      invalidationRange: FULL_DISPLAY_PROJECTION_INVALIDATION,
+      layer: 0,
+      priority: 0,
+      disposal: NO_DISPLAY_PROJECTION_DISPOSAL,
+      value: [...decorations],
+    })
     this.applyRangeDecorations()
     this.log({
       action: 'editor.decorations.range.changed',
@@ -751,7 +783,16 @@ export class Editor {
   }
 
   setRowDecorations(decorations: ReadonlyMap<number, VirtualizedTextRowDecoration>): void {
-    this.directRowDecorations = new Map(decorations)
+    this.displayProjections.set({
+      kind: 'rowDecorations',
+      owner: DIRECT_ROW_DECORATION_OWNER,
+      source: this.currentDisplayProjectionSource(),
+      invalidationRange: FULL_DISPLAY_PROJECTION_INVALIDATION,
+      layer: 0,
+      priority: 0,
+      disposal: NO_DISPLAY_PROJECTION_DISPOSAL,
+      value: new Map(decorations),
+    })
     this.applyComposedRowDecorations()
     this.log({
       action: 'editor.decorations.row.changed',
@@ -872,6 +913,7 @@ export class Editor {
       level: 'info',
     })
     this.secondaryWork.dispose()
+    this.displayProjections.clear()
     this.blockSurfaces.dispose()
     this.inputSelection.dispose()
     this.viewContributions.dispose()
@@ -1061,16 +1103,50 @@ export class Editor {
   }
 
   private syncGutterContributions(): void {
-    if (!this.view.setGutterContributions(this.pluginHost.getGutterContributions())) return
+    const contributions = this.pluginHost.getGutterContributions()
+    if (!this.setGutterProjection(contributions)) return
+    if (!this.view.setGutterContributions(this.composedGutterContributions())) return
 
     this.notifyViewContributions('layout', null)
     this.log({
       action: 'editor.plugins.gutters.changed',
       level: 'info',
       plugins: {
-        gutterContributionCount: this.pluginHost.getGutterContributions().length,
+        gutterContributionCount: this.composedGutterContributions().length,
       },
     })
+  }
+
+  private setGutterProjection(contributions: readonly EditorGutterContribution[]): boolean {
+    if (sameGutterContributions(this.pluginGutterContributions(), contributions)) return false
+    if (contributions.length === 0) {
+      return this.displayProjections.delete('gutters', PLUGIN_GUTTER_PROJECTION_OWNER)
+    }
+
+    this.displayProjections.set({
+      kind: 'gutters',
+      owner: PLUGIN_GUTTER_PROJECTION_OWNER,
+      source: this.currentDisplayProjectionSource(),
+      invalidationRange: FULL_DISPLAY_PROJECTION_INVALIDATION,
+      layer: 0,
+      priority: 0,
+      disposal: NO_DISPLAY_PROJECTION_DISPOSAL,
+      value: [...contributions],
+    })
+    return true
+  }
+
+  private pluginGutterContributions(): readonly EditorGutterContribution[] {
+    return this.displayProjections.get('gutters', PLUGIN_GUTTER_PROJECTION_OWNER)?.value ?? []
+  }
+
+  private composedGutterContributions(): readonly EditorGutterContribution[] {
+    const contributions: EditorGutterContribution[] = []
+    for (const projection of this.displayProjections.values('gutters')) {
+      contributions.push(...projection.value)
+    }
+
+    return contributions
   }
 
   private handleBlockProvidersChanged(): void {
@@ -1087,6 +1163,122 @@ export class Editor {
 
   private syncEditorBlocks(): void {
     this.blockSurfaces.sync(this.pluginHost.getBlockProviders())
+  }
+
+  private applyBlockRowsProjection(rows: readonly BlockRow[]): void {
+    this.setBlockRowsProjection(rows)
+    this.view.setBlockRows(this.composedBlockRows())
+  }
+
+  private setBlockRowsProjection(rows: readonly BlockRow[]): void {
+    if (rows.length === 0) {
+      this.displayProjections.delete('blockRows', PLUGIN_BLOCK_ROWS_PROJECTION_OWNER)
+      return
+    }
+
+    this.displayProjections.set({
+      kind: 'blockRows',
+      owner: PLUGIN_BLOCK_ROWS_PROJECTION_OWNER,
+      source: this.currentDisplayProjectionSource(),
+      invalidationRange: FULL_DISPLAY_PROJECTION_INVALIDATION,
+      layer: 0,
+      priority: 0,
+      disposal: NO_DISPLAY_PROJECTION_DISPOSAL,
+      value: [...rows],
+    })
+  }
+
+  private composedBlockRows(): readonly BlockRow[] {
+    const rows: BlockRow[] = []
+    for (const projection of this.displayProjections.values('blockRows')) {
+      rows.push(...projection.value)
+    }
+
+    return rows
+  }
+
+  private applyBlockLanesProjection(lanes: readonly BlockLane[]): void {
+    this.setBlockLanesProjection(lanes)
+    this.view.setBlockLanes(this.composedBlockLanes())
+  }
+
+  private setBlockLanesProjection(lanes: readonly BlockLane[]): void {
+    if (lanes.length === 0) {
+      this.displayProjections.delete('blockLanes', PLUGIN_BLOCK_LANES_PROJECTION_OWNER)
+      return
+    }
+
+    this.displayProjections.set({
+      kind: 'blockLanes',
+      owner: PLUGIN_BLOCK_LANES_PROJECTION_OWNER,
+      source: this.currentDisplayProjectionSource(),
+      invalidationRange: FULL_DISPLAY_PROJECTION_INVALIDATION,
+      layer: 0,
+      priority: 0,
+      disposal: NO_DISPLAY_PROJECTION_DISPOSAL,
+      value: [...lanes],
+    })
+  }
+
+  private composedBlockLanes(): readonly BlockLane[] {
+    const lanes: BlockLane[] = []
+    for (const projection of this.displayProjections.values('blockLanes')) {
+      lanes.push(...projection.value)
+    }
+
+    return lanes
+  }
+
+  private setSyntaxFoldProjection(folds: readonly FoldRange[]): boolean {
+    const result = rejectNestedOrOverlappingFoldRanges(folds)
+    if (result.rejected.length > 0) this.logRejectedSyntaxFoldProjection(result.rejected)
+
+    const acceptedFolds = result.folds
+    if (foldRangesEqual(this.syntaxFoldProjection(), acceptedFolds)) return false
+    if (acceptedFolds.length === 0) {
+      return this.displayProjections.delete('folds', SYNTAX_FOLD_PROJECTION_OWNER)
+    }
+
+    this.displayProjections.set({
+      kind: 'folds',
+      owner: SYNTAX_FOLD_PROJECTION_OWNER,
+      source: this.currentDisplayProjectionSource(),
+      invalidationRange: FULL_DISPLAY_PROJECTION_INVALIDATION,
+      layer: 0,
+      priority: 0,
+      disposal: NO_DISPLAY_PROJECTION_DISPOSAL,
+      value: [...acceptedFolds],
+    })
+    return true
+  }
+
+  private logRejectedSyntaxFoldProjection(rejected: readonly FoldRangeRejection[]): void {
+    const first = rejected[0]
+    if (!first) return
+
+    this.log({
+      action: 'editor.folds.syntax.rejected',
+      level: 'warn',
+      message: 'Rejected invalid syntax fold projection ranges',
+      syntax: {
+        firstRejectedFold: foldLogContext(first.fold),
+        previousFold: first.previous ? foldLogContext(first.previous) : null,
+        reason: first.kind,
+        rejectedFoldCount: rejected.length,
+      },
+    })
+  }
+
+  private syntaxFoldProjection(): readonly FoldRange[] {
+    return this.displayProjections.get('folds', SYNTAX_FOLD_PROJECTION_OWNER)?.value ?? []
+  }
+
+  private foldProjections(): readonly EditorDisplayProjection<'folds'>[] {
+    return this.displayProjections.values('folds')
+  }
+
+  private syncFoldStateFromProjections(): void {
+    this.foldState.setFoldProjections(this.foldProjections())
   }
 
   private handleInjectedTextRowProvidersChanged(): void {
@@ -1106,11 +1298,46 @@ export class Editor {
 
   private syncInjectedTextRows(): boolean {
     const rows = this.injectedTextRowsForProviders()
-    if (sameInjectedTextRows(this.appliedInjectedTextRows, rows)) return false
+    if (!this.setInjectedRowsProjection(rows)) return false
 
-    this.appliedInjectedTextRows = rows
-    this.view.setInjectedTextRows(rows)
+    this.appliedInjectedTextRows = this.composedInjectedTextRows()
+    this.view.setInjectedTextRows(this.appliedInjectedTextRows)
     return true
+  }
+
+  private setInjectedRowsProjection(rows: readonly InjectedTextRow[]): boolean {
+    if (sameInjectedTextRows(this.pluginInjectedTextRows(), rows)) return false
+    if (rows.length === 0) {
+      return this.displayProjections.delete('injectedRows', PLUGIN_INJECTED_ROWS_PROJECTION_OWNER)
+    }
+
+    this.displayProjections.set({
+      kind: 'injectedRows',
+      owner: PLUGIN_INJECTED_ROWS_PROJECTION_OWNER,
+      source: this.currentDisplayProjectionSource(),
+      invalidationRange: FULL_DISPLAY_PROJECTION_INVALIDATION,
+      layer: 0,
+      priority: 0,
+      disposal: NO_DISPLAY_PROJECTION_DISPOSAL,
+      value: [...rows],
+    })
+    return true
+  }
+
+  private pluginInjectedTextRows(): readonly InjectedTextRow[] {
+    return (
+      this.displayProjections.get('injectedRows', PLUGIN_INJECTED_ROWS_PROJECTION_OWNER)?.value ??
+      []
+    )
+  }
+
+  private composedInjectedTextRows(): readonly InjectedTextRow[] {
+    const rows: InjectedTextRow[] = []
+    for (const projection of this.displayProjections.values('injectedRows')) {
+      rows.push(...projection.value)
+    }
+
+    return rows
   }
 
   private injectedTextRowsForProviders(): readonly InjectedTextRow[] {
@@ -1137,12 +1364,22 @@ export class Editor {
   ): void {
     if (sourceId.length === 0) return
 
-    this.rowDecorationSources.set(sourceId, new Map(decorations))
+    this.displayProjections.set({
+      kind: 'rowDecorations',
+      owner: sourceRowDecorationOwner(sourceId),
+      source: this.currentDisplayProjectionSource(),
+      invalidationRange: FULL_DISPLAY_PROJECTION_INVALIDATION,
+      layer: 10,
+      priority: 0,
+      disposal: NO_DISPLAY_PROJECTION_DISPOSAL,
+      value: new Map(decorations),
+    })
     this.applyComposedRowDecorations()
   }
 
   private clearSourceRowDecorations(sourceId: string): void {
-    if (!this.rowDecorationSources.delete(sourceId)) return
+    if (!this.displayProjections.delete('rowDecorations', sourceRowDecorationOwner(sourceId)))
+      return
 
     this.applyComposedRowDecorations()
   }
@@ -1155,9 +1392,8 @@ export class Editor {
 
   private composedRowDecorations(): ReadonlyMap<number, VirtualizedTextRowDecoration> {
     const composed = new Map<number, VirtualizedTextRowDecoration>()
-    mergeRowDecorationMap(composed, this.directRowDecorations)
-    for (const decorations of this.rowDecorationSources.values()) {
-      mergeRowDecorationMap(composed, decorations)
+    for (const projection of this.displayProjections.values('rowDecorations')) {
+      mergeRowDecorationMap(composed, projection.value)
     }
 
     return composed
@@ -1170,20 +1406,20 @@ export class Editor {
   ): boolean {
     const rowDelta = editLineDelta(edit, previousText)
     if (rowDelta === 0) return false
-    if (this.directRowDecorations.size === 0 && this.rowDecorationSources.size === 0) return false
+
+    const projections = this.displayProjections.values('rowDecorations')
+    if (projections.length === 0) return false
 
     const startRow = rowForOffset(lineStarts, edit.from)
     const endRow = rowForOffset(lineStarts, edit.to)
-    this.directRowDecorations = projectRowDecorationMapThroughLineEdit(
-      this.directRowDecorations,
-      startRow,
-      endRow,
-      rowDelta,
-    )
-    for (const [sourceId, decorations] of this.rowDecorationSources) {
-      this.rowDecorationSources.set(
-        sourceId,
-        projectRowDecorationMapThroughLineEdit(decorations, startRow, endRow, rowDelta),
+    const source = this.currentDisplayProjectionSource()
+    const invalidationRange = { kind: 'rows' as const, startRow, endRow }
+    for (const projection of projections) {
+      this.displayProjections.replaceValue(
+        'rowDecorations',
+        projection.owner,
+        projectRowDecorationMapThroughLineEdit(projection.value, startRow, endRow, rowDelta),
+        { source, invalidationRange },
       )
     }
 
@@ -1252,12 +1488,13 @@ export class Editor {
   }
 
   private applyRangeDecorations(): void {
-    if (this.textSnapshot.length === 0 || this.rangeDecorations.length === 0) {
+    const decorations = this.composedRangeDecorations()
+    if (this.textSnapshot.length === 0 || decorations.length === 0) {
       this.clearAppliedRangeDecorations()
       return
     }
 
-    const groups = groupedRangeDecorations(this.rangeDecorations, this.highlightPrefix)
+    const groups = groupedRangeDecorations(decorations, this.highlightPrefix)
     const names: string[] = []
 
     for (const group of groups) {
@@ -1277,6 +1514,40 @@ export class Editor {
   private clearStaleAppliedRangeDecorations(nextNames: ReadonlySet<string>): void {
     for (const name of this.appliedRangeDecorationNames) {
       if (!nextNames.has(name)) this.view.clearRangeHighlight(name)
+    }
+  }
+
+  private directRangeDecorations(): readonly EditorRangeDecoration[] {
+    return (
+      this.displayProjections.get('rangeDecorations', DIRECT_RANGE_DECORATION_OWNER)?.value ?? []
+    )
+  }
+
+  private composedRangeDecorations(): readonly EditorRangeDecoration[] {
+    const decorations: EditorRangeDecoration[] = []
+    for (const projection of this.displayProjections.values('rangeDecorations')) {
+      decorations.push(...projection.value)
+    }
+
+    return decorations
+  }
+
+  private retagDisplayProjectionSources(): void {
+    const source = this.currentDisplayProjectionSource()
+    this.displayProjections.retagKind('folds', source)
+    this.displayProjections.retagKind('rangeDecorations', source)
+    this.displayProjections.retagKind('rowDecorations', source)
+    this.displayProjections.retagKind('blockRows', source)
+    this.displayProjections.retagKind('blockLanes', source)
+    this.displayProjections.retagKind('injectedRows', source)
+    this.displayProjections.retagKind('gutters', source)
+  }
+
+  private currentDisplayProjectionSource(): EditorDisplayProjectionSource {
+    return {
+      documentId: this.documentId,
+      documentVersion: this.documentVersion,
+      textVersion: this.textVersion,
     }
   }
 
@@ -1515,10 +1786,11 @@ export class Editor {
 
     if (edit && change.edits.length === 1) {
       const previousTextSnapshot = this.textSnapshot
+      const syntaxFolds = this.syntaxFoldProjection()
       const foldProjection = measureEditorPerformance(
         'editor.projectSyntaxFolds',
-        () => projectSyntaxFoldsThroughLineEdit(this.foldState.folds, edit, previousTextSnapshot),
-        () => ({ foldCount: this.foldState.folds.length }),
+        () => projectSyntaxFoldsThroughLineEdit(syntaxFolds, edit, previousTextSnapshot),
+        () => ({ foldCount: syntaxFolds.length }),
       )
       const projectedTokens = measureEditorPerformance(
         'editor.projectTokens',
@@ -1531,13 +1803,20 @@ export class Editor {
         this.view.getLineStarts(),
       )
       this.applyEdit(edit, projectedTokens, documentSessionChangeTextSnapshot(change))
-      this.foldState.applyProjection(foldProjection)
+      this.applySyntaxFoldProjection(foldProjection)
       if (rowDecorationsProjected) this.view.setRowDecorations(this.composedRowDecorations())
       return
     }
 
     this.clearSyntaxFolds()
     this.setDocument({ text: change.textSnapshot.materializeFullText(), tokens: [] })
+  }
+
+  private applySyntaxFoldProjection(projection: SyntaxFoldProjection | null): void {
+    if (!projection) return
+
+    this.setSyntaxFoldProjection(projection.folds)
+    this.foldState.applyProjectedEdit(projection, this.foldProjections())
   }
 
   private logSessionChange(change: DocumentSessionChange, timingName: string): void {
@@ -1729,6 +2008,7 @@ export class Editor {
   }
 
   private clearSyntaxFolds(): void {
+    this.displayProjections.delete('folds', SYNTAX_FOLD_PROJECTION_OWNER)
     this.foldState.clear()
   }
 
@@ -1748,6 +2028,10 @@ function mergeRowDecorationMap(
   for (const [row, decoration] of source) {
     target.set(row, mergeRowDecoration(target.get(row), decoration))
   }
+}
+
+function sourceRowDecorationOwner(sourceId: string): string {
+  return `${FEATURE_ROW_DECORATION_OWNER_PREFIX}${sourceId}`
 }
 
 function projectRowDecorationMapThroughLineEdit(
@@ -1859,6 +2143,14 @@ function sameInjectedTextRows(
 ): boolean {
   if (left.length !== right.length) return false
   return left.every((row, index) => row === right[index])
+}
+
+function sameGutterContributions(
+  left: readonly EditorGutterContribution[],
+  right: readonly EditorGutterContribution[],
+): boolean {
+  if (left.length !== right.length) return false
+  return left.every((contribution, index) => contribution === right[index])
 }
 
 function mergeRowDecoration(

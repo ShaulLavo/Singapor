@@ -8,6 +8,18 @@ export type SyntaxFoldProjection = {
   readonly keyMap: ReadonlyMap<string, string>
 }
 
+export type FoldRangeRejection = {
+  readonly kind: 'invalid-range' | 'overlap'
+  readonly fold: FoldRange
+  readonly message: string
+  readonly previous?: FoldRange
+}
+
+export type FoldRangeIngestionResult = {
+  readonly folds: readonly FoldRange[]
+  readonly rejected: readonly FoldRangeRejection[]
+}
+
 export const EMPTY_SYNTAX_FOLDS: readonly FoldRange[] = []
 export const EMPTY_FOLD_MARKERS: readonly VirtualizedFoldMarker[] = []
 
@@ -41,6 +53,36 @@ export function foldRangesEqual(left: readonly FoldRange[], right: readonly Fold
   return true
 }
 
+export function rejectNestedOrOverlappingFoldRanges(
+  folds: readonly FoldRange[],
+): FoldRangeIngestionResult {
+  const accepted: FoldRange[] = []
+  const rejected: FoldRangeRejection[] = []
+
+  for (const fold of sortedFoldRangesForIngestion(folds)) {
+    const invalidMessage = invalidFoldRangeMessage(fold)
+    if (invalidMessage) {
+      rejected.push({ kind: 'invalid-range', fold, message: invalidMessage })
+      continue
+    }
+
+    const previous = accepted.at(-1)
+    if (previous && foldRangesOverlap(previous, fold)) {
+      rejected.push({
+        kind: 'overlap',
+        fold,
+        previous,
+        message: 'Fold ranges must not overlap or nest',
+      })
+      continue
+    }
+
+    accepted.push(fold)
+  }
+
+  return { folds: accepted, rejected }
+}
+
 export function projectSyntaxFoldsThroughLineEdit(
   folds: readonly FoldRange[],
   edit: TextEdit,
@@ -58,6 +100,49 @@ export function projectSyntaxFoldsThroughLineEdit(
 
   if (foldRangesEqual(folds, projected)) return null
   return { folds: projected, keyMap }
+}
+
+function sortedFoldRangesForIngestion(folds: readonly FoldRange[]): readonly FoldRange[] {
+  return [...folds].toSorted(compareFoldRangesForIngestion)
+}
+
+function compareFoldRangesForIngestion(left: FoldRange, right: FoldRange): number {
+  return (
+    left.startIndex - right.startIndex ||
+    right.endIndex - left.endIndex ||
+    left.startLine - right.startLine ||
+    right.endLine - left.endLine ||
+    left.type.localeCompare(right.type) ||
+    foldLanguageId(left).localeCompare(foldLanguageId(right))
+  )
+}
+
+function foldLanguageId(fold: FoldRange): string {
+  return fold.languageId ?? ''
+}
+
+function invalidFoldRangeMessage(fold: FoldRange): string | null {
+  const integerMessage =
+    invalidNonNegativeIntegerMessage(fold.startIndex, 'Fold range startIndex') ??
+    invalidNonNegativeIntegerMessage(fold.endIndex, 'Fold range endIndex') ??
+    invalidNonNegativeIntegerMessage(fold.startLine, 'Fold range startLine') ??
+    invalidNonNegativeIntegerMessage(fold.endLine, 'Fold range endLine')
+  if (integerMessage) return integerMessage
+  if (fold.endIndex <= fold.startIndex) {
+    return 'Fold range endIndex must be greater than startIndex'
+  }
+  if (fold.endLine <= fold.startLine) return 'Fold range endLine must be greater than startLine'
+  return null
+}
+
+function invalidNonNegativeIntegerMessage(value: number, name: string): string | null {
+  if (!Number.isInteger(value)) return `${name} must be an integer`
+  if (value < 0) return `${name} must be non-negative`
+  return null
+}
+
+function foldRangesOverlap(left: FoldRange, right: FoldRange): boolean {
+  return right.startIndex < left.endIndex
 }
 
 function foldRangeEqual(left: FoldRange, right: FoldRange): boolean {

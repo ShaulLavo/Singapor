@@ -7,6 +7,11 @@ import {
 } from '../src/editor/domBoundary'
 import { EditorFoldState } from '../src/editor/foldState'
 import {
+  FULL_DISPLAY_PROJECTION_INVALIDATION,
+  NO_DISPLAY_PROJECTION_DISPOSAL,
+  type EditorDisplayProjection,
+} from '../src/editor/displayProjectionRegistry'
+import {
   defaultEditorKeyBindings,
   editorKeyBindings,
   editorKeymapLayersForCommandPacks,
@@ -17,6 +22,7 @@ import {
   foldRangeKey,
   foldRangesEqual,
   projectSyntaxFoldsThroughLineEdit,
+  rejectNestedOrOverlappingFoldRanges,
 } from '../src/editor/folds'
 import { mouseSelectionAutoScrollDelta } from '../src/editor/mouseSelection'
 import { nextWordOffset, previousWordOffset } from '../src/editor/navigation'
@@ -100,6 +106,44 @@ describe('editor fold helpers', () => {
       startLine: 1,
     })
   })
+
+  it('rejects nested and overlapping fold ranges while accepting adjacent ranges', () => {
+    const outer = foldRange({
+      startIndex: 0,
+      endIndex: 40,
+      startLine: 0,
+      endLine: 4,
+      type: 'outer',
+    })
+    const inner = foldRange({
+      startIndex: 10,
+      endIndex: 20,
+      startLine: 1,
+      endLine: 2,
+      type: 'inner',
+    })
+    const crossing = foldRange({
+      startIndex: 30,
+      endIndex: 60,
+      startLine: 3,
+      endLine: 5,
+      type: 'crossing',
+    })
+    const adjacent = foldRange({
+      startIndex: 40,
+      endIndex: 70,
+      startLine: 4,
+      endLine: 6,
+      type: 'adjacent',
+    })
+
+    const result = rejectNestedOrOverlappingFoldRanges([inner, adjacent, crossing, outer])
+
+    expect(result.folds).toEqual([outer, adjacent])
+    expect(result.rejected.map((rejection) => rejection.kind)).toEqual(['overlap', 'overlap'])
+    expect(result.rejected.map((rejection) => rejection.fold.type)).toEqual(['inner', 'crossing'])
+    expect(result.rejected.every((rejection) => rejection.previous === outer)).toBe(true)
+  })
 })
 
 describe('EditorFoldState', () => {
@@ -110,18 +154,35 @@ describe('EditorFoldState', () => {
     )
     const fold = foldRange({ startIndex: 0, endIndex: 28, startLine: 0, endLine: 2 })
 
-    state.setSyntaxFolds([fold])
+    state.setFoldProjections([foldProjection([fold])])
     state.toggle(foldMarkerFromRange(fold, new Set()))
-    state.applyProjection({
-      folds: [{ ...fold, startIndex: 2, endIndex: 30, startLine: 1, endLine: 3 }],
-      keyMap: new Map([[foldRangeKey(fold), 'typescript:block:2:30']]),
-    })
+    const projectedFold = { ...fold, startIndex: 2, endIndex: 30, startLine: 1, endLine: 3 }
+    state.applyProjectedEdit(
+      {
+        folds: [projectedFold],
+        keyMap: new Map([[foldRangeKey(fold), 'typescript:block:2:30']]),
+      },
+      [foldProjection([projectedFold])],
+    )
 
     const [markers, foldMap] = setFoldState.mock.lastCall ?? []
     expect(markers?.[0]).toMatchObject({ key: 'typescript:block:2:30', collapsed: true })
     expect(foldMap).not.toBeNull()
   })
 })
+
+function foldProjection(folds: readonly FoldRange[]): EditorDisplayProjection<'folds'> {
+  return {
+    kind: 'folds',
+    owner: 'test.folds',
+    source: { documentId: null, documentVersion: 1, textVersion: 1 },
+    invalidationRange: FULL_DISPLAY_PROJECTION_INVALIDATION,
+    layer: 0,
+    priority: 0,
+    disposal: NO_DISPLAY_PROJECTION_DISPOSAL,
+    value: folds,
+  }
+}
 
 describe('mouse selection helpers', () => {
   it('returns signed auto-scroll deltas near the vertical edges', () => {
