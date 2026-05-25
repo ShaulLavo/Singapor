@@ -45,6 +45,13 @@ import {
 import { lineRangeAtOffset, wordRangeAtOffset } from './textRanges'
 import { appendTiming, eventStartMs, mergeChangeTimings, nowMs } from './timing'
 import { measureEditorPerformance } from './performanceDiagnostics'
+import {
+  canWaitForNativeTextInput,
+  createEditorInputState,
+  transitionEditorInputState,
+  type EditorInputState,
+  type EditorInputStateTransition,
+} from './inputState'
 import type { EditorCommandContext, EditorCommandId } from './commands'
 import type { EditorSelectionSyncMode, EditorSessionOptions } from './types'
 
@@ -78,14 +85,10 @@ type PendingKeyboardTextFallback = {
   text: string
 }
 
-type NativeTextInputState = 'unknown' | 'observed' | 'missing'
-
 export class InputSelectionController {
   private mouseSelectionDrag: MouseSelectionDrag | null = null
   private mouseSelectionAutoScrollFrame = 0
-  private useSessionSelectionForNextInput = false
-  private nativeInputGeneration = 0
-  private nativeTextInputState: NativeTextInputState = 'unknown'
+  private inputState: EditorInputState = createEditorInputState()
   private nativeInputHandlersInstalled = false
   private pendingKeyboardTextFallback: PendingKeyboardTextFallback | null = null
 
@@ -99,6 +102,8 @@ export class InputSelectionController {
     el.addEventListener('drop', this.handleDrop)
     el.addEventListener('paste', this.handlePaste)
     el.addEventListener('keydown', this.handleKeyDown)
+    el.addEventListener('compositionstart', this.handleCompositionStart)
+    el.addEventListener('compositionend', this.handleCompositionEnd)
     el.addEventListener('keyup', this.syncSessionSelectionFromDom)
     el.addEventListener('mouseup', this.syncSessionSelectionFromDom)
     el.ownerDocument.addEventListener('selectionchange', this.syncCustomSelectionFromDom)
@@ -114,6 +119,8 @@ export class InputSelectionController {
     el.removeEventListener('drop', this.handleDrop)
     el.removeEventListener('paste', this.handlePaste)
     el.removeEventListener('keydown', this.handleKeyDown)
+    el.removeEventListener('compositionstart', this.handleCompositionStart)
+    el.removeEventListener('compositionend', this.handleCompositionEnd)
     el.removeEventListener('keyup', this.syncSessionSelectionFromDom)
     el.removeEventListener('mouseup', this.syncSessionSelectionFromDom)
     el.ownerDocument.removeEventListener('selectionchange', this.syncCustomSelectionFromDom)
@@ -213,7 +220,7 @@ export class InputSelectionController {
     const start = context.event ? eventStartMs(context.event) : nowMs()
     const change = session.setSelection(0, session.getSnapshot().length)
     this.syncCustomSelectionHighlight(0, session.getSnapshot().length)
-    this.useSessionSelectionForNextInput = true
+    this.markSessionSelectionForNextInput()
     this.options.applySessionChange(change, 'input.selectAll', start, { syncDomSelection: false })
     return true
   }
@@ -224,8 +231,10 @@ export class InputSelectionController {
 
     const start = context.event ? eventStartMs(context.event) : nowMs()
     const change = session.clearSecondarySelections()
+    if (change.kind === 'none') return false
+
     this.syncSessionSelectionHighlight()
-    this.useSessionSelectionForNextInput = true
+    this.markSessionSelectionForNextInput()
     this.options.applySessionChange(change, 'input.clearSecondarySelections', start, {
       syncDomSelection: false,
     })
@@ -258,7 +267,7 @@ export class InputSelectionController {
     const start = context.event ? eventStartMs(context.event) : nowMs()
     const change = session.setSelections(selections)
     this.syncSessionSelectionHighlight()
-    this.useSessionSelectionForNextInput = true
+    this.markSessionSelectionForNextInput()
     this.options.applySessionChange(change, `input.insertCursor${capitalize(direction)}`, start, {
       revealOffset: inserted[0]?.anchor,
       syncDomSelection: false,
@@ -284,7 +293,7 @@ export class InputSelectionController {
     const start = context.event ? eventStartMs(context.event) : nowMs()
     const change = session.setSelections(selections)
     this.syncSessionSelectionHighlight()
-    this.useSessionSelectionForNextInput = true
+    this.markSessionSelectionForNextInput()
     this.options.applySessionChange(change, occurrenceSelectTimingName(command), start, {
       revealOffset: query.range.end,
       syncDomSelection: false,
@@ -324,7 +333,7 @@ export class InputSelectionController {
     const start = context.event ? eventStartMs(context.event) : nowMs()
     const change = session.setSelections(selections)
     this.syncSessionSelectionHighlight()
-    this.useSessionSelectionForNextInput = true
+    this.markSessionSelectionForNextInput()
     this.options.applySessionChange(change, 'input.moveSelectionToNextFindMatch', start, {
       revealOffset: next.end,
       syncDomSelection: false,
@@ -338,7 +347,7 @@ export class InputSelectionController {
     if (!result) return false
 
     this.syncSessionSelectionHighlight()
-    this.useSessionSelectionForNextInput = true
+    this.markSessionSelectionForNextInput()
     this.options.applySessionChange(result.change, 'input.addNextOccurrence', start, {
       revealOffset: result.revealOffset,
       syncDomSelection: false,
@@ -381,7 +390,7 @@ export class InputSelectionController {
       })
     }
     const change = session.setSelections(selections)
-    this.useSessionSelectionForNextInput = true
+    this.markSessionSelectionForNextInput()
     this.options.view.revealOffset(primary.target.offset)
     this.options.applySessionChange(change, primary.target.timingName, start)
     return true
@@ -399,7 +408,7 @@ export class InputSelectionController {
     const start = nowMs()
     const change = session.setSelection(anchorOffset, headOffset)
     this.syncSessionSelectionHighlight()
-    this.useSessionSelectionForNextInput = true
+    this.markSessionSelectionForNextInput()
     this.options.applySessionChange(change, timingName, start, {
       revealOffset,
       syncDomSelection: false,
@@ -418,7 +427,7 @@ export class InputSelectionController {
     const start = nowMs()
     const change = session.setSelections(selections)
     this.syncSessionSelectionHighlight()
-    this.useSessionSelectionForNextInput = true
+    this.markSessionSelectionForNextInput()
     this.options.applySessionChange(change, timingName, start, {
       revealOffset,
       syncDomSelection: false,
@@ -438,7 +447,7 @@ export class InputSelectionController {
     const start = nowMs()
     const change = session.applyEdits(edits, { selection })
     this.syncSessionSelectionHighlight()
-    this.useSessionSelectionForNextInput = true
+    this.markSessionSelectionForNextInput()
     this.options.applySessionChange(change, timingName, start, {
       revealOffset: this.primarySelectionHeadOffset(change),
       syncDomSelection: false,
@@ -547,6 +556,22 @@ export class InputSelectionController {
     return this.options.materializeFullText()
   }
 
+  private transitionInputState(transition: EditorInputStateTransition): void {
+    this.inputState = transitionEditorInputState(this.inputState, transition)
+  }
+
+  private markSessionSelectionForNextInput(): void {
+    this.transitionInputState({ type: 'selection-owned-by-session' })
+  }
+
+  private markDomSelectionForNextInput(): void {
+    this.transitionInputState({ type: 'selection-owned-by-dom' })
+  }
+
+  private markHiddenInputSelectionForNextInput(): void {
+    this.transitionInputState({ type: 'selection-owned-by-hidden-input' })
+  }
+
   private installNativeInputHandlers(): void {
     if (this.nativeInputHandlersInstalled) return
 
@@ -582,15 +607,22 @@ export class InputSelectionController {
   }
 
   private handleNativeInputBeforeInputCapture = (_event: InputEvent): void => {
-    this.nativeInputGeneration += 1
-    this.nativeTextInputState = 'observed'
+    this.transitionInputState({ type: 'native-input-observed' })
     this.cancelPendingKeyboardTextFallback()
   }
 
   private handleNativeInputInputCapture = (_event: Event): void => {
-    this.nativeInputGeneration += 1
-    this.nativeTextInputState = 'observed'
+    this.transitionInputState({ type: 'native-input-observed' })
     this.cancelPendingKeyboardTextFallback()
+  }
+
+  private handleCompositionStart = (_event: CompositionEvent): void => {
+    this.cancelPendingKeyboardTextFallback()
+    this.transitionInputState({ type: 'composition-start' })
+  }
+
+  private handleCompositionEnd = (_event: CompositionEvent): void => {
+    this.transitionInputState({ type: 'composition-end' })
   }
 
   private handleMouseDown = (event: MouseEvent): void => {
@@ -635,7 +667,7 @@ export class InputSelectionController {
     event.preventDefault()
     const change = session.addSelection(offset)
     this.syncSessionSelectionHighlight()
-    this.useSessionSelectionForNextInput = true
+    this.markSessionSelectionForNextInput()
     this.options.applySessionChange(change, 'input.addCursor', start, {
       syncDomSelection: false,
     })
@@ -687,7 +719,7 @@ export class InputSelectionController {
     const change = session.setSelection(drag.anchorOffset, offset)
     const syncDomSelection = drag.anchorOffset === offset
     this.syncCustomSelectionHighlight(drag.anchorOffset, offset)
-    this.useSessionSelectionForNextInput = true
+    this.markSessionSelectionForNextInput()
     this.options.applySessionChange(change, 'input.selection', start, { syncDomSelection })
   }
 
@@ -708,7 +740,12 @@ export class InputSelectionController {
     this.syncCustomSelectionHighlight(drag.anchorOffset, offset)
     session.setSelection(drag.anchorOffset, offset)
     this.options.notifyViewContributions('selection', null)
-    this.useSessionSelectionForNextInput = drag.anchorOffset !== offset
+    if (drag.anchorOffset === offset) {
+      this.markDomSelectionForNextInput()
+      return
+    }
+
+    this.markSessionSelectionForNextInput()
   }
 
   private mouseSelectionOffsetFromPoint(clientX: number, clientY: number): number {
@@ -781,7 +818,7 @@ export class InputSelectionController {
     event.preventDefault()
     const change = session.setSelection(0, session.getSnapshot().length)
     this.syncCustomSelectionHighlight(0, session.getSnapshot().length)
-    this.useSessionSelectionForNextInput = true
+    this.markSessionSelectionForNextInput()
     this.options.applySessionChange(change, timingName, start, { syncDomSelection: false })
   }
 
@@ -815,7 +852,7 @@ export class InputSelectionController {
     event.preventDefault()
     const change = session.setSelection(range.start, range.end)
     this.syncCustomSelectionHighlight(range.start, range.end)
-    this.useSessionSelectionForNextInput = true
+    this.markSessionSelectionForNextInput()
     this.options.applySessionChange(change, timingName, start, { syncDomSelection: false })
   }
 
@@ -832,6 +869,7 @@ export class InputSelectionController {
     if (event.inputType !== 'insertText' && event.inputType !== 'insertLineBreak') return
 
     this.cancelPendingKeyboardTextFallback()
+    this.transitionInputState({ type: 'beforeinput-pending' })
     const start = eventStartMs(event)
     const selectionChange = measureEditorPerformance('input.selectionChangeBeforeEdit', () =>
       this.selectionChangeBeforeEdit(),
@@ -841,6 +879,7 @@ export class InputSelectionController {
     const textChange = measureEditorPerformance('session.applyText', () =>
       session.applyText(inserted),
     )
+    this.transitionInputState({ type: 'transaction-committed' })
     this.options.applySessionChange(
       mergeChangeTimings(textChange, selectionChange),
       'input.beforeinput',
@@ -863,6 +902,7 @@ export class InputSelectionController {
     const selectionChange = this.selectionChangeBeforeEdit()
     event.preventDefault()
     const change = mergeChangeTimings(session.applyText(text), selectionChange)
+    this.transitionInputState({ type: 'transaction-committed' })
     this.options.applySessionChange(change, 'input.paste', start, {
       revealBlock: pasteRevealBlock(text),
       revealOffset: this.primarySelectionHeadOffset(change),
@@ -891,6 +931,7 @@ export class InputSelectionController {
 
     const fallbackText = keyboardFallbackText(event)
     if (fallbackText === null) return
+    if (this.inputState.phase === 'composing') return
 
     if (this.canWaitForNativeTextInput(event, fallbackText)) {
       this.scheduleKeyboardTextFallback(event, fallbackText)
@@ -904,19 +945,21 @@ export class InputSelectionController {
   }
 
   private canWaitForNativeTextInput(event: KeyboardEvent, text: string): boolean {
-    if (text === ' ') return false
-    if (this.nativeTextInputState === 'missing') return false
-    return event.target === this.options.view.inputElement
+    return canWaitForNativeTextInput(this.inputState, {
+      targetIsHiddenInput: event.target === this.options.view.inputElement,
+      text,
+    })
   }
 
   private scheduleKeyboardTextFallback(event: KeyboardEvent, text: string): void {
     const start = eventStartMs(event)
-    const nativeInputGeneration = this.nativeInputGeneration
+    const nativeInputGeneration = this.inputState.nativeInputGeneration
     const pending = this.pendingKeyboardTextFallback
 
     if (pending && pending.nativeInputGeneration === nativeInputGeneration) {
       pending.text += text
       pending.startMs = Math.min(pending.startMs, start)
+      this.transitionInputState({ startMs: start, text, type: 'fallback-appended' })
       return
     }
 
@@ -930,6 +973,12 @@ export class InputSelectionController {
       startMs: start,
       text,
     }
+    this.transitionInputState({
+      generation: nativeInputGeneration,
+      startMs: start,
+      text,
+      type: 'fallback-scheduled',
+    })
     next.timerId = view.setTimeout(() => {
       this.flushPendingKeyboardTextFallback(next)
     }, 0)
@@ -942,6 +991,7 @@ export class InputSelectionController {
 
     this.pendingKeyboardTextFallback = null
     this.options.el.ownerDocument.defaultView?.clearTimeout(pending.timerId)
+    this.transitionInputState({ type: 'fallback-cancelled' })
   }
 
   private flushPendingKeyboardTextFallback(expected?: PendingKeyboardTextFallback): void {
@@ -951,6 +1001,7 @@ export class InputSelectionController {
 
     this.pendingKeyboardTextFallback = null
     this.options.el.ownerDocument.defaultView?.clearTimeout(pending.timerId)
+    this.transitionInputState({ type: 'fallback-cancelled' })
     this.applyKeyboardTextFallback(pending.text, pending.startMs, pending.nativeInputGeneration)
   }
 
@@ -962,15 +1013,23 @@ export class InputSelectionController {
     const session = this.session
     if (!session) return
     if (!this.options.canEditDocument()) return
-    if (nativeInputGeneration !== undefined && this.nativeInputGeneration !== nativeInputGeneration)
+    if (
+      nativeInputGeneration !== undefined &&
+      this.inputState.nativeInputGeneration !== nativeInputGeneration
+    ) {
       return
+    }
 
-    if (nativeInputGeneration !== undefined) this.nativeTextInputState = 'missing'
+    if (nativeInputGeneration !== undefined) {
+      this.transitionInputState({ generation: nativeInputGeneration, type: 'native-input-missing' })
+    }
     const selectionChange = measureEditorPerformance('input.selectionChangeBeforeEdit', () =>
       this.selectionChangeBeforeEdit(),
     )
     this.options.view.inputElement.value = ''
+    this.transitionInputState({ type: 'hidden-input-cleared' })
     const textChange = measureEditorPerformance('session.applyText', () => session.applyText(text))
+    this.transitionInputState({ type: 'transaction-committed' })
     this.options.applySessionChange(
       mergeChangeTimings(textChange, selectionChange),
       'input.keydownFallback',
@@ -1105,14 +1164,14 @@ export class InputSelectionController {
   private syncSessionSelectionFromDom = (_event: Event): void => {
     if (!this.session) return
     if (this.mouseSelectionDrag) return
-    if (this.useSessionSelectionForNextInput) return
+    if (this.inputState.selectionOwner === 'session') return
     if (this.isInputFocused()) return
 
     const start = nowMs()
     const change = this.updateSessionSelectionFromDom()
     if (!change) return
 
-    this.useSessionSelectionForNextInput = false
+    this.markDomSelectionForNextInput()
     const timedChange = appendTiming(change, 'input.selection', start)
     this.options.getSessionOptions().onChange?.(timedChange)
     this.options.notifyViewContributions('selection', null)
@@ -1137,12 +1196,12 @@ export class InputSelectionController {
 
   private selectionChangeBeforeEdit(): DocumentSessionChange | null {
     if (this.isInputFocused()) {
-      this.useSessionSelectionForNextInput = false
+      this.markHiddenInputSelectionForNextInput()
       return null
     }
-    if (!this.useSessionSelectionForNextInput) return this.updateSessionSelectionFromDom()
+    if (this.inputState.selectionOwner !== 'session') return this.updateSessionSelectionFromDom()
 
-    this.useSessionSelectionForNextInput = false
+    this.markDomSelectionForNextInput()
     return null
   }
 
@@ -1159,7 +1218,7 @@ export class InputSelectionController {
 
   private syncCustomSelectionFromDom = (): void => {
     if (!this.session) return
-    if (this.useSessionSelectionForNextInput) return
+    if (this.inputState.selectionOwner === 'session') return
     if (this.isInputFocused()) return
 
     const offsets = this.readDomSelectionOffsets()
@@ -1170,6 +1229,7 @@ export class InputSelectionController {
 
   private syncCustomSelectionHighlight(anchorOffset: number, headOffset: number): void {
     this.options.view.setSelection(anchorOffset, headOffset)
+    this.transitionInputState({ owner: 'dom', type: 'selection-reconciled' })
   }
 
   private isInputFocused(): boolean {

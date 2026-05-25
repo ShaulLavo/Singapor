@@ -83,10 +83,10 @@ export class EditorKeymapController {
     const handle = getHotkeyManager().register(
       binding.hotkey,
       (event) => {
-        dispatch(binding.command, { event })
+        const handled = dispatch(binding.command, { event })
 
-        if (binding.preventDefault !== false) event.preventDefault()
-        if (binding.stopPropagation !== false) event.stopPropagation()
+        if (shouldPreventDefault(binding, handled)) event.preventDefault()
+        if (shouldStopPropagation(binding, handled)) event.stopPropagation()
       },
       {
         conflictBehavior: 'replace',
@@ -99,6 +99,18 @@ export class EditorKeymapController {
     )
     this.handles.push(handle)
   }
+}
+
+function shouldPreventDefault(binding: EditorKeyBinding, handled: boolean): boolean {
+  if (binding.preventDefault === true) return true
+  if (binding.preventDefault === false) return false
+  return handled
+}
+
+function shouldStopPropagation(binding: EditorKeyBinding, handled: boolean): boolean {
+  if (binding.stopPropagation === true) return true
+  if (binding.stopPropagation === false) return false
+  return handled
 }
 
 export function editorKeyBindings(options: EditorKeymapOptions = {}): readonly EditorKeyBinding[] {

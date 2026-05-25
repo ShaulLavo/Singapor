@@ -2401,6 +2401,25 @@ describe('Editor', () => {
       expect(editor.materializeFullText()).toBe('abc')
     })
 
+    it('tracks composition state for keydown fallback decisions', async () => {
+      const session = createDocumentSession('abc')
+      editor.attachSession(session)
+      editor.focus()
+
+      editorInput().dispatchEvent(new Event('compositionstart', { bubbles: true }))
+      dispatchInputKey('X')
+      await flushTimers()
+
+      expect(session.materializeFullText()).toBe('abc')
+
+      editorInput().dispatchEvent(new Event('compositionend', { bubbles: true }))
+      dispatchInputKey('X')
+      await flushTimers()
+
+      expect(session.materializeFullText()).toBe('abcX')
+      expect(editor.materializeFullText()).toBe('abcX')
+    })
+
     it('clears pending keydown fallback on dispose', async () => {
       const session = createDocumentSession('abc')
       editor.attachSession(session)
@@ -3111,14 +3130,41 @@ describe('Editor', () => {
       expect(editorRoot().scrollTop).toBe(0)
     })
 
-    it('prevents browser defaults for no-op editor key commands', () => {
+    it('leaves browser defaults alone for unhandled editor key commands', () => {
       editor.setText(' ')
 
       const addOccurrence = dispatchEditorKey('d', primaryModifier())
       const clearSecondary = dispatchEditorKey('Escape')
 
+      expect(addOccurrence.defaultPrevented).toBe(false)
+      expect(clearSecondary.defaultPrevented).toBe(false)
+    })
+
+    it('allows key bindings to explicitly prevent browser defaults', () => {
+      editor.dispose()
+      editor = new Editor(container, {
+        keymap: {
+          defaultBindings: false,
+          layers: [
+            {
+              bindings: [
+                {
+                  command: 'addNextOccurrence',
+                  hotkey: { key: 'D', mod: true },
+                  preventDefault: true,
+                },
+              ],
+              id: 'test.prevent-default',
+            },
+          ],
+        },
+        plugins: withTestLanguagePlugins(),
+      })
+      editor.setText(' ')
+
+      const addOccurrence = dispatchEditorKey('d', primaryModifier())
+
       expect(addOccurrence.defaultPrevented).toBe(true)
-      expect(clearSecondary.defaultPrevented).toBe(true)
     })
 
     it('opens find, navigates matches, and paints find highlights', () => {
