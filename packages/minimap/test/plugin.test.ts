@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import type {
+  EditorCapabilityContributionProvider,
   EditorPluginContext,
   EditorViewContributionContext,
   EditorViewContributionProvider,
   EditorViewSnapshot,
 } from '@editor/core/extensions'
+import { EDITOR_MINIMAP_FEATURE } from '@editor/core/extensions'
 import { createMinimapPlugin } from '../src/plugin'
 
 describe('createMinimapPlugin', () => {
@@ -29,6 +31,36 @@ describe('createMinimapPlugin', () => {
     expect(plugin.name).toBe('minimap')
     expect(disposable).toBeDefined()
     expect(registerViewContribution).toHaveBeenCalledOnce()
+  })
+
+  it('registers decorations through a capability contribution factory', () => {
+    let registration: EditorCapabilityContributionProvider | undefined
+    const registerCapabilityContribution: EditorPluginContext['registerCapabilityContribution'] = (
+      provider,
+    ) => {
+      registration = provider
+      return { dispose: vi.fn() }
+    }
+    const registerFeature = vi.fn(() => ({ dispose: vi.fn() }))
+    const plugin = createMinimapPlugin({ enabled: false })
+
+    plugin.activate({
+      registerHighlighter: vi.fn(() => ({ dispose: vi.fn() })),
+      registerSyntaxProvider: vi.fn(() => ({ dispose: vi.fn() })),
+      registerViewContribution: vi.fn(() => ({ dispose: vi.fn() })),
+      registerCommandContribution: vi.fn(() => ({ dispose: vi.fn() })),
+      registerCapabilityContribution,
+      registerEditorFeatureContribution: vi.fn(() => ({ dispose: vi.fn() })),
+      registerGutterContribution: vi.fn(() => ({ dispose: vi.fn() })),
+      registerBlockProvider: vi.fn(() => ({ dispose: vi.fn() })),
+      registerInjectedTextRowProvider: vi.fn(() => ({ dispose: vi.fn() })),
+    })
+
+    const contribution = registration?.createContribution({ registerFeature })
+
+    expect(registerFeature).toHaveBeenCalledWith(EDITOR_MINIMAP_FEATURE, expect.any(Object))
+
+    contribution?.dispose()
   })
 
   it('returns no contribution when disabled', () => {

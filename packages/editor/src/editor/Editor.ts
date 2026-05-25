@@ -814,7 +814,8 @@ export class Editor {
   }
 
   setKeymap(keymap: EditorOptions['keymap']): void {
-    this.keymap.setKeymap(keymap)
+    if (!this.keymap.setKeymap(keymap)) return
+
     this.log({
       action: 'editor.keymap.changed',
       level: 'info',

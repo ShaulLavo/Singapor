@@ -9,6 +9,11 @@ import {
 import type { EditorCommandContext, EditorCommandId } from './commands'
 
 type EditorPlatform = ReturnType<typeof detectPlatform>
+type EditorKeymapSignature = readonly string[]
+type EditorResolvedKeymap = {
+  readonly bindings: readonly EditorKeyBinding[]
+  readonly signature: EditorKeymapSignature
+}
 
 export type EditorCommandPack =
   | 'navigation'
@@ -51,7 +56,7 @@ export class EditorKeymapController {
   private readonly handles: HotkeyRegistrationHandle[] = []
   private readonly dispatch: (command: EditorCommandId, context: EditorCommandContext) => boolean
   private readonly target: HTMLElement
-  private keymap: EditorKeymapOptions | undefined | null = null
+  private keymapSignature: EditorKeymapSignature | null = null
 
   public constructor(options: EditorKeymapControllerOptions) {
     this.dispatch = options.dispatch
@@ -59,18 +64,26 @@ export class EditorKeymapController {
     this.setKeymap(options.keymap)
   }
 
-  public setKeymap(keymap: EditorKeymapOptions | undefined): void {
-    if (this.keymap === keymap) return
+  public setKeymap(keymap: EditorKeymapOptions | undefined): boolean {
+    const resolved = resolveEditorKeymap(keymap)
+    if (editorKeymapSignaturesEqual(this.keymapSignature, resolved.signature)) {
+      return false
+    }
 
-    this.dispose()
-    this.keymap = keymap
-    if (keymap?.enabled === false) return
+    this.unregisterBindings()
+    this.keymapSignature = resolved.signature
 
-    const bindings = editorKeyBindings(keymap)
-    for (const binding of bindings) this.registerBinding(this.target, binding, this.dispatch)
+    for (const binding of resolved.bindings)
+      this.registerBinding(this.target, binding, this.dispatch)
+    return true
   }
 
   public dispose(): void {
+    this.unregisterBindings()
+    this.keymapSignature = null
+  }
+
+  private unregisterBindings(): void {
     for (const handle of this.handles) handle.unregister()
     this.handles.length = 0
   }
@@ -111,6 +124,43 @@ function shouldStopPropagation(binding: EditorKeyBinding, handled: boolean): boo
   if (binding.stopPropagation === true) return true
   if (binding.stopPropagation === false) return false
   return handled
+}
+
+function resolveEditorKeymap(options: EditorKeymapOptions | undefined): EditorResolvedKeymap {
+  if (options?.enabled === false) {
+    return { bindings: [], signature: ['enabled:false'] }
+  }
+
+  const platform = detectPlatform()
+  const bindings = editorKeyBindingsFromLayers(editorKeymapLayers(options), platform)
+
+  return {
+    bindings,
+    signature: bindings.map((binding) => editorKeyBindingSignature(binding, platform)),
+  }
+}
+
+function editorKeyBindingSignature(binding: EditorKeyBinding, platform: EditorPlatform): string {
+  return [
+    editorHotkeyKey(binding.hotkey, platform),
+    binding.command,
+    binding.preventDefault,
+    binding.stopPropagation,
+  ].join('\0')
+}
+
+function editorKeymapSignaturesEqual(
+  left: EditorKeymapSignature | null,
+  right: EditorKeymapSignature,
+): boolean {
+  if (!left) return false
+  if (left.length !== right.length) return false
+
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return false
+  }
+
+  return true
 }
 
 export function editorKeyBindings(options: EditorKeymapOptions = {}): readonly EditorKeyBinding[] {

@@ -2,7 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { detectPlatform } from '@tanstack/hotkeys'
 import { createEditorFindPlugin } from '../../find/src/index.ts'
 import { createFoldGutterPlugin, createLineGutterPlugin } from '../../gutters/src/index.ts'
-import { createMergeConflictPlugin, Editor, type EditorState } from '../src/editor'
+import {
+  createEditorLoggingPlugin,
+  createMergeConflictPlugin,
+  Editor,
+  type EditorKeymapOptions,
+  type EditorLogEvent,
+  type EditorState,
+} from '../src/editor'
 import { createDocumentSession, type DocumentSessionChange } from '../src/public/document'
 import {
   createEmptySyntaxResult,
@@ -3197,6 +3204,32 @@ describe('Editor', () => {
       dispatchEditorKey('ArrowLeft')
 
       expect(editor.getState().cursor).toEqual({ row: 0, column: 3 })
+    })
+
+    it('skips keymap change logs for equivalent keymap options', () => {
+      const events: EditorLogEvent[] = []
+      const keymap = (): EditorKeymapOptions => ({
+        defaultBindings: false,
+        layers: [
+          {
+            bindings: [{ command: 'cursorLeft', hotkey: 'ArrowLeft' }],
+            id: 'test.navigation',
+          },
+        ],
+      })
+      editor.dispose()
+      editor = new Editor(container, {
+        plugins: [createEditorLoggingPlugin((event) => events.push(event))],
+      })
+      editor.setText('abc')
+
+      editor.setKeymap(keymap())
+      editor.setKeymap(keymap())
+      dispatchEditorKey('ArrowLeft')
+
+      const keymapEvents = events.filter((event) => event.action === 'editor.keymap.changed')
+      expect(editor.getState().cursor).toEqual({ row: 0, column: 2 })
+      expect(keymapEvents).toHaveLength(1)
     })
 
     it('keeps browser selections synced to the document session', () => {
