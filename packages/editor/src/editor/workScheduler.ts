@@ -182,11 +182,20 @@ export class EditorWorkScheduler {
   private scheduleStart(work: ScheduledEditorWork): void {
     const delayMs = normalizeDelayMs(work.options.delayMs)
     if (delayMs === 0) {
+      this.startZeroDelayWork(work)
+      return
+    }
+
+    work.timer = this.setTimer(() => this.start(work), delayMs)
+  }
+
+  private startZeroDelayWork(work: ScheduledEditorWork): void {
+    if (work.options.defer === true) {
       this.enqueueStart(work)
       return
     }
 
-    work.timer = this.setTimer(() => this.enqueueStart(work), delayMs)
+    this.start(work)
   }
 
   private enqueueStart(work: ScheduledEditorWork): void {

@@ -7,6 +7,11 @@ export {
   setHighlightRegistry,
 } from './editor/runtime'
 export {
+  createEditorConsoleLogger,
+  createEditorConsoleLoggingPlugin,
+  createEditorLoggingPlugin,
+} from './logging'
+export {
   createMergeConflictDocumentText,
   parseMergeConflicts,
   resolveMergeConflict,
@@ -104,6 +109,12 @@ export type {
   EditorInjectedTextRow,
   EditorInjectedTextRowProvider,
   EditorInjectedTextRowProviderContext,
+  EditorLogEditorContext,
+  EditorLogError,
+  EditorLogEvent,
+  EditorLogInput,
+  EditorLogger,
+  EditorLogLevel,
   EditorCommandHandler,
   EditorFeatureContribution,
   EditorFeatureContributionContext,

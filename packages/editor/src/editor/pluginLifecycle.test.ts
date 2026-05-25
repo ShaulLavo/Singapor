@@ -1,6 +1,13 @@
 import { Window } from 'happy-dom'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-import type { EditorGutterContribution, EditorPlugin, EditorPluginContext } from '../plugins'
+import { createEditorLoggingPlugin } from '../logging'
+import type {
+  EditorGutterContribution,
+  EditorLogEvent,
+  EditorPlugin,
+  EditorPluginContext,
+} from '../plugins'
+import type { EditorOptions } from './types'
 import { setHighlightRegistry } from './runtime'
 import { Editor } from './Editor'
 
@@ -113,13 +120,42 @@ describe('editor plugin lifecycle', () => {
     expect(findGutterCells('test-gutter')).toHaveLength(0)
     editor.dispose()
   })
+
+  test('registered loggers receive structured editor events', () => {
+    const events: EditorLogEvent[] = []
+    const editor = createEditor({
+      plugins: [createEditorLoggingPlugin((event) => events.push(event))],
+    })
+
+    editor.edit({ from: 0, to: 0, text: 'x' })
+    editor.dispatchCommand('selectAll')
+
+    expect(events.some((event) => event.action === 'editor.lifecycle.mounted')).toBe(true)
+    expect(events.some((event) => event.action === 'editor.plugin.activated')).toBe(true)
+    expect(events.some((event) => event.action === 'editor.command.dispatched')).toBe(true)
+
+    const change = events.find(
+      (event) =>
+        event.action === 'editor.session.changed' &&
+        (event.change as { kind?: string } | undefined)?.kind === 'edit',
+    )
+    expect(change).toMatchObject({
+      level: 'info',
+      source: 'editor',
+      editor: {
+        documentId: null,
+        languageId: null,
+      },
+    })
+    editor.dispose()
+  })
 })
 
-function createEditor(): Editor {
+function createEditor(options: EditorOptions = {}): Editor {
   const container = document.createElement('div')
   mockEditorViewport(container, 320, 120)
   document.body.appendChild(container)
-  const editor = new Editor(container, { defaultText: 'one\ntwo' })
+  const editor = new Editor(container, { defaultText: 'one\ntwo', ...options })
   mockEditorViewport(editorElement(editor), 320, 120)
   syncEditorViewport(editor, 320, 120)
   editor.setScrollPosition({ top: 0, left: 0 })

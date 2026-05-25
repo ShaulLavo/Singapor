@@ -174,16 +174,19 @@ describe('EditorWorkScheduler', () => {
     scheduler.schedule({
       key: 'idle',
       taskClass: 'idle-cache',
+      defer: true,
       run: () => calls.push('idle'),
     })
     scheduler.schedule({
       key: 'visible',
       taskClass: 'visible-render',
+      defer: true,
       run: () => calls.push('visible'),
     })
     scheduler.schedule({
       key: 'background',
       taskClass: 'background-derived',
+      defer: true,
       run: () => calls.push('background'),
     })
 

@@ -13,6 +13,8 @@
     "./editor": "./src/editor.ts",
     "./extensions": "./src/public/extensions.ts",
     "./internal": "./src/internal.ts",
+    "./logging": "./src/logging/index.ts",
+    "./logging/evlog": "./src/logging/evlog.ts",
     "./rendering": "./src/public/rendering.ts",
     "./shiki": "./src/shiki/index.ts",
     "./syntax": "./src/public/syntax.ts",
@@ -34,6 +36,7 @@
   "dependencies": {
     "@tanstack/hotkeys": "0.8.0",
     "diff": "^8.0.3",
+    "evlog": "^2.17.0",
     "shiki": "^1.29.2"
   },
   "devDependencies": {

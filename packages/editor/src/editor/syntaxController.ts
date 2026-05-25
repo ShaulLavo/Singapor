@@ -1,7 +1,12 @@
 import type { DocumentSession, DocumentSessionChange } from '../documentSession'
 import { defineLazyFullTextProperty, type DocumentTextSnapshot } from '../documentTextSnapshot'
 import type { PieceTableSnapshot } from '../pieceTable/pieceTableTypes'
-import type { EditorHighlightResult, EditorHighlighterSession, EditorPluginHost } from '../plugins'
+import type {
+  EditorHighlightResult,
+  EditorHighlighterSession,
+  EditorLogInput,
+  EditorPluginHost,
+} from '../plugins'
 import { createEmptySyntaxResult } from '../syntax/session'
 import type { EditorSyntaxRange, EditorSyntaxResult, EditorSyntaxSession } from '../syntax/session'
 import type { EditorSyntaxLanguageId, FoldRange } from '../syntax/session'
@@ -38,6 +43,7 @@ export type EditorSyntaxControllerOptions = {
   setSyntaxFolds(folds: readonly FoldRange[]): void
   notifyChange(change: DocumentSessionChange | null): void
   notifyThemeChanged(): void
+  log?(event: EditorLogInput): void
 }
 
 export type EditorSyntaxRefreshOptions = {
@@ -168,6 +174,7 @@ export class EditorSyntaxController {
     )
     this.syntaxSession = this.createSyntaxSession(document)
     this.syntaxStatus = this.syntaxSession ? 'loading' : 'plain'
+    this.logSyntaxStatus('editor.syntax.document_started')
   }
 
   clearDocument(): void {
@@ -176,6 +183,7 @@ export class EditorSyntaxController {
     this.resetSyntaxContentVersion()
     this.disposeSyntaxSession()
     this.disposeHighlighterSession()
+    this.logSyntaxStatus('editor.syntax.document_cleared')
   }
 
   dispose(): void {
@@ -204,6 +212,7 @@ export class EditorSyntaxController {
       snapshot: session.getSnapshot(),
     })
     this.syntaxStatus = this.syntaxSession ? 'loading' : 'plain'
+    this.logSyntaxStatus('editor.syntax.reloaded')
     this.refresh(this.options.getDocumentVersion(), null)
     this.options.notifyChange(null)
   }
@@ -230,6 +239,15 @@ export class EditorSyntaxController {
     if (!this.options.getSession()) return
     if (change && (change.kind === 'none' || change.kind === 'selection')) return
 
+    this.options.log?.({
+      action: 'editor.syntax.refresh_scheduled',
+      level: 'debug',
+      syntax: {
+        changeKind: change?.kind ?? null,
+        documentVersion,
+        range: options.range ?? null,
+      },
+    })
     this.refreshStructuralSyntax(documentVersion, change, options)
     this.refreshHighlightTokens(documentVersion, change, options)
   }
@@ -734,6 +752,14 @@ export class EditorSyntaxController {
 
     if (result.theme !== undefined) this.setHighlighterTheme(result.theme)
     this.setTokens(result.tokens)
+    this.options.log?.({
+      action: 'editor.syntax.highlight_applied',
+      level: 'debug',
+      syntax: {
+        documentVersion,
+        tokenCount: result.tokens.length,
+      },
+    })
     this.options.notifyChange(null)
   }
 
@@ -741,6 +767,7 @@ export class EditorSyntaxController {
     if (documentVersion !== this.options.getDocumentVersion()) return
 
     this.syntaxStatus = 'error'
+    this.logSyntaxStatus('editor.syntax.structural_error', 'error')
     warnEditorSyntax('mark structural syntax error', this.debugContext(documentVersion))
     this.options.notifyChange(null)
   }
@@ -752,6 +779,16 @@ export class EditorSyntaxController {
     startedAt: number,
   ): void {
     if (documentVersion !== this.options.getDocumentVersion()) return
+    this.options.log?.({
+      action: 'editor.syntax.structural_request_failed',
+      level: 'error',
+      error: syntaxLogError(error),
+      syntax: {
+        ...this.debugContext(documentVersion),
+        changeKind: change?.kind ?? 'refresh',
+        startedAt,
+      },
+    })
     warnEditorSyntax(`structural syntax request failed: ${syntaxErrorMessage(error)}`, {
       ...this.debugContext(documentVersion),
       changeKind: change?.kind ?? 'refresh',
@@ -775,6 +812,11 @@ export class EditorSyntaxController {
     const session = this.options.getSession()
     if (!session || documentVersion !== this.options.getDocumentVersion()) return
 
+    this.options.log?.({
+      action: 'editor.syntax.highlight_cleared_after_error',
+      level: 'warn',
+      syntax: this.debugContext(documentVersion),
+    })
     warnEditorSyntax('clear plugin highlighting after error', this.debugContext(documentVersion))
     this.setHighlighterTheme(null)
     this.setTokens([])
@@ -788,6 +830,16 @@ export class EditorSyntaxController {
     startedAt: number,
   ): void {
     if (documentVersion !== this.options.getDocumentVersion()) return
+    this.options.log?.({
+      action: 'editor.syntax.highlight_request_failed',
+      level: 'warn',
+      error: syntaxLogError(error),
+      syntax: {
+        ...this.debugContext(documentVersion),
+        changeKind: change?.kind ?? 'refresh',
+        startedAt,
+      },
+    })
     warnEditorSyntax(`plugin highlighting request failed: ${syntaxErrorMessage(error)}`, {
       ...this.debugContext(documentVersion),
       changeKind: change?.kind ?? 'refresh',
@@ -826,6 +878,11 @@ export class EditorSyntaxController {
     if (editorThemesEqual(this.highlighterTheme, nextTheme)) return
 
     this.highlighterTheme = nextTheme
+    this.options.log?.({
+      action: 'editor.syntax.highlighter_theme_changed',
+      level: 'debug',
+      syntax: { hasTheme: nextTheme !== null },
+    })
     this.options.notifyThemeChanged()
   }
 
@@ -834,7 +891,23 @@ export class EditorSyntaxController {
     if (editorThemesEqual(this.providerHighlighterTheme, nextTheme)) return
 
     this.providerHighlighterTheme = nextTheme
+    this.options.log?.({
+      action: 'editor.syntax.provider_theme_changed',
+      level: 'debug',
+      syntax: { hasTheme: nextTheme !== null },
+    })
     this.options.notifyThemeChanged()
+  }
+
+  private logSyntaxStatus(
+    action: string,
+    level: 'debug' | 'info' | 'warn' | 'error' = 'info',
+  ): void {
+    this.options.log?.({
+      action,
+      level,
+      syntax: this.debugContext(this.options.getDocumentVersion()),
+    })
   }
 }
 
@@ -854,6 +927,20 @@ const syntaxDebugError = (error: unknown): EditorSyntaxDebugPayload => {
   }
 
   return { value: String(error) }
+}
+
+const syntaxLogError = (
+  error: unknown,
+): { readonly message: string; readonly name?: string; readonly stack?: string } => {
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      name: error.name,
+      stack: error.stack,
+    }
+  }
+
+  return { message: String(error) }
 }
 
 const syntaxErrorMessage = (error: unknown): string => {

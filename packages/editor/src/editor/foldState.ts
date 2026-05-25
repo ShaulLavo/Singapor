@@ -31,6 +31,10 @@ export class EditorFoldState {
     return this.syntaxFolds
   }
 
+  public get collapsedFoldCount(): number {
+    return this.collapsedFoldKeys.size
+  }
+
   public setSyntaxFolds(folds: readonly FoldRange[]): void {
     if (foldRangesEqual(this.syntaxFolds, folds)) return
 

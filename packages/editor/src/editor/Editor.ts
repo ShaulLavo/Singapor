@@ -65,6 +65,8 @@ import {
   type EditorFeatureContributionContext,
   type EditorFeatureContributionProvider,
   type EditorInjectedTextRowProviderContext,
+  type EditorLogError,
+  type EditorLogInput,
   type EditorOverlaySide,
   type EditorPlugin,
   type EditorViewContribution,
@@ -263,6 +265,7 @@ export class Editor {
       setSyntaxFolds: (folds) => this.setSyntaxFolds(folds),
       notifyChange: (change) => this.notifyChange(change),
       notifyThemeChanged: () => this.applyResolvedTheme(),
+      log: (event) => this.log(event),
     })
     this.inputSelection = new InputSelectionController({
       el: this.el,
@@ -313,6 +316,27 @@ export class Editor {
       () => this.createViewSnapshot(),
     )
     this.pluginHost.setEvents({
+      onPluginActivated: (name, durationMs) =>
+        this.log({
+          action: 'editor.plugin.activated',
+          level: 'info',
+          durationMs,
+          plugin: { name },
+        }),
+      onPluginActivationFailed: (name, error, durationMs) =>
+        this.log({
+          action: 'editor.plugin.activation_failed',
+          level: 'error',
+          durationMs,
+          error: editorLogError(error),
+          plugin: { name },
+        }),
+      onPluginDisposed: (name) =>
+        this.log({
+          action: 'editor.plugin.disposed',
+          level: 'info',
+          plugin: { name },
+        }),
       onHighlighterProvidersChanged: () => this.syntax.reloadHighlighterAndSyntax(),
       onSyntaxProvidersChanged: () => this.syntax.reloadSyntaxSession(),
       onViewContributionProviderAdded: (provider) => this.addViewContributionProvider(provider),
@@ -329,7 +353,22 @@ export class Editor {
     this.inputSelection.install()
     this.initializeDefaultText()
     this.setRangeDecorations(options.rangeDecorations ?? [])
-    recordEditorMountTiming(nowMs() - mountStart)
+    const mountDurationMs = nowMs() - mountStart
+    recordEditorMountTiming(mountDurationMs)
+    this.logInitialPlugins()
+    this.log({
+      action: 'editor.lifecycle.mounted',
+      level: 'info',
+      durationMs: mountDurationMs,
+      plugins: this.pluginHost.getActivePluginNames(),
+      settings: {
+        defaultTextLength: options.defaultText?.length ?? 0,
+        hiddenCharacters: options.hiddenCharacters ?? null,
+        lineHeight: options.lineHeight ?? null,
+        rowGap: options.rowGap ?? null,
+        tabSize: this.tabSize,
+      },
+    })
   }
 
   setContent(text: string): void {
@@ -341,6 +380,14 @@ export class Editor {
     this.clearSyntaxFolds()
     this.applyRangeDecorations()
     this.notifyViewContributions('content', null)
+    this.log({
+      action: 'editor.content.set',
+      level: 'info',
+      content: {
+        length: text.length,
+        lineCount: this.view.getLineCount(),
+      },
+    })
   }
 
   setTokens(tokens: readonly EditorToken[]): void {
@@ -398,7 +445,14 @@ export class Editor {
     if (!this.session) return false
 
     const changed = this.foldState.foldAll()
-    if (changed) this.notifyViewContributions('layout', null)
+    if (changed) {
+      this.notifyViewContributions('layout', null)
+      this.log({
+        action: 'editor.fold.all',
+        level: 'info',
+        fold: { collapsedCount: this.foldState.collapsedFoldCount },
+      })
+    }
     return changed
   }
 
@@ -406,7 +460,14 @@ export class Editor {
     if (!this.session) return false
 
     const changed = this.foldState.unfoldAll()
-    if (changed) this.notifyViewContributions('layout', null)
+    if (changed) {
+      this.notifyViewContributions('layout', null)
+      this.log({
+        action: 'editor.unfold.all',
+        level: 'info',
+        fold: { collapsedCount: this.foldState.collapsedFoldCount },
+      })
+    }
     return changed
   }
 
@@ -426,6 +487,14 @@ export class Editor {
     )
     this.notifyChange(null)
     this.refreshSyntax(documentVersion, null)
+    this.log({
+      action: 'editor.document.set_text',
+      level: 'info',
+      document: {
+        length: text.length,
+        mode: options.documentMode ?? this.documentMode,
+      },
+    })
   }
 
   syncText(text: string, options: EditorSetTextOptions = {}): void {
@@ -447,6 +516,13 @@ export class Editor {
       syncDomSelection: false,
     })
     this.applyDocumentScrollPosition(scrollPosition)
+    this.log({
+      action: 'editor.document.synced_text',
+      level: 'info',
+      document: {
+        length: text.length,
+      },
+    })
   }
 
   edit(editOrEdits: EditorEditInput, options: EditorEditOptions = {}): void {
@@ -470,6 +546,14 @@ export class Editor {
     })
     this.notifyChange(null)
     this.refreshSyntax(documentVersion, null)
+    this.log({
+      action: 'editor.document.opened',
+      level: 'info',
+      document: {
+        id: document.documentId ?? null,
+        length: document.text.length,
+      },
+    })
   }
 
   private ensureAnonymousSession(): void {
@@ -616,14 +700,29 @@ export class Editor {
     this.configuredTheme = nextTheme
     this.applyResolvedTheme()
     this.notifyViewContributions('tokens', null)
+    this.log({
+      action: 'editor.theme.changed',
+      level: 'info',
+      theme: { configured: nextTheme !== null },
+    })
   }
 
   setHiddenCharacters(mode: HiddenCharactersMode): void {
     this.view.setHiddenCharacters(mode)
+    this.log({
+      action: 'editor.rendering.hidden_characters_changed',
+      level: 'info',
+      rendering: { hiddenCharacters: mode },
+    })
   }
 
   setKeymap(keymap: EditorOptions['keymap']): void {
     this.keymap.setKeymap(keymap)
+    this.log({
+      action: 'editor.keymap.changed',
+      level: 'info',
+      keymap: { configured: Boolean(keymap) },
+    })
   }
 
   setEditability(editability: EditorEditability): void {
@@ -631,6 +730,11 @@ export class Editor {
 
     this.syncViewEditability()
     this.notifyChange(null)
+    this.log({
+      action: 'editor.editability.changed',
+      level: 'info',
+      editability,
+    })
   }
 
   setRangeDecorations(decorations: readonly EditorRangeDecoration[]): void {
@@ -638,23 +742,43 @@ export class Editor {
 
     this.rangeDecorations = decorations
     this.applyRangeDecorations()
+    this.log({
+      action: 'editor.decorations.range.changed',
+      level: 'info',
+      decorations: { count: decorations.length },
+    })
   }
 
   setRowDecorations(decorations: ReadonlyMap<number, VirtualizedTextRowDecoration>): void {
     this.directRowDecorations = new Map(decorations)
     this.applyComposedRowDecorations()
+    this.log({
+      action: 'editor.decorations.row.changed',
+      level: 'info',
+      decorations: { count: decorations.size },
+    })
   }
 
   setLineHeight(lineHeight: number): void {
     if (!this.view.setLineHeight(lineHeight)) return
 
     this.notifyViewContributions('layout', null)
+    this.log({
+      action: 'editor.layout.line_height_changed',
+      level: 'info',
+      layout: { lineHeight },
+    })
   }
 
   setRowGap(rowGap: number): void {
     if (!this.view.setRowGap(rowGap)) return
 
     this.notifyViewContributions('layout', null)
+    this.log({
+      action: 'editor.layout.row_gap_changed',
+      level: 'info',
+      layout: { rowGap },
+    })
   }
 
   addPlugin(plugin: EditorPlugin): EditorDisposable {
@@ -667,10 +791,27 @@ export class Editor {
 
   setPlugins(plugins: readonly EditorPlugin[]): void {
     this.pluginHost.setPlugins(plugins)
+    this.log({
+      action: 'editor.plugins.set',
+      level: 'info',
+      plugins: plugins.map((plugin) => plugin.name ?? 'anonymous'),
+    })
   }
 
   dispatchCommand(command: EditorCommandId, context: EditorCommandContext = {}): boolean {
-    return this.commandRouter.dispatch(command, context)
+    const start = nowMs()
+    const handled = this.commandRouter.dispatch(command, context)
+    this.log({
+      action: 'editor.command.dispatched',
+      level: handled ? 'info' : 'debug',
+      command: {
+        id: command,
+        handled,
+        keyboardEvent: Boolean(context.event),
+      },
+      durationMs: nowMs() - start,
+    })
+    return handled
   }
 
   attachSession(session: DocumentSession, options: EditorSessionOptions = {}): void {
@@ -688,12 +829,26 @@ export class Editor {
     this.notifyViewContributions('document', null)
     this.notifyChange(null)
     this.refreshSyntax(attachment.documentVersion, null)
+    this.log({
+      action: 'editor.document.attached',
+      level: 'info',
+      document: {
+        id: options.documentId ?? null,
+        length: attachment.fullText.length,
+      },
+    })
   }
 
   detachSession(): void {
+    const previousDocumentId = this.documentId
     this.document.detachSession()
     this.inputSelection.clearSelectionHighlight()
     this.view.setEditable(false)
+    this.log({
+      action: 'editor.document.detached',
+      level: 'info',
+      document: { id: previousDocumentId },
+    })
   }
 
   clear(): void {
@@ -704,9 +859,17 @@ export class Editor {
     this.setContent('')
     this.applyDocumentScrollPosition()
     this.notifyViewContributions('clear', null)
+    this.log({
+      action: 'editor.document.cleared',
+      level: 'info',
+    })
   }
 
   dispose(): void {
+    this.log({
+      action: 'editor.lifecycle.disposing',
+      level: 'info',
+    })
     this.secondaryWork.dispose()
     this.blockSurfaces.dispose()
     this.inputSelection.dispose()
@@ -866,15 +1029,59 @@ export class Editor {
     this.editorFeatureContributionsByProvider.clear()
   }
 
+  private logInitialPlugins(): void {
+    for (const name of this.pluginHost.getActivePluginNames()) {
+      this.log({
+        action: 'editor.plugin.activated',
+        level: 'info',
+        plugin: { name, initial: true },
+      })
+    }
+  }
+
+  private log(event: EditorLogInput): void {
+    if (!this.pluginHost.hasLoggers()) return
+
+    this.pluginHost.log({
+      ...event,
+      editor: {
+        ...event.editor,
+        documentId: this.documentId,
+        documentMode: this.documentMode,
+        documentVersion: this.documentVersion,
+        editability: this.editability,
+        instanceId: this.highlightPrefix,
+        languageId: this.languageId,
+        textVersion: this.textVersion,
+      },
+      source: 'editor',
+      timestamp: event.timestamp ?? new Date().toISOString(),
+    })
+  }
+
   private syncGutterContributions(): void {
     if (!this.view.setGutterContributions(this.pluginHost.getGutterContributions())) return
 
     this.notifyViewContributions('layout', null)
+    this.log({
+      action: 'editor.plugins.gutters.changed',
+      level: 'info',
+      plugins: {
+        gutterContributionCount: this.pluginHost.getGutterContributions().length,
+      },
+    })
   }
 
   private handleBlockProvidersChanged(): void {
     this.syncEditorBlocks()
     this.notifyViewContributions('layout', null)
+    this.log({
+      action: 'editor.plugins.blocks.changed',
+      level: 'info',
+      plugins: {
+        blockProviderCount: this.pluginHost.getBlockProviders().length,
+      },
+    })
   }
 
   private syncEditorBlocks(): void {
@@ -886,6 +1093,14 @@ export class Editor {
 
     this.notifyViewContributions('layout', null)
     this.inputSelection.syncDomSelection()
+    this.log({
+      action: 'editor.plugins.injected_rows.changed',
+      level: 'info',
+      plugins: {
+        injectedTextRowProviderCount: this.pluginHost.getInjectedTextRowProviders().length,
+        rowCount: this.appliedInjectedTextRows.length,
+      },
+    })
   }
 
   private syncInjectedTextRows(): boolean {
@@ -981,6 +1196,7 @@ export class Editor {
       highlightPrefix: this.highlightPrefix,
       getSnapshot: () => this.createViewSnapshot(),
       getFeature: (id) => this.getFeature(id),
+      log: (event) => this.log(event),
       revealLine: (row) => this.view.scrollToRow(row),
       focusEditor: () => this.focus(),
       setSelection: (anchor, head, timingName, revealOffset) =>
@@ -1003,6 +1219,7 @@ export class Editor {
       scrollElement: this.el,
       highlightPrefix: this.highlightPrefix,
       hasDocument: () => this.session !== null,
+      log: (event) => this.log(event),
       materializeFullText: () => this.materializeFullText(),
       getTextSnapshot: () => this.session?.getTextSnapshot() ?? null,
       getSelections: () => this.inputSelection.resolveViewSelections(),
@@ -1183,6 +1400,14 @@ export class Editor {
       delayMs: BACKGROUND_SYNTAX_WARM_DELAY_MS,
     })
     this.notifyViewContributions('viewport', null)
+    this.log({
+      action: 'editor.viewport.changed',
+      level: 'debug',
+      syntax: {
+        visibleRange,
+      },
+      viewport: this.viewportLogContext(),
+    })
   }
 
   private visibleSyntaxRange(): EditorSyntaxRange | null {
@@ -1278,6 +1503,7 @@ export class Editor {
     measureEditorPerformance('editor.notifyChangeWithTiming', () =>
       this.notifyChangeWithTiming(finalChange),
     )
+    this.logSessionChange(finalChange, totalName)
     this.sessionChangeVersion += 1
     this.scheduleSecondarySessionChangeWork(finalChange, totalName, this.sessionChangeVersion)
   }
@@ -1311,6 +1537,49 @@ export class Editor {
 
     this.clearSyntaxFolds()
     this.setDocument({ text: change.textSnapshot.materializeFullText(), tokens: [] })
+  }
+
+  private logSessionChange(change: DocumentSessionChange, timingName: string): void {
+    this.log({
+      action: 'editor.session.changed',
+      level: sessionChangeLogLevel(change),
+      change: {
+        canRedo: change.canRedo,
+        canUndo: change.canUndo,
+        editCount: change.edits.length,
+        edits: summarizeTextEdits(change.edits),
+        isDirty: change.isDirty,
+        kind: change.kind,
+        selectionCount: change.selections.selections.length,
+        textLength: change.snapshot.length,
+        timingName,
+        timings: change.timings,
+        transaction: change.transaction
+          ? {
+              intent: change.transaction.metadata.intent,
+              source: change.transaction.metadata.source,
+              undoGroup: change.transaction.metadata.undoGroup ?? null,
+            }
+          : null,
+      },
+    })
+  }
+
+  private viewportLogContext(): Record<string, unknown> {
+    const viewState = this.view.getState()
+    return {
+      clientHeight: viewState.viewportHeight,
+      clientWidth: viewState.viewportWidth,
+      contentWidth: viewState.contentWidth,
+      lineCount: viewState.lineCount,
+      mountedRowCount: viewState.mountedRows.length,
+      scrollHeight: viewState.scrollHeight,
+      scrollLeft: viewState.scrollLeft,
+      scrollTop: viewState.scrollTop,
+      scrollWidth: viewState.scrollWidth,
+      totalHeight: viewState.totalHeight,
+      visibleRange: viewState.visibleRange,
+    }
   }
 
   private legacyEditTextSnapshot(edit: TextEdit): TextSnapshot {
@@ -1397,6 +1666,11 @@ export class Editor {
     if (!this.foldState.toggle(marker)) return
 
     this.notifyViewContributions('layout', null)
+    this.log({
+      action: 'editor.fold.toggled',
+      level: 'info',
+      fold: foldLogContext(marker),
+    })
   }
 
   private applyFoldOperation(operation: FoldOperation, offset?: number): boolean {
@@ -1413,7 +1687,14 @@ export class Editor {
     if (!fold) return false
 
     const changed = this.applyFoldStateChange(operation, fold)
-    if (changed) this.notifyViewContributions('layout', null)
+    if (changed) {
+      this.notifyViewContributions('layout', null)
+      this.log({
+        action: `editor.fold.${operation}`,
+        level: 'info',
+        fold: foldLogContext(fold),
+      })
+    }
     return changed
   }
 
@@ -1524,6 +1805,51 @@ function syntaxScrollDirection(delta: number): SyntaxScrollDirection {
   if (delta > 0) return 1
   if (delta < 0) return -1
   return 0
+}
+
+function sessionChangeLogLevel(change: DocumentSessionChange): 'debug' | 'info' {
+  if (change.kind === 'selection' || change.kind === 'none') return 'debug'
+  return 'info'
+}
+
+function summarizeTextEdits(edits: readonly TextEdit[]): readonly Record<string, number>[] {
+  return edits.map((edit) => ({
+    from: edit.from,
+    insertedLength: edit.text.length,
+    removedLength: edit.to - edit.from,
+    to: edit.to,
+  }))
+}
+
+function foldLogContext(fold: FoldRange | VirtualizedFoldMarker): Record<string, unknown> {
+  if ('startOffset' in fold) {
+    return {
+      collapsed: fold.collapsed,
+      endIndex: fold.endOffset,
+      endLine: fold.endRow,
+      startIndex: fold.startOffset,
+      startLine: fold.startRow,
+    }
+  }
+
+  return {
+    endIndex: fold.endIndex,
+    endLine: fold.endLine,
+    startIndex: fold.startIndex,
+    startLine: fold.startLine,
+  }
+}
+
+function editorLogError(error: unknown): EditorLogError {
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      name: error.name,
+      stack: error.stack,
+    }
+  }
+
+  return { message: String(error) }
 }
 
 function sameInjectedTextRows(

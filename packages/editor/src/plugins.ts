@@ -25,6 +25,48 @@ export type EditorDisposable = {
   dispose(): void
 }
 
+export type EditorLogLevel = 'debug' | 'info' | 'warn' | 'error'
+
+export type EditorLogError = {
+  readonly message: string
+  readonly name?: string
+  readonly stack?: string
+}
+
+export type EditorLogEditorContext = {
+  readonly documentId: string | null
+  readonly documentMode?: string
+  readonly documentVersion?: number
+  readonly editability?: string
+  readonly instanceId: string
+  readonly languageId: EditorSyntaxLanguageId | null
+  readonly textVersion?: number
+}
+
+export type EditorLogEvent = {
+  readonly action: string
+  readonly editor?: Partial<EditorLogEditorContext>
+  readonly error?: EditorLogError
+  readonly level: EditorLogLevel
+  readonly message?: string
+  readonly source: 'editor'
+  readonly timestamp: string
+  readonly [key: string]: unknown
+}
+
+export type EditorLogInput = {
+  readonly action: string
+  readonly editor?: Partial<EditorLogEditorContext>
+  readonly error?: EditorLogError
+  readonly level: EditorLogLevel
+  readonly message?: string
+  readonly source?: 'editor'
+  readonly timestamp?: string
+  readonly [key: string]: unknown
+}
+
+export type EditorLogger = (event: EditorLogEvent) => void
+
 export const EDITOR_MINIMAP_FEATURE_ID = 'editor.minimap'
 
 export type EditorMinimapDecorationPosition = 'inline' | 'gutter'
@@ -134,6 +176,7 @@ export type EditorViewContributionContext = {
   readonly highlightPrefix?: string
   getSnapshot(): EditorViewSnapshot
   getFeature?<T>(id: string): T | null
+  log?(event: EditorLogInput): void
   revealLine(row: number): void
   focusEditor(): void
   setSelection(anchor: number, head: number, timingName: string, revealOffset?: number): void
@@ -182,6 +225,7 @@ export type EditorFeatureContributionContext = {
   readonly scrollElement: HTMLDivElement
   readonly highlightPrefix: string
   hasDocument(): boolean
+  log?(event: EditorLogInput): void
   materializeFullText(): string
   getTextSnapshot?(): TextSnapshot | null
   getSelections(): readonly EditorResolvedSelection[]
@@ -264,6 +308,8 @@ export type EditorGutterContribution = {
 }
 
 export type EditorPluginContext = {
+  log?(event: EditorLogInput): void
+  registerLogger?(logger: EditorLogger): EditorDisposable
   registerHighlighter(provider: EditorHighlighterProvider): EditorDisposable
   registerSyntaxProvider(provider: EditorSyntaxProvider): EditorDisposable
   registerViewContribution(provider: EditorViewContributionProvider): EditorDisposable
@@ -281,6 +327,9 @@ export type EditorPlugin = {
 export type EditorPluginHostEvents = {
   onHighlighterProvidersChanged?(): void
   onSyntaxProvidersChanged?(): void
+  onPluginActivated?(name: string, durationMs: number): void
+  onPluginActivationFailed?(name: string, error: unknown, durationMs: number): void
+  onPluginDisposed?(name: string): void
   onViewContributionProviderAdded?(provider: EditorViewContributionProvider): void
   onViewContributionProviderRemoved?(provider: EditorViewContributionProvider): void
   onEditorFeatureContributionProviderAdded?(provider: EditorFeatureContributionProvider): void
@@ -296,6 +345,7 @@ type ActiveEditorPlugin = {
 }
 
 export class EditorPluginHost implements EditorDisposable {
+  private readonly loggers: EditorLogger[] = []
   private readonly highlighters: EditorHighlighterProvider[] = []
   private readonly syntaxProviders: EditorSyntaxProvider[] = []
   private readonly viewContributions: EditorViewContributionProvider[] = []
@@ -437,6 +487,20 @@ export class EditorPluginHost implements EditorDisposable {
     return this.editorFeatureContributions
   }
 
+  public getActivePluginNames(): readonly string[] {
+    return Array.from(this.activePlugins.keys(), pluginName)
+  }
+
+  public hasLoggers(): boolean {
+    return this.loggers.length > 0
+  }
+
+  public log(event: EditorLogEvent): void {
+    if (this.loggers.length === 0) return
+
+    for (const logger of this.loggers) callEditorLogger(logger, event)
+  }
+
   public dispose(): void {
     while (this.activePlugins.size > 0) {
       const plugin = this.activePlugins.keys().next().value
@@ -446,6 +510,7 @@ export class EditorPluginHost implements EditorDisposable {
     }
     this.managedPlugins.clear()
     this.manualPluginReferences.clear()
+    this.loggers.length = 0
     this.highlighters.length = 0
     this.syntaxProviders.length = 0
     this.viewContributions.length = 0
@@ -487,7 +552,15 @@ export class EditorPluginHost implements EditorDisposable {
   }
 
   private activatePlugin(plugin: EditorPlugin): EditorDisposable | null {
-    return disposableFromActivationResult(plugin.activate(this.context))
+    const start = nowMs()
+    try {
+      const disposable = disposableFromActivationResult(plugin.activate(this.context))
+      this.events.onPluginActivated?.(pluginName(plugin), nowMs() - start)
+      return disposable
+    } catch (error) {
+      this.events.onPluginActivationFailed?.(pluginName(plugin), error, nowMs() - start)
+      throw error
+    }
   }
 
   private disposeActivePlugin(plugin: EditorPlugin): void {
@@ -495,6 +568,7 @@ export class EditorPluginHost implements EditorDisposable {
     if (!activePlugin) return
 
     this.activePlugins.delete(plugin)
+    this.events.onPluginDisposed?.(pluginName(plugin))
     activePlugin.disposable?.dispose()
   }
 
@@ -537,6 +611,8 @@ export class EditorPluginHost implements EditorDisposable {
 
   private createContext(): EditorPluginContext {
     return {
+      log: (event) => this.logInput(event),
+      registerLogger: (logger) => this.registerLogger(logger),
       registerHighlighter: (provider) => this.registerHighlighter(provider),
       registerSyntaxProvider: (provider) => this.registerSyntaxProvider(provider),
       registerViewContribution: (provider) => this.registerViewContribution(provider),
@@ -546,6 +622,25 @@ export class EditorPluginHost implements EditorDisposable {
       registerBlockProvider: (provider) => this.registerBlockProvider(provider),
       registerInjectedTextRowProvider: (provider) => this.registerInjectedTextRowProvider(provider),
     }
+  }
+
+  private logInput(event: EditorLogInput): void {
+    this.log(normalizeEditorLogInput(event))
+  }
+
+  private registerLogger(logger: EditorLogger): EditorDisposable {
+    this.loggers.push(logger)
+
+    return {
+      dispose: () => this.unregisterLogger(logger),
+    }
+  }
+
+  private unregisterLogger(logger: EditorLogger): void {
+    const index = this.loggers.indexOf(logger)
+    if (index === -1) return
+
+    this.loggers.splice(index, 1)
   }
 
   private registerHighlighter(provider: EditorHighlighterProvider): EditorDisposable {
@@ -719,3 +814,27 @@ function disposableOnce(dispose: () => void): EditorDisposable {
 const isDisposableList = (
   value: EditorDisposable | readonly EditorDisposable[],
 ): value is readonly EditorDisposable[] => Array.isArray(value)
+
+function normalizeEditorLogInput(event: EditorLogInput): EditorLogEvent {
+  return {
+    ...event,
+    source: 'editor',
+    timestamp: event.timestamp ?? new Date().toISOString(),
+  }
+}
+
+function callEditorLogger(logger: EditorLogger, event: EditorLogEvent): void {
+  try {
+    logger(event)
+  } catch {
+    // Logging must never affect editor behavior.
+  }
+}
+
+function pluginName(plugin: EditorPlugin): string {
+  return plugin.name ?? 'anonymous'
+}
+
+function nowMs(): number {
+  return globalThis.performance?.now() ?? Date.now()
+}

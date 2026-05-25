@@ -1,4 +1,9 @@
 export {
+  createEditorConsoleLogger,
+  createEditorConsoleLoggingPlugin,
+  createEditorLoggingPlugin,
+} from './logging'
+export {
   createMergeConflictDocumentText,
   createMergeConflictPlugin,
   Editor,
@@ -123,6 +128,12 @@ export type {
   EditorInjectedTextRow,
   EditorInjectedTextRowProvider,
   EditorInjectedTextRowProviderContext,
+  EditorLogEditorContext,
+  EditorLogError,
+  EditorLogEvent,
+  EditorLogInput,
+  EditorLogger,
+  EditorLogLevel,
   EditorMinimapDecoration,
   EditorMinimapDecorationPosition,
   EditorMinimapFeature,
