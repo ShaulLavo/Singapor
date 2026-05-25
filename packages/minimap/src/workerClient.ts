@@ -361,6 +361,7 @@ export class MinimapWorkerClient {
       key: MINIMAP_RENDER_KEY,
       taskClass: 'visible-render',
       priority: 'high',
+      defer: true,
       tags: {
         configuration: 'render',
         snapshotVersion: snapshot.textVersion,
@@ -465,15 +466,27 @@ export class MinimapWorkerClient {
   }
 
   private viewport(snapshot: EditorViewSnapshot): MinimapViewport {
+    const snapshotViewport = snapshot.viewport
+    const fallbackClientHeight =
+      snapshotViewport.clientHeight > 0 ? 0 : this.host.colorScope.clientHeight
+    const fallbackClientWidth =
+      snapshotViewport.clientWidth > 0 ? 0 : this.host.colorScope.clientWidth
+    const clientHeight = positiveOrFallback(snapshotViewport.clientHeight, fallbackClientHeight)
+    const clientWidth = positiveOrFallback(snapshotViewport.clientWidth, fallbackClientWidth)
+    const fallbackScrollHeight =
+      snapshotViewport.scrollHeight > 0 ? 0 : this.host.colorScope.scrollHeight
+    const fallbackScrollWidth =
+      snapshotViewport.scrollWidth > 0 ? 0 : this.host.colorScope.scrollWidth
+
     return {
-      scrollTop: snapshot.viewport.scrollTop,
-      scrollLeft: snapshot.viewport.scrollLeft,
-      scrollHeight: snapshot.viewport.scrollHeight,
-      scrollWidth: snapshot.viewport.scrollWidth,
-      clientHeight: snapshot.viewport.clientHeight,
-      clientWidth: snapshot.viewport.clientWidth,
-      visibleStart: snapshot.viewport.visibleRange.start,
-      visibleEnd: snapshot.viewport.visibleRange.end,
+      scrollTop: snapshotViewport.scrollTop,
+      scrollLeft: snapshotViewport.scrollLeft,
+      scrollHeight: Math.max(snapshotViewport.scrollHeight, fallbackScrollHeight, clientHeight),
+      scrollWidth: Math.max(snapshotViewport.scrollWidth, fallbackScrollWidth, clientWidth),
+      clientHeight,
+      clientWidth,
+      visibleStart: snapshotViewport.visibleRange.start,
+      visibleEnd: snapshotViewport.visibleRange.end,
     }
   }
 
@@ -510,7 +523,7 @@ export class MinimapWorkerClient {
   }
 
   private sizeCanvasElements(snapshot: EditorViewSnapshot): void {
-    const height = `${Math.max(0, snapshot.viewport.clientHeight)}px`
+    const height = `${this.viewport(snapshot).clientHeight}px`
     setStyleValue(this.host.mainCanvas, 'height', height)
     setStyleValue(this.host.decorationsCanvas, 'height', height)
   }
@@ -673,6 +686,11 @@ function clamp(value: number, min: number, max: number): number {
 function shadowVisible(snapshot: EditorViewSnapshot): boolean {
   const viewport = snapshot.viewport
   return viewport.scrollLeft + viewport.clientWidth < viewport.scrollWidth
+}
+
+function positiveOrFallback(value: number, fallback: number): number {
+  if (value > 0) return value
+  return Math.max(0, fallback)
 }
 
 function baseStylesSignature(styles: MinimapBaseStyles): string {

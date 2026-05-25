@@ -266,6 +266,8 @@ function createContext(
     registerHighlighter: vi.fn(() => ({ dispose: vi.fn() })),
     registerSyntaxProvider: vi.fn(() => ({ dispose: vi.fn() })),
     registerViewContribution,
+    registerCommandContribution: vi.fn(() => ({ dispose: vi.fn() })),
+    registerCapabilityContribution: vi.fn(() => ({ dispose: vi.fn() })),
     registerEditorFeatureContribution: vi.fn(() => ({ dispose: vi.fn() })),
     registerGutterContribution: vi.fn(() => ({ dispose: vi.fn() })),
     registerBlockProvider: vi.fn(() => ({ dispose: vi.fn() })),

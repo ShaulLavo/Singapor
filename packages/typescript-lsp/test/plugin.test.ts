@@ -1181,6 +1181,8 @@ function activatePlugin(
       provider = value
       return { dispose: () => undefined }
     },
+    registerCommandContribution: () => ({ dispose: () => undefined }),
+    registerCapabilityContribution: () => ({ dispose: () => undefined }),
     registerEditorFeatureContribution: () => ({ dispose: () => undefined }),
     registerGutterContribution: () => ({ dispose: () => undefined }),
     registerBlockProvider: () => ({ dispose: () => undefined }),
@@ -1217,6 +1219,8 @@ function activatePluginWithCommands(
       provider = value
       return { dispose: () => undefined }
     },
+    registerCommandContribution: () => ({ dispose: () => undefined }),
+    registerCapabilityContribution: () => ({ dispose: () => undefined }),
     registerEditorFeatureContribution: (value) => {
       value.createContribution(featureContributionContext(commands, { ...options, features }))
       return { dispose: () => undefined }

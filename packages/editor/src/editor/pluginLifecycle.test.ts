@@ -64,7 +64,7 @@ describe('editor plugin lifecycle', () => {
     editor.dispose()
   })
 
-  test('removePlugin force-removes managed and manual references', () => {
+  test('removePlugin removes managed and manual ownership', () => {
     const editor = createEditor()
     const lifecycle = createLifecyclePlugin()
     const lease = editor.addPlugin(lifecycle.plugin)
@@ -76,6 +76,83 @@ describe('editor plugin lifecycle', () => {
     expect(lifecycle.activations).toBe(1)
     expect(lifecycle.disposals).toBe(1)
     editor.dispose()
+  })
+
+  test('duplicate manual plugin add does not create reference-counted ownership', () => {
+    const editor = createEditor()
+    const lifecycle = createLifecyclePlugin()
+    const firstLease = editor.addPlugin(lifecycle.plugin)
+    const duplicateLease = editor.addPlugin(lifecycle.plugin)
+
+    expect(lifecycle.activations).toBe(1)
+
+    duplicateLease.dispose()
+    expect(lifecycle.disposals).toBe(0)
+
+    firstLease.dispose()
+    expect(lifecycle.disposals).toBe(1)
+    editor.dispose()
+  })
+
+  test('runs plugin install activate update deactivate and dispose in order', () => {
+    const host = new EditorPluginHost()
+    const events: string[] = []
+    const plugin: EditorPlugin = {
+      name: 'lifecycle-plugin',
+      install: () => {
+        events.push('install')
+        return { dispose: () => events.push('install-dispose') }
+      },
+      activate: () => {
+        events.push('activate')
+        return { dispose: () => events.push('activate-dispose') }
+      },
+      update: (_context, state) => {
+        events.push(`update:${state.active}:${state.managed}:${state.manual}`)
+      },
+      deactivate: () => events.push('deactivate'),
+      dispose: () => events.push('dispose'),
+    }
+
+    host.setPlugins([plugin])
+    host.setPlugins([])
+    host.dispose()
+
+    expect(events).toEqual([
+      'install',
+      'activate',
+      'update:true:true:false',
+      'update:true:false:false',
+      'deactivate',
+      'activate-dispose',
+      'dispose',
+      'install-dispose',
+    ])
+  })
+
+  test('updates lifecycle state while managed and manual ownership overlap', () => {
+    const host = new EditorPluginHost()
+    const states: string[] = []
+    const plugin: EditorPlugin = {
+      name: 'owned-plugin',
+      activate: () => undefined,
+      update: (_context, state) => {
+        states.push(`${state.active}:${state.managed}:${state.manual}`)
+      },
+    }
+
+    const lease = host.addPlugin(plugin)
+    host.setPlugins([plugin])
+    lease.dispose()
+    host.setPlugins([])
+    host.dispose()
+
+    expect(states).toEqual([
+      'true:false:true',
+      'true:true:true',
+      'true:true:false',
+      'true:false:false',
+    ])
   })
 
   test('late view contributions receive an initial document update', () => {
@@ -203,6 +280,35 @@ describe('editor plugin lifecycle', () => {
     editor.dispose()
   })
 
+  test('registers commands through the narrow command contribution API', () => {
+    const editor = createEditor()
+    let calls = 0
+    const plugin: EditorPlugin = {
+      activate: (context) =>
+        context.registerCommandContribution({
+          createContribution: (commandContext) => {
+            const registration = commandContext.registerCommand('goToDefinition', () => {
+              calls += 1
+              return true
+            })
+            return { dispose: () => registration.dispose() }
+          },
+        }),
+    }
+
+    const lease = editor.addPlugin(plugin)
+
+    expect(editor.dispatchCommand('goToDefinition')).toBe(true)
+    expect(calls).toBe(1)
+
+    lease.dispose()
+
+    expect(editor.dispatchCommand('goToDefinition')).toBe(false)
+    expect(calls).toBe(1)
+
+    editor.dispose()
+  })
+
   test('makes contribution registration disposal idempotent', () => {
     const host = new EditorPluginHost()
     let registration: EditorDisposable | null = null
@@ -316,9 +422,9 @@ function createCapabilityPlugin(
   return {
     name: owner,
     activate: (context) =>
-      context.registerEditorFeatureContribution({
-        createContribution: (featureContext) => {
-          const registration = featureContext.registerFeature(token, { owner })
+      context.registerCapabilityContribution({
+        createContribution: (capabilityContext) => {
+          const registration = capabilityContext.registerFeature(token, { owner })
           return { dispose: () => registration.dispose() }
         },
       }),

@@ -1,8 +1,8 @@
 import type { DocumentSessionChange } from '@editor/core/document'
 import type {
   EditorDisposable,
-  EditorFeatureContribution,
-  EditorFeatureContributionContext,
+  EditorCapabilityContribution,
+  EditorCapabilityContributionContext,
   EditorMinimapDecoration,
   EditorMinimapFeature,
   EditorPlugin,
@@ -27,7 +27,7 @@ export function createMinimapPlugin(options: EditorMinimapOptions = {}): EditorP
     name: 'minimap',
     activate(context) {
       return [
-        context.registerEditorFeatureContribution({
+        context.registerCapabilityContribution({
           createContribution: (contributionContext) =>
             createMinimapFeatureContribution(contributionContext, decorations),
         }),
@@ -41,9 +41,9 @@ export function createMinimapPlugin(options: EditorMinimapOptions = {}): EditorP
 }
 
 function createMinimapFeatureContribution(
-  context: EditorFeatureContributionContext,
+  context: EditorCapabilityContributionContext,
   decorations: MinimapDecorationRegistry,
-): EditorFeatureContribution {
+): EditorCapabilityContribution {
   const registration = context.registerFeature(EDITOR_MINIMAP_FEATURE, decorations)
 
   return {

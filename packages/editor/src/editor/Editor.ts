@@ -72,7 +72,13 @@ import type { BlockLane, BlockRow, InjectedTextRow } from '../displayTransforms'
 import { offsetToPoint } from '../pieceTable/positions'
 import {
   EditorPluginHost,
+  type EditorCapabilityContribution,
+  type EditorCapabilityContributionContext,
+  type EditorCapabilityContributionProvider,
   type EditorCapabilityToken,
+  type EditorCommandContribution,
+  type EditorCommandContributionContext,
+  type EditorCommandContributionProvider,
   type EditorCommandHandler,
   type EditorDisposable,
   type EditorFeatureContribution,
@@ -139,7 +145,6 @@ const PLUGIN_BLOCK_LANES_PROJECTION_OWNER = 'editor.blockLanes.plugins'
 const PLUGIN_GUTTER_PROJECTION_OWNER = 'editor.gutters.plugins'
 const PLUGIN_INJECTED_ROWS_PROJECTION_OWNER = 'editor.injectedRows.plugins'
 
-type EditorFeatureKey<T = unknown> = string | EditorCapabilityToken<T>
 type SyntaxScrollDirection = -1 | 0 | 1
 
 export class Editor {
@@ -154,8 +159,10 @@ export class Editor {
   private readonly pluginHost: EditorPluginHost
   private readonly commandRouter: EditorCommandRouter
   private readonly document: EditorDocumentController
-  private readonly editorFeatures = new Map<EditorFeatureKey, unknown>()
-  private readonly editorFeatureKeysById = new Map<string, EditorFeatureKey>()
+  private readonly editorFeatures = new Map<EditorCapabilityToken<unknown>, unknown>()
+  private readonly editorFeatureTokensById = new Map<string, EditorCapabilityToken<unknown>>()
+  private readonly commandContributions: EditorCommandContribution[] = []
+  private readonly capabilityContributions: EditorCapabilityContribution[] = []
   private readonly editorFeatureContributions: EditorFeatureContribution[] = []
   private readonly viewContributionsByProvider = new Map<
     EditorViewContributionProvider,
@@ -164,6 +171,14 @@ export class Editor {
   private readonly editorFeatureContributionsByProvider = new Map<
     EditorFeatureContributionProvider,
     EditorFeatureContribution
+  >()
+  private readonly commandContributionsByProvider = new Map<
+    EditorCommandContributionProvider,
+    EditorCommandContribution
+  >()
+  private readonly capabilityContributionsByProvider = new Map<
+    EditorCapabilityContributionProvider,
+    EditorCapabilityContribution
   >()
   private readonly keymap: EditorKeymapController
   private readonly viewContributions: EditorViewContributionController
@@ -327,6 +342,8 @@ export class Editor {
     })
     this.applyResolvedTheme()
     if (this.pluginHost.hasHighlighterProviders()) this.syntax.refreshHighlighterTheme()
+    this.createInitialCommandContributions(this.pluginHost.getCommandContributionProviders())
+    this.createInitialCapabilityContributions(this.pluginHost.getCapabilityContributionProviders())
     this.createInitialEditorFeatureContributions(
       this.pluginHost.getEditorFeatureContributionProviders(),
     )
@@ -340,6 +357,21 @@ export class Editor {
       () => this.createViewSnapshot(),
     )
     this.pluginHost.setEvents({
+      onPluginInstalled: (name, durationMs) =>
+        this.log({
+          action: 'editor.plugin.installed',
+          level: 'info',
+          durationMs,
+          plugin: { name },
+        }),
+      onPluginInstallFailed: (name, error, durationMs) =>
+        this.log({
+          action: 'editor.plugin.install_failed',
+          level: 'error',
+          durationMs,
+          error: editorLogError(error),
+          plugin: { name },
+        }),
       onPluginActivated: (name, durationMs) =>
         this.log({
           action: 'editor.plugin.activated',
@@ -350,6 +382,36 @@ export class Editor {
       onPluginActivationFailed: (name, error, durationMs) =>
         this.log({
           action: 'editor.plugin.activation_failed',
+          level: 'error',
+          durationMs,
+          error: editorLogError(error),
+          plugin: { name },
+        }),
+      onPluginUpdated: (name, durationMs) =>
+        this.log({
+          action: 'editor.plugin.updated',
+          level: 'debug',
+          durationMs,
+          plugin: { name },
+        }),
+      onPluginUpdateFailed: (name, error, durationMs) =>
+        this.log({
+          action: 'editor.plugin.update_failed',
+          level: 'error',
+          durationMs,
+          error: editorLogError(error),
+          plugin: { name },
+        }),
+      onPluginDeactivated: (name, durationMs) =>
+        this.log({
+          action: 'editor.plugin.deactivated',
+          level: 'info',
+          durationMs,
+          plugin: { name },
+        }),
+      onPluginDeactivateFailed: (name, error, durationMs) =>
+        this.log({
+          action: 'editor.plugin.deactivate_failed',
           level: 'error',
           durationMs,
           error: editorLogError(error),
@@ -366,6 +428,14 @@ export class Editor {
       onViewContributionProviderAdded: (provider) => this.addViewContributionProvider(provider),
       onViewContributionProviderRemoved: (provider) =>
         this.removeViewContributionProvider(provider),
+      onCommandContributionProviderAdded: (provider) =>
+        this.addCommandContributionProvider(provider),
+      onCommandContributionProviderRemoved: (provider) =>
+        this.removeCommandContributionProvider(provider),
+      onCapabilityContributionProviderAdded: (provider) =>
+        this.addCapabilityContributionProvider(provider),
+      onCapabilityContributionProviderRemoved: (provider) =>
+        this.removeCapabilityContributionProvider(provider),
       onEditorFeatureContributionProviderAdded: (provider) =>
         this.addEditorFeatureContributionProvider(provider),
       onEditorFeatureContributionProviderRemoved: (provider) =>
@@ -921,6 +991,8 @@ export class Editor {
     this.inputSelection.dispose()
     this.viewContributions.dispose()
     this.disposeEditorFeatureContributions()
+    this.disposeCapabilityContributions()
+    this.disposeCommandContributions()
     this.keymap.dispose()
     this.syntax.dispose()
     this.detachSession()
@@ -1035,6 +1107,68 @@ export class Editor {
     provider: EditorViewContributionProvider,
   ): EditorViewContribution | null {
     return provider.createContribution(this.createViewContributionContext(this.container))
+  }
+
+  private createInitialCommandContributions(
+    providers: readonly EditorCommandContributionProvider[],
+  ): void {
+    for (const provider of providers) this.addCommandContributionProvider(provider)
+  }
+
+  private addCommandContributionProvider(provider: EditorCommandContributionProvider): void {
+    const contribution = provider.createContribution(this.createCommandContributionContext())
+    if (!contribution) return
+
+    this.commandContributionsByProvider.set(provider, contribution)
+    this.commandContributions.push(contribution)
+  }
+
+  private removeCommandContributionProvider(provider: EditorCommandContributionProvider): void {
+    const contribution = this.commandContributionsByProvider.get(provider)
+    if (!contribution) return
+
+    this.commandContributionsByProvider.delete(provider)
+    removeArrayItem(this.commandContributions, contribution)
+    contribution.dispose()
+  }
+
+  private disposeCommandContributions(): void {
+    while (this.commandContributions.length > 0) {
+      this.commandContributions.pop()?.dispose()
+    }
+    this.commandContributionsByProvider.clear()
+  }
+
+  private createInitialCapabilityContributions(
+    providers: readonly EditorCapabilityContributionProvider[],
+  ): void {
+    for (const provider of providers) this.addCapabilityContributionProvider(provider)
+  }
+
+  private addCapabilityContributionProvider(provider: EditorCapabilityContributionProvider): void {
+    const contribution = provider.createContribution(this.createCapabilityContributionContext())
+    if (!contribution) return
+
+    this.capabilityContributionsByProvider.set(provider, contribution)
+    this.capabilityContributions.push(contribution)
+  }
+
+  private removeCapabilityContributionProvider(
+    provider: EditorCapabilityContributionProvider,
+  ): void {
+    const contribution = this.capabilityContributionsByProvider.get(provider)
+    if (!contribution) return
+
+    this.capabilityContributionsByProvider.delete(provider)
+    removeArrayItem(this.capabilityContributions, contribution)
+    contribution.dispose()
+  }
+
+  private disposeCapabilityContributions(): void {
+    while (this.capabilityContributions.length > 0) {
+      this.capabilityContributions.pop()?.dispose()
+    }
+    this.capabilityContributionsByProvider.clear()
   }
 
   private createInitialEditorFeatureContributions(
@@ -1451,6 +1585,18 @@ export class Editor {
     }
   }
 
+  private createCommandContributionContext(): EditorCommandContributionContext {
+    return {
+      registerCommand: (command, handler) => this.registerCommandHandler(command, handler),
+    }
+  }
+
+  private createCapabilityContributionContext(): EditorCapabilityContributionContext {
+    return {
+      registerFeature: (key, feature) => this.registerFeature(key, feature),
+    }
+  }
+
   private createEditorFeatureContributionContext(
     container: HTMLElement,
   ): EditorFeatureContributionContext {
@@ -1624,36 +1770,37 @@ export class Editor {
     return this.commandRouter.registerCommandHandler(command, handler)
   }
 
-  private registerFeature<T>(key: EditorFeatureKey<T>, feature: T): EditorDisposable {
-    const id = editorFeatureKeyId(key)
-    if (this.editorFeatureKeysById.has(id)) {
-      throw new Error(`Editor feature already registered: ${id}`)
+  private registerFeature<T>(token: EditorCapabilityToken<T>, feature: T): EditorDisposable {
+    if (this.editorFeatureTokensById.has(token.id)) {
+      throw new Error(`Editor feature already registered: ${token.id}`)
     }
 
-    this.editorFeatures.set(key, feature)
-    this.editorFeatureKeysById.set(id, key)
+    this.editorFeatures.set(token, feature)
+    this.editorFeatureTokensById.set(token.id, token)
 
-    return disposableOnce(() => this.unregisterFeature(key, feature))
+    return disposableOnce(() => this.unregisterFeature(token, feature))
   }
 
-  private unregisterFeature<T>(key: EditorFeatureKey<T>, feature: T): void {
-    if (this.editorFeatures.get(key) !== feature) return
+  private unregisterFeature<T>(token: EditorCapabilityToken<T>, feature: T): void {
+    if (this.editorFeatures.get(token) !== feature) return
 
-    this.editorFeatures.delete(key)
-    this.editorFeatureKeysById.delete(editorFeatureKeyId(key))
+    this.editorFeatures.delete(token)
+    this.editorFeatureTokensById.delete(token.id)
   }
 
-  private getFeature<T>(key: EditorFeatureKey<T>): T | null {
-    if (this.editorFeatures.has(key)) return (this.editorFeatures.get(key) as T | undefined) ?? null
+  private getFeature<T>(token: EditorCapabilityToken<T>): T | null {
+    if (this.editorFeatures.has(token)) {
+      return (this.editorFeatures.get(token) as T | undefined) ?? null
+    }
 
-    const registeredKey = this.editorFeatureKeysById.get(editorFeatureKeyId(key))
-    if (!registeredKey) return null
+    const registeredToken = this.editorFeatureTokensById.get(token.id)
+    if (!registeredToken) return null
 
-    return (this.editorFeatures.get(registeredKey) as T | undefined) ?? null
+    return (this.editorFeatures.get(registeredToken) as T | undefined) ?? null
   }
 
   private findFeature(): EditorFindFeature | null {
-    return (this.editorFeatures.get(EDITOR_FIND_FEATURE) as EditorFindFeature | undefined) ?? null
+    return this.getFeature(EDITOR_FIND_FEATURE)
   }
 
   private reserveOverlayWidth(side: EditorOverlaySide, width: number): void {
@@ -2180,11 +2327,6 @@ function joinClassNames(left: string | undefined, right: string | undefined): st
   if (!left) return right
   if (!right) return left
   return `${left} ${right}`
-}
-
-function editorFeatureKeyId(key: EditorFeatureKey): string {
-  if (typeof key === 'string') return key
-  return key.id
 }
 
 function disposableOnce(dispose: () => void): EditorDisposable {

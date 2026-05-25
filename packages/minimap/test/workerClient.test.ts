@@ -6,6 +6,77 @@ import { MinimapWorkerClient, type MinimapHost } from '../src/workerClient'
 import type { MinimapWorkerRequest, MinimapWorkerResponse } from '../src/types'
 
 describe('MinimapWorkerClient', () => {
+  it('posts an initial render after the startup scheduler tick', () => {
+    const runtime = installMinimapRuntime()
+    try {
+      const host = createHost()
+      const client = new MinimapWorkerClient({
+        host,
+        options: resolveMinimapOptions(),
+        snapshot: snapshot(),
+        decorations: [],
+        onLayoutWidth: vi.fn(),
+      })
+      const worker = runtime.workers[0]!
+
+      expect(worker.postMessage.mock.calls.some((call) => call[0].type === 'render')).toBe(false)
+
+      runtime.flushAnimationFrames()
+
+      const render = worker.postMessage.mock.calls
+        .map((call) => call[0] as MinimapWorkerRequest)
+        .find((request): request is Extract<MinimapWorkerRequest, { type: 'render' }> => {
+          return request.type === 'render'
+        })
+
+      expect(render?.sequence).toBeGreaterThan(0)
+      expect(host.mainCanvas.style.height).toBe('100px')
+
+      client.dispose()
+      host.root.remove()
+      host.colorScope.remove()
+    } finally {
+      runtime.restore()
+    }
+  })
+
+  it('uses mounted scroll element dimensions when initial snapshot viewport is zero-sized', () => {
+    const runtime = installMinimapRuntime()
+    try {
+      const host = createHost()
+      setElementBox(host.colorScope, { clientHeight: 320, clientWidth: 640 })
+      const client = new MinimapWorkerClient({
+        host,
+        options: resolveMinimapOptions(),
+        snapshot: snapshot({ clientHeight: 0, clientWidth: 0, scrollHeight: 0, scrollWidth: 0 }),
+        decorations: [],
+        onLayoutWidth: vi.fn(),
+      })
+      const worker = runtime.workers[0]!
+      const layoutRequest = worker.postMessage.mock.calls
+        .map((call) => call[0] as MinimapWorkerRequest)
+        .find((request): request is Extract<MinimapWorkerRequest, { type: 'updateLayout' }> => {
+          return request.type === 'updateLayout'
+        })
+
+      runtime.flushAnimationFrames()
+
+      expect(layoutRequest?.viewport).toMatchObject({
+        clientHeight: 320,
+        clientWidth: 640,
+        scrollHeight: 320,
+        scrollWidth: 640,
+      })
+      expect(host.mainCanvas.style.height).toBe('320px')
+
+      client.dispose()
+      host.root.remove()
+      host.colorScope.remove()
+    } finally {
+      runtime.restore()
+    }
+  })
+
   it('skips layout updates for scroll-only viewport changes', () => {
     const runtime = installMinimapRuntime()
     try {
@@ -487,6 +558,14 @@ function createHost(): MinimapHost {
   root.append(shadow, mainCanvas, decorationsCanvas, slider)
   document.body.append(colorScope, root)
   return { root, colorScope, shadow, mainCanvas, decorationsCanvas, slider, sliderHorizontal }
+}
+
+function setElementBox(
+  element: HTMLElement,
+  box: { readonly clientHeight: number; readonly clientWidth: number },
+): void {
+  Object.defineProperty(element, 'clientHeight', { configurable: true, value: box.clientHeight })
+  Object.defineProperty(element, 'clientWidth', { configurable: true, value: box.clientWidth })
 }
 
 function snapshot(

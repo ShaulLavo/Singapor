@@ -140,6 +140,8 @@ function activatePlugin(
     },
     registerHighlighter: () => ({ dispose: () => undefined }),
     registerSyntaxProvider: () => ({ dispose: () => undefined }),
+    registerCommandContribution: () => ({ dispose: () => undefined }),
+    registerCapabilityContribution: () => ({ dispose: () => undefined }),
     registerEditorFeatureContribution: () => ({ dispose: () => undefined }),
     registerGutterContribution: () => ({ dispose: () => undefined }),
     registerBlockProvider: () => ({ dispose: () => undefined }),
