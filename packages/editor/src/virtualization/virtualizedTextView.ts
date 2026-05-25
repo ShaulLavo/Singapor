@@ -71,6 +71,7 @@ import {
   materializeLineStarts,
   multiLineEditPatch,
   setTextLayoutState,
+  setTextSnapshotLayoutState,
   setWrapEnabledLayout,
   updateVirtualizerRows,
   visibleLineCount,
@@ -329,13 +330,7 @@ export class VirtualizedTextView {
     view.tokenProjectionDirtyStartRow = null
     view.tokenRenderIndexDirty = true
     const { lineCountChanged } = setTextLayoutState(view, text, textSnapshot)
-    if (lineCountChanged) view.gutterWidthDirty = true
-    rebuildDisplayRows(view, horizontalViewportColumns(view))
-    clampStoredSelection(view)
-    clearRowTokenState(view)
-    view.lastRenderedRowsKey = ''
-    resetContentWidthScan(view)
-    updateVirtualizerRows(view)
+    this.finishTextReplacement(lineCountChanged)
   }
 
   public refreshGutterWidth(): void {
@@ -431,7 +426,7 @@ export class VirtualizedTextView {
       return
     }
 
-    this.setText(textSnapshot.materializeFullText(), textSnapshot)
+    this.setTextSnapshot(textSnapshot)
   }
 
   public setTokens(tokens: readonly EditorToken[]): void {
@@ -782,6 +777,26 @@ export class VirtualizedTextView {
     clearTokenHighlightsFromRow(view, patch.startRow)
     updateVirtualizerRows(view)
     renderHiddenCharacters(view)
+  }
+
+  private setTextSnapshot(textSnapshot: TextSnapshot): void {
+    const view = this.view
+    view.sameLineTokenEdit = null
+    view.tokenProjectionDirtyStartRow = null
+    view.tokenRenderIndexDirty = true
+    const { lineCountChanged } = setTextSnapshotLayoutState(view, textSnapshot)
+    this.finishTextReplacement(lineCountChanged)
+  }
+
+  private finishTextReplacement(lineCountChanged: boolean): void {
+    const view = this.view
+    if (lineCountChanged) view.gutterWidthDirty = true
+    rebuildDisplayRows(view, horizontalViewportColumns(view))
+    clampStoredSelection(view)
+    clearRowTokenState(view)
+    view.lastRenderedRowsKey = ''
+    resetContentWidthScan(view)
+    updateVirtualizerRows(view)
   }
 
   private refreshWrapWidth(

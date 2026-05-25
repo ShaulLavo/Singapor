@@ -293,6 +293,18 @@ export function isInjectedTextDisplayRow(
   return row?.kind === 'text' && row.source === 'injected'
 }
 
+export type DisplayRowLineInput = {
+  readonly visibleLineCount: number
+  readonly bufferRowForVisibleRow: (row: number) => number
+  readonly lineText: (bufferRow: number) => string
+  readonly lineStartOffset: (bufferRow: number) => number
+  readonly lineEndOffset: (bufferRow: number) => number
+  readonly wrapColumn?: number | null
+  readonly blocks?: readonly BlockRow[]
+  readonly injectedTextRows?: readonly InjectedTextRow[]
+  readonly tabSize?: number
+}
+
 export function createDisplayRows(options: {
   readonly lineStarts: readonly number[]
   readonly text: string
@@ -303,6 +315,15 @@ export function createDisplayRows(options: {
   readonly injectedTextRows?: readonly InjectedTextRow[]
   readonly tabSize?: number
 }): DisplayRow[] {
+  return createDisplayRowsFromLines({
+    ...options,
+    lineText: (row) => lineTextFromFullText(options.text, options.lineStarts, row),
+    lineStartOffset: (row) => lineStartOffsetFromLineStarts(options.text, options.lineStarts, row),
+    lineEndOffset: (row) => lineEndOffsetFromLineStarts(options.text, options.lineStarts, row),
+  })
+}
+
+export function createDisplayRowsFromLines(options: DisplayRowLineInput): DisplayRow[] {
   const rows: DisplayRow[] = []
   const blocks = blockRowIndex(options.blocks ?? [])
   const injectedTextRows = injectedTextRowIndex(options.injectedTextRows ?? [])
@@ -346,17 +367,12 @@ const appendDisplayRowsForVisibleRow = (
   visibleRow: number,
   blocks: BlockRowIndex,
   injectedTextRows: InjectedTextRowIndex,
-  options: {
-    readonly lineStarts: readonly number[]
-    readonly text: string
-    readonly bufferRowForVisibleRow: (row: number) => number
-    readonly wrapColumn?: number | null
-  },
+  options: DisplayRowLineInput,
   tabSize: number,
 ): void => {
   const bufferRow = options.bufferRowForVisibleRow(visibleRow)
-  const text = lineText(options.text, options.lineStarts, bufferRow)
-  const startOffset = lineStartOffset(options.text, options.lineStarts, bufferRow)
+  const text = options.lineText(bufferRow)
+  const startOffset = options.lineStartOffset(bufferRow)
   appendInjectedTextRows(
     rows,
     injectedTextRows,
@@ -368,19 +384,13 @@ const appendDisplayRowsForVisibleRow = (
   )
   appendBlockRows(rows, blocks, bufferRow, 'before', startOffset)
   appendDocumentTextDisplayRows(rows, bufferRow, text, startOffset, options.wrapColumn, tabSize)
-  appendBlockRows(
-    rows,
-    blocks,
-    bufferRow,
-    'after',
-    lineEndOffset(options.text, options.lineStarts, bufferRow),
-  )
+  appendBlockRows(rows, blocks, bufferRow, 'after', options.lineEndOffset(bufferRow))
   appendInjectedTextRows(
     rows,
     injectedTextRows,
     bufferRow,
     'after',
-    lineEndOffset(options.text, options.lineStarts, bufferRow),
+    options.lineEndOffset(bufferRow),
     options.wrapColumn,
     tabSize,
   )
@@ -695,16 +705,26 @@ const injectedTextRowsAtBufferRow = (
   return rows
 }
 
-const lineText = (text: string, lineStarts: readonly number[], row: number): string =>
-  text.slice(lineStartOffset(text, lineStarts, row), lineEndOffset(text, lineStarts, row))
+const lineTextFromFullText = (text: string, lineStarts: readonly number[], row: number): string =>
+  text.slice(
+    lineStartOffsetFromLineStarts(text, lineStarts, row),
+    lineEndOffsetFromLineStarts(text, lineStarts, row),
+  )
 
-const lineStartOffset = (text: string, lineStarts: readonly number[], row: number): number =>
-  lineStarts[row] ?? text.length
+const lineStartOffsetFromLineStarts = (
+  text: string,
+  lineStarts: readonly number[],
+  row: number,
+): number => lineStarts[row] ?? text.length
 
-const lineEndOffset = (text: string, lineStarts: readonly number[], row: number): number => {
+const lineEndOffsetFromLineStarts = (
+  text: string,
+  lineStarts: readonly number[],
+  row: number,
+): number => {
   const nextLineStart = lineStarts[row + 1]
   if (nextLineStart === undefined) return text.length
-  return Math.max(lineStartOffset(text, lineStarts, row), nextLineStart - 1)
+  return Math.max(lineStartOffsetFromLineStarts(text, lineStarts, row), nextLineStart - 1)
 }
 
 const normalizeWrapColumn = (wrapColumn: number): number => {

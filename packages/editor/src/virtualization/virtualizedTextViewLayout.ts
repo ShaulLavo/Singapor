@@ -1,7 +1,6 @@
 import { bufferPointToFoldPoint, foldPointToBufferPoint, type FoldMap } from '../foldMap'
 import {
   bufferColumnToVisualColumn,
-  createDisplayRows,
   isDocumentTextDisplayRow,
   visualColumnToBufferColumn,
   type BlockRow,
@@ -30,6 +29,7 @@ import {
   normalizeRowHeight,
 } from './virtualizedTextViewHelpers'
 import type { FixedRowVirtualizerSnapshot } from './fixedRowVirtualizer'
+import { createVirtualizedTextViewModel } from './virtualizedTextViewModel'
 import type {
   MultiLineEditPatch,
   SameLineEditPatch,
@@ -54,6 +54,21 @@ export function setTextLayoutState(
   view.textLength = text.length
   view.textRevision += 1
   view.lineStarts = computeLineStarts(text)
+  view.lineStartOffsetIndex = null
+  view.foldMap = foldMapMatchesText(view.foldMap, view.textLength) ? view.foldMap : null
+  return { lineCountChanged: previousLineCount !== view.lineStarts.length }
+}
+
+export function setTextSnapshotLayoutState(
+  view: VirtualizedTextViewInternal,
+  textSnapshot: TextSnapshot,
+): { readonly lineCountChanged: boolean } {
+  const previousLineCount = view.lineStarts.length
+  view.text = ''
+  view.textSnapshot = textSnapshot
+  view.textLength = textSnapshot.length
+  view.textRevision += 1
+  view.lineStarts = computeLineStartsFromSnapshot(textSnapshot)
   view.lineStartOffsetIndex = null
   view.foldMap = foldMapMatchesText(view.foldMap, view.textLength) ? view.foldMap : null
   return { lineCountChanged: previousLineCount !== view.lineStarts.length }
@@ -119,19 +134,20 @@ export function rebuildDisplayRows(
   view: VirtualizedTextViewInternal,
   viewportColumns: number | null,
 ): void {
-  materializeViewText(view)
   materializeLineStarts(view)
   view.currentWrapColumn = view.wrapEnabled ? viewportColumns : null
-  view.displayRows = createDisplayRows({
-    text: view.text,
+  const model = createVirtualizedTextViewModel({
+    textSnapshot: view.textSnapshot,
     lineStarts: view.lineStarts,
-    visibleLineCount: foldVisibleLineCount(view),
-    bufferRowForVisibleRow: (row) => foldBufferRowForVisibleRow(view, row),
-    wrapColumn: view.currentWrapColumn,
-    blocks: view.blockRows,
+    foldMap: view.foldMap,
+    blockRows: view.blockRows,
     injectedTextRows: view.injectedTextRows,
+    wrapColumn: view.currentWrapColumn,
     tabSize: view.tabSize,
   })
+  view.textLength = model.textLength
+  view.foldMap = model.foldMap
+  view.displayRows = [...model.rows]
 }
 
 export function refreshDisplayRowsForWrapWidth(
@@ -276,17 +292,22 @@ export function lineText(view: VirtualizedTextViewInternal, row: number): string
   return view.displayRows[row]?.text ?? ''
 }
 
-function materializeViewText(view: VirtualizedTextViewInternal): void {
-  const text = view.textSnapshot.materializeFullText()
-  view.text = text
-  view.textLength = text.length
-}
-
 function bufferLineEndOffset(view: VirtualizedTextViewInternal, row: number): number {
   if (row < 0) return view.textLength
   if (row >= view.lineStarts.length - 1) return view.textLength
 
   return Math.max(bufferLineStartOffset(view, row), bufferLineStartOffset(view, row + 1) - 1)
+}
+
+function computeLineStartsFromSnapshot(snapshot: TextSnapshot): number[] {
+  const lineStarts = [0]
+  snapshot.forEachTextChunk((text, chunkStart) => {
+    for (let index = 0; index < text.length; index += 1) {
+      if (text[index] !== '\n') continue
+      lineStarts.push(chunkStart + index + 1)
+    }
+  })
+  return lineStarts
 }
 
 export function materializeLineStarts(view: VirtualizedTextViewInternal): readonly number[] {
