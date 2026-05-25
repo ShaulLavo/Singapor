@@ -5,7 +5,10 @@ import {
   editorInputStateOwnership,
   hasPendingKeyboardTextFallbackForGeneration,
   pendingKeyboardTextFallback,
+  selectionBeforeEditSource,
   shouldCommitCompositionEnd,
+  shouldSyncCustomSelectionFromDom,
+  shouldSyncSessionSelectionFromDom,
   transitionEditorInputState,
 } from '../src/editor/inputState'
 
@@ -133,5 +136,31 @@ describe('editor input state machine', () => {
       compositionText: '',
       phase: 'idle',
     })
+  })
+
+  it('owns DOM selection reconciliation decisions', () => {
+    let state = createEditorInputState()
+
+    expect(
+      shouldSyncSessionSelectionFromDom(state, {
+        hiddenInputFocused: false,
+      }),
+    ).toBe(true)
+    expect(selectionBeforeEditSource(state, { hiddenInputFocused: false })).toBe('dom')
+
+    state = transitionEditorInputState(state, { type: 'selection-owned-by-session' })
+
+    expect(shouldSyncCustomSelectionFromDom(state, { hiddenInputFocused: false })).toBe(false)
+    expect(selectionBeforeEditSource(state, { hiddenInputFocused: false })).toBe('session')
+
+    state = transitionEditorInputState(state, { type: 'selection-owned-by-dom' })
+    state = transitionEditorInputState(state, { type: 'mouse-selection-start' })
+
+    expect(shouldSyncSessionSelectionFromDom(state, { hiddenInputFocused: false })).toBe(false)
+    expect(selectionBeforeEditSource(state, { hiddenInputFocused: true })).toBe('hidden-input')
+
+    state = transitionEditorInputState(state, { type: 'mouse-selection-finish' })
+
+    expect(shouldSyncSessionSelectionFromDom(state, { hiddenInputFocused: false })).toBe(true)
   })
 })

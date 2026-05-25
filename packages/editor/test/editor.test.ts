@@ -3441,6 +3441,45 @@ describe('Editor', () => {
       expect(resolved.endOffset).toBe(3)
     })
 
+    it('ignores browser selectionchange while dragging', () => {
+      const session = createDocumentSession('abcd')
+      editor.attachSession(session)
+      mockEditorViewport(editorRoot(), 120, 40)
+
+      editorRoot().dispatchEvent(
+        new MouseEvent('mousedown', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 10,
+          clientY: 10,
+          detail: 1,
+        }),
+      )
+      document.dispatchEvent(
+        new MouseEvent('mousemove', { cancelable: true, clientX: 30, clientY: 10 }),
+      )
+
+      const staleRange = document.createRange()
+      const textNode = rowTextNode()
+      staleRange.setStart(textNode, 0)
+      staleRange.setEnd(textNode, 0)
+      const selection = window.getSelection()!
+      selection.removeAllRanges()
+      selection.addRange(staleRange)
+      document.dispatchEvent(new Event('selectionchange'))
+
+      const resolved = resolveSelection(
+        session.getSnapshot(),
+        session.getSelections().selections[0]!,
+      )
+      expect(resolved.startOffset).toBe(1)
+      expect(resolved.endOffset).toBe(3)
+
+      document.dispatchEvent(
+        new MouseEvent('mouseup', { cancelable: true, clientX: 30, clientY: 10 }),
+      )
+    })
+
     it('renders and copies pointer drag selections with selection sync disabled', () => {
       editor.dispose()
       editor = new Editor(container, {

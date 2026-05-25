@@ -25,6 +25,7 @@ export type EditorInputState = {
   readonly compositionActive: boolean
   readonly compositionCommitted: boolean
   readonly compositionText: string
+  readonly mouseSelectionActive: boolean
 }
 
 export type EditorInputStateOwnership = {
@@ -58,12 +59,21 @@ export type EditorInputStateTransition =
   | { readonly type: 'selection-owned-by-dom' }
   | { readonly type: 'selection-owned-by-hidden-input' }
   | { readonly type: 'selection-owned-by-session' }
+  | { readonly type: 'mouse-selection-start' }
+  | { readonly type: 'mouse-selection-finish' }
+  | { readonly type: 'mouse-selection-cancel' }
   | { readonly type: 'hidden-input-cleared' }
 
 export type NativeTextInputWaitOptions = {
   readonly targetIsHiddenInput: boolean
   readonly text: string
 }
+
+export type EditorDomSelectionContext = {
+  readonly hiddenInputFocused: boolean
+}
+
+export type EditorSelectionBeforeEditSource = 'dom' | 'hidden-input' | 'session'
 
 export type PendingKeyboardTextFallback = {
   readonly generation: number
@@ -85,6 +95,7 @@ export function createEditorInputState(): EditorInputState {
     compositionActive: false,
     compositionCommitted: false,
     compositionText: '',
+    mouseSelectionActive: false,
   }
 }
 
@@ -121,6 +132,9 @@ export function transitionEditorInputState(
     return selectionOwnedBy(state, 'hidden-input')
   }
   if (transition.type === 'selection-owned-by-session') return selectionOwnedBy(state, 'session')
+  if (transition.type === 'mouse-selection-start') return startMouseSelection(state)
+  if (transition.type === 'mouse-selection-finish') return finishMouseSelection(state)
+  if (transition.type === 'mouse-selection-cancel') return cancelMouseSelection(state)
 
   return { ...state, hiddenInputValueOwner: 'editor' }
 }
@@ -171,6 +185,31 @@ export function hasPendingKeyboardTextFallbackForGeneration(
   generation: number,
 ): boolean {
   return pendingKeyboardTextFallback(state)?.generation === generation
+}
+
+export function shouldSyncSessionSelectionFromDom(
+  state: EditorInputState,
+  context: EditorDomSelectionContext,
+): boolean {
+  if (state.mouseSelectionActive) return false
+  if (state.selectionOwner === 'session') return false
+  return !context.hiddenInputFocused
+}
+
+export function shouldSyncCustomSelectionFromDom(
+  state: EditorInputState,
+  context: EditorDomSelectionContext,
+): boolean {
+  return shouldSyncSessionSelectionFromDom(state, context)
+}
+
+export function selectionBeforeEditSource(
+  state: EditorInputState,
+  context: EditorDomSelectionContext,
+): EditorSelectionBeforeEditSource {
+  if (context.hiddenInputFocused) return 'hidden-input'
+  if (state.selectionOwner === 'session') return 'session'
+  return 'dom'
 }
 
 function startComposition(state: EditorInputState): EditorInputState {
@@ -291,4 +330,22 @@ function selectionOwnedBy(
   owner: EditorInputSelectionOwner,
 ): EditorInputState {
   return { ...state, phase: 'selection-reconciled', selectionOwner: owner }
+}
+
+function startMouseSelection(state: EditorInputState): EditorInputState {
+  return {
+    ...state,
+    mouseSelectionActive: true,
+  }
+}
+
+function finishMouseSelection(state: EditorInputState): EditorInputState {
+  return {
+    ...state,
+    mouseSelectionActive: false,
+  }
+}
+
+function cancelMouseSelection(state: EditorInputState): EditorInputState {
+  return finishMouseSelection(state)
 }

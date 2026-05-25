@@ -50,7 +50,10 @@ import {
   createEditorInputState,
   hasPendingKeyboardTextFallbackForGeneration,
   pendingKeyboardTextFallback,
+  selectionBeforeEditSource,
   shouldCommitCompositionEnd,
+  shouldSyncCustomSelectionFromDom,
+  shouldSyncSessionSelectionFromDom,
   transitionEditorInputState,
   type EditorInputState,
   type EditorInputStateTransition,
@@ -693,6 +696,7 @@ export class InputSelectionController {
       clientY: event.clientY,
     }
     this.syncCustomSelectionHighlight(offset, offset)
+    this.transitionInputState({ type: 'mouse-selection-start' })
     this.options.el.ownerDocument.addEventListener('mousemove', this.updateMouseSelectionDrag)
     this.options.el.ownerDocument.addEventListener('mouseup', this.finishMouseSelectionDrag)
   }
@@ -720,7 +724,7 @@ export class InputSelectionController {
     drag.clientY = event.clientY
     const offset = this.mouseSelectionOffsetFromPoint(drag.clientX, drag.clientY)
     event.preventDefault()
-    this.stopMouseSelectionDrag()
+    this.stopMouseSelectionDrag('finish')
 
     const start = nowMs()
     const change = session.setSelection(drag.anchorOffset, offset)
@@ -730,11 +734,17 @@ export class InputSelectionController {
     this.options.applySessionChange(change, 'input.selection', start, { syncDomSelection })
   }
 
-  private stopMouseSelectionDrag(): void {
+  private stopMouseSelectionDrag(reason: 'cancel' | 'finish' = 'cancel'): void {
+    const hadDrag = this.mouseSelectionDrag !== null
     this.mouseSelectionDrag = null
     this.stopMouseSelectionAutoScroll()
     this.options.el.ownerDocument.removeEventListener('mousemove', this.updateMouseSelectionDrag)
     this.options.el.ownerDocument.removeEventListener('mouseup', this.finishMouseSelectionDrag)
+    if (!hadDrag) return
+
+    this.transitionInputState({
+      type: reason === 'finish' ? 'mouse-selection-finish' : 'mouse-selection-cancel',
+    })
   }
 
   private updateMouseSelectionFromDragPoint(): void {
@@ -1218,9 +1228,7 @@ export class InputSelectionController {
 
   private syncSessionSelectionFromDom = (_event: Event): void => {
     if (!this.session) return
-    if (this.mouseSelectionDrag) return
-    if (this.inputState.selectionOwner === 'session') return
-    if (this.isInputFocused()) return
+    if (!shouldSyncSessionSelectionFromDom(this.inputState, this.domSelectionContext())) return
 
     const start = nowMs()
     const change = this.updateSessionSelectionFromDom()
@@ -1250,11 +1258,12 @@ export class InputSelectionController {
   }
 
   private selectionChangeBeforeEdit(): DocumentSessionChange | null {
-    if (this.isInputFocused()) {
+    const source = selectionBeforeEditSource(this.inputState, this.domSelectionContext())
+    if (source === 'hidden-input') {
       this.markHiddenInputSelectionForNextInput()
       return null
     }
-    if (this.inputState.selectionOwner !== 'session') return this.updateSessionSelectionFromDom()
+    if (source === 'dom') return this.updateSessionSelectionFromDom()
 
     this.markDomSelectionForNextInput()
     return null
@@ -1273,8 +1282,7 @@ export class InputSelectionController {
 
   private syncCustomSelectionFromDom = (): void => {
     if (!this.session) return
-    if (this.inputState.selectionOwner === 'session') return
-    if (this.isInputFocused()) return
+    if (!shouldSyncCustomSelectionFromDom(this.inputState, this.domSelectionContext())) return
 
     const offsets = this.readDomSelectionOffsets()
     if (!offsets) return
@@ -1289,6 +1297,12 @@ export class InputSelectionController {
 
   private isInputFocused(): boolean {
     return this.options.el.ownerDocument.activeElement === this.options.view.inputElement
+  }
+
+  private domSelectionContext(): { readonly hiddenInputFocused: boolean } {
+    return {
+      hiddenInputFocused: this.isInputFocused(),
+    }
   }
 
   private hasFocusedExternalElement(): boolean {
