@@ -18,6 +18,27 @@ import {
 } from '../src/pieceTable/tree.ts'
 
 describe('piece table tree', () => {
+  it('assigns deterministic node priorities from piece identity and seed', () => {
+    const firstBuffers = createInitialBuffers('abc', { prioritySeed: 7 })
+    const secondBuffers = createInitialBuffers('abc', { prioritySeed: 7 })
+    const thirdBuffers = createInitialBuffers('abc', { prioritySeed: 8 })
+    const first = createTreeFromPieces(
+      [createOriginalPiece(firstBuffers)!],
+      firstBuffers.prioritySeed,
+    )
+    const second = createTreeFromPieces(
+      [createOriginalPiece(secondBuffers)!],
+      secondBuffers.prioritySeed,
+    )
+    const third = createTreeFromPieces(
+      [createOriginalPiece(thirdBuffers)!],
+      thirdBuffers.prioritySeed,
+    )
+
+    expect(first?.priority).toBe(second?.priority)
+    expect(first?.priority).not.toBe(third?.priority)
+  })
+
   it('builds trees, collects ranges, and finds visible pieces', () => {
     const buffers = createInitialBuffers('abcdef')
     const piece = createOriginalPiece(buffers)!

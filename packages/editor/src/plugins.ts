@@ -418,7 +418,7 @@ export class EditorPluginHost implements EditorDisposable {
   }
 
   public getGutterContributions(): readonly EditorGutterContribution[] {
-    return this.gutterContributions
+    return [...this.gutterContributions]
   }
 
   public getBlockProviders(): readonly EditorBlockProvider[] {

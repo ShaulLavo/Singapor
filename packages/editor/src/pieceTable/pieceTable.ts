@@ -25,8 +25,12 @@ export {
   getPieceTableLength,
   getPieceTableOriginalText,
   getPieceTableText,
+  materializePieceTableText,
   forEachPieceTableTextChunk,
   pieceTableSnapshotsHaveSameText,
+  readPieceTableRange,
+  streamPieceTablePieces,
+  streamPieceTableTextChunks,
 } from './reads'
 export { createPieceTableSnapshot } from './snapshot'
 

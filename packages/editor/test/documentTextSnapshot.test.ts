@@ -17,14 +17,16 @@ describe('DocumentTextSnapshot', () => {
     Reflect.deleteProperty(globalThis, '__EDITOR_PERFORMANCE_DIAGNOSTICS__')
   })
 
-  it('does not retain computed full text reads', () => {
+  it('does not retain computed full text materializations', () => {
     const diagnostics = collectDiagnostics()
     const snapshot = createDocumentTextSnapshot(createPieceTableSnapshot('alpha'))
 
-    expect(snapshot.getText()).toBe('alpha')
-    expect(snapshot.getText()).toBe('alpha')
+    expect(snapshot.materializeText()).toBe('alpha')
+    expect(snapshot.materializeText()).toBe('alpha')
 
-    const reads = diagnostics.filter((diagnostic) => diagnostic.name === 'textSnapshot.getText')
+    const reads = diagnostics.filter(
+      (diagnostic) => diagnostic.name === 'textSnapshot.materializeText',
+    )
     expect(reads).toHaveLength(2)
     expect(reads.map((diagnostic) => diagnostic.detail)).toEqual([
       { length: 5, cached: false, retained: false },
@@ -36,10 +38,12 @@ describe('DocumentTextSnapshot', () => {
     const diagnostics = collectDiagnostics()
     const snapshot = createDocumentTextSnapshot(createPieceTableSnapshot('alpha'), 'alpha')
 
-    expect(snapshot.getText()).toBe('alpha')
-    expect(snapshot.getText()).toBe('alpha')
+    expect(snapshot.materializeText()).toBe('alpha')
+    expect(snapshot.materializeText()).toBe('alpha')
 
-    const reads = diagnostics.filter((diagnostic) => diagnostic.name === 'textSnapshot.getText')
+    const reads = diagnostics.filter(
+      (diagnostic) => diagnostic.name === 'textSnapshot.materializeText',
+    )
     expect(reads).toHaveLength(2)
     expect(reads.map((diagnostic) => diagnostic.detail)).toEqual([
       { length: 5, cached: true, retained: true },

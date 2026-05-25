@@ -42,13 +42,24 @@ describe('piece table buffers', () => {
   it('splits appended text into bounded chunks', () => {
     const buffers = createInitialBuffers('')
     const text = 'x'.repeat(16 * 1024) + 'tail'
-    const pieces = appendChunksToBuffers(buffers, text)
+    const appended = appendChunksToBuffers(buffers, text)
+    const pieces = appended.pieces
 
     expect(pieces).toHaveLength(2)
     expect(pieces.map((piece) => piece.length)).toEqual([16 * 1024, 4])
-    expect(pieces.map((piece) => getBufferText(buffers, piece.buffer))).toEqual([
+    expect(pieces.map((piece) => getBufferText(appended.buffers, piece.buffer))).toEqual([
       'x'.repeat(16 * 1024),
       'tail',
     ])
+  })
+
+  it('appends with copy-on-write buffer maps', () => {
+    const buffers = createInitialBuffers('')
+    const appended = appendChunksToBuffers(buffers, 'abc')
+    const piece = appended.pieces[0]!
+
+    expect(appended.buffers.chunks).not.toBe(buffers.chunks)
+    expect(buffers.chunks.has(piece.buffer)).toBe(false)
+    expect(getBufferText(appended.buffers, piece.buffer)).toBe('abc')
   })
 })

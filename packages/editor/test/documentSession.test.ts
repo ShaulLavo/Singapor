@@ -37,6 +37,11 @@ describe('DocumentSession', () => {
 
     expect(change.kind).toBe('edit')
     expect(change.edits).toEqual([{ from: 3, to: 3, text: '!' }])
+    expect(change.transaction).toMatchObject({
+      edits: [{ from: 3, to: 3, text: '!' }],
+      inverseEdits: [{ from: 3, to: 4, text: '' }],
+      metadata: { source: 'keyboard', intent: 'insert-text' },
+    })
     expect(Object.keys(change)).toContain('text')
     expect({ ...change }.text).toBe('abc!')
     expect(session.getText()).toBe('abc!')
@@ -173,8 +178,10 @@ describe('DocumentSession', () => {
 
     expect(undone.kind).toBe('undo')
     expect(undone.edits).toEqual([{ from: 1, to: 4, text: 'bcd' }])
+    expect(undone.transaction?.inverseEdits).toEqual([{ from: 1, to: 4, text: 'bcd' }])
     expect(redone.kind).toBe('redo')
     expect(redone.edits).toEqual([{ from: 1, to: 4, text: 'XYZ' }])
+    expect(redone.transaction?.edits).toEqual([{ from: 1, to: 4, text: 'XYZ' }])
   })
 
   it('applies batch edits as one undoable operation', () => {

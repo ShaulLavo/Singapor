@@ -2,8 +2,7 @@ import type { Piece, PieceTableBuffers, PieceTreeNode } from './pieceTableTypes'
 import type { ReverseIndexChange, SplitContext } from './internalTypes'
 import { bufferForPiece, createPiece } from './buffers'
 import { allocateOrdersBetween, PIECE_ORDER_MIN_GAP, PIECE_ORDER_STEP } from './orders'
-
-const randomPriority = () => Math.random()
+import { priorityForPiece } from './priority'
 
 export const getSubtreeLength = (node: PieceTreeNode | null): number =>
   node ? node.subtreeLength : 0
@@ -80,7 +79,7 @@ export const createNode = (
   piece: Piece,
   left: PieceTreeNode | null = null,
   right: PieceTreeNode | null = null,
-  priority = randomPriority(),
+  priority = priorityForPiece(piece),
 ): PieceTreeNode => ({
   piece,
   left,
@@ -204,8 +203,9 @@ export const splitByVisibleOffset = (
     node.piece.visible,
   )
 
-  const leftNode = createNode(leftPiece)
-  const rightNode = createNode(rightPiece)
+  const prioritySeed = buffers.prioritySeed
+  const leftNode = createNode(leftPiece, null, null, priorityForPiece(leftPiece, prioritySeed))
+  const rightNode = createNode(rightPiece, null, null, priorityForPiece(rightPiece, prioritySeed))
   const leftTree = merge(node.left, leftNode)
   const rightTree = merge(rightNode, node.right)
 
@@ -216,11 +216,14 @@ export const splitByVisibleOffset = (
   return { left: leftTree, right: rightTree }
 }
 
-export const createTreeFromPieces = (pieces: readonly Piece[]): PieceTreeNode | null => {
+export const createTreeFromPieces = (
+  pieces: readonly Piece[],
+  prioritySeed = 0,
+): PieceTreeNode | null => {
   let tree: PieceTreeNode | null = null
 
   for (const piece of pieces) {
-    tree = merge(tree, createNode(piece))
+    tree = merge(tree, createNode(piece, null, null, priorityForPiece(piece, prioritySeed)))
   }
 
   return tree

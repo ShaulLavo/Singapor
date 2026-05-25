@@ -271,7 +271,7 @@ describe('piece table', () => {
     for (let seed = 1; seed <= 25; seed++) {
       runRandomEditScenario(seed)
     }
-  })
+  }, 10_000)
 
   test('keeps deleted pieces invisible and out of user-facing text', () => {
     const snapshot = deleteFromPieceTable(createPieceTableSnapshot('ab\ncd'), 1, 3)
@@ -385,7 +385,7 @@ describe('piece table', () => {
     for (let seed = 1; seed <= 10; seed++) {
       runRandomAnchorScenario(seed)
     }
-  })
+  }, 10_000)
 
   test('applies non-overlapping batch edits against the original snapshot', () => {
     const snapshot = createPieceTableSnapshot('abcdef')

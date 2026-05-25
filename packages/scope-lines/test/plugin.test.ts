@@ -409,6 +409,9 @@ function countingTextSnapshot(
 ): TextSnapshot {
   return {
     length: text.length,
+    materializeText: () => {
+      throw new Error('unexpected full text materialization')
+    },
     getText: () => {
       throw new Error('unexpected full text materialization')
     },

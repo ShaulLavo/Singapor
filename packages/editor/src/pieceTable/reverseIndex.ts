@@ -6,8 +6,7 @@ import type {
 } from './pieceTableTypes'
 import type { ReverseIndexChange } from './internalTypes'
 import { flattenNodes } from './tree'
-
-const randomPriority = () => Math.random()
+import { priorityForPiece } from './priority'
 
 export const compareReverseKeys = (
   leftBuffer: PieceBufferId,
@@ -30,12 +29,12 @@ const cloneReverseIndexNode = (node: PieceTableReverseIndexNode): PieceTableReve
   right: node.right,
 })
 
-const createReverseIndexNode = (piece: Piece): PieceTableReverseIndexNode => ({
+const createReverseIndexNode = (piece: Piece, prioritySeed = 0): PieceTableReverseIndexNode => ({
   buffer: piece.buffer,
   start: piece.start,
   piece,
   order: piece.order,
-  priority: randomPriority(),
+  priority: priorityForPiece(piece, prioritySeed, 'reverse-index'),
   left: null,
   right: null,
 })
@@ -59,20 +58,21 @@ const rotateReverseLeft = (node: PieceTableReverseIndexNode): PieceTableReverseI
 export const insertReverseIndexNode = (
   root: PieceTableReverseIndexNode | null,
   piece: Piece,
+  prioritySeed = 0,
 ): PieceTableReverseIndexNode => {
-  if (!root) return createReverseIndexNode(piece)
+  if (!root) return createReverseIndexNode(piece, prioritySeed)
 
   const comparison = compareReverseKeys(piece.buffer, piece.start, root.buffer, root.start)
 
   if (comparison < 0) {
     const next = cloneReverseIndexNode(root)
-    next.left = insertReverseIndexNode(next.left, piece)
+    next.left = insertReverseIndexNode(next.left, piece, prioritySeed)
     return next.left.priority < next.priority ? rotateReverseRight(next) : next
   }
 
   if (comparison > 0) {
     const next = cloneReverseIndexNode(root)
-    next.right = insertReverseIndexNode(next.right, piece)
+    next.right = insertReverseIndexNode(next.right, piece, prioritySeed)
     return next.right.priority < next.priority ? rotateReverseLeft(next) : next
   }
 
@@ -127,6 +127,7 @@ const deleteReverseIndexNode = (
 export const applyReverseIndexChanges = (
   root: PieceTableReverseIndexNode | null,
   changes: readonly ReverseIndexChange[],
+  prioritySeed = 0,
 ): PieceTableReverseIndexNode | null => {
   let next = root
 
@@ -135,7 +136,7 @@ export const applyReverseIndexChanges = (
       next = deleteReverseIndexNode(next, change.remove)
     }
     if (change.add && change.add.length > 0) {
-      next = insertReverseIndexNode(next, change.add)
+      next = insertReverseIndexNode(next, change.add, prioritySeed)
     }
   }
 
@@ -144,13 +145,14 @@ export const applyReverseIndexChanges = (
 
 export const buildReverseIndex = (
   root: PieceTableTreeSnapshot['root'],
+  prioritySeed = 0,
 ): PieceTableReverseIndexNode | null => {
   let indexRoot: PieceTableReverseIndexNode | null = null
   const nodes = flattenNodes(root, [])
 
   for (const node of nodes) {
     if (node.piece.length === 0) continue
-    indexRoot = insertReverseIndexNode(indexRoot, node.piece)
+    indexRoot = insertReverseIndexNode(indexRoot, node.piece, prioritySeed)
   }
 
   return indexRoot

@@ -10,10 +10,14 @@ export {
   getPieceTableLength,
   getPieceTableText,
   insertIntoPieceTable,
+  materializePieceTableText,
   offsetToPoint,
   pieceTableSnapshotsHaveSameText,
   pointToOffset,
+  readPieceTableRange,
   resolveAnchor,
+  streamPieceTablePieces,
+  streamPieceTableTextChunks,
 } from '../pieceTable'
 export { createDocumentSession, createStaticDocumentSession } from '../documentSession'
 export { createDocumentTextSnapshot, createStringTextSnapshot } from '../documentTextSnapshot'
@@ -35,6 +39,8 @@ export type {
   DocumentSessionEditSelection,
   DocumentSessionSelectionOptions,
   DocumentSessionSelectionRange,
+  DocumentTransaction,
+  DocumentTransactionMetadata,
   EditorTimingMeasurement,
 } from '../documentSession'
 export type { DocumentTextSnapshot, TextSnapshot } from '../documentTextSnapshot'

@@ -8,6 +8,9 @@ import {
   getPieceTableLength,
   getPieceTableOriginalText,
   getPieceTableText,
+  materializePieceTableText,
+  readPieceTableRange,
+  streamPieceTablePieces,
 } from '../src/pieceTable/reads.ts'
 
 describe('piece table reads', () => {
@@ -18,6 +21,8 @@ describe('piece table reads', () => {
     expect(getPieceTableLength(edited)).toBe(8)
     expect(getPieceTableOriginalText(edited)).toBe('abcdef')
     expect(getPieceTableText(edited)).toBe('abcXXdef')
+    expect(materializePieceTableText(edited)).toBe('abcXXdef')
+    expect(readPieceTableRange(edited, 2, 6)).toBe('cXXd')
     expect(getPieceTableText(edited, 2, 6)).toBe('cXXd')
     expect(getPieceTableText(edited, 2, 2)).toBe('')
   })
@@ -33,6 +38,18 @@ describe('piece table reads', () => {
 
     expect(chunks.join('|')).toBe('0:3:abc|3:5:XX|5:8:def')
     expect(chunks.length).toBeGreaterThan(1)
+  })
+
+  it('streams visible pieces with document offsets', () => {
+    const initial = createPieceTableSnapshot('abcdef')
+    const edited = insertIntoPieceTable(initial, 3, 'XX')
+    const entries: string[] = []
+
+    streamPieceTablePieces(edited, (entry) => {
+      entries.push(`${entry.start}:${entry.end}:${entry.text}`)
+    })
+
+    expect(entries).toEqual(['0:3:abc', '3:5:XX', '5:8:def'])
   })
 
   it('validates read ranges', () => {

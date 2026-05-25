@@ -47,21 +47,19 @@ export const insertIntoPieceTable = (
   const { left, right } = splitByVisibleOffset(snapshot.root, offset, snapshot.buffers, context)
   const leftOrder = left ? getSubtreeMaxOrder(left) : null
   const rightOrder = right ? getSubtreeMinOrder(right) : null
-  const ordered = assignPieceOrders(
-    appendChunksToBuffers(snapshot.buffers, text),
-    leftOrder,
-    rightOrder,
-  )
-  const insertionTree = createTreeFromPieces(ordered.pieces)
+  const appended = appendChunksToBuffers(snapshot.buffers, text)
+  const ordered = assignPieceOrders(appended.pieces, leftOrder, rightOrder)
+  const insertionTree = createTreeFromPieces(ordered.pieces, appended.buffers.prioritySeed)
   const merged = merge(merge(left, insertionTree), right)
   const insertionChanges = ordered.pieces.map((piece) => ({ add: piece }))
-  const reverseIndexRoot = applyReverseIndexChanges(snapshot.reverseIndexRoot, [
-    ...context.changes,
-    ...insertionChanges,
-  ])
+  const reverseIndexRoot = applyReverseIndexChanges(
+    snapshot.reverseIndexRoot,
+    [...context.changes, ...insertionChanges],
+    appended.buffers.prioritySeed,
+  )
 
   return createSnapshotWithIndex(
-    snapshot.buffers,
+    appended.buffers,
     merged,
     reverseIndexRoot,
     context.normalizeOrders || ordered.normalizeOrders,
@@ -86,7 +84,11 @@ export const deleteFromPieceTable = (
   )
   const invisible = markTreeInvisible(deleted, context.changes)
   const merged = merge(merge(left, invisible), tail)
-  const reverseIndexRoot = applyReverseIndexChanges(snapshot.reverseIndexRoot, context.changes)
+  const reverseIndexRoot = applyReverseIndexChanges(
+    snapshot.reverseIndexRoot,
+    context.changes,
+    snapshot.buffers.prioritySeed,
+  )
   return createSnapshotWithIndex(
     snapshot.buffers,
     merged,

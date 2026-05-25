@@ -1,11 +1,106 @@
 import type { Piece, PieceBufferId, PieceTableBuffers } from './pieceTableTypes'
 import { PIECE_ORDER_STEP } from './orders'
+import { DEFAULT_PIECE_TABLE_PRIORITY_SEED } from './priority'
 
 const BUFFER_CHUNK_SIZE = 16 * 1024
-let nextBufferSequence = 0
+const BUFFER_ID_PREFIX = 'buffer:'
+const BUFFER_STORE_PAGE_SIZE = 1024
 
-export const createBufferId = (): PieceBufferId =>
-  ('buffer:' + nextBufferSequence++) as PieceBufferId
+class PieceBufferChunkStore implements ReadonlyMap<PieceBufferId, string> {
+  public readonly [Symbol.toStringTag] = 'PieceBufferChunkStore'
+
+  public constructor(
+    private readonly pages: readonly (readonly string[])[],
+    public readonly size: number,
+  ) {}
+
+  public static from(chunks: readonly string[]): PieceBufferChunkStore {
+    return new PieceBufferChunkStore([chunks], chunks.length)
+  }
+
+  public get(buffer: PieceBufferId): string | undefined {
+    const sequence = bufferSequence(buffer)
+    if (sequence === null) return undefined
+
+    const page = this.pages[Math.floor(sequence / BUFFER_STORE_PAGE_SIZE)]
+    return page?.[sequence % BUFFER_STORE_PAGE_SIZE]
+  }
+
+  public has(buffer: PieceBufferId): boolean {
+    return this.get(buffer) !== undefined
+  }
+
+  public forEach(
+    callback: (value: string, key: PieceBufferId, map: ReadonlyMap<PieceBufferId, string>) => void,
+    thisArg?: unknown,
+  ): void {
+    for (const [key, value] of this.entries()) {
+      callback.call(thisArg, value, key, this)
+    }
+  }
+
+  public *entries(): IterableIterator<[PieceBufferId, string]> {
+    let sequence = 0
+
+    for (const page of this.pages) {
+      for (const text of page) {
+        yield [createBufferId(sequence), text]
+        sequence += 1
+      }
+    }
+  }
+
+  public *keys(): IterableIterator<PieceBufferId> {
+    for (const [key] of this.entries()) yield key
+  }
+
+  public *values(): IterableIterator<string> {
+    for (const [, value] of this.entries()) yield value
+  }
+
+  public [Symbol.iterator](): IterableIterator<[PieceBufferId, string]> {
+    return this.entries()
+  }
+
+  public append(chunks: readonly string[]): PieceBufferChunkStore {
+    if (chunks.length === 0) return this
+
+    const nextPages = [...this.pages]
+    let tail = nextPages.pop()?.slice() ?? []
+
+    for (const chunk of chunks) {
+      if (tail.length === BUFFER_STORE_PAGE_SIZE) {
+        nextPages.push(tail)
+        tail = []
+      }
+
+      tail.push(chunk)
+    }
+
+    if (tail.length > 0) nextPages.push(tail)
+    return new PieceBufferChunkStore(nextPages, this.size + chunks.length)
+  }
+}
+
+export type PieceTableBufferOptions = {
+  readonly prioritySeed?: number
+}
+
+export type AppendChunksToBuffersResult = {
+  readonly buffers: PieceTableBuffers
+  readonly pieces: readonly Piece[]
+}
+
+export const createBufferId = (sequence: number): PieceBufferId =>
+  `${BUFFER_ID_PREFIX}${sequence}` as PieceBufferId
+
+const bufferSequence = (buffer: PieceBufferId): number | null => {
+  if (!buffer.startsWith(BUFFER_ID_PREFIX)) return null
+
+  const sequence = Number(buffer.slice(BUFFER_ID_PREFIX.length))
+  if (!Number.isSafeInteger(sequence) || sequence < 0) return null
+  return sequence
+}
 
 export const countLineBreaks = (text: string, start = 0, end = text.length): number => {
   let count = 0
@@ -47,15 +142,20 @@ export const createPiece = (
 export const bufferForPiece = (buffers: PieceTableBuffers, piece: Piece): string =>
   getBufferText(buffers, piece.buffer)
 
-export const appendChunksToBuffers = (buffers: PieceTableBuffers, text: string): Piece[] => {
-  const chunks = buffers.chunks as Map<PieceBufferId, string>
+export const appendChunksToBuffers = (
+  buffers: PieceTableBuffers,
+  text: string,
+): AppendChunksToBuffersResult => {
+  const chunkTexts: string[] = []
   const pieces: Piece[] = []
+  let nextBufferSequence = buffers.nextBufferSequence
   let textOffset = 0
 
   while (textOffset < text.length) {
     const chunkText = text.slice(textOffset, textOffset + BUFFER_CHUNK_SIZE)
-    const buffer = createBufferId()
-    chunks.set(buffer, chunkText)
+    const buffer = createBufferId(nextBufferSequence)
+    nextBufferSequence += 1
+    chunkTexts.push(chunkText)
     pieces.push({
       buffer,
       start: 0,
@@ -67,15 +167,42 @@ export const appendChunksToBuffers = (buffers: PieceTableBuffers, text: string):
     textOffset += chunkText.length
   }
 
-  return pieces
+  return {
+    buffers: {
+      ...buffers,
+      chunks: appendChunkTexts(buffers.chunks, chunkTexts),
+      nextBufferSequence,
+    },
+    pieces,
+  }
 }
 
-export const createInitialBuffers = (original: string): PieceTableBuffers => {
-  const originalBuffer = createBufferId()
-  const chunks = new Map<PieceBufferId, string>([[originalBuffer, original]])
+const appendChunkTexts = (
+  chunks: ReadonlyMap<PieceBufferId, string>,
+  chunkTexts: readonly string[],
+): ReadonlyMap<PieceBufferId, string> => {
+  if (chunks instanceof PieceBufferChunkStore) return chunks.append(chunkTexts)
+
+  const next = new Map(chunks)
+  let sequence = chunks.size
+  for (const chunkText of chunkTexts) {
+    next.set(createBufferId(sequence), chunkText)
+    sequence += 1
+  }
+  return next
+}
+
+export const createInitialBuffers = (
+  original: string,
+  options: PieceTableBufferOptions = {},
+): PieceTableBuffers => {
+  const originalBuffer = createBufferId(0)
+  const chunks = PieceBufferChunkStore.from([original])
   return {
     original: originalBuffer,
     chunks,
+    nextBufferSequence: 1,
+    prioritySeed: options.prioritySeed ?? DEFAULT_PIECE_TABLE_PRIORITY_SEED,
   }
 }
 

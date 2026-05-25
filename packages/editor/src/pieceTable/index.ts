@@ -26,9 +26,13 @@ export {
   getPieceTableOriginalText,
   getPieceTableText,
   insertIntoPieceTable,
+  materializePieceTableText,
   offsetToPoint,
   pieceTableSnapshotsHaveSameText,
   pointToOffset,
+  readPieceTableRange,
   resolveAnchor,
   resolveAnchorLinear,
+  streamPieceTablePieces,
+  streamPieceTableTextChunks,
 } from './pieceTable'

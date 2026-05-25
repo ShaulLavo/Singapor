@@ -1366,6 +1366,7 @@ function snapshotWithThrowingText(
 function stringTextSnapshot(text: string): TextSnapshot {
   return {
     length: text.length,
+    materializeText: () => text,
     getText: () => text,
     getTextInRange: (start, end) => text.slice(start, end),
     forEachTextChunk: (visit) => visit(text, 0, text.length),

@@ -1,22 +1,23 @@
 import type { Anchor as PieceTableAnchor, PieceTableSnapshot } from './pieceTable/pieceTableTypes'
 import type { SelectionSet } from './selections'
 
-export type EditorHistoryEntry<TSnapshot, TSelectionState> = {
+export type EditorHistoryEntry<TSnapshot, TSelectionState, TTransaction = never> = {
   readonly snapshot: TSnapshot
   readonly selections: TSelectionState
+  readonly transaction?: TTransaction
 }
 
-export type EditorHistoryStack<TSnapshot, TSelectionState> = {
-  readonly entry: EditorHistoryEntry<TSnapshot, TSelectionState>
-  readonly previous: EditorHistoryStack<TSnapshot, TSelectionState>
+export type EditorHistoryStack<TSnapshot, TSelectionState, TTransaction = never> = {
+  readonly entry: EditorHistoryEntry<TSnapshot, TSelectionState, TTransaction>
+  readonly previous: EditorHistoryStack<TSnapshot, TSelectionState, TTransaction>
   readonly size: number
 } | null
 
-export type EditorHistory<TSnapshot, TSelectionState> = {
+export type EditorHistory<TSnapshot, TSelectionState, TTransaction = never> = {
   readonly current: TSnapshot
   readonly selections: TSelectionState
-  readonly undo: EditorHistoryStack<TSnapshot, TSelectionState>
-  readonly redo: EditorHistoryStack<TSnapshot, TSelectionState>
+  readonly undo: EditorHistoryStack<TSnapshot, TSelectionState, TTransaction>
+  readonly redo: EditorHistoryStack<TSnapshot, TSelectionState, TTransaction>
 }
 
 export type PieceTableEditorHistory = EditorHistory<
@@ -24,42 +25,44 @@ export type PieceTableEditorHistory = EditorHistory<
   SelectionSet<PieceTableAnchor>
 >
 
-export const createEditorHistory = <TSnapshot, TSelectionState>(
+export const createEditorHistory = <TSnapshot, TSelectionState, TTransaction = never>(
   current: TSnapshot,
   selections: TSelectionState,
-): EditorHistory<TSnapshot, TSelectionState> => ({
+): EditorHistory<TSnapshot, TSelectionState, TTransaction> => ({
   current,
   selections,
   undo: null,
   redo: null,
 })
 
-const pushHistoryEntry = <TSnapshot, TSelectionState>(
-  stack: EditorHistoryStack<TSnapshot, TSelectionState>,
-  entry: EditorHistoryEntry<TSnapshot, TSelectionState>,
-): EditorHistoryStack<TSnapshot, TSelectionState> => ({
+const pushHistoryEntry = <TSnapshot, TSelectionState, TTransaction = never>(
+  stack: EditorHistoryStack<TSnapshot, TSelectionState, TTransaction>,
+  entry: EditorHistoryEntry<TSnapshot, TSelectionState, TTransaction>,
+): EditorHistoryStack<TSnapshot, TSelectionState, TTransaction> => ({
   entry,
   previous: stack,
   size: (stack?.size ?? 0) + 1,
 })
 
-export const commitEditorHistory = <TSnapshot, TSelectionState>(
-  history: EditorHistory<TSnapshot, TSelectionState>,
+export const commitEditorHistory = <TSnapshot, TSelectionState, TTransaction = never>(
+  history: EditorHistory<TSnapshot, TSelectionState, TTransaction>,
   current: TSnapshot,
   selections: TSelectionState,
-): EditorHistory<TSnapshot, TSelectionState> => ({
+  transaction?: TTransaction,
+): EditorHistory<TSnapshot, TSelectionState, TTransaction> => ({
   current,
   selections,
   undo: pushHistoryEntry(history.undo, {
     snapshot: history.current,
     selections: history.selections,
+    transaction,
   }),
   redo: null,
 })
 
-export const undoEditorHistory = <TSnapshot, TSelectionState>(
-  history: EditorHistory<TSnapshot, TSelectionState>,
-): EditorHistory<TSnapshot, TSelectionState> => {
+export const undoEditorHistory = <TSnapshot, TSelectionState, TTransaction = never>(
+  history: EditorHistory<TSnapshot, TSelectionState, TTransaction>,
+): EditorHistory<TSnapshot, TSelectionState, TTransaction> => {
   const previous = history.undo
   if (!previous) return history
 
@@ -70,13 +73,14 @@ export const undoEditorHistory = <TSnapshot, TSelectionState>(
     redo: pushHistoryEntry(history.redo, {
       snapshot: history.current,
       selections: history.selections,
+      transaction: previous.entry.transaction,
     }),
   }
 }
 
-export const redoEditorHistory = <TSnapshot, TSelectionState>(
-  history: EditorHistory<TSnapshot, TSelectionState>,
-): EditorHistory<TSnapshot, TSelectionState> => {
+export const redoEditorHistory = <TSnapshot, TSelectionState, TTransaction = never>(
+  history: EditorHistory<TSnapshot, TSelectionState, TTransaction>,
+): EditorHistory<TSnapshot, TSelectionState, TTransaction> => {
   const next = history.redo
   if (!next) return history
 
@@ -86,6 +90,7 @@ export const redoEditorHistory = <TSnapshot, TSelectionState>(
     undo: pushHistoryEntry(history.undo, {
       snapshot: history.current,
       selections: history.selections,
+      transaction: next.entry.transaction,
     }),
     redo: next.previous,
   }

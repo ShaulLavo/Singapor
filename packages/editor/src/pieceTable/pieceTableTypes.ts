@@ -5,8 +5,8 @@ export type PieceBufferId = string & {
 }
 
 export type Point = {
-  row: number
-  column: number
+  readonly row: number
+  readonly column: number
 }
 
 export type AnchorBias = 'left' | 'right'
@@ -14,10 +14,10 @@ export type AnchorBias = 'left' | 'right'
 export type AnchorLiveness = 'live' | 'deleted'
 
 export type RealAnchor = {
-  kind: 'anchor'
-  buffer: PieceBufferId
-  offset: number
-  bias: AnchorBias
+  readonly kind: 'anchor'
+  readonly buffer: PieceBufferId
+  readonly offset: number
+  readonly bias: AnchorBias
 }
 
 export type SentinelAnchor = { kind: 'min' } | { kind: 'max' }
@@ -25,22 +25,24 @@ export type SentinelAnchor = { kind: 'min' } | { kind: 'max' }
 export type Anchor = RealAnchor | SentinelAnchor
 
 export type ResolvedAnchor = {
-  offset: number
-  liveness: AnchorLiveness
+  readonly offset: number
+  readonly liveness: AnchorLiveness
 }
 
 export type Piece = {
-  buffer: PieceBufferId
-  start: number
-  length: number
-  order: number
-  lineBreaks: number
-  visible: boolean
+  readonly buffer: PieceBufferId
+  readonly start: number
+  readonly length: number
+  readonly order: number
+  readonly lineBreaks: number
+  readonly visible: boolean
 }
 
 export type PieceTableBuffers = {
-  original: PieceBufferId
-  chunks: ReadonlyMap<PieceBufferId, string>
+  readonly original: PieceBufferId
+  readonly chunks: ReadonlyMap<PieceBufferId, string>
+  readonly nextBufferSequence: number
+  readonly prioritySeed: number
 }
 
 export type PieceTreeNode = {
@@ -67,17 +69,17 @@ export type PieceTableReverseIndexNode = {
 }
 
 export type PieceTableTreeSnapshot = {
-  buffers: PieceTableBuffers
-  root: PieceTreeNode | null
-  reverseIndexRoot: PieceTableReverseIndexNode | null
-  length: number
-  pieceCount: number
+  readonly buffers: PieceTableBuffers
+  readonly root: PieceTreeNode | null
+  readonly reverseIndexRoot: PieceTableReverseIndexNode | null
+  readonly length: number
+  readonly pieceCount: number
 }
 
 export type PieceTableEdit = {
-  from: number
-  to: number
-  text: string
+  readonly from: number
+  readonly to: number
+  readonly text: string
 }
 
 export type PieceTableSnapshot = PieceTableTreeSnapshot

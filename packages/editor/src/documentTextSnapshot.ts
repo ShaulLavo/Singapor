@@ -1,5 +1,9 @@
 import type { PieceTableSnapshot } from './pieceTable/pieceTableTypes'
-import { forEachPieceTableTextChunk, getPieceTableText } from './pieceTable/reads'
+import {
+  forEachPieceTableTextChunk,
+  materializePieceTableText,
+  readPieceTableRange,
+} from './pieceTable/reads'
 import {
   measureEditorPerformance,
   recordEditorPerformanceDiagnostic,
@@ -7,6 +11,7 @@ import {
 
 export type TextSnapshot = {
   readonly length: number
+  materializeText(): string
   getText(): string
   getTextInRange(start: number, end?: number): string
   forEachTextChunk(visit: (text: string, start: number, end: number) => void): void
@@ -21,22 +26,24 @@ export function createDocumentTextSnapshot(
   materializedText?: string,
 ): DocumentTextSnapshot {
   const retainedText = materializedText?.length === snapshot.length ? materializedText : undefined
+  const materializeText = (): string => {
+    if (retainedText !== undefined) {
+      recordFullTextSnapshotRead('textSnapshot.materializeText', snapshot.length, true)
+      return retainedText
+    }
+
+    return measureEditorPerformance(
+      'textSnapshot.materializeText',
+      () => materializePieceTableText(snapshot),
+      () => fullTextSnapshotDetail(snapshot.length, false),
+    )
+  }
 
   return {
     snapshot,
     length: snapshot.length,
-    getText: () => {
-      if (retainedText !== undefined) {
-        recordFullTextSnapshotRead('textSnapshot.getText', snapshot.length, true)
-        return retainedText
-      }
-
-      return measureEditorPerformance(
-        'textSnapshot.getText',
-        () => getPieceTableText(snapshot),
-        () => fullTextSnapshotDetail(snapshot.length, false),
-      )
-    },
+    materializeText,
+    getText: materializeText,
     getTextInRange: (start, end) => {
       const effectiveEnd = end ?? snapshot.length
       if (retainedText !== undefined && start === 0 && effectiveEnd === snapshot.length) {
@@ -47,12 +54,12 @@ export function createDocumentTextSnapshot(
       if (start === 0 && effectiveEnd === snapshot.length) {
         return measureEditorPerformance(
           'textSnapshot.getTextInRange',
-          () => getPieceTableText(snapshot, start, effectiveEnd),
+          () => readPieceTableRange(snapshot, start, effectiveEnd),
           () => fullTextSnapshotDetail(snapshot.length, false),
         )
       }
 
-      return getPieceTableText(snapshot, start, effectiveEnd)
+      return readPieceTableRange(snapshot, start, effectiveEnd)
     },
     forEachTextChunk: (visit) => {
       if (retainedText !== undefined) {
@@ -68,6 +75,7 @@ export function createDocumentTextSnapshot(
 export function createStringTextSnapshot(text: string): TextSnapshot {
   return {
     length: text.length,
+    materializeText: () => text,
     getText: () => text,
     getTextInRange: (start, end) => text.slice(start, end),
     forEachTextChunk: (visit) => {

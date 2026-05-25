@@ -4,10 +4,11 @@ import type {
   PieceTableTreeSnapshot,
   PieceTreeNode,
 } from './pieceTableTypes'
-import { createInitialBuffers, createOriginalPiece } from './buffers'
+import { createInitialBuffers, createOriginalPiece, type PieceTableBufferOptions } from './buffers'
 import { buildReverseIndex } from './reverseIndex'
 import { createNode, getSubtreePieces, getSubtreeVisibleLength, normalizePieceOrders } from './tree'
 import { PIECE_ORDER_STEP } from './orders'
+import { priorityForPiece } from './priority'
 
 export const createSnapshot = (
   buffers: PieceTableBuffers,
@@ -30,12 +31,23 @@ export const createSnapshotWithIndex = (
   if (!normalizeOrders) return createSnapshot(buffers, root, reverseIndexRoot)
 
   const normalizedRoot = normalizePieceOrders(root, { value: PIECE_ORDER_STEP })
-  return createSnapshot(buffers, normalizedRoot, buildReverseIndex(normalizedRoot))
+  return createSnapshot(
+    buffers,
+    normalizedRoot,
+    buildReverseIndex(normalizedRoot, buffers.prioritySeed),
+  )
 }
 
-export const createPieceTableSnapshot = (original: string): PieceTableTreeSnapshot => {
-  const buffers = createInitialBuffers(original)
+export type CreatePieceTableSnapshotOptions = PieceTableBufferOptions
+
+export const createPieceTableSnapshot = (
+  original: string,
+  options: CreatePieceTableSnapshotOptions = {},
+): PieceTableTreeSnapshot => {
+  const buffers = createInitialBuffers(original, options)
   const originalPiece = createOriginalPiece(buffers)
-  const root = originalPiece ? createNode(originalPiece) : null
-  return createSnapshot(buffers, root, buildReverseIndex(root))
+  const root = originalPiece
+    ? createNode(originalPiece, null, null, priorityForPiece(originalPiece, buffers.prioritySeed))
+    : null
+  return createSnapshot(buffers, root, buildReverseIndex(root, buffers.prioritySeed))
 }

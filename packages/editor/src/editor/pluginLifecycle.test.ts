@@ -102,6 +102,7 @@ describe('editor plugin lifecycle', () => {
     }
 
     const lease = editor.addPlugin(plugin)
+    syncEditorViewport(editor, 320, 120)
     const cells = findGutterCells('test-gutter')
 
     expect(cells.length).toBeGreaterThan(0)
@@ -116,10 +117,46 @@ describe('editor plugin lifecycle', () => {
 
 function createEditor(): Editor {
   const container = document.createElement('div')
+  mockEditorViewport(container, 320, 120)
   document.body.appendChild(container)
   const editor = new Editor(container, { defaultText: 'one\ntwo' })
+  mockEditorViewport(editorElement(editor), 320, 120)
+  syncEditorViewport(editor, 320, 120)
   editor.setScrollPosition({ top: 0, left: 0 })
   return editor
+}
+
+function editorElement(editor: Editor): HTMLElement {
+  return (editor as unknown as { readonly el: HTMLElement }).el
+}
+
+function syncEditorViewport(editor: Editor, width: number, height: number): void {
+  const internals = editor as unknown as {
+    readonly view: {
+      setScrollMetrics(scrollTop: number, viewportHeight: number, viewportWidth: number): void
+    }
+  }
+  internals.view.setScrollMetrics(0, height, width)
+}
+
+function mockEditorViewport(element: HTMLElement, width: number, height: number): void {
+  Object.defineProperty(element, 'clientHeight', { configurable: true, value: height })
+  Object.defineProperty(element, 'clientWidth', { configurable: true, value: width })
+  Object.defineProperty(element, 'scrollHeight', { configurable: true, value: height })
+  Object.defineProperty(element, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => ({
+      bottom: height,
+      height,
+      left: 0,
+      right: width,
+      top: 0,
+      width,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    }),
+  })
 }
 
 function createLifecyclePlugin(): {

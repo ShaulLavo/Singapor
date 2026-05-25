@@ -1,4 +1,4 @@
-import type { PieceTableTreeSnapshot } from './pieceTableTypes'
+import type { Piece, PieceTableTreeSnapshot } from './pieceTableTypes'
 import { getBufferText } from './buffers'
 import { collectTextInRange, forEachTextInRange } from './tree'
 
@@ -13,7 +13,7 @@ export const ensureValidRange = (snapshot: PieceTableTreeSnapshot, start: number
   }
 }
 
-export const getPieceTableText = (
+export const readPieceTableRange = (
   snapshot: PieceTableTreeSnapshot,
   start = 0,
   end?: number,
@@ -27,7 +27,19 @@ export const getPieceTableText = (
   return chunks.join('')
 }
 
-export const forEachPieceTableTextChunk = (
+export const materializePieceTableText = (snapshot: PieceTableTreeSnapshot): string =>
+  readPieceTableRange(snapshot, 0, snapshot.length)
+
+export const getPieceTableText = (
+  snapshot: PieceTableTreeSnapshot,
+  start = 0,
+  end?: number,
+): string => {
+  if (start === 0 && end === undefined) return materializePieceTableText(snapshot)
+  return readPieceTableRange(snapshot, start, end)
+}
+
+export const streamPieceTableTextChunks = (
   snapshot: PieceTableTreeSnapshot,
   visit: (text: string, start: number, end: number) => void,
   start = 0,
@@ -45,6 +57,27 @@ export const forEachPieceTableTextChunk = (
   })
 }
 
+export const forEachPieceTableTextChunk = streamPieceTableTextChunks
+
+export type PieceTablePieceStreamEntry = {
+  readonly piece: Piece
+  readonly text: string
+  readonly start: number
+  readonly end: number
+}
+
+export const streamPieceTablePieces = (
+  snapshot: PieceTableTreeSnapshot,
+  visit: (entry: PieceTablePieceStreamEntry) => void,
+  start = 0,
+  end?: number,
+): void => {
+  const effectiveEnd = end ?? snapshot.length
+  ensureValidRange(snapshot, start, effectiveEnd)
+  if (start === effectiveEnd) return
+  streamPieces(snapshot.root, snapshot, visit, start, effectiveEnd)
+}
+
 export const pieceTableSnapshotsHaveSameText = (
   left: PieceTableTreeSnapshot,
   right: PieceTableTreeSnapshot,
@@ -56,6 +89,50 @@ export const pieceTableSnapshotsHaveSameText = (
     collectPieceTableTextChunks(left),
     collectPieceTableTextChunks(right),
   )
+}
+
+const streamPieces = (
+  node: PieceTableTreeSnapshot['root'],
+  snapshot: PieceTableTreeSnapshot,
+  visit: (entry: PieceTablePieceStreamEntry) => void,
+  start: number,
+  end: number,
+  baseOffset = 0,
+): void => {
+  if (!node || baseOffset >= end) return
+
+  const leftLength = node.left?.subtreeVisibleLength ?? 0
+  const pieceLength = node.piece.visible ? node.piece.length : 0
+  const pieceStart = baseOffset + leftLength
+  const pieceEnd = pieceStart + pieceLength
+
+  if (start < pieceStart) streamPieces(node.left, snapshot, visit, start, end, baseOffset)
+  streamCurrentPiece(node.piece, snapshot, visit, start, end, pieceStart, pieceEnd)
+  if (end > pieceEnd) streamPieces(node.right, snapshot, visit, start, end, pieceEnd)
+}
+
+const streamCurrentPiece = (
+  piece: Piece,
+  snapshot: PieceTableTreeSnapshot,
+  visit: (entry: PieceTablePieceStreamEntry) => void,
+  start: number,
+  end: number,
+  pieceStart: number,
+  pieceEnd: number,
+): void => {
+  if (!piece.visible || pieceEnd <= start || pieceStart >= end) return
+
+  const localStart = Math.max(0, start - pieceStart)
+  const localEnd = Math.min(piece.length, end - pieceStart)
+  if (localEnd <= localStart) return
+
+  const buffer = getBufferText(snapshot.buffers, piece.buffer)
+  visit({
+    piece,
+    text: buffer.slice(piece.start + localStart, piece.start + localEnd),
+    start: pieceStart + localStart,
+    end: pieceStart + localEnd,
+  })
 }
 
 type PieceTableTextChunk = {

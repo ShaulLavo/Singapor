@@ -2,6 +2,7 @@ import {
   applyTextToSelections,
   backspaceSelections,
   createAnchorSelection,
+  createSelectionIdFactory,
   createSelectionSet,
   deleteSelections,
   indentSelections,
@@ -9,6 +10,7 @@ import {
   normalizeSelectionSet,
   outdentSelections,
   type AnchorSelection,
+  type SelectionIdFactory,
   type SelectionGoal,
   type SelectionSet,
 } from './selections'
@@ -17,7 +19,7 @@ import {
   createEditorHistory,
   redoEditorHistory,
   undoEditorHistory,
-  type PieceTableEditorHistory,
+  type EditorHistory,
 } from './history'
 import type { EditorToken, TextEdit } from './tokens'
 import {
@@ -40,6 +42,7 @@ export type EditorTimingMeasurement = {
 export type DocumentSessionChange = {
   readonly kind: DocumentSessionChangeKind
   readonly edits: readonly TextEdit[]
+  readonly transaction: DocumentTransaction | null
   readonly snapshot: PieceTableSnapshot
   readonly selections: SelectionSet<PieceTableAnchor>
   readonly textSnapshot: DocumentTextSnapshot
@@ -111,29 +114,68 @@ export type DocumentSessionApplyEditsOptions = {
   readonly selections?: readonly DocumentSessionEditSelection[]
 }
 
-type CommitEditOptions = {
-  readonly history: DocumentSessionEditHistoryMode
+export type DocumentTransactionMetadata = {
+  readonly source: 'keyboard' | 'programmatic' | 'history'
+  readonly intent:
+    | 'insert-text'
+    | 'indent'
+    | 'outdent'
+    | 'backspace'
+    | 'delete'
+    | 'programmatic-edit'
+    | 'undo'
+    | 'redo'
+  readonly undoGroup?: string
 }
 
+export type DocumentTransaction = {
+  readonly edits: readonly TextEdit[]
+  readonly inverseEdits: readonly TextEdit[]
+  readonly snapshotBefore: PieceTableSnapshot
+  readonly snapshotAfter: PieceTableSnapshot
+  readonly selectionBefore: SelectionSet<PieceTableAnchor>
+  readonly selectionAfter: SelectionSet<PieceTableAnchor>
+  readonly metadata: DocumentTransactionMetadata
+}
+
+type CommitEditOptions = {
+  readonly history: DocumentSessionEditHistoryMode
+  readonly metadata: DocumentTransactionMetadata
+}
+
+type DocumentHistory = EditorHistory<
+  PieceTableSnapshot,
+  SelectionSet<PieceTableAnchor>,
+  DocumentTransaction
+>
+
 class PieceTableDocumentSession implements DocumentSession {
-  private history: PieceTableEditorHistory
+  private readonly createSelectionId: SelectionIdFactory = createSelectionIdFactory()
+  private history: DocumentHistory
   private cleanSnapshot: PieceTableSnapshot
   private dirtyCacheSnapshot: PieceTableSnapshot
   private dirtyCacheValue = false
   private textSnapshot: DocumentTextSnapshot
   private tokens: readonly EditorToken[] = []
-  private undoEdits: readonly (readonly TextEdit[])[]
-  private redoEdits: readonly (readonly TextEdit[])[]
 
   public constructor(text: string) {
     const snapshot = createPieceTableSnapshot(text)
-    const selections = createSelectionSet([createAnchorSelection(snapshot, snapshot.length)], true)
-    this.history = createEditorHistory(snapshot, selections)
+    const selections = createSelectionSet(
+      [
+        createAnchorSelection(snapshot, snapshot.length, snapshot.length, {
+          idFactory: this.createSelectionId,
+        }),
+      ],
+      true,
+    )
+    this.history = createEditorHistory<
+      PieceTableSnapshot,
+      SelectionSet<PieceTableAnchor>,
+      DocumentTransaction
+    >(snapshot, selections)
     this.cleanSnapshot = snapshot
     this.dirtyCacheSnapshot = snapshot
     this.textSnapshot = createDocumentTextSnapshot(snapshot, text)
-    this.undoEdits = []
-    this.redoEdits = []
   }
 
   public applyText(text: string): DocumentSessionChange {
@@ -144,7 +186,10 @@ class PieceTableDocumentSession implements DocumentSession {
 
     const result = applyTextToSelections(this.history.current, this.history.selections, text)
     return appendTiming(
-      this.commitEdit(result.snapshot, result.selections, result.edits),
+      this.commitEdit(result.snapshot, result.selections, result.edits, {
+        history: 'record',
+        metadata: { source: 'keyboard', intent: 'insert-text' },
+      }),
       'session.applyText',
       start,
     )
@@ -154,7 +199,10 @@ class PieceTableDocumentSession implements DocumentSession {
     const start = nowMs()
     const result = indentSelections(this.history.current, this.history.selections, text)
     return appendTiming(
-      this.commitEdit(result.snapshot, result.selections, result.edits),
+      this.commitEdit(result.snapshot, result.selections, result.edits, {
+        history: 'record',
+        metadata: { source: 'keyboard', intent: 'indent' },
+      }),
       'session.indentSelection',
       start,
     )
@@ -164,7 +212,10 @@ class PieceTableDocumentSession implements DocumentSession {
     const start = nowMs()
     const result = outdentSelections(this.history.current, this.history.selections, tabSize)
     return appendTiming(
-      this.commitEdit(result.snapshot, result.selections, result.edits),
+      this.commitEdit(result.snapshot, result.selections, result.edits, {
+        history: 'record',
+        metadata: { source: 'keyboard', intent: 'outdent' },
+      }),
       'session.outdentSelection',
       start,
     )
@@ -194,6 +245,7 @@ class PieceTableDocumentSession implements DocumentSession {
     return appendTiming(
       this.commitEdit(nextSnapshot, selections, effectiveEdits, {
         history: options.history ?? 'record',
+        metadata: { source: 'programmatic', intent: 'programmatic-edit' },
       }),
       'session.applyEdits',
       start,
@@ -204,7 +256,10 @@ class PieceTableDocumentSession implements DocumentSession {
     const start = nowMs()
     const result = backspaceSelections(this.history.current, this.history.selections)
     return appendTiming(
-      this.commitEdit(result.snapshot, result.selections, result.edits),
+      this.commitEdit(result.snapshot, result.selections, result.edits, {
+        history: 'record',
+        metadata: { source: 'keyboard', intent: 'backspace' },
+      }),
       'session.backspace',
       start,
     )
@@ -214,7 +269,10 @@ class PieceTableDocumentSession implements DocumentSession {
     const start = nowMs()
     const result = deleteSelections(this.history.current, this.history.selections)
     return appendTiming(
-      this.commitEdit(result.snapshot, result.selections, result.edits),
+      this.commitEdit(result.snapshot, result.selections, result.edits, {
+        history: 'record',
+        metadata: { source: 'keyboard', intent: 'delete' },
+      }),
       'session.delete',
       start,
     )
@@ -222,30 +280,36 @@ class PieceTableDocumentSession implements DocumentSession {
 
   public undo(): DocumentSessionChange {
     const start = nowMs()
+    const transaction = this.history.undo?.entry.transaction ?? null
     const next = undoEditorHistory(this.history)
     if (next === this.history) {
       return appendTiming(this.createChange('none', []), 'session.undo', start)
     }
 
-    const previousSnapshot = this.history.current
     this.history = next
     this.textSnapshot = createDocumentTextSnapshot(this.history.current)
-    const edits = this.consumeUndoEdits(previousSnapshot)
-    return appendTiming(this.createChange('undo', edits), 'session.undo', start)
+    return appendTiming(
+      this.createChange('undo', transaction?.inverseEdits ?? [], transaction),
+      'session.undo',
+      start,
+    )
   }
 
   public redo(): DocumentSessionChange {
     const start = nowMs()
+    const transaction = this.history.redo?.entry.transaction ?? null
     const next = redoEditorHistory(this.history)
     if (next === this.history) {
       return appendTiming(this.createChange('none', []), 'session.redo', start)
     }
 
-    const previousSnapshot = this.history.current
     this.history = next
     this.textSnapshot = createDocumentTextSnapshot(this.history.current)
-    const edits = this.consumeRedoEdits(previousSnapshot)
-    return appendTiming(this.createChange('redo', edits), 'session.redo', start)
+    return appendTiming(
+      this.createChange('redo', transaction?.edits ?? [], transaction),
+      'session.redo',
+      start,
+    )
   }
 
   public setSelection(
@@ -360,19 +424,19 @@ class PieceTableDocumentSession implements DocumentSession {
     snapshot: PieceTableSnapshot,
     selections: SelectionSet<PieceTableAnchor>,
     edits: readonly TextEdit[],
-    options: CommitEditOptions = { history: 'record' },
+    options: CommitEditOptions,
   ): DocumentSessionChange {
     if (edits.length === 0) return this.createChange('none', [])
 
+    const transaction = this.createTransaction(snapshot, selections, edits, options.metadata)
     if (options.history === 'record') {
-      this.recordEditHistory(edits)
-      this.history = commitEditorHistory(this.history, snapshot, selections)
+      this.history = commitEditorHistory(this.history, snapshot, selections, transaction)
     } else {
       this.history = { ...this.history, current: snapshot, selections }
     }
 
     this.textSnapshot = createDocumentTextSnapshot(snapshot)
-    return this.createChange('edit', edits)
+    return this.createChange('edit', edits, transaction)
   }
 
   private selectionsAfterProgrammaticEdit(
@@ -385,7 +449,10 @@ class PieceTableDocumentSession implements DocumentSession {
     if (selection) {
       const anchor = selection.anchor
       const head = selection.head ?? selection.anchor
-      return createSelectionSet([createAnchorSelection(snapshot, anchor, head)], true, snapshot)
+      const anchorSelection = createAnchorSelection(snapshot, anchor, head, {
+        idFactory: this.createSelectionId,
+      })
+      return createSelectionSet([anchorSelection], true, snapshot)
     }
 
     return markSelectionSetDirty(this.history.selections)
@@ -414,6 +481,7 @@ class PieceTableDocumentSession implements DocumentSession {
       const head = selection.head ?? selection.anchor
       return createAnchorSelection(snapshot, selection.anchor, head, {
         goal: selection.goal ?? options.goal,
+        idFactory: this.createSelectionId,
       })
     })
     const set = createSelectionSet(anchorSelections)
@@ -427,36 +495,36 @@ class PieceTableDocumentSession implements DocumentSession {
   ): AnchorSelection {
     return createAnchorSelection(this.history.current, anchorOffset, headOffset, {
       goal: options.goal,
+      idFactory: this.createSelectionId,
     })
   }
 
-  private recordEditHistory(edits: readonly TextEdit[]): void {
-    const undoEdits = invertTextEdits(this.history.current, edits)
-    this.undoEdits = [...this.undoEdits, undoEdits]
-    this.redoEdits = []
-  }
-
-  private consumeUndoEdits(previousSnapshot: PieceTableSnapshot): readonly TextEdit[] {
-    const edits = this.undoEdits.at(-1) ?? []
-    this.undoEdits = this.undoEdits.slice(0, -1)
-    this.redoEdits = [...this.redoEdits, invertTextEdits(previousSnapshot, edits)]
-    return edits
-  }
-
-  private consumeRedoEdits(previousSnapshot: PieceTableSnapshot): readonly TextEdit[] {
-    const edits = this.redoEdits.at(-1) ?? []
-    this.redoEdits = this.redoEdits.slice(0, -1)
-    this.undoEdits = [...this.undoEdits, invertTextEdits(previousSnapshot, edits)]
-    return edits
+  private createTransaction(
+    snapshot: PieceTableSnapshot,
+    selections: SelectionSet<PieceTableAnchor>,
+    edits: readonly TextEdit[],
+    metadata: DocumentTransactionMetadata,
+  ): DocumentTransaction {
+    return {
+      edits,
+      inverseEdits: invertTextEdits(this.history.current, edits),
+      snapshotBefore: this.history.current,
+      snapshotAfter: snapshot,
+      selectionBefore: this.history.selections,
+      selectionAfter: selections,
+      metadata,
+    }
   }
 
   private createChange(
     kind: DocumentSessionChangeKind,
     edits: readonly TextEdit[],
+    transaction: DocumentTransaction | null = null,
   ): DocumentSessionChange {
     return createDocumentSessionChange({
       kind,
       edits,
+      transaction,
       snapshot: this.history.current,
       selections: this.history.selections,
       textSnapshot: this.textSnapshot,
@@ -470,6 +538,7 @@ class PieceTableDocumentSession implements DocumentSession {
 }
 
 class StaticDocumentSession implements DocumentSession {
+  private readonly createSelectionId: SelectionIdFactory = createSelectionIdFactory()
   private snapshot: PieceTableSnapshot
   private textSnapshot: DocumentTextSnapshot
   private selections: SelectionSet<PieceTableAnchor>
@@ -479,7 +548,11 @@ class StaticDocumentSession implements DocumentSession {
     this.snapshot = createPieceTableSnapshot(text)
     this.textSnapshot = createDocumentTextSnapshot(this.snapshot, text)
     this.selections = createSelectionSet(
-      [createAnchorSelection(this.snapshot, this.snapshot.length)],
+      [
+        createAnchorSelection(this.snapshot, this.snapshot.length, this.snapshot.length, {
+          idFactory: this.createSelectionId,
+        }),
+      ],
       true,
       this.snapshot,
     )
@@ -648,6 +721,7 @@ class StaticDocumentSession implements DocumentSession {
   ): AnchorSelection {
     return createAnchorSelection(this.snapshot, anchorOffset, headOffset, {
       goal: options.goal,
+      idFactory: this.createSelectionId,
     })
   }
 
@@ -674,6 +748,7 @@ class StaticDocumentSession implements DocumentSession {
       const head = selection.head ?? selection.anchor
       return createAnchorSelection(snapshot, selection.anchor, head, {
         goal: selection.goal ?? options.goal,
+        idFactory: this.createSelectionId,
       })
     })
     return normalizeSelectionSet(snapshot, createSelectionSet(anchorSelections))
@@ -686,6 +761,7 @@ class StaticDocumentSession implements DocumentSession {
     return createDocumentSessionChange({
       kind,
       edits,
+      transaction: null,
       snapshot: this.snapshot,
       selections: this.selections,
       textSnapshot: this.textSnapshot,
@@ -727,6 +803,7 @@ export function withDocumentSessionChangeTimings(
   return createDocumentSessionChange({
     kind: change.kind,
     edits: change.edits,
+    transaction: change.transaction,
     snapshot: change.snapshot,
     selections: change.selections,
     textSnapshot: documentSessionChangeTextSnapshot(change),
