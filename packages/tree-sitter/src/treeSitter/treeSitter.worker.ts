@@ -24,6 +24,7 @@ import type {
   BracketInfo,
   FoldRange,
   TreeSitterCapture,
+  TreeSitterDegradedState,
   TreeSitterEditRequest,
   TreeSitterError,
   TreeSitterInjectionInfo,
@@ -72,6 +73,7 @@ type ParsedDocument = {
   readonly languageId: TreeSitterLanguageId
   readonly source: TreeSitterPieceTableInput
   readonly layers: readonly ParsedLayer[]
+  readonly degraded: readonly TreeSitterDegradedState[]
   readonly size: number
   lastUsed: number
 }
@@ -90,7 +92,9 @@ type CancellationContext = {
 type FlattenedDocument = Pick<
   TreeSitterParseResult,
   'captures' | 'folds' | 'brackets' | 'errors' | 'injections' | 'tokens'
->
+> & {
+  readonly degraded: readonly TreeSitterDegradedState[]
+}
 
 type RangeFlattenOptions = {
   readonly range: TreeSitterSyntaxRange
@@ -250,6 +254,7 @@ const parseDocument = async (
     const rootLayer = runWorkerPhase('parse root', () =>
       parseRootLayer(runtime, source, null, context),
     )
+    const degraded: TreeSitterDegradedState[] = []
     const parsedDocument = await runAsyncWorkerPhase('parse injections', () =>
       parseParsedDocument({
         documentId: request.documentId,
@@ -260,13 +265,19 @@ const parseDocument = async (
         context,
         oldDocument: null,
         inputEdits: [],
+        degraded,
       }),
     )
     assertNotCancelled(context)
     const parseMs = nowMs() - parseStart
     replaceCachedDocument(request.documentId, parsedDocument)
     if (request.resultMode === 'parseOnly') {
-      return parseAckResult(request, [], [{ name: 'treeSitter.parse', durationMs: parseMs }])
+      return parseAckResult(
+        request,
+        [],
+        [{ name: 'treeSitter.parse', durationMs: parseMs }],
+        degraded,
+      )
     }
 
     const queryStart = nowMs()
@@ -290,6 +301,7 @@ const parseDocument = async (
       brackets: result.brackets,
       errors: result.errors,
       injections: result.injections,
+      degraded: result.degraded,
       tokens: result.tokens,
       timings: [
         { name: 'treeSitter.parse', durationMs: parseMs },
@@ -328,6 +340,7 @@ const editDocument = async (
     const changedRanges = runWorkerPhase('changed ranges', () =>
       treeChangedRanges(reusableTree, rootLayer.tree),
     )
+    const degraded: TreeSitterDegradedState[] = []
     const parsedDocument = await runAsyncWorkerPhase('parse injections', () =>
       parseParsedDocument({
         documentId: request.documentId,
@@ -338,6 +351,7 @@ const editDocument = async (
         context,
         oldDocument: cached,
         inputEdits: request.inputEdits,
+        degraded,
       }),
     )
     const parseMs = nowMs() - parseStart
@@ -345,10 +359,15 @@ const editDocument = async (
     assertNotCancelled(context)
     replaceCachedDocument(request.documentId, parsedDocument)
     if (request.resultMode === 'parseOnly') {
-      return parseAckResult(request, changedRanges, [
-        { name: 'treeSitter.edit', durationMs: editMs },
-        { name: 'treeSitter.parse', durationMs: parseMs },
-      ])
+      return parseAckResult(
+        request,
+        changedRanges,
+        [
+          { name: 'treeSitter.edit', durationMs: editMs },
+          { name: 'treeSitter.parse', durationMs: parseMs },
+        ],
+        degraded,
+      )
     }
 
     const queryStart = nowMs()
@@ -372,6 +391,7 @@ const editDocument = async (
       brackets: result.brackets,
       errors: result.errors,
       injections: result.injections,
+      degraded: result.degraded,
       tokens: result.tokens,
       timings: [
         { name: 'treeSitter.edit', durationMs: editMs },
@@ -425,6 +445,7 @@ const queryDocumentRangeWithContext = async (
     brackets: result.brackets,
     errors: result.errors,
     injections: result.injections,
+    degraded: result.degraded,
     tokens: result.tokens,
     timings: [{ name: 'treeSitter.queryRange', durationMs: nowMs() - queryStart }],
   }
@@ -455,12 +476,14 @@ const parseAckResult = (
   >,
   changedRanges: readonly TreeSitterSyntaxRange[],
   timings: TreeSitterParseAckResult['timings'],
+  degraded: readonly TreeSitterDegradedState[] = [],
 ): TreeSitterParseAckResult => ({
   documentId: request.documentId,
   snapshotVersion: request.snapshotVersion,
   languageId: request.languageId,
   status: 'parsed',
   changedRanges,
+  degraded,
   timings,
 })
 
@@ -494,13 +517,18 @@ const runAsyncWorkerPhase = async <T>(phase: string, run: () => Promise<T>): Pro
   }
 }
 
-const runOptionalWorkerPhase = <T>(phase: string, fallback: T, run: () => T): T => {
+const runOptionalWorkerPhase = <T>(
+  phase: string,
+  fallback: T,
+  degraded: TreeSitterDegradedState[],
+  run: () => T,
+): T => {
   try {
     return run()
   } catch (error) {
     if (error instanceof SyntaxRequestCancelled) throw error
 
-    warnOptionalWorkerPhase(phase, error)
+    recordOptionalWorkerPhaseFailure(phase, error, degraded, 'optional-phase-failed')
     return fallback
   }
 }
@@ -518,8 +546,15 @@ const workerPhaseError = (phase: string, error: unknown): Error => {
   return nextError
 }
 
-const warnOptionalWorkerPhase = (phase: string, error: unknown): void => {
-  console.warn(`[tree-sitter-worker] optional phase failed: ${phase}: ${createErrorMessage(error)}`)
+const recordOptionalWorkerPhaseFailure = (
+  phase: string,
+  error: unknown,
+  degraded: TreeSitterDegradedState[],
+  kind: TreeSitterDegradedState['kind'],
+): void => {
+  const message = createErrorMessage(error)
+  degraded.push({ kind, phase, message })
+  console.warn(`[tree-sitter-worker] optional phase failed: ${phase}: ${message}`)
 }
 
 const parseSource = (
@@ -557,6 +592,7 @@ type ParseParsedDocumentOptions = {
   readonly context: CancellationContext
   readonly oldDocument: ParsedDocument | null
   readonly inputEdits: readonly TreeSitterEditRequest['inputEdits'][number][]
+  readonly degraded: TreeSitterDegradedState[]
 }
 
 type PendingInjectionPlan = Omit<InjectionPlan, 'id' | 'key'> & {
@@ -599,6 +635,7 @@ const parseParsedDocument = async (
     languageId: options.languageId,
     source: options.source,
     layers,
+    degraded: options.degraded,
     size: options.source.length,
     lastUsed: nextUse++,
   }
@@ -610,8 +647,11 @@ const appendInjectionLayers = async (
   options: ParseParsedDocumentOptions,
 ): Promise<void> => {
   const runtime = await ensureRuntime(parent.languageId)
-  const plans = runOptionalWorkerPhase('find injections', [] as InjectionPlan[], () =>
-    findInjections(parent, runtime, options.source, options.context),
+  const plans = runOptionalWorkerPhase(
+    'find injections',
+    [] as InjectionPlan[],
+    options.degraded,
+    () => findInjections(parent, runtime, options.source, options.context),
   )
 
   for (const plan of plans) {
@@ -621,7 +661,12 @@ const appendInjectionLayers = async (
       await appendInjectionLayers(layers, layer, options)
     } catch (error) {
       if (error instanceof SyntaxRequestCancelled) throw error
-      warnOptionalWorkerPhase('parse injection', error)
+      recordOptionalWorkerPhaseFailure(
+        'parse injection',
+        error,
+        options.degraded,
+        'injection-failed',
+      )
     }
   }
 }
@@ -1023,6 +1068,7 @@ const flattenDocument = async (
   includeCaptures: boolean,
 ): Promise<FlattenedDocument> => {
   const result = createEmptyFlattenedDocument()
+  appendItems(result.degraded, document.degraded)
   const queryContext = { ...context, budgetMs: QUERY_BUDGET_MS }
 
   for (const layer of document.layers) {
@@ -1036,6 +1082,7 @@ const flattenDocument = async (
     brackets: sortBrackets(result.brackets),
     errors: sortErrors(result.errors),
     injections: sortInjections(result.injections),
+    degraded: result.degraded,
     tokens: treeSitterCapturesToEditorTokens(captures),
   }
 }
@@ -1046,6 +1093,7 @@ const flattenDocumentRange = async (
   options: RangeFlattenOptions,
 ): Promise<FlattenedDocument> => {
   const result = createEmptyFlattenedDocument()
+  appendItems(result.degraded, document.degraded)
   if (options.range.endIndex <= options.range.startIndex) return result
 
   for (const layer of document.layers) {
@@ -1060,6 +1108,7 @@ const flattenDocumentRange = async (
     brackets: sortBrackets(result.brackets),
     errors: sortErrors(result.errors),
     injections: sortInjections(result.injections),
+    degraded: result.degraded,
     tokens: treeSitterCapturesToEditorTokens(captures),
   }
 }
@@ -1071,20 +1120,26 @@ const flattenLayer = async (
   includeHighlights: boolean,
 ): Promise<void> => {
   const runtime = await ensureRuntime(layer.languageId)
-  const treeData = runOptionalWorkerPhase('collect diagnostics', emptyTreeData(), () =>
-    collectTreeData(layer.tree),
+  const treeData = runOptionalWorkerPhase(
+    'collect diagnostics',
+    emptyTreeData(),
+    result.degraded,
+    () => collectTreeData(layer.tree),
   )
   if (includeHighlights) {
     appendItems(
       result.captures,
-      runOptionalWorkerPhase('collect highlights', [] as TreeSitterCapture[], () =>
-        collectCaptures(layer.tree, runtime, context),
+      runOptionalWorkerPhase(
+        'collect highlights',
+        [] as TreeSitterCapture[],
+        result.degraded,
+        () => collectCaptures(layer.tree, runtime, context),
       ),
     )
   }
   appendItems(
     result.folds,
-    runOptionalWorkerPhase('collect folds', [] as FoldRange[], () =>
+    runOptionalWorkerPhase('collect folds', [] as FoldRange[], result.degraded, () =>
       collectFolds(layer.tree, runtime, context),
     ),
   )
@@ -1100,20 +1155,26 @@ const flattenLayerRange = async (
   options: RangeFlattenOptions,
 ): Promise<void> => {
   const runtime = await ensureRuntime(layer.languageId)
-  const treeData = runOptionalWorkerPhase('collect range diagnostics', emptyTreeData(), () =>
-    collectTreeData(layer.tree, options.range),
+  const treeData = runOptionalWorkerPhase(
+    'collect range diagnostics',
+    emptyTreeData(),
+    result.degraded,
+    () => collectTreeData(layer.tree, options.range),
   )
   if (options.includeHighlights) {
     appendItems(
       result.captures,
-      runOptionalWorkerPhase('collect range highlights', [] as TreeSitterCapture[], () =>
-        collectCaptures(layer.tree, runtime, context, options.range),
+      runOptionalWorkerPhase(
+        'collect range highlights',
+        [] as TreeSitterCapture[],
+        result.degraded,
+        () => collectCaptures(layer.tree, runtime, context, options.range),
       ),
     )
   }
   appendItems(
     result.folds,
-    runOptionalWorkerPhase('collect range folds', [] as FoldRange[], () =>
+    runOptionalWorkerPhase('collect range folds', [] as FoldRange[], result.degraded, () =>
       collectFolds(layer.tree, runtime, context, options.range),
     ),
   )
@@ -1142,6 +1203,7 @@ const createEmptyFlattenedDocument = (): Writable<FlattenedDocument> => ({
   brackets: [],
   errors: [],
   injections: [],
+  degraded: [],
   tokens: [],
 })
 

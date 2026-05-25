@@ -15,7 +15,6 @@ const createChange = (text: string, edit: { from: number; to: number; text: stri
     textSnapshot: createDocumentTextSnapshot(snapshot, text),
     snapshot,
     selections: { selections: [], normalized: true },
-    tokens: [],
     timings: [],
     canUndo: false,
     canRedo: false,

@@ -60,6 +60,12 @@ export type TreeSitterTimingMeasurement = {
   readonly durationMs: number
 }
 
+export type TreeSitterDegradedState = {
+  readonly kind: 'optional-phase-failed' | 'injection-failed'
+  readonly phase: string
+  readonly message: string
+}
+
 export type TreeSitterParseResult = {
   readonly documentId: string
   readonly snapshotVersion: number
@@ -69,6 +75,7 @@ export type TreeSitterParseResult = {
   readonly brackets: readonly BracketInfo[]
   readonly errors: readonly TreeSitterError[]
   readonly injections: readonly TreeSitterInjectionInfo[]
+  readonly degraded?: readonly TreeSitterDegradedState[]
   readonly tokens?: readonly EditorToken[]
   readonly timings: readonly TreeSitterTimingMeasurement[]
 }
@@ -84,6 +91,7 @@ export type TreeSitterParseAckResult = {
   readonly languageId: TreeSitterLanguageId
   readonly status: 'parsed'
   readonly changedRanges: readonly TreeSitterSyntaxRange[]
+  readonly degraded?: readonly TreeSitterDegradedState[]
   readonly timings: readonly TreeSitterTimingMeasurement[]
 }
 

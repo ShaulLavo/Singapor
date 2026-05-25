@@ -507,6 +507,42 @@ describe('Tree-sitter syntax capture conversion', () => {
     expect(ranged.tokens).toEqual(tokens)
   })
 
+  it('maps worker degraded states onto syntax results', async () => {
+    const backend = {
+      disposeDocument: () => undefined,
+      edit: async () => undefined,
+      parse: async (payload) => ({
+        ...createParseAck(payload.snapshotVersion),
+        degraded: [
+          {
+            kind: 'optional-phase-failed' as const,
+            phase: 'collect highlights',
+            message: 'query failed',
+          },
+        ],
+      }),
+      registerLanguages: async () => undefined,
+      select: async () => undefined,
+    } satisfies TreeSitterBackend
+    const text = 'const a = 1;'
+    const session = new TreeSitterSyntaxSession({
+      backend,
+      documentId: 'file.ts',
+      languageId: 'typescript',
+      snapshot: createPieceTableSnapshot(text),
+      syntaxMode: 'range',
+      fullText: text,
+    })
+
+    const result = await session.refresh(createPieceTableSnapshot(text), text)
+
+    expect(result.degraded).toEqual({
+      kind: 'optional-phase-failed',
+      phase: 'collect highlights',
+      message: 'query failed',
+    })
+  })
+
   it('keeps large editor-path syntax results range-only', async () => {
     const parsePayloads: TreeSitterBackendParsePayload[] = []
     const rangePayloads: TreeSitterRangePayload[] = []

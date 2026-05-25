@@ -682,7 +682,7 @@ export class Editor {
       snapshot: attachment.session.getSnapshot(),
     })
     this.syncViewEditability()
-    this.setDocument({ text: attachment.fullText, tokens: attachment.session.getTokens() })
+    this.setDocument({ text: attachment.fullText, tokens: [] })
     this.applyDocumentScrollPosition(options.scrollPosition)
     this.inputSelection.syncDomSelection()
     this.notifyViewContributions('document', null)

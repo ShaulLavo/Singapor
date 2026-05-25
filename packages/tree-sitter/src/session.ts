@@ -18,6 +18,7 @@ import {
 } from '@editor/core/syntax'
 import { documentSessionChangeTextSnapshot } from '@editor/core/internal'
 import type {
+  TreeSitterDegradedState,
   TreeSitterInputEdit,
   TreeSitterLanguageId,
   TreeSitterParseAckResult,
@@ -283,6 +284,7 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
     this.parsedSnapshotVersion = result.snapshotVersion
     if (isTreeSitterParseAckResult(result)) {
       this.result = this.createEmptyResult({
+        degraded: treeSitterDegradedStateToEditorSyntaxState(result.degraded),
         snapshot,
         snapshotVersion: result.snapshotVersion,
       })
@@ -479,7 +481,7 @@ const treeSitterParseResultToEditorSyntaxResult = (
   context: TreeSitterSyntaxResultContext,
 ): EditorSyntaxResult => ({
   captures: result.captures,
-  degraded: null,
+  degraded: treeSitterDegradedStateToEditorSyntaxState(result.degraded),
   folds: result.folds,
   brackets: result.brackets,
   errors: result.errors,
@@ -500,6 +502,22 @@ const treeSitterParseResultToEditorSyntaxResult = (
   },
   tokens: result.tokens ?? treeSitterCapturesToEditorTokens(result.captures),
 })
+
+const treeSitterDegradedStateToEditorSyntaxState = (
+  degraded: readonly TreeSitterDegradedState[] | undefined,
+): EditorSyntaxDegradedState | null => {
+  const first = degraded?.[0]
+  if (!first) return null
+
+  return {
+    kind: first.kind,
+    phase: first.phase,
+    message:
+      degraded.length === 1
+        ? first.message
+        : `${first.message} (${degraded.length} Tree-sitter phases degraded)`,
+  }
+}
 
 const isTreeSitterParseAckResult = (
   result: TreeSitterParseResult | TreeSitterParseAckResult,

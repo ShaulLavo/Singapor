@@ -2,6 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { EditorSecondaryWorkScheduler } from '../src/editor/secondaryWorkScheduler'
 
+function flushSchedulerTicks(count = 4): void {
+  for (let index = 0; index < count; index += 1) vi.runOnlyPendingTimers()
+}
+
 describe('EditorSecondaryWorkScheduler', () => {
   afterEach(() => {
     vi.useRealTimers()
@@ -20,6 +24,7 @@ describe('EditorSecondaryWorkScheduler', () => {
     expect(calls).toEqual([])
 
     vi.advanceTimersByTime(1)
+    flushSchedulerTicks()
     expect(calls).toEqual(['second'])
   })
 
@@ -37,6 +42,7 @@ describe('EditorSecondaryWorkScheduler', () => {
     })
 
     vi.advanceTimersByTime(25)
+    flushSchedulerTicks()
     expect(calls).toEqual([])
   })
 
@@ -60,7 +66,7 @@ describe('EditorSecondaryWorkScheduler', () => {
     scheduler.schedule({ key: 'features', run: () => calls.push('run') })
     expect(calls).toEqual([])
 
-    vi.advanceTimersByTime(0)
+    flushSchedulerTicks()
     expect(calls).toEqual(['run'])
   })
 })

@@ -97,54 +97,355 @@ export type TreeSitterBackend = {
 const supportsWorkers = (): boolean => typeof Worker !== 'undefined'
 const supportsSharedCancellation = (): boolean => typeof SharedArrayBuffer !== 'undefined'
 
-let worker: Worker | null = null
-let nextRequestId = 1
-let nextGeneration = 1
-let initPromise: Promise<void> | null = null
-const pendingRequests = new Map<number, PendingRequest>()
-const sentSourceChunkIds = new Map<string, Set<string>>()
-const sourceDocumentEpochs = new Map<string, number>()
-const registeredLanguageSignatures = new Map<TreeSitterLanguageId, string>()
-
-const getWorker = (): Worker | null => {
-  if (!supportsWorkers()) return null
-  if (worker) return worker
-
-  const handle = new Worker(new URL('./treeSitter.worker.ts', import.meta.url), { type: 'module' })
-  handle.onmessage = handleWorkerMessage
-  handle.onerror = (event) => handleWorkerError(handle, event)
-  worker = handle
-  return handle
-}
-
-const ensureWorkerReady = async (): Promise<Worker | null> => {
-  const handle = getWorker()
-  if (!handle) return null
-
-  if (!initPromise) {
-    initPromise = postRequest({ type: 'init' }).then(() => undefined)
-  }
-
-  await initPromise
-  return handle
-}
-
 export const canUseTreeSitterWorker = (): boolean => supportsWorkers()
 
-export const registerTreeSitterLanguagesWithWorker = async (
-  languages: readonly TreeSitterLanguageDescriptor[],
-): Promise<void> => {
-  const nextLanguages = unregisteredLanguages(languages)
-  if (nextLanguages.length === 0) return
+export class TreeSitterWorkerClient implements TreeSitterBackend {
+  private worker: Worker | null = null
+  private nextRequestId = 1
+  private nextGeneration = 1
+  private initPromise: Promise<void> | null = null
+  private readonly pendingRequests = new Map<number, PendingRequest>()
+  private readonly sentSourceChunkIds = new Map<string, Set<string>>()
+  private readonly sourceDocumentEpochs = new Map<string, number>()
+  private readonly registeredLanguageSignatures = new Map<TreeSitterLanguageId, string>()
 
-  const handle = await ensureWorkerReady()
-  if (!handle) return
+  public async registerLanguages(
+    languages: readonly TreeSitterLanguageDescriptor[],
+  ): Promise<void> {
+    const nextLanguages = this.unregisteredLanguages(languages)
+    if (nextLanguages.length === 0) return
 
-  await postRequest({ type: 'registerLanguages', languages: nextLanguages })
-  for (const language of nextLanguages) {
-    registeredLanguageSignatures.set(language.id, languageDescriptorSignature(language))
+    const handle = await this.ensureWorkerReady()
+    if (!handle) return
+
+    await this.postRequest({ type: 'registerLanguages', languages: nextLanguages })
+    for (const language of nextLanguages) {
+      this.registeredLanguageSignatures.set(language.id, languageDescriptorSignature(language))
+    }
+  }
+
+  public async parse(
+    payload: TreeSitterBackendParsePayload,
+  ): Promise<TreeSitterParseResult | TreeSitterParseAckResult | undefined> {
+    const handle = await this.ensureWorkerReady()
+    if (!handle) return undefined
+    const source = this.createSourceDescriptor(payload.documentId, payload.snapshot)
+    const request: TreeSitterParseDocumentRequest = {
+      type: 'parse',
+      documentId: payload.documentId,
+      snapshotVersion: payload.snapshotVersion,
+      languageId: payload.languageId,
+      includeHighlights: payload.includeHighlights ?? true,
+      includeCaptures: payload.includeCaptures,
+      resultMode: payload.resultMode,
+      source,
+    }
+    const result = await this.postDocumentRequest(request)
+    if (isTreeSitterParseResult(result)) return result
+    if (isTreeSitterParseAckResult(result)) return result
+    return undefined
+  }
+
+  public async edit(
+    payload: TreeSitterBackendEditPayload,
+  ): Promise<TreeSitterParseResult | TreeSitterParseAckResult | undefined> {
+    const handle = await this.ensureWorkerReady()
+    if (!handle) return undefined
+    const source = this.createSourceDescriptor(payload.documentId, payload.snapshot)
+    const result = await this.postDocumentRequest({
+      type: 'edit',
+      documentId: payload.documentId,
+      previousSnapshotVersion: payload.previousSnapshotVersion,
+      snapshotVersion: payload.snapshotVersion,
+      languageId: payload.languageId,
+      includeHighlights: payload.includeHighlights,
+      includeCaptures: payload.includeCaptures,
+      resultMode: payload.resultMode,
+      source,
+      edits: payload.edits,
+      inputEdits: payload.inputEdits,
+    })
+    if (isTreeSitterParseResult(result)) return result
+    if (isTreeSitterParseAckResult(result)) return result
+    return undefined
+  }
+
+  public async queryRange(
+    payload: TreeSitterRangePayload,
+  ): Promise<TreeSitterRangeResult | undefined> {
+    const handle = await this.ensureWorkerReady()
+    if (!handle) return undefined
+    const result = await this.postRangeRequest({
+      type: 'queryRange',
+      documentId: payload.documentId,
+      snapshotVersion: payload.snapshotVersion,
+      languageId: payload.languageId,
+      includeHighlights: payload.includeHighlights ?? true,
+      includeCaptures: payload.includeCaptures,
+      range: payload.range,
+    })
+    return isTreeSitterRangeResult(result) ? result : undefined
+  }
+
+  public async select(
+    payload: TreeSitterSelectionPayload,
+  ): Promise<TreeSitterSelectionResult | undefined> {
+    const handle = await this.ensureWorkerReady()
+    if (!handle) return undefined
+    const result = await this.postRequest({ type: 'selection', ...payload })
+    return isTreeSitterSelectionResult(result) ? result : undefined
+  }
+
+  public disposeDocument(documentId: string): void {
+    this.invalidateDocumentSourceState(documentId)
+    void this.postRequest({ type: 'disposeDocument', documentId }).catch(() => undefined)
+  }
+
+  public async dispose(): Promise<void> {
+    if (!this.worker) return
+
+    try {
+      await this.postRequest({ type: 'dispose' })
+    } finally {
+      this.worker.terminate()
+      this.worker = null
+      this.initPromise = null
+      this.registeredLanguageSignatures.clear()
+      this.sentSourceChunkIds.clear()
+      this.sourceDocumentEpochs.clear()
+      this.rejectPendingRequests(new Error('Tree-sitter worker disposed'))
+    }
+  }
+
+  private getWorker(): Worker | null {
+    if (!supportsWorkers()) return null
+    if (this.worker) return this.worker
+
+    const handle = new Worker(new URL('./treeSitter.worker.ts', import.meta.url), {
+      type: 'module',
+    })
+    handle.onmessage = (event) => this.handleWorkerMessage(event)
+    handle.onerror = (event) => this.handleWorkerError(handle, event)
+    this.worker = handle
+    return handle
+  }
+
+  private async ensureWorkerReady(): Promise<Worker | null> {
+    const handle = this.getWorker()
+    if (!handle) return null
+
+    if (!this.initPromise) {
+      this.initPromise = this.postRequest({ type: 'init' }).then(() => undefined)
+    }
+
+    await this.initPromise
+    return handle
+  }
+
+  private postRequest(
+    payload: TreeSitterWorkerRequestPayload,
+  ): Promise<TreeSitterWorkerResult> {
+    const handle = this.getWorker()
+    if (!handle) return Promise.resolve(undefined)
+
+    const id = this.nextRequestId
+    this.nextRequestId += 1
+    const request: TreeSitterWorkerRequest = { id, payload }
+
+    return new Promise((resolve, reject) => {
+      this.pendingRequests.set(id, {
+        documentId: documentIdForPayload(payload),
+        cancellationFlag: cancellationFlagForPayload(payload),
+        payload,
+        sourceEpoch: this.sourceEpochForPayload(payload),
+        resolve,
+        reject,
+      })
+      handle.postMessage(request)
+    })
+  }
+
+  private postDocumentRequest(
+    payload: TreeSitterParseDocumentRequest | TreeSitterEditDocumentRequest,
+  ): Promise<TreeSitterWorkerResult> {
+    return this.postRequest(
+      this.withCancellation(this.cancelPreviousDocumentRequests(payload.documentId), payload),
+    )
+  }
+
+  private postRangeRequest(payload: TreeSitterRangeDocumentRequest): Promise<TreeSitterWorkerResult> {
+    return this.postRequest(
+      this.withCancellation(this.cancelPreviousRangeRequests(payload.documentId), payload),
+    )
+  }
+
+  private cancelPreviousDocumentRequests(documentId: string): Int32Array | null {
+    const cancellationFlag = this.createCancellationFlag()
+    for (const pending of this.pendingRequests.values()) {
+      if (pending.documentId !== documentId) continue
+      if (pending.cancellationFlag) Atomics.store(pending.cancellationFlag, 0, 1)
+    }
+
+    return cancellationFlag
+  }
+
+  private cancelPreviousRangeRequests(documentId: string): Int32Array | null {
+    const cancellationFlag = this.createCancellationFlag()
+    for (const pending of this.pendingRequests.values()) {
+      if (pending.documentId !== documentId) continue
+      if (pending.payload.type !== 'queryRange') continue
+      if (pending.cancellationFlag) Atomics.store(pending.cancellationFlag, 0, 1)
+    }
+
+    return cancellationFlag
+  }
+
+  private createCancellationFlag(): Int32Array | null {
+    if (!supportsSharedCancellation()) return null
+    return new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT))
+  }
+
+  private withCancellation<
+    TPayload extends
+      | TreeSitterParseDocumentRequest
+      | TreeSitterEditDocumentRequest
+      | TreeSitterRangeDocumentRequest,
+  >(
+    cancellationFlag: Int32Array | null,
+    payload: TPayload,
+  ): TPayload & { readonly generation: number; readonly cancellationBuffer?: SharedArrayBuffer } {
+    const generation = this.nextGeneration
+    this.nextGeneration += 1
+    if (!cancellationFlag) return { ...payload, generation }
+    return {
+      ...payload,
+      generation,
+      cancellationBuffer: cancellationFlag.buffer as SharedArrayBuffer,
+    }
+  }
+
+  private handleWorkerMessage(event: MessageEvent<TreeSitterWorkerResponse>): void {
+    const response = event.data
+    const pending = this.pendingRequests.get(response.id)
+    if (!pending) return
+
+    this.pendingRequests.delete(response.id)
+    if (response.ok) {
+      this.markSourceChunksAsSent(pending)
+      pending.resolve(response.result)
+      return
+    }
+
+    if (pending.documentId && shouldInvalidateDocumentSourceState(response.error)) {
+      this.invalidateDocumentSourceState(pending.documentId)
+    }
+    pending.reject(new Error(response.error))
+  }
+
+  private handleWorkerError(failedWorker: Worker, event: ErrorEvent): void {
+    if (failedWorker !== this.worker) return
+
+    const error = new Error(event.message || 'Tree-sitter worker failed')
+    failedWorker.terminate()
+    this.worker = null
+    this.rejectPendingRequests(error)
+    this.initPromise = null
+    this.registeredLanguageSignatures.clear()
+    this.sentSourceChunkIds.clear()
+    this.sourceDocumentEpochs.clear()
+  }
+
+  private rejectPendingRequests(error: Error): void {
+    for (const request of this.pendingRequests.values()) request.reject(error)
+    this.pendingRequests.clear()
+  }
+
+  private shouldRegisterLanguageWithWorker(language: TreeSitterLanguageDescriptor): boolean {
+    return (
+      this.registeredLanguageSignatures.get(language.id) !==
+      languageDescriptorSignature(language)
+    )
+  }
+
+  private unregisteredLanguages(
+    languages: readonly TreeSitterLanguageDescriptor[],
+  ): readonly TreeSitterLanguageDescriptor[] {
+    const nextLanguages: TreeSitterLanguageDescriptor[] = []
+    const nextSignatures = new Map<TreeSitterLanguageId, string>()
+
+    for (const language of languages) {
+      if (!this.shouldRegisterLanguageWithWorker(language)) continue
+
+      const signature = languageDescriptorSignature(language)
+      if (nextSignatures.get(language.id) === signature) continue
+
+      nextSignatures.set(language.id, signature)
+      nextLanguages.push(language)
+    }
+
+    return nextLanguages
+  }
+
+  private createSourceDescriptor(
+    documentId: string,
+    snapshot: PieceTableSnapshot,
+  ): TreeSitterSourceDescriptor {
+    return createTreeSitterSourceDescriptor(snapshot, {
+      sentChunkIds: this.sourceChunkIdsForDocument(documentId),
+    })
+  }
+
+  private sourceChunkIdsForDocument(documentId: string): Set<string> {
+    const existing = this.sentSourceChunkIds.get(documentId)
+    if (existing) return existing
+
+    const sent = new Set<string>()
+    this.sentSourceChunkIds.set(documentId, sent)
+    return sent
+  }
+
+  private markSourceChunksAsSent(pending: PendingRequest): void {
+    const { payload } = pending
+    if (!('source' in payload)) return
+    if (!this.canMarkSourceChunksAsSent(pending)) return
+
+    const sent = this.sourceChunkIdsForDocument(payload.documentId)
+    for (const chunk of payload.source.chunks) sent.add(chunk.chunkId)
+  }
+
+  private canMarkSourceChunksAsSent(pending: PendingRequest): boolean {
+    if (!('source' in pending.payload)) return false
+    return pending.sourceEpoch === this.currentSourceEpoch(pending.payload.documentId)
+  }
+
+  private sourceEpochForPayload(payload: TreeSitterWorkerRequestPayload): number | null {
+    if (!('source' in payload)) return null
+    return this.currentSourceEpoch(payload.documentId)
+  }
+
+  private currentSourceEpoch(documentId: string): number {
+    return this.sourceDocumentEpochs.get(documentId) ?? 0
+  }
+
+  private invalidateDocumentSourceState(documentId: string): void {
+    this.sentSourceChunkIds.delete(documentId)
+    this.sourceDocumentEpochs.set(documentId, this.currentSourceEpoch(documentId) + 1)
   }
 }
+
+export const createTreeSitterWorkerBackend = (): TreeSitterBackend =>
+  new TreeSitterWorkerClient()
+
+let compatibilityWorkerClient: TreeSitterWorkerClient | null = null
+
+const defaultTreeSitterWorkerClient = (): TreeSitterWorkerClient => {
+  if (!compatibilityWorkerClient) compatibilityWorkerClient = new TreeSitterWorkerClient()
+  return compatibilityWorkerClient
+}
+
+export const registerTreeSitterLanguagesWithWorker = (
+  languages: readonly TreeSitterLanguageDescriptor[],
+): Promise<void> => defaultTreeSitterWorkerClient().registerLanguages(languages)
 
 export function parseWithTreeSitter(
   payload: TreeSitterParseOnlyPayload,
@@ -155,26 +456,10 @@ export function parseWithTreeSitter(
 export function parseWithTreeSitter(
   payload: TreeSitterBackendParsePayload,
 ): Promise<TreeSitterParseResult | TreeSitterParseAckResult | undefined>
-export async function parseWithTreeSitter(
+export function parseWithTreeSitter(
   payload: TreeSitterBackendParsePayload,
 ): Promise<TreeSitterParseResult | TreeSitterParseAckResult | undefined> {
-  const handle = await ensureWorkerReady()
-  if (!handle) return undefined
-  const source = createSourceDescriptor(payload.documentId, payload.snapshot)
-  const request: TreeSitterParseDocumentRequest = {
-    type: 'parse',
-    documentId: payload.documentId,
-    snapshotVersion: payload.snapshotVersion,
-    languageId: payload.languageId,
-    includeHighlights: payload.includeHighlights ?? true,
-    includeCaptures: payload.includeCaptures,
-    resultMode: payload.resultMode,
-    source,
-  }
-  const result = await postDocumentRequest(request)
-  if (isTreeSitterParseResult(result)) return result
-  if (isTreeSitterParseAckResult(result)) return result
-  return undefined
+  return defaultTreeSitterWorkerClient().parse(payload)
 }
 
 export function editWithTreeSitter(
@@ -186,225 +471,29 @@ export function editWithTreeSitter(
 export function editWithTreeSitter(
   payload: TreeSitterBackendEditPayload,
 ): Promise<TreeSitterParseResult | TreeSitterParseAckResult | undefined>
-export async function editWithTreeSitter(
+export function editWithTreeSitter(
   payload: TreeSitterBackendEditPayload,
 ): Promise<TreeSitterParseResult | TreeSitterParseAckResult | undefined> {
-  const handle = await ensureWorkerReady()
-  if (!handle) return undefined
-  const source = createSourceDescriptor(payload.documentId, payload.snapshot)
-  const result = await postDocumentRequest({
-    type: 'edit',
-    documentId: payload.documentId,
-    previousSnapshotVersion: payload.previousSnapshotVersion,
-    snapshotVersion: payload.snapshotVersion,
-    languageId: payload.languageId,
-    includeHighlights: payload.includeHighlights,
-    includeCaptures: payload.includeCaptures,
-    resultMode: payload.resultMode,
-    source,
-    edits: payload.edits,
-    inputEdits: payload.inputEdits,
-  })
-  if (isTreeSitterParseResult(result)) return result
-  if (isTreeSitterParseAckResult(result)) return result
-  return undefined
+  return defaultTreeSitterWorkerClient().edit(payload)
 }
 
-export const queryRangeWithTreeSitter = async (
+export const queryRangeWithTreeSitter = (
   payload: TreeSitterRangePayload,
-): Promise<TreeSitterRangeResult | undefined> => {
-  const handle = await ensureWorkerReady()
-  if (!handle) return undefined
-  const result = await postRangeRequest({
-    type: 'queryRange',
-    documentId: payload.documentId,
-    snapshotVersion: payload.snapshotVersion,
-    languageId: payload.languageId,
-    includeHighlights: payload.includeHighlights ?? true,
-    includeCaptures: payload.includeCaptures,
-    range: payload.range,
-  })
-  return isTreeSitterRangeResult(result) ? result : undefined
-}
+): Promise<TreeSitterRangeResult | undefined> =>
+  defaultTreeSitterWorkerClient().queryRange(payload)
 
-export const selectWithTreeSitter = async (
+export const selectWithTreeSitter = (
   payload: TreeSitterSelectionPayload,
-): Promise<TreeSitterSelectionResult | undefined> => {
-  const handle = await ensureWorkerReady()
-  if (!handle) return undefined
-  const result = await postRequest({ type: 'selection', ...payload })
-  return isTreeSitterSelectionResult(result) ? result : undefined
-}
+): Promise<TreeSitterSelectionResult | undefined> =>
+  defaultTreeSitterWorkerClient().select(payload)
 
 export const disposeTreeSitterDocument = (documentId: string): void => {
-  invalidateDocumentSourceState(documentId)
-  void postRequest({ type: 'disposeDocument', documentId }).catch(() => undefined)
+  defaultTreeSitterWorkerClient().disposeDocument(documentId)
 }
 
 export const disposeTreeSitterWorker = async (): Promise<void> => {
-  if (!worker) return
-
-  try {
-    await postRequest({ type: 'dispose' })
-  } finally {
-    worker.terminate()
-    worker = null
-    initPromise = null
-    registeredLanguageSignatures.clear()
-    sentSourceChunkIds.clear()
-    sourceDocumentEpochs.clear()
-    rejectPendingRequests(new Error('Tree-sitter worker disposed'))
-  }
-}
-
-export const createTreeSitterWorkerBackend = (): TreeSitterBackend => ({
-  registerLanguages: registerTreeSitterLanguagesWithWorker,
-  parse: parseWithTreeSitter,
-  edit: editWithTreeSitter,
-  queryRange: queryRangeWithTreeSitter,
-  select: selectWithTreeSitter,
-  disposeDocument: disposeTreeSitterDocument,
-  dispose: disposeTreeSitterWorker,
-})
-
-const postRequest = (payload: TreeSitterWorkerRequestPayload): Promise<TreeSitterWorkerResult> => {
-  const handle = getWorker()
-  if (!handle) return Promise.resolve(undefined)
-
-  const id = nextRequestId++
-  const request: TreeSitterWorkerRequest = { id, payload }
-
-  return new Promise((resolve, reject) => {
-    pendingRequests.set(id, {
-      documentId: documentIdForPayload(payload),
-      cancellationFlag: cancellationFlagForPayload(payload),
-      payload,
-      sourceEpoch: sourceEpochForPayload(payload),
-      resolve,
-      reject,
-    })
-    handle.postMessage(request)
-  })
-}
-
-function postDocumentRequest(
-  payload: TreeSitterParseDocumentRequest | TreeSitterEditDocumentRequest,
-): Promise<TreeSitterWorkerResult> {
-  return postRequest(withCancellation(cancelPreviousDocumentRequests(payload.documentId), payload))
-}
-
-function postRangeRequest(
-  payload: TreeSitterRangeDocumentRequest,
-): Promise<TreeSitterWorkerResult> {
-  return postRequest(withCancellation(cancelPreviousRangeRequests(payload.documentId), payload))
-}
-
-const cancelPreviousDocumentRequests = (documentId: string): Int32Array | null => {
-  let cancellationFlag: Int32Array | null = null
-
-  for (const pending of pendingRequests.values()) {
-    if (pending.documentId !== documentId) continue
-    if (pending.cancellationFlag) Atomics.store(pending.cancellationFlag, 0, 1)
-  }
-
-  if (supportsSharedCancellation()) {
-    cancellationFlag = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT))
-  }
-
-  return cancellationFlag
-}
-
-const cancelPreviousRangeRequests = (documentId: string): Int32Array | null => {
-  let cancellationFlag: Int32Array | null = null
-
-  for (const pending of pendingRequests.values()) {
-    if (pending.documentId !== documentId) continue
-    if (pending.payload.type !== 'queryRange') continue
-    if (pending.cancellationFlag) Atomics.store(pending.cancellationFlag, 0, 1)
-  }
-
-  if (supportsSharedCancellation()) {
-    cancellationFlag = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT))
-  }
-
-  return cancellationFlag
-}
-
-const withCancellation = <
-  TPayload extends
-    | TreeSitterParseDocumentRequest
-    | TreeSitterEditDocumentRequest
-    | TreeSitterRangeDocumentRequest,
->(
-  cancellationFlag: Int32Array | null,
-  payload: TPayload,
-): TPayload & { readonly generation: number; readonly cancellationBuffer?: SharedArrayBuffer } => {
-  const generation = nextGeneration++
-  if (!cancellationFlag) return { ...payload, generation }
-  return {
-    ...payload,
-    generation,
-    cancellationBuffer: cancellationFlag.buffer as SharedArrayBuffer,
-  }
-}
-
-const handleWorkerMessage = (event: MessageEvent<TreeSitterWorkerResponse>): void => {
-  const response = event.data
-  const pending = pendingRequests.get(response.id)
-  if (!pending) return
-
-  pendingRequests.delete(response.id)
-  if (response.ok) {
-    markSourceChunksAsSent(pending)
-    pending.resolve(response.result)
-    return
-  }
-
-  if (pending.documentId && shouldInvalidateDocumentSourceState(response.error)) {
-    invalidateDocumentSourceState(pending.documentId)
-  }
-  pending.reject(new Error(response.error))
-}
-
-const handleWorkerError = (failedWorker: Worker, event: ErrorEvent): void => {
-  if (failedWorker !== worker) return
-
-  const error = new Error(event.message || 'Tree-sitter worker failed')
-  failedWorker.terminate()
-  worker = null
-  rejectPendingRequests(error)
-  initPromise = null
-  registeredLanguageSignatures.clear()
-  sentSourceChunkIds.clear()
-  sourceDocumentEpochs.clear()
-}
-
-const rejectPendingRequests = (error: Error): void => {
-  for (const request of pendingRequests.values()) request.reject(error)
-  pendingRequests.clear()
-}
-
-function shouldRegisterLanguageWithWorker(language: TreeSitterLanguageDescriptor): boolean {
-  return registeredLanguageSignatures.get(language.id) !== languageDescriptorSignature(language)
-}
-
-function unregisteredLanguages(
-  languages: readonly TreeSitterLanguageDescriptor[],
-): readonly TreeSitterLanguageDescriptor[] {
-  const nextLanguages: TreeSitterLanguageDescriptor[] = []
-  const nextSignatures = new Map<TreeSitterLanguageId, string>()
-
-  for (const language of languages) {
-    if (!shouldRegisterLanguageWithWorker(language)) continue
-
-    const signature = languageDescriptorSignature(language)
-    if (nextSignatures.get(language.id) === signature) continue
-
-    nextSignatures.set(language.id, signature)
-    nextLanguages.push(language)
-  }
-
-  return nextLanguages
+  await compatibilityWorkerClient?.dispose()
+  compatibilityWorkerClient = null
 }
 
 function languageDescriptorSignature(language: TreeSitterLanguageDescriptor): string {
@@ -432,49 +521,6 @@ const cancellationFlagForPayload = (payload: TreeSitterWorkerRequestPayload): In
   if (!('cancellationBuffer' in payload)) return null
   if (!payload.cancellationBuffer) return null
   return new Int32Array(payload.cancellationBuffer)
-}
-
-const createSourceDescriptor = (
-  documentId: string,
-  snapshot: PieceTableSnapshot,
-): TreeSitterSourceDescriptor =>
-  createTreeSitterSourceDescriptor(snapshot, {
-    sentChunkIds: sourceChunkIdsForDocument(documentId),
-  })
-
-const sourceChunkIdsForDocument = (documentId: string): Set<string> => {
-  const existing = sentSourceChunkIds.get(documentId)
-  if (existing) return existing
-
-  const sent = new Set<string>()
-  sentSourceChunkIds.set(documentId, sent)
-  return sent
-}
-
-const markSourceChunksAsSent = (pending: PendingRequest): void => {
-  const { payload } = pending
-  if (!('source' in payload)) return
-  if (!canMarkSourceChunksAsSent(pending)) return
-
-  const sent = sourceChunkIdsForDocument(payload.documentId)
-  for (const chunk of payload.source.chunks) sent.add(chunk.chunkId)
-}
-
-const canMarkSourceChunksAsSent = (pending: PendingRequest): boolean => {
-  if (!('source' in pending.payload)) return false
-  return pending.sourceEpoch === currentSourceEpoch(pending.payload.documentId)
-}
-
-const sourceEpochForPayload = (payload: TreeSitterWorkerRequestPayload): number | null => {
-  if (!('source' in payload)) return null
-  return currentSourceEpoch(payload.documentId)
-}
-
-const currentSourceEpoch = (documentId: string): number => sourceDocumentEpochs.get(documentId) ?? 0
-
-const invalidateDocumentSourceState = (documentId: string): void => {
-  sentSourceChunkIds.delete(documentId)
-  sourceDocumentEpochs.set(documentId, currentSourceEpoch(documentId) + 1)
 }
 
 const shouldInvalidateDocumentSourceState = (error: string): boolean => {

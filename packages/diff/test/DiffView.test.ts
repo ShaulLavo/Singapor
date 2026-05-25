@@ -312,6 +312,8 @@ function emptySyntaxResult() {
 async function flushPromises(): Promise<void> {
   await Promise.resolve()
   await Promise.resolve()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  await Promise.resolve()
 }
 
 type HighlightConstructor = new (...ranges: AbstractRange[]) => Highlight

@@ -4,7 +4,11 @@ import type {
   VirtualizedTextHighlightRange,
   VirtualizedTextRowDecoration,
 } from '@editor/core/rendering'
-import { VirtualizedTextView } from '@editor/core/internal'
+import {
+  EditorWorkScheduler,
+  VirtualizedTextView,
+  type EditorWorkContext,
+} from '@editor/core/internal'
 import { ResizablePaneGroup, type ResizablePaneLayout } from '@editor/panes'
 import { createDiffCanvasGutterRenderer, type DiffCanvasGutterRenderer } from './canvasGutter'
 import { diffGutterWidth } from './gutters'
@@ -21,8 +25,8 @@ import type {
 } from './types'
 
 type MountedPane = {
+  readonly id: number
   rows: readonly DiffRenderRow[]
-  syntaxGeneration: number
   tokens?: readonly EditorToken[]
   readonly side: 'old' | 'new' | 'stacked'
   readonly view: VirtualizedTextView
@@ -45,16 +49,22 @@ type PaneSelection = {
   headOffset: number
 }
 
+type DiffSyntaxHighlightResult = {
+  readonly tokens: readonly EditorToken[]
+}
+
 const DEFAULT_THEME = 'github-dark'
 const DEFAULT_DIFF_OVERSCAN = 8
 const WHEEL_LINE_DELTA = 40
 let nextDiffViewId = 0
+let nextMountedPaneId = 0
 
 export class DiffView {
   private readonly root: HTMLDivElement
   private readonly fileList: HTMLDivElement
   private readonly content: HTMLDivElement
   private readonly highlightPrefix: string
+  private readonly scheduler = new EditorWorkScheduler()
   private readonly options: DiffViewOptions
   private files: readonly DiffFile[] = []
   private selectedPath: string | null = null
@@ -142,6 +152,7 @@ export class DiffView {
 
   dispose(): void {
     this.disposePanes()
+    this.scheduler.dispose()
     this.root.remove()
   }
 
@@ -279,7 +290,14 @@ export class DiffView {
       backgroundColor: 'rgba(255, 255, 255, 0.18)',
     })
     const disposeEvents = this.installPaneInteractions(view, getRows)
-    mountedPane = { view, rows, side, disposeEvents, gutterRenderer, syntaxGeneration: 0 }
+    mountedPane = {
+      id: nextMountedPaneId++,
+      view,
+      rows,
+      side,
+      disposeEvents,
+      gutterRenderer,
+    }
     gutterRenderer.render()
     this.refreshSyntaxHighlighting(mountedPane, file)
     return mountedPane
@@ -523,9 +541,9 @@ export class DiffView {
   private installScrollSync(left: VirtualizedTextView, right: VirtualizedTextView): () => void {
     const leftElement = left.scrollElement
     const rightElement = right.scrollElement
-    let pendingFrame = 0
     let pendingSource: HTMLElement | null = null
     let pendingTarget: HTMLElement | null = null
+    const scrollSyncKey = `${this.highlightPrefix}.scrollSync`
 
     const onLeftWheel = (event: WheelEvent) =>
       this.syncWheelScroll(event, leftElement, rightElement)
@@ -536,19 +554,25 @@ export class DiffView {
 
       pendingSource = leftElement
       pendingTarget = rightElement
-      pendingFrame ||=
-        this.root.ownerDocument.defaultView?.requestAnimationFrame(flushPendingScroll) ?? 0
+      schedulePendingScroll()
     }
     const onRightScroll = () => {
       if (this.syncingScroll) return
 
       pendingSource = rightElement
       pendingTarget = leftElement
-      pendingFrame ||=
-        this.root.ownerDocument.defaultView?.requestAnimationFrame(flushPendingScroll) ?? 0
+      schedulePendingScroll()
+    }
+    const schedulePendingScroll = () => {
+      this.scheduler.schedule({
+        key: scrollSyncKey,
+        taskClass: 'visible-render',
+        priority: 'high',
+        tags: { configuration: 'scroll-sync' },
+        run: flushPendingScroll,
+      })
     }
     const flushPendingScroll = () => {
-      pendingFrame = 0
       if (!pendingSource || !pendingTarget) return
 
       this.syncScrollElements(pendingSource, pendingTarget)
@@ -562,8 +586,7 @@ export class DiffView {
     rightElement.addEventListener('scroll', onRightScroll)
 
     return () => {
-      const view = this.root.ownerDocument.defaultView
-      if (pendingFrame) view?.cancelAnimationFrame(pendingFrame)
+      this.scheduler.cancel(scrollSyncKey)
       leftElement.removeEventListener('wheel', onLeftWheel)
       rightElement.removeEventListener('wheel', onRightWheel)
       leftElement.removeEventListener('scroll', onLeftScroll)
@@ -597,14 +620,19 @@ export class DiffView {
 
   private withScrollSync(sync: () => void): void {
     this.syncingScroll = true
-    sync()
-    const view = this.root.ownerDocument.defaultView
-    if (!view) {
-      this.syncingScroll = false
-      return
+    try {
+      sync()
+    } finally {
+      this.scheduler.schedule({
+        key: `${this.highlightPrefix}.scrollSync.unlock`,
+        taskClass: 'visible-render',
+        priority: 'high',
+        tags: { configuration: 'scroll-sync-unlock' },
+        run: () => {
+          this.syncingScroll = false
+        },
+      })
     }
-
-    view.requestAnimationFrame(() => (this.syncingScroll = false))
   }
 
   private renderEmptyState(text: string): void {
@@ -658,6 +686,7 @@ export class DiffView {
     this.disposeScrollSync?.()
     this.disposeScrollSync = null
     for (const pane of this.panes) {
+      this.scheduler.cancel(diffSyntaxKey(pane))
       pane.disposeEvents()
       pane.syntaxSession?.dispose()
       pane.gutterRenderer.dispose()
@@ -682,58 +711,70 @@ export class DiffView {
   private refreshSyntaxHighlighting(pane: MountedPane, file: DiffFile): void {
     pane.syntaxSession?.dispose()
     pane.syntaxSession = undefined
-    pane.syntaxGeneration += 1
-    const generation = pane.syntaxGeneration
-    void this.applySyntaxHighlighting(pane, file, generation).catch(() => undefined)
+    this.scheduler.cancel(diffSyntaxKey(pane))
+
+    const sessions: { dispose(): void }[] = []
+    this.scheduler.schedule({
+      key: diffSyntaxKey(pane),
+      taskClass: 'background-derived',
+      priority: 'low',
+      tags: {
+        configuration: 'syntax',
+        version: pane.id,
+        viewport: pane.side,
+      },
+      run: (context) => this.loadSyntaxHighlighting(pane, file, context, sessions),
+      apply: (result, context) =>
+        this.applySyntaxHighlightingResult(pane, result, sessions, context),
+      fail: () => disposeMutableSessions(sessions),
+      cancel: () => disposeMutableSessions(sessions),
+    })
   }
 
-  private async applySyntaxHighlighting(
+  private async loadSyntaxHighlighting(
     pane: MountedPane,
     file: DiffFile,
-    generation: number,
-  ): Promise<void> {
-    if (this.options.syntaxHighlight === false) return
+    context: EditorWorkContext,
+    sessions: { dispose(): void }[],
+  ): Promise<DiffSyntaxHighlightResult | null> {
+    if (this.options.syntaxHighlight === false) return null
     const syntaxBackend = diffSyntaxBackend(this.options)
     if (syntaxBackend.kind === 'tree-sitter') {
-      await this.applySyntaxProviderHighlighting(pane, file, generation, syntaxBackend)
-      return
+      return this.loadSyntaxProviderHighlighting(pane, file, context, sessions, syntaxBackend)
     }
 
-    await this.applyShikiHighlighting(pane, file, generation, syntaxBackend)
+    return this.loadShikiHighlighting(pane, file, context, sessions, syntaxBackend)
   }
 
-  private async applySyntaxProviderHighlighting(
+  private async loadSyntaxProviderHighlighting(
     pane: MountedPane,
     file: DiffFile,
-    generation: number,
+    context: EditorWorkContext,
+    sessions: { dispose(): void }[],
     backend: Extract<DiffSyntaxBackend, { readonly kind: 'tree-sitter' }>,
-  ): Promise<void> {
-    if (!backend.provider) return
+  ): Promise<DiffSyntaxHighlightResult | null> {
+    if (!backend.provider) return null
 
     const sources = syntaxSourcesForPane(file, pane.side)
-    const sessions: { dispose(): void }[] = []
     const tokenSources: DiffSyntaxTokenSource[] = []
 
     for (const source of sources) {
+      if (!context.isCurrent()) return null
+
+      const snapshot = createPieceTableSnapshot(source.text)
       const session = backend.provider.createSession({
         documentId: `${file.path}:${source.side}`,
         languageId: file.languageId ?? shikiLanguageForFile(file),
         fullText: source.text,
-        snapshot: createPieceTableSnapshot(source.text),
+        snapshot,
       })
       if (!session) continue
 
-      if (pane.syntaxGeneration !== generation) {
-        session.dispose()
-        disposeSessions(sessions)
-        return
-      }
-
       sessions.push(session)
-      const result = await session.refresh(createPieceTableSnapshot(source.text), source.text)
-      if (pane.syntaxGeneration !== generation) {
-        disposeSessions(sessions)
-        return
+      const result = await session.refresh(snapshot, source.text)
+      if (!context.isCurrent()) {
+        disposeMutableSessions(sessions)
+        return null
       }
 
       tokenSources.push({
@@ -743,31 +784,29 @@ export class DiffView {
       })
     }
 
-    pane.syntaxSession = { dispose: () => disposeSessions(sessions) }
-    pane.view.setTheme(this.options.theme)
-    pane.gutterRenderer.refreshStyle()
-    pane.gutterRenderer.render()
-    pane.tokens = projectDiffSyntaxTokens({
-      rows: pane.rows,
-      side: pane.side,
-      sources: tokenSources,
-    })
-    pane.view.setTokens(pane.tokens)
+    return {
+      tokens: projectDiffSyntaxTokens({
+        rows: pane.rows,
+        side: pane.side,
+        sources: tokenSources,
+      }),
+    }
   }
 
-  private async applyShikiHighlighting(
+  private async loadShikiHighlighting(
     pane: MountedPane,
     file: DiffFile,
-    generation: number,
+    context: EditorWorkContext,
+    sessions: { dispose(): void }[],
     backend: Extract<DiffSyntaxBackend, { readonly kind: 'shiki' }>,
-  ): Promise<void> {
+  ): Promise<DiffSyntaxHighlightResult | null> {
     const { canUseShikiWorker, createShikiHighlighterSession } = await import('@editor/core/shiki')
-    if (pane.syntaxGeneration !== generation) return
-    if (!canUseShikiWorker()) return
+    if (!context.isCurrent()) return null
+    if (!canUseShikiWorker()) return null
 
     const syntaxText = joinSyntaxLines(pane.rows)
     const lang = shikiLanguageForFile(file)
-    if (!lang) return
+    if (!lang) return null
 
     const themeName = shikiThemeName(backend.shikiTheme)
     const snapshot = createPieceTableSnapshot(syntaxText)
@@ -781,24 +820,34 @@ export class DiffView {
       theme: themeName,
       themes: [themeName],
     })
-    if (!session) return
+    if (!session) return null
 
-    if (pane.syntaxGeneration !== generation) {
-      session.dispose()
-      return
-    }
-
-    pane.syntaxSession = session
+    sessions.push(session)
     const result = await session.refresh(snapshot, syntaxText)
-    if (pane.syntaxGeneration !== generation) {
-      session.dispose()
+    if (!context.isCurrent()) {
+      disposeMutableSessions(sessions)
+      return null
+    }
+
+    return { tokens: result.tokens as readonly EditorToken[] }
+  }
+
+  private applySyntaxHighlightingResult(
+    pane: MountedPane,
+    result: DiffSyntaxHighlightResult | null,
+    sessions: { dispose(): void }[],
+    context: EditorWorkContext,
+  ): void {
+    if (!context.isCurrent() || !result) {
+      disposeMutableSessions(sessions)
       return
     }
 
+    pane.syntaxSession = { dispose: () => disposeMutableSessions(sessions) }
     pane.view.setTheme(this.options.theme)
     pane.gutterRenderer.refreshStyle()
     pane.gutterRenderer.render()
-    pane.tokens = result.tokens as readonly EditorToken[]
+    pane.tokens = result.tokens
     pane.view.setTokens(pane.tokens)
   }
 
@@ -989,8 +1038,12 @@ function sourceSideForRow(row: DiffRenderRow, side: MountedPane['side']): DiffSy
   return 'new'
 }
 
-function disposeSessions(sessions: readonly { dispose(): void }[]): void {
-  for (const session of sessions) session.dispose()
+function diffSyntaxKey(pane: MountedPane): string {
+  return `diff.syntax.${pane.id}`
+}
+
+function disposeMutableSessions(sessions: { dispose(): void }[]): void {
+  while (sessions.length > 0) sessions.pop()?.dispose()
 }
 
 function lineStartsForLines(lines: readonly string[]): readonly number[] {

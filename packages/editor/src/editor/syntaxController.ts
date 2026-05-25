@@ -18,7 +18,6 @@ import {
 import { LatestAsyncRequest } from './latestAsyncRequest'
 import { getEditorSyntaxSessionFactory } from './runtime'
 import { syntaxRefreshDelay } from './editorUtils'
-import { appendTiming } from './timing'
 
 export type EditorSyntaxDocumentStartOptions = {
   readonly documentId: string
@@ -548,7 +547,7 @@ export class EditorSyntaxController {
   private applySyntaxResult(
     loadResult: EditorSyntaxLoadResult,
     documentVersion: number,
-    startedAt: number,
+    _startedAt: number,
   ): boolean {
     const session = this.options.getSession()
     if (loadResult.skipApply) return false
@@ -561,15 +560,13 @@ export class EditorSyntaxController {
     const nextTokens = this.highlighterSession
       ? this.currentTokens
       : this.syntaxTokensForResult(result.tokens, loadResult.range)
-    const tokenChange = session.adoptTokens(nextTokens)
-    const timedChange = appendTiming(tokenChange, 'editor.syntax', startedAt)
     if (!this.highlighterSession) this.setTokens(nextTokens)
     if (loadResult.range) this.rememberSyntaxRange(loadResult.range, result)
     if (!this.highlighterSession && loadResult.range && !this.pendingWarm) {
       this.warmSyntaxAroundRange(documentVersion, loadResult.range)
     }
     if (this.shouldApplySyntaxFolds(loadResult)) this.options.setSyntaxFolds(result.folds)
-    this.options.notifyChange(timedChange)
+    this.options.notifyChange(null)
     return true
   }
 
@@ -730,16 +727,14 @@ export class EditorSyntaxController {
   private applyHighlightResult(
     result: EditorHighlightResult,
     documentVersion: number,
-    startedAt: number,
+    _startedAt: number,
   ): void {
     const session = this.options.getSession()
     if (!session || documentVersion !== this.options.getDocumentVersion()) return
 
     if (result.theme !== undefined) this.setHighlighterTheme(result.theme)
-    const tokenChange = session.adoptTokens(result.tokens)
-    const timedChange = appendTiming(tokenChange, 'editor.highlight', startedAt)
     this.setTokens(result.tokens)
-    this.options.notifyChange(timedChange)
+    this.options.notifyChange(null)
   }
 
   private applySyntaxError(documentVersion: number): void {
@@ -776,16 +771,14 @@ export class EditorSyntaxController {
     this.reloadSyntaxSession()
   }
 
-  private applyHighlightError(documentVersion: number, startedAt: number): void {
+  private applyHighlightError(documentVersion: number, _startedAt: number): void {
     const session = this.options.getSession()
     if (!session || documentVersion !== this.options.getDocumentVersion()) return
 
     warnEditorSyntax('clear plugin highlighting after error', this.debugContext(documentVersion))
     this.setHighlighterTheme(null)
-    const tokenChange = session.adoptTokens([])
-    const timedChange = appendTiming(tokenChange, 'editor.highlightError', startedAt)
     this.setTokens([])
-    this.options.notifyChange(timedChange)
+    this.options.notifyChange(null)
   }
 
   private recoverHighlightError(

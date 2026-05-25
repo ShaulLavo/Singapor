@@ -21,7 +21,7 @@ import {
   undoEditorHistory,
   type EditorHistory,
 } from './history'
-import type { EditorToken, TextEdit } from './tokens'
+import type { TextEdit } from './tokens'
 import { createDocumentTextSnapshot, type DocumentTextSnapshot } from './documentTextSnapshot'
 import type { Anchor as PieceTableAnchor, PieceTableSnapshot } from './pieceTable/pieceTableTypes'
 import { applyBatchToPieceTable } from './pieceTable/edits'
@@ -42,7 +42,6 @@ export type DocumentSessionChange = {
   readonly snapshot: PieceTableSnapshot
   readonly selections: SelectionSet<PieceTableAnchor>
   readonly textSnapshot: DocumentTextSnapshot
-  readonly tokens: readonly EditorToken[]
   readonly timings: readonly EditorTimingMeasurement[]
   readonly canUndo: boolean
   readonly canRedo: boolean
@@ -76,11 +75,8 @@ export type DocumentSession = {
     options?: DocumentSessionSelectionOptions,
   ): DocumentSessionChange
   clearSecondarySelections(): DocumentSessionChange
-  setTokens(tokens: readonly EditorToken[]): DocumentSessionChange
-  adoptTokens(tokens: readonly EditorToken[]): DocumentSessionChange
   materializeFullText(): string
   getTextSnapshot(): DocumentTextSnapshot
-  getTokens(): readonly EditorToken[]
   getSelections(): SelectionSet<PieceTableAnchor>
   getSnapshot(): PieceTableSnapshot
   canUndo(): boolean
@@ -151,7 +147,6 @@ class PieceTableDocumentSession implements DocumentSession {
   private dirtyCacheSnapshot: PieceTableSnapshot
   private dirtyCacheValue = false
   private textSnapshot: DocumentTextSnapshot
-  private tokens: readonly EditorToken[] = []
 
   public constructor(text: string) {
     const snapshot = createPieceTableSnapshot(text)
@@ -361,26 +356,12 @@ class PieceTableDocumentSession implements DocumentSession {
     )
   }
 
-  public setTokens(tokens: readonly EditorToken[]): DocumentSessionChange {
-    return this.adoptTokens(tokens)
-  }
-
-  public adoptTokens(tokens: readonly EditorToken[]): DocumentSessionChange {
-    const start = nowMs()
-    this.tokens = tokens
-    return appendTiming(this.createChange('none', []), 'session.setTokens', start)
-  }
-
   public materializeFullText(): string {
     return this.textSnapshot.materializeFullText()
   }
 
   public getTextSnapshot(): DocumentTextSnapshot {
     return this.textSnapshot
-  }
-
-  public getTokens(): readonly EditorToken[] {
-    return this.tokens
   }
 
   public getSelections(): SelectionSet<PieceTableAnchor> {
@@ -523,7 +504,6 @@ class PieceTableDocumentSession implements DocumentSession {
       snapshot: this.history.current,
       selections: this.history.selections,
       textSnapshot: this.textSnapshot,
-      tokens: this.tokens,
       timings: [],
       canUndo: this.canUndo(),
       canRedo: this.canRedo(),
@@ -537,7 +517,6 @@ class StaticDocumentSession implements DocumentSession {
   private snapshot: PieceTableSnapshot
   private textSnapshot: DocumentTextSnapshot
   private selections: SelectionSet<PieceTableAnchor>
-  private tokens: readonly EditorToken[] = []
 
   public constructor(text: string) {
     this.snapshot = createPieceTableSnapshot(text)
@@ -650,26 +629,12 @@ class StaticDocumentSession implements DocumentSession {
     )
   }
 
-  public setTokens(tokens: readonly EditorToken[]): DocumentSessionChange {
-    return this.adoptTokens(tokens)
-  }
-
-  public adoptTokens(tokens: readonly EditorToken[]): DocumentSessionChange {
-    const start = nowMs()
-    this.tokens = tokens
-    return appendTiming(this.createChange('none', []), 'session.setTokens', start)
-  }
-
   public materializeFullText(): string {
     return this.textSnapshot.materializeFullText()
   }
 
   public getTextSnapshot(): DocumentTextSnapshot {
     return this.textSnapshot
-  }
-
-  public getTokens(): readonly EditorToken[] {
-    return this.tokens
   }
 
   public getSelections(): SelectionSet<PieceTableAnchor> {
@@ -760,7 +725,6 @@ class StaticDocumentSession implements DocumentSession {
       snapshot: this.snapshot,
       selections: this.selections,
       textSnapshot: this.textSnapshot,
-      tokens: this.tokens,
       timings: [],
       canUndo: false,
       canRedo: false,
@@ -800,7 +764,6 @@ export function withDocumentSessionChangeTimings(
     snapshot: change.snapshot,
     selections: change.selections,
     textSnapshot: documentSessionChangeTextSnapshot(change),
-    tokens: change.tokens,
     timings,
     canUndo: change.canUndo,
     canRedo: change.canRedo,

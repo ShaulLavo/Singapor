@@ -24,12 +24,17 @@ async function flushMicrotasks(): Promise<void> {
   await Promise.resolve()
 }
 
+function flushSchedulerTicks(count = 4): void {
+  for (let index = 0; index < count; index += 1) vi.runOnlyPendingTimers()
+}
+
 describe('LatestAsyncRequest', () => {
   afterEach(() => {
     vi.useRealTimers()
   })
 
   it('applies only the latest request result', async () => {
+    vi.useFakeTimers()
     const first = createDeferred<string>()
     const second = createDeferred<string>()
     const applied: string[] = []
@@ -37,6 +42,7 @@ describe('LatestAsyncRequest', () => {
 
     request.schedule({ run: () => first.promise, apply: (result) => applied.push(result) })
     request.schedule({ run: () => second.promise, apply: (result) => applied.push(result) })
+    flushSchedulerTicks()
 
     first.resolve('first')
     await flushMicrotasks()
@@ -75,12 +81,14 @@ describe('LatestAsyncRequest', () => {
     expect(started).toEqual([])
 
     vi.advanceTimersByTime(1)
+    flushSchedulerTicks()
     await flushMicrotasks()
     expect(started).toEqual(['second'])
     expect(applied).toEqual(['second'])
   })
 
   it('ignores stale request errors', async () => {
+    vi.useFakeTimers()
     const first = createDeferred<string>()
     const second = createDeferred<string>()
     const failed: unknown[] = []
@@ -92,11 +100,13 @@ describe('LatestAsyncRequest', () => {
       apply: (result) => applied.push(result),
       fail: (error) => failed.push(error),
     })
+    flushSchedulerTicks(1)
     request.schedule({
       run: () => second.promise,
       apply: (result) => applied.push(result),
       fail: (error) => failed.push(error),
     })
+    flushSchedulerTicks(1)
 
     first.reject(new Error('stale'))
     second.resolve('second')

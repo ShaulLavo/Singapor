@@ -1,6 +1,7 @@
 import type { DocumentSessionChange, TextEdit } from '@editor/core/document'
 import type { EditorToken } from '@editor/core/syntax'
 import type { EditorMinimapDecoration, EditorViewSnapshot } from '@editor/core/extensions'
+import { EditorWorkScheduler } from '@editor/core/internal'
 import { parseCssColor, RGBA_BLACK, RGBA_WHITE, transparent } from './color'
 import type {
   MinimapBaseStyles,
@@ -19,6 +20,10 @@ import type {
 
 const MINIMAP_UPDATE_QUIET_DELAY_MS = 120
 const MINIMAP_UPDATE_MAX_DELAY_MS = 300
+const MINIMAP_FRAME_FLUSH_KEY = 'minimap.flush.frame'
+const MINIMAP_QUIET_FLUSH_KEY = 'minimap.flush.quiet'
+const MINIMAP_MAX_FLUSH_KEY = 'minimap.flush.max'
+const MINIMAP_RENDER_KEY = 'minimap.render'
 
 export type MinimapHost = {
   readonly root: HTMLDivElement
@@ -43,15 +48,11 @@ export class MinimapWorkerClient {
   private readonly options: ResolvedMinimapOptions
   private readonly worker: Worker
   private readonly colorResolver: ColorResolver
+  private readonly scheduler = new EditorWorkScheduler()
   private readonly onLayoutWidth: (width: number) => void
   private externalDecorations: readonly EditorMinimapDecoration[]
-  private sequence = 0
-  private latestRenderedSequence = 0
   private pendingUpdate: PendingMinimapUpdate | null = null
-  private flushHandle = 0
-  private quietFlushTimer: ReturnType<typeof setTimeout> | null = null
-  private maxFlushTimer: ReturnType<typeof setTimeout> | null = null
-  private idleFlushHandle = 0
+  private activeRenderToken = 0
   private renderInFlight = false
   private latestSliderHeight = 0
   private latestSliderNeeded = false
@@ -121,6 +122,7 @@ export class MinimapWorkerClient {
 
     this.disposed = true
     this.cancelScheduledFlush()
+    this.scheduler.dispose()
     this.post({ type: 'dispose' })
     this.worker.terminate()
     this.colorResolver.dispose()
@@ -165,35 +167,34 @@ export class MinimapWorkerClient {
   }
 
   private scheduleFrameFlush(): void {
-    if (this.flushHandle !== 0) return
-
-    this.flushHandle = requestFrame(() => {
-      this.flushHandle = 0
-      this.flushPendingUpdate()
+    this.scheduler.schedule({
+      key: MINIMAP_FRAME_FLUSH_KEY,
+      taskClass: 'visible-render',
+      priority: 'high',
+      tags: { configuration: 'frame', version: this.latestSnapshot.textVersion },
+      run: () => this.flushPendingUpdate(),
     })
   }
 
   private scheduleDeferredFlush(): void {
     this.cancelScheduledFrame()
-    this.cancelQuietFlush()
-    this.quietFlushTimer = setTimeout(this.flushDeferredUpdate, MINIMAP_UPDATE_QUIET_DELAY_MS)
-    if (this.maxFlushTimer === null) {
-      this.maxFlushTimer = setTimeout(this.flushDeferredUpdate, MINIMAP_UPDATE_MAX_DELAY_MS)
-    }
-    this.scheduleIdleFlush()
-  }
-
-  private scheduleIdleFlush(): void {
-    if (this.idleFlushHandle !== 0) return
-    if (typeof requestIdleCallback !== 'function') return
-
-    this.idleFlushHandle = requestIdleCallback(
-      () => {
-        this.idleFlushHandle = 0
-        this.flushDeferredUpdate()
-      },
-      { timeout: MINIMAP_UPDATE_MAX_DELAY_MS },
-    )
+    this.scheduler.schedule({
+      key: MINIMAP_QUIET_FLUSH_KEY,
+      taskClass: 'background-derived',
+      priority: 'low',
+      delayMs: MINIMAP_UPDATE_QUIET_DELAY_MS,
+      tags: { configuration: 'quiet', version: this.latestSnapshot.textVersion },
+      run: this.flushDeferredUpdate,
+    })
+    this.scheduler.schedule({
+      key: MINIMAP_MAX_FLUSH_KEY,
+      taskClass: 'background-derived',
+      priority: 'normal',
+      delayMs: MINIMAP_UPDATE_MAX_DELAY_MS,
+      replace: false,
+      tags: { configuration: 'max', version: this.latestSnapshot.textVersion },
+      run: this.flushDeferredUpdate,
+    })
   }
 
   private flushDeferredUpdate = (): void => {
@@ -355,10 +356,37 @@ export class MinimapWorkerClient {
   }
 
   private postRender(snapshot: EditorViewSnapshot): void {
-    this.sizeCanvasElements(snapshot)
-    this.sequence += 1
+    let renderToken = 0
+    const handle = this.scheduler.schedule({
+      key: MINIMAP_RENDER_KEY,
+      taskClass: 'visible-render',
+      priority: 'high',
+      tags: {
+        configuration: 'render',
+        snapshotVersion: snapshot.textVersion,
+        viewport: snapshot.viewport.visibleRange.start,
+      },
+      run: (context) => this.postScheduledRender(snapshot, context.token),
+      cancel: () => this.cancelScheduledRender(renderToken),
+    })
+
+    renderToken = handle.token
+    this.activeRenderToken = handle.token
     this.renderInFlight = true
-    this.post({ type: 'render', sequence: this.sequence })
+  }
+
+  private postScheduledRender(snapshot: EditorViewSnapshot, token: number): void {
+    if (token !== this.activeRenderToken) return
+
+    this.sizeCanvasElements(snapshot)
+    this.post({ type: 'render', sequence: token })
+  }
+
+  private cancelScheduledRender(token: number): void {
+    if (token !== this.activeRenderToken) return
+
+    this.activeRenderToken = 0
+    this.renderInFlight = false
   }
 
   private applyImmediateViewport(snapshot: EditorViewSnapshot, scrollTop: number): void {
@@ -498,7 +526,11 @@ export class MinimapWorkerClient {
       return
     }
     if (response.type === 'rendered') {
+      if (!this.isCurrentRenderResponse(response)) return
+
+      this.scheduler.cancel(MINIMAP_RENDER_KEY)
       this.renderInFlight = false
+      this.activeRenderToken = 0
       if (this.pendingUpdate) {
         this.scheduleFlush()
         return
@@ -522,9 +554,6 @@ export class MinimapWorkerClient {
   private applyRenderedResponse(
     response: Extract<MinimapWorkerResponse, { type: 'rendered' }>,
   ): void {
-    if (response.sequence < this.latestRenderedSequence) return
-
-    this.latestRenderedSequence = response.sequence
     this.latestSliderHeight = response.sliderHeight
     this.latestSliderNeeded = response.sliderNeeded
     setStyleValue(this.host.slider, 'display', response.sliderNeeded ? 'block' : 'none')
@@ -564,36 +593,18 @@ export class MinimapWorkerClient {
   }
 
   private cancelScheduledFrame(): void {
-    if (this.flushHandle === 0) return
-
-    cancelFrame(this.flushHandle)
-    this.flushHandle = 0
+    this.scheduler.cancel(MINIMAP_FRAME_FLUSH_KEY)
   }
 
   private cancelDeferredFlush(): void {
-    this.cancelQuietFlush()
-    this.cancelMaxFlush()
-    this.cancelIdleFlush()
+    this.scheduler.cancel(MINIMAP_QUIET_FLUSH_KEY)
+    this.scheduler.cancel(MINIMAP_MAX_FLUSH_KEY)
   }
 
-  private cancelQuietFlush(): void {
-    if (this.quietFlushTimer === null) return
-
-    clearTimeout(this.quietFlushTimer)
-    this.quietFlushTimer = null
-  }
-
-  private cancelMaxFlush(): void {
-    if (this.maxFlushTimer === null) return
-
-    clearTimeout(this.maxFlushTimer)
-    this.maxFlushTimer = null
-  }
-
-  private cancelIdleFlush(): void {
-    if (this.idleFlushHandle === 0) return
-    if (typeof cancelIdleCallback === 'function') cancelIdleCallback(this.idleFlushHandle)
-    this.idleFlushHandle = 0
+  private isCurrentRenderResponse(
+    response: Extract<MinimapWorkerResponse, { type: 'rendered' }>,
+  ): boolean {
+    return response.sequence === this.activeRenderToken
   }
 }
 
@@ -1107,20 +1118,6 @@ function setClassName(element: HTMLElement, className: string): void {
   if (element.className === className) return
 
   element.className = className
-}
-
-function requestFrame(callback: () => void): number {
-  if (typeof requestAnimationFrame === 'function') return requestAnimationFrame(callback)
-  return setTimeout(callback, 16) as unknown as number
-}
-
-function cancelFrame(handle: number): void {
-  if (typeof cancelAnimationFrame === 'function') {
-    cancelAnimationFrame(handle)
-    return
-  }
-
-  clearTimeout(handle)
 }
 
 function minimapBackgroundOpacity(style: CSSStyleDeclaration): number {

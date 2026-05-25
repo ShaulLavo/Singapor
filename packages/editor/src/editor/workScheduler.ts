@@ -99,6 +99,14 @@ const TASK_CLASS_PRIORITIES: Record<EditorWorkTaskClass, EditorWorkPriority> = {
   'idle-cache': 'idle',
 }
 
+const PRIORITY_RANK: Record<EditorWorkPriority, number> = {
+  critical: 0,
+  high: 1,
+  normal: 2,
+  low: 3,
+  idle: 4,
+}
+
 const defaultSetTimeout = ((handler: () => void, timeout?: number) =>
   setTimeout(handler, timeout)) as typeof globalThis.setTimeout
 const defaultClearTimeout = ((handle?: ReturnType<typeof globalThis.setTimeout>) =>
@@ -110,6 +118,8 @@ export class EditorWorkScheduler {
   private readonly now: () => number
   private readonly onEvent?: (event: EditorWorkEvent) => void
   private readonly scheduled = new Map<string, ScheduledEditorWork>()
+  private queued: ScheduledEditorWork[] = []
+  private queueTimer: ReturnType<typeof globalThis.setTimeout> | null = null
   private nextToken = 0
   private disposed = false
 
@@ -122,6 +132,9 @@ export class EditorWorkScheduler {
 
   schedule<T>(options: EditorScheduleWorkOptions<T>): EditorScheduledWorkHandle {
     if (this.disposed) return inactiveHandle(options.key)
+    const existing = this.scheduled.get(options.key)
+    if (existing && options.replace === false) return this.handleFor(existing)
+
     if (options.replace !== false) this.cancel(options.key, 'replaced')
 
     const work = this.createWork(options)
@@ -144,6 +157,8 @@ export class EditorWorkScheduler {
     this.disposed = true
     const works = [...this.scheduled.values()]
     for (const work of works) this.cancelWork(work, 'disposed')
+    this.clearQueueTimer()
+    this.queued = []
   }
 
   private createWork<T>(options: EditorScheduleWorkOptions<T>): ScheduledEditorWork<T> {
@@ -166,12 +181,63 @@ export class EditorWorkScheduler {
 
   private scheduleStart(work: ScheduledEditorWork): void {
     const delayMs = normalizeDelayMs(work.options.delayMs)
-    if (delayMs === 0 && !work.options.defer) {
-      this.start(work)
+    if (delayMs === 0) {
+      this.enqueueStart(work)
       return
     }
 
-    work.timer = this.setTimer(() => this.start(work), delayMs)
+    work.timer = this.setTimer(() => this.enqueueStart(work), delayMs)
+  }
+
+  private enqueueStart(work: ScheduledEditorWork): void {
+    if (!this.isCurrentWork(work)) return
+
+    work.timer = null
+    this.queued.push(work)
+    this.scheduleQueueFlush()
+  }
+
+  private scheduleQueueFlush(): void {
+    if (this.queueTimer !== null) return
+
+    this.queueTimer = this.setTimer(() => this.flushQueuedWork(), 0)
+  }
+
+  private flushQueuedWork(): void {
+    this.queueTimer = null
+    const work = this.takeNextQueuedWork()
+    if (!work) return
+
+    this.start(work)
+    if (this.hasQueuedWork()) this.scheduleQueueFlush()
+  }
+
+  private takeNextQueuedWork(): ScheduledEditorWork | null {
+    this.queued = this.queued.filter((work) => this.canStartQueuedWork(work))
+
+    let bestIndex = -1
+    let bestWork: ScheduledEditorWork | null = null
+    for (const [index, work] of this.queued.entries()) {
+      if (bestWork && compareQueuedWork(bestWork, work) <= 0) continue
+
+      bestIndex = index
+      bestWork = work
+    }
+
+    if (bestIndex === -1) return null
+
+    this.queued.splice(bestIndex, 1)
+    return bestWork
+  }
+
+  private hasQueuedWork(): boolean {
+    return this.queued.some((work) => this.canStartQueuedWork(work))
+  }
+
+  private canStartQueuedWork(work: ScheduledEditorWork): boolean {
+    if (work.startedAt !== null) return false
+    if (work.controller.signal.aborted) return false
+    return this.isCurrentWork(work)
   }
 
   private start(work: ScheduledEditorWork): void {
@@ -288,6 +354,13 @@ export class EditorWorkScheduler {
     work.timer = null
   }
 
+  private clearQueueTimer(): void {
+    if (this.queueTimer === null) return
+
+    this.clearTimer(this.queueTimer)
+    this.queueTimer = null
+  }
+
   private clearBudgetTimer(work: ScheduledEditorWork): void {
     if (work.budgetTimer === null) return
 
@@ -375,6 +448,12 @@ function normalizeDelayMs(delayMs: number | undefined): number {
 function normalizeBudgetMs(budgetMs: number | undefined): number | null {
   if (!budgetMs || budgetMs <= 0) return null
   return budgetMs
+}
+
+function compareQueuedWork(left: ScheduledEditorWork, right: ScheduledEditorWork): number {
+  const priorityDelta = PRIORITY_RANK[left.priority] - PRIORITY_RANK[right.priority]
+  if (priorityDelta !== 0) return priorityDelta
+  return left.token - right.token
 }
 
 function isPromiseLike(value: unknown): value is Promise<unknown> {

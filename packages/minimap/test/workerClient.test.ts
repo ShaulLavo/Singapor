@@ -265,6 +265,7 @@ describe('MinimapWorkerClient', () => {
         documentEdit(firstEdit, 'line 1x\nline 2\nline 3'),
       )
       runtime.flushAnimationFrames()
+      const inFlightSequence = lastRenderSequence(worker)
       worker.postMessage.mockClear()
 
       const secondEdit: TextEdit = { from: 7, to: 7, text: 'y' }
@@ -283,7 +284,7 @@ describe('MinimapWorkerClient', () => {
 
       expect(worker.postMessage).not.toHaveBeenCalled()
 
-      worker.send(renderedResponse(2))
+      worker.send(renderedResponse(inFlightSequence))
       runtime.flushAnimationFrames()
 
       const requests = worker.postMessage.mock.calls.map((call) => call[0] as MinimapWorkerRequest)
@@ -434,7 +435,7 @@ describe('MinimapWorkerClient', () => {
         documentEdit(edit, 'line 1x\nline 2\nline 3'),
       )
       runtime.flushAnimationFrames()
-      worker.send(renderedResponse(2))
+      worker.send(renderedResponse(lastRenderSequence(worker)))
       worker.postMessage.mockClear()
 
       client.update(
@@ -554,6 +555,16 @@ function renderedResponse(sequence: number): MinimapWorkerResponse {
   }
 }
 
+function lastRenderSequence(worker: MockWorker): number {
+  const request = worker.postMessage.mock.calls
+    .map((call) => call[0] as MinimapWorkerRequest)
+    .findLast((item): item is Extract<MinimapWorkerRequest, { type: 'render' }> => {
+      return item.type === 'render'
+    })
+  if (!request) throw new Error('Expected a render request')
+  return request.sequence
+}
+
 function installMinimapRuntime(): {
   readonly workers: MockWorker[]
   readonly flushFrames: () => void
@@ -630,22 +641,23 @@ function installMinimapRuntime(): {
     value: () => ({}),
   })
 
+  const flushTimerQueue = () => {
+    while (timers.size > 0) {
+      for (const [timer, callback] of Array.from(timers)) {
+        timers.delete(timer)
+        callback()
+      }
+    }
+  }
+
   return {
     workers,
     flushFrames: () => {
       for (const frame of frames.splice(0)) frame()
     },
-    flushTimers: () => {
-      for (const [timer, callback] of Array.from(timers)) {
-        timers.delete(timer)
-        callback()
-      }
-    },
+    flushTimers: flushTimerQueue,
     flushAnimationFrames: () => {
-      for (const [timer, callback] of Array.from(timers)) {
-        timers.delete(timer)
-        callback()
-      }
+      flushTimerQueue()
       for (const frame of frames.splice(0)) frame()
     },
     restore: () => {

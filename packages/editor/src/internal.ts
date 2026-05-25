@@ -13,7 +13,19 @@ export {
   withDocumentSessionChangeTimings,
 } from './documentSession'
 export { defineLazyFullTextProperty } from './documentTextSnapshot'
+export { EditorWorkScheduler } from './editor/workScheduler'
 export { VirtualizedTextView } from './virtualization'
+export type {
+  EditorScheduleWorkOptions,
+  EditorScheduledWorkHandle,
+  EditorWorkContext,
+  EditorWorkEvent,
+  EditorWorkEventType,
+  EditorWorkPriority,
+  EditorWorkSchedulerOptions,
+  EditorWorkTags,
+  EditorWorkTaskClass,
+} from './editor/workScheduler'
 export type { AnchorSelection, SelectionSet } from './selections'
 export type { PieceTableAnchor } from './pieceTable'
 export type { VirtualizedTextViewState } from './virtualization'

@@ -98,6 +98,16 @@ export type EditorSyntaxDegradedState =
       readonly kind: 'request-failed'
       readonly message: string
     }
+  | {
+      readonly kind: 'optional-phase-failed'
+      readonly phase: string
+      readonly message: string
+    }
+  | {
+      readonly kind: 'injection-failed'
+      readonly phase: string
+      readonly message: string
+    }
 
 export type EditorSyntaxResult = {
   readonly captures: readonly EditorSyntaxCapture[]

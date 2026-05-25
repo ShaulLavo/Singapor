@@ -24,6 +24,10 @@ async function flushMicrotasks(): Promise<void> {
   await Promise.resolve()
 }
 
+function flushSchedulerTicks(count = 4): void {
+  for (let index = 0; index < count; index += 1) vi.runOnlyPendingTimers()
+}
+
 describe('EditorWorkScheduler', () => {
   afterEach(() => {
     vi.useRealTimers()
@@ -55,6 +59,7 @@ describe('EditorWorkScheduler', () => {
     expect(calls).toEqual([])
 
     vi.advanceTimersByTime(1)
+    flushSchedulerTicks()
     expect(calls).toEqual(['second'])
     expect(events.map((event) => event.type)).toEqual([
       'scheduled',
@@ -86,11 +91,13 @@ describe('EditorWorkScheduler', () => {
     })
 
     vi.advanceTimersByTime(10)
+    flushSchedulerTicks()
     expect(calls).toEqual([])
     expect(events.at(-1)).toMatchObject({ type: 'dropped', reason: 'stale-before-start' })
   })
 
   it('cancels running async work when replacement is scheduled', async () => {
+    vi.useFakeTimers()
     const first = createDeferred<string>()
     const second = createDeferred<string>()
     const applied: string[] = []
@@ -106,12 +113,14 @@ describe('EditorWorkScheduler', () => {
       },
       apply: (result) => applied.push(result),
     })
+    flushSchedulerTicks(1)
     scheduler.schedule({
       key: 'editor.syntax.document',
       taskClass: 'background-derived',
       run: () => second.promise,
       apply: (result) => applied.push(result),
     })
+    flushSchedulerTicks(1)
 
     expect(firstSignal?.aborted).toBe(true)
     first.resolve('first')
@@ -146,6 +155,7 @@ describe('EditorWorkScheduler', () => {
       },
     })
 
+    flushSchedulerTicks(1)
     vi.advanceTimersByTime(20)
     expect(signal?.aborted).toBe(true)
     expect(cancelled).toBe(true)
@@ -154,5 +164,31 @@ describe('EditorWorkScheduler', () => {
     deferred.resolve('late')
     await flushMicrotasks()
     expect(applied).toEqual([])
+  })
+
+  it('starts queued work by priority', () => {
+    vi.useFakeTimers()
+    const calls: string[] = []
+    const scheduler = new EditorWorkScheduler()
+
+    scheduler.schedule({
+      key: 'idle',
+      taskClass: 'idle-cache',
+      run: () => calls.push('idle'),
+    })
+    scheduler.schedule({
+      key: 'visible',
+      taskClass: 'visible-render',
+      run: () => calls.push('visible'),
+    })
+    scheduler.schedule({
+      key: 'background',
+      taskClass: 'background-derived',
+      run: () => calls.push('background'),
+    })
+
+    expect(calls).toEqual([])
+    flushSchedulerTicks()
+    expect(calls).toEqual(['visible', 'background', 'idle'])
   })
 })
