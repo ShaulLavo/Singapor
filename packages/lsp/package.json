@@ -13,7 +13,7 @@
     "typecheck": "tsgo --noEmit",
     "lint": "oxlint .",
     "format": "oxfmt --write .",
-    "format:check": "oxfmt ."
+    "format:check": "oxfmt --check ."
   },
   "dependencies": {
     "vscode-languageserver-protocol": "^3.17.5"
