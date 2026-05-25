@@ -81,4 +81,24 @@ describe('editor input state machine', () => {
 
     expect(canWaitForNativeTextInput(state, { targetIsHiddenInput: true, text: 'x' })).toBe(false)
   })
+
+  it('tracks paste and drop pending text sources', () => {
+    let state = createEditorInputState()
+
+    state = transitionEditorInputState(state, { text: 'pasted', type: 'paste-pending' })
+    expect(state).toMatchObject({
+      pendingText: 'pasted',
+      pendingTextSource: 'paste',
+      phase: 'beforeinput-pending',
+    })
+
+    state = transitionEditorInputState(state, { type: 'transaction-committed' })
+    state = transitionEditorInputState(state, { text: 'dropped', type: 'drop-pending' })
+
+    expect(state).toMatchObject({
+      pendingText: 'dropped',
+      pendingTextSource: 'drop',
+      phase: 'beforeinput-pending',
+    })
+  })
 })

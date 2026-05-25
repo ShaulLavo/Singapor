@@ -287,6 +287,34 @@ function rowTextNode(row = 0): Text {
   return walker.nextNode() as Text
 }
 
+function installCaretRangeFromPoint(textNode: Text, offset: number): () => void {
+  const doc = document as Document & {
+    caretRangeFromPoint?: (x: number, y: number) => Range | null
+  }
+  const originalCaretRangeFromPoint = doc.caretRangeFromPoint
+  Object.defineProperty(document, 'caretRangeFromPoint', {
+    configurable: true,
+    value: () => {
+      const range = document.createRange()
+      range.setStart(textNode, offset)
+      range.setEnd(textNode, offset)
+      return range
+    },
+  })
+
+  return () => {
+    if (originalCaretRangeFromPoint) {
+      Object.defineProperty(document, 'caretRangeFromPoint', {
+        configurable: true,
+        value: originalCaretRangeFromPoint,
+      })
+      return
+    }
+
+    Reflect.deleteProperty(document, 'caretRangeFromPoint')
+  }
+}
+
 function setCollapsedDomSelection(offset: number): void {
   const range = document.createRange()
   const textNode = rowTextNode()
@@ -332,6 +360,19 @@ function createPasteEvent(text: string): ClipboardEvent {
   }
   const event = new Event('paste', { bubbles: true, cancelable: true }) as ClipboardEvent
   Object.defineProperty(event, 'clipboardData', { configurable: true, value: clipboardData })
+  return event
+}
+
+function createDropEvent(text: string, init: MouseEventInit = {}): DragEvent {
+  const dataTransfer = {
+    getData: (format: string): string => (format === 'text/plain' ? text : ''),
+  }
+  const event = new MouseEvent('drop', {
+    bubbles: true,
+    cancelable: true,
+    ...init,
+  }) as DragEvent
+  Object.defineProperty(event, 'dataTransfer', { configurable: true, value: dataTransfer })
   return event
 }
 
@@ -2692,6 +2733,41 @@ describe('Editor', () => {
       expect(editor.materializeFullText()).toBe(pasted)
       expect(editor.getState().cursor).toEqual({ row: 7, column: 6 })
       expect(editorRoot().scrollTop).toBeGreaterThan(0)
+    })
+
+    it('inserts dropped plain text at the hit-tested offset', () => {
+      const session = createDocumentSession('abcd')
+      session.setSelection(0)
+      editor.attachSession(session)
+      mockEditorViewport(editorRoot(), 120, 40)
+      const restoreCaretRangeFromPoint = installCaretRangeFromPoint(rowTextNode(), 2)
+
+      try {
+        const drop = createDropEvent('X', { clientX: 20, clientY: 10 })
+        editorRoot().dispatchEvent(drop)
+
+        expect(drop.defaultPrevented).toBe(true)
+        expect(session.materializeFullText()).toBe('abXcd')
+        expect(resolvedSelectionRanges(session)).toEqual([{ anchor: 3, end: 3, head: 3, start: 3 }])
+
+        editor.dispatchCommand('undo')
+
+        expect(session.materializeFullText()).toBe('abcd')
+        expect(resolvedSelectionRanges(session)).toEqual([{ anchor: 2, end: 2, head: 2, start: 2 }])
+      } finally {
+        restoreCaretRangeFromPoint()
+      }
+    })
+
+    it('prevents empty drops without editing', () => {
+      const session = createDocumentSession('abcd')
+      editor.attachSession(session)
+
+      const drop = createDropEvent('', { clientX: 20, clientY: 10 })
+      editorRoot().dispatchEvent(drop)
+
+      expect(drop.defaultPrevented).toBe(true)
+      expect(session.materializeFullText()).toBe('abcd')
     })
 
     it('keeps a visible row stable when pasting single-line text', () => {

@@ -869,13 +869,13 @@ export class InputSelectionController {
     if (event.inputType !== 'insertText' && event.inputType !== 'insertLineBreak') return
 
     this.cancelPendingKeyboardTextFallback()
-    this.transitionInputState({ type: 'beforeinput-pending' })
     const start = eventStartMs(event)
     const selectionChange = measureEditorPerformance('input.selectionChangeBeforeEdit', () =>
       this.selectionChangeBeforeEdit(),
     )
     event.preventDefault()
     const inserted = event.inputType === 'insertLineBreak' ? '\n' : text
+    this.transitionInputState({ text: inserted, type: 'beforeinput-pending' })
     const textChange = measureEditorPerformance('session.applyText', () =>
       session.applyText(inserted),
     )
@@ -898,6 +898,8 @@ export class InputSelectionController {
     const text = event.clipboardData?.getData('text/plain') ?? ''
     if (text.length === 0) return
 
+    this.cancelPendingKeyboardTextFallback()
+    this.transitionInputState({ text, type: 'paste-pending' })
     const start = eventStartMs(event)
     const selectionChange = this.selectionChangeBeforeEdit()
     event.preventDefault()
@@ -910,9 +912,30 @@ export class InputSelectionController {
   }
 
   private handleDrop = (event: DragEvent): void => {
-    if (this.options.canEditDocument()) return
+    const session = this.session
+    if (!session) return
 
+    this.cancelPendingKeyboardTextFallback()
     event.preventDefault()
+    if (!this.options.canEditDocument()) return
+
+    const text = dropPlainText(event)
+    if (text.length === 0) return
+
+    const offset = this.textOffsetFromPoint(event.clientX, event.clientY)
+    if (offset === null) return
+
+    this.transitionInputState({ text, type: 'drop-pending' })
+    const start = eventStartMs(event)
+    const selectionChange = session.setSelection(offset)
+    this.markSessionSelectionForNextInput()
+    const textChange = session.applyText(text)
+    const change = mergeChangeTimings(textChange, selectionChange)
+    this.transitionInputState({ type: 'transaction-committed' })
+    this.options.applySessionChange(change, 'input.drop', start, {
+      revealBlock: pasteRevealBlock(text),
+      revealOffset: this.primarySelectionHeadOffset(change),
+    })
   }
 
   private handleCopy = (event: ClipboardEvent): void => {
@@ -1275,4 +1298,13 @@ export class InputSelectionController {
 function pasteRevealBlock(text: string): SessionChangeOptions['revealBlock'] {
   if (text.includes('\n') || text.includes('\r')) return 'end'
   return 'nearest'
+}
+
+function dropPlainText(event: DragEvent): string {
+  const transfer = event.dataTransfer
+  if (!transfer) return ''
+
+  const plainText = transfer.getData('text/plain')
+  if (plainText.length > 0) return plainText
+  return transfer.getData('text')
 }
