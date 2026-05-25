@@ -3,6 +3,9 @@ import {
   canWaitForNativeTextInput,
   createEditorInputState,
   editorInputStateOwnership,
+  hasPendingKeyboardTextFallbackForGeneration,
+  pendingKeyboardTextFallback,
+  shouldCommitCompositionEnd,
   transitionEditorInputState,
 } from '../src/editor/inputState'
 
@@ -51,6 +54,12 @@ describe('editor input state machine', () => {
       pendingText: 'AB',
       phase: 'fallback-pending',
     })
+    expect(pendingKeyboardTextFallback(state)).toEqual({
+      generation: 0,
+      startMs: 10,
+      text: 'AB',
+    })
+    expect(hasPendingKeyboardTextFallbackForGeneration(state, 0)).toBe(true)
 
     state = transitionEditorInputState(state, { type: 'native-input-observed' })
 
@@ -61,6 +70,7 @@ describe('editor input state machine', () => {
       pendingText: '',
       phase: 'native-input-observed',
     })
+    expect(pendingKeyboardTextFallback(state)).toBeNull()
   })
 
   it('makes keyboard fallback waiting explicit', () => {
@@ -99,6 +109,29 @@ describe('editor input state machine', () => {
       pendingText: 'dropped',
       pendingTextSource: 'drop',
       phase: 'beforeinput-pending',
+    })
+  })
+
+  it('commits compositionend only when composition text was not already handled', () => {
+    let state = createEditorInputState()
+
+    state = transitionEditorInputState(state, { type: 'composition-start' })
+    state = transitionEditorInputState(state, { text: '文', type: 'composition-update' })
+
+    expect(shouldCommitCompositionEnd(state, state.compositionText)).toBe(true)
+
+    state = transitionEditorInputState(state, { text: '文', type: 'composition-pending' })
+    state = transitionEditorInputState(state, { type: 'transaction-committed' })
+
+    expect(shouldCommitCompositionEnd(state, '文')).toBe(false)
+
+    state = transitionEditorInputState(state, { type: 'composition-end' })
+
+    expect(state).toMatchObject({
+      compositionActive: false,
+      compositionCommitted: false,
+      compositionText: '',
+      phase: 'idle',
     })
   })
 })

@@ -376,6 +376,12 @@ function createDropEvent(text: string, init: MouseEventInit = {}): DragEvent {
   return event
 }
 
+function createCompositionEvent(type: string, data = ''): CompositionEvent {
+  const event = new Event(type, { bubbles: true }) as CompositionEvent
+  Object.defineProperty(event, 'data', { configurable: true, value: data })
+  return event
+}
+
 function createCopyEvent(): {
   readonly event: ClipboardEvent
   readonly formatCount: () => number
@@ -2447,18 +2453,52 @@ describe('Editor', () => {
       editor.attachSession(session)
       editor.focus()
 
-      editorInput().dispatchEvent(new Event('compositionstart', { bubbles: true }))
+      editorInput().dispatchEvent(createCompositionEvent('compositionstart'))
       dispatchInputKey('X')
       await flushTimers()
 
       expect(session.materializeFullText()).toBe('abc')
 
-      editorInput().dispatchEvent(new Event('compositionend', { bubbles: true }))
+      editorInput().dispatchEvent(createCompositionEvent('compositionend'))
       dispatchInputKey('X')
       await flushTimers()
 
       expect(session.materializeFullText()).toBe('abcX')
       expect(editor.materializeFullText()).toBe('abcX')
+    })
+
+    it('commits compositionend data when final beforeinput is missing', () => {
+      const changes: DocumentSessionChange[] = []
+      editor.dispose()
+      editor = new Editor(container, {
+        onChange: (_state, change) => {
+          if (change) changes.push(change)
+        },
+      })
+      const session = createDocumentSession('abc')
+      editor.attachSession(session)
+      editor.focus()
+
+      editorInput().dispatchEvent(createCompositionEvent('compositionstart'))
+      editorInput().dispatchEvent(createCompositionEvent('compositionupdate', '文'))
+      editorInput().dispatchEvent(createCompositionEvent('compositionend'))
+
+      expect(session.materializeFullText()).toBe('abc文')
+      expect(editor.materializeFullText()).toBe('abc文')
+      expect(changes.at(-1)?.timings.some(({ name }) => name === 'input.composition')).toBe(true)
+    })
+
+    it('does not duplicate composition text after beforeinput commits it', () => {
+      const session = createDocumentSession('abc')
+      editor.attachSession(session)
+      editor.focus()
+
+      editorInput().dispatchEvent(createCompositionEvent('compositionstart'))
+      editorInput().dispatchEvent(createInsertEvent('文'))
+      editorInput().dispatchEvent(createCompositionEvent('compositionend', '文'))
+
+      expect(session.materializeFullText()).toBe('abc文')
+      expect(editor.materializeFullText()).toBe('abc文')
     })
 
     it('clears pending keydown fallback on dispose', async () => {

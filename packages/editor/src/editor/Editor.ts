@@ -104,6 +104,7 @@ import {
 const RAPID_INPUT_SECONDARY_WORK_DELAY_MS = 150
 const RAPID_INPUT_TIMING_NAMES = new Set([
   'input.beforeinput',
+  'input.composition',
   'input.keydownFallback',
   'input.backspace',
   'input.delete',
