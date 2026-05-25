@@ -7,6 +7,7 @@ export {
   createMergeConflictDocumentText,
   createMergeConflictPlugin,
   Editor,
+  EDITOR_MERGE_CONFLICT_FEATURE,
   EDITOR_MERGE_CONFLICT_FEATURE_ID,
   parseMergeConflicts,
   resolveMergeConflict,
@@ -33,7 +34,13 @@ export {
   pointToOffset,
   resolveAnchor,
 } from './public/document'
-export { EDITOR_MINIMAP_FEATURE_ID } from './public/extensions'
+export {
+  createEditorCapabilityToken,
+  EDITOR_FIND_FEATURE,
+  EDITOR_FIND_FEATURE_ID,
+  EDITOR_MINIMAP_FEATURE,
+  EDITOR_MINIMAP_FEATURE_ID,
+} from './public/extensions'
 export { applyEditorTheme, editorThemesEqual, mergeEditorThemes } from './public/rendering'
 export {
   createEditorSyntaxSession,
@@ -114,6 +121,7 @@ export type {
 } from './editor/keymap'
 export type {
   EditorCommandHandler,
+  EditorCapabilityToken,
   EditorDisposable,
   EditorFeatureContribution,
   EditorFeatureContributionContext,

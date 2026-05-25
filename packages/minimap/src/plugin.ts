@@ -11,7 +11,7 @@ import type {
   EditorViewContributionUpdateKind,
   EditorViewSnapshot,
 } from '@editor/core/extensions'
-import { EDITOR_MINIMAP_FEATURE_ID } from '@editor/core/extensions'
+import { EDITOR_MINIMAP_FEATURE } from '@editor/core/extensions'
 import { resolveMinimapOptions } from './options'
 import type { EditorMinimapOptions, ResolvedMinimapOptions } from './types'
 import { canUseMinimapWorker, MinimapWorkerClient, type MinimapHost } from './workerClient'
@@ -44,10 +44,7 @@ function createMinimapFeatureContribution(
   context: EditorFeatureContributionContext,
   decorations: MinimapDecorationRegistry,
 ): EditorFeatureContribution {
-  const registration = context.registerFeature<EditorMinimapFeature>(
-    EDITOR_MINIMAP_FEATURE_ID,
-    decorations,
-  )
+  const registration = context.registerFeature(EDITOR_MINIMAP_FEATURE, decorations)
 
   return {
     dispose: () => registration.dispose(),

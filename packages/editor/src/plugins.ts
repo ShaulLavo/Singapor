@@ -25,6 +25,18 @@ export type EditorDisposable = {
   dispose(): void
 }
 
+export type EditorCapabilityToken<T> = {
+  readonly id: string
+  readonly __capability?: T
+}
+
+export function createEditorCapabilityToken<T>(id: string): EditorCapabilityToken<T> {
+  const normalized = id.trim()
+  if (!normalized) throw new Error('Editor capability token id cannot be empty')
+
+  return Object.freeze({ id: normalized }) as EditorCapabilityToken<T>
+}
+
 export type EditorLogLevel = 'debug' | 'info' | 'warn' | 'error'
 
 export type EditorLogError = {
@@ -90,6 +102,9 @@ export type EditorMinimapFeature = {
   getDecorations(): readonly EditorMinimapDecoration[]
   subscribe(listener: () => void): EditorDisposable
 }
+
+export const EDITOR_MINIMAP_FEATURE =
+  createEditorCapabilityToken<EditorMinimapFeature>(EDITOR_MINIMAP_FEATURE_ID)
 
 export type EditorHighlightResult = {
   readonly tokens: readonly EditorToken[]
@@ -175,6 +190,8 @@ export type EditorViewContributionContext = {
   readonly scrollElement: HTMLDivElement
   readonly highlightPrefix?: string
   getSnapshot(): EditorViewSnapshot
+  getFeature?<T>(token: EditorCapabilityToken<T>): T | null
+  /** @deprecated Use typed editor capability tokens. */
   getFeature?<T>(id: string): T | null
   log?(event: EditorLogInput): void
   revealLine(row: number): void
@@ -249,6 +266,8 @@ export type EditorFeatureContributionContext = {
   ): void
   clearRowDecorations(sourceId: string): void
   registerCommand(command: EditorCommandId, handler: EditorCommandHandler): EditorDisposable
+  registerFeature<T>(token: EditorCapabilityToken<T>, feature: T): EditorDisposable
+  /** @deprecated Use typed editor capability tokens. */
   registerFeature<T>(id: string, feature: T): EditorDisposable
 }
 
@@ -344,6 +363,11 @@ type ActiveEditorPlugin = {
   disposable: EditorDisposable | null
 }
 
+type EditorPluginActivation = {
+  readonly activated: boolean
+  readonly disposable: EditorDisposable | null
+}
+
 export class EditorPluginHost implements EditorDisposable {
   private readonly loggers: EditorLogger[] = []
   private readonly highlighters: EditorHighlighterProvider[] = []
@@ -364,6 +388,7 @@ export class EditorPluginHost implements EditorDisposable {
   private readonly activePlugins = new Map<EditorPlugin, ActiveEditorPlugin>()
   private readonly managedPlugins = new Set<EditorPlugin>()
   private readonly manualPluginReferences = new Map<EditorPlugin, number>()
+  private readonly activationRegistrationStack: EditorDisposable[][] = []
   private readonly context = this.createContext()
   private events: EditorPluginHostEvents = {}
 
@@ -376,7 +401,8 @@ export class EditorPluginHost implements EditorDisposable {
   }
 
   public addPlugin(plugin: EditorPlugin): EditorDisposable {
-    this.retainPlugin(plugin)
+    if (!this.retainPlugin(plugin)) return disposableOnce(() => undefined)
+
     this.manualPluginReferences.set(plugin, this.manualReferenceCount(plugin) + 1)
 
     return disposableOnce(() => this.releaseManualPlugin(plugin))
@@ -401,8 +427,9 @@ export class EditorPluginHost implements EditorDisposable {
     for (const plugin of nextPlugins) {
       if (this.managedPlugins.has(plugin)) continue
 
+      if (!this.retainPlugin(plugin)) continue
+
       this.managedPlugins.add(plugin)
-      this.retainPlugin(plugin)
     }
   }
 
@@ -528,17 +555,21 @@ export class EditorPluginHost implements EditorDisposable {
     this.injectedTextRowProviders.length = 0
   }
 
-  private retainPlugin(plugin: EditorPlugin): void {
+  private retainPlugin(plugin: EditorPlugin): boolean {
     const activePlugin = this.activePlugins.get(plugin)
     if (activePlugin) {
       activePlugin.references += 1
-      return
+      return true
     }
+
+    const activation = this.activatePlugin(plugin)
+    if (!activation.activated) return false
 
     this.activePlugins.set(plugin, {
       references: 1,
-      disposable: this.activatePlugin(plugin),
+      disposable: activation.disposable,
     })
+    return true
   }
 
   private releasePlugin(plugin: EditorPlugin): void {
@@ -551,15 +582,24 @@ export class EditorPluginHost implements EditorDisposable {
     this.disposeActivePlugin(plugin)
   }
 
-  private activatePlugin(plugin: EditorPlugin): EditorDisposable | null {
+  private activatePlugin(plugin: EditorPlugin): EditorPluginActivation {
     const start = nowMs()
+    const registrations: EditorDisposable[] = []
+    this.activationRegistrationStack.push(registrations)
+
     try {
-      const disposable = disposableFromActivationResult(plugin.activate(this.context))
+      const disposable = activationDisposableFromResult(
+        plugin.activate(this.context),
+        registrations,
+      )
       this.events.onPluginActivated?.(pluginName(plugin), nowMs() - start)
-      return disposable
+      return { activated: true, disposable }
     } catch (error) {
+      disposeAll(registrations)
       this.events.onPluginActivationFailed?.(pluginName(plugin), error, nowMs() - start)
-      throw error
+      return { activated: false, disposable: null }
+    } finally {
+      this.activationRegistrationStack.pop()
     }
   }
 
@@ -631,9 +671,7 @@ export class EditorPluginHost implements EditorDisposable {
   private registerLogger(logger: EditorLogger): EditorDisposable {
     this.loggers.push(logger)
 
-    return {
-      dispose: () => this.unregisterLogger(logger),
-    }
+    return this.trackActivationRegistration(disposableOnce(() => this.unregisterLogger(logger)))
   }
 
   private unregisterLogger(logger: EditorLogger): void {
@@ -645,11 +683,12 @@ export class EditorPluginHost implements EditorDisposable {
 
   private registerHighlighter(provider: EditorHighlighterProvider): EditorDisposable {
     this.highlighters.push(provider)
-    this.events.onHighlighterProvidersChanged?.()
+    const disposable = this.trackActivationRegistration(
+      disposableOnce(() => this.unregisterHighlighter(provider)),
+    )
+    notifyRegistrationAdded(disposable, () => this.events.onHighlighterProvidersChanged?.())
 
-    return {
-      dispose: () => this.unregisterHighlighter(provider),
-    }
+    return disposable
   }
 
   private unregisterHighlighter(provider: EditorHighlighterProvider): void {
@@ -662,11 +701,12 @@ export class EditorPluginHost implements EditorDisposable {
 
   private registerSyntaxProvider(provider: EditorSyntaxProvider): EditorDisposable {
     this.syntaxProviders.push(provider)
-    this.events.onSyntaxProvidersChanged?.()
+    const disposable = this.trackActivationRegistration(
+      disposableOnce(() => this.unregisterSyntaxProvider(provider)),
+    )
+    notifyRegistrationAdded(disposable, () => this.events.onSyntaxProvidersChanged?.())
 
-    return {
-      dispose: () => this.unregisterSyntaxProvider(provider),
-    }
+    return disposable
   }
 
   private unregisterSyntaxProvider(provider: EditorSyntaxProvider): void {
@@ -679,11 +719,18 @@ export class EditorPluginHost implements EditorDisposable {
 
   private registerViewContribution(provider: EditorViewContributionProvider): EditorDisposable {
     this.viewContributions.push(provider)
-    this.events.onViewContributionProviderAdded?.(provider)
+    const disposable = this.trackActivationRegistration(
+      disposableOnce(() => this.unregisterViewContribution(provider)),
+    )
 
-    return {
-      dispose: () => this.unregisterViewContribution(provider),
+    try {
+      this.events.onViewContributionProviderAdded?.(provider)
+    } catch (error) {
+      disposable.dispose()
+      throw error
     }
+
+    return disposable
   }
 
   private unregisterViewContribution(provider: EditorViewContributionProvider): void {
@@ -698,11 +745,18 @@ export class EditorPluginHost implements EditorDisposable {
     provider: EditorFeatureContributionProvider,
   ): EditorDisposable {
     this.editorFeatureContributions.push(provider)
-    this.events.onEditorFeatureContributionProviderAdded?.(provider)
+    const disposable = this.trackActivationRegistration(
+      disposableOnce(() => this.unregisterEditorFeatureContribution(provider)),
+    )
 
-    return {
-      dispose: () => this.unregisterEditorFeatureContribution(provider),
+    try {
+      this.events.onEditorFeatureContributionProviderAdded?.(provider)
+    } catch (error) {
+      disposable.dispose()
+      throw error
     }
+
+    return disposable
   }
 
   private unregisterEditorFeatureContribution(provider: EditorFeatureContributionProvider): void {
@@ -715,11 +769,12 @@ export class EditorPluginHost implements EditorDisposable {
 
   private registerGutterContribution(contribution: EditorGutterContribution): EditorDisposable {
     this.gutterContributions.push(contribution)
-    this.events.onGutterContributionsChanged?.()
+    const disposable = this.trackActivationRegistration(
+      disposableOnce(() => this.unregisterGutterContribution(contribution)),
+    )
+    notifyRegistrationAdded(disposable, () => this.events.onGutterContributionsChanged?.())
 
-    return {
-      dispose: () => this.unregisterGutterContribution(contribution),
-    }
+    return disposable
   }
 
   private unregisterGutterContribution(contribution: EditorGutterContribution): void {
@@ -738,11 +793,12 @@ export class EditorPluginHost implements EditorDisposable {
     if (invalidationDisposable) {
       this.blockProviderInvalidationDisposables.set(provider, invalidationDisposable)
     }
-    this.events.onBlockProvidersChanged?.()
+    const disposable = this.trackActivationRegistration(
+      disposableOnce(() => this.unregisterBlockProvider(provider)),
+    )
+    notifyRegistrationAdded(disposable, () => this.events.onBlockProvidersChanged?.())
 
-    return {
-      dispose: () => this.unregisterBlockProvider(provider),
-    }
+    return disposable
   }
 
   private unregisterBlockProvider(provider: EditorBlockProvider): void {
@@ -765,11 +821,12 @@ export class EditorPluginHost implements EditorDisposable {
     if (invalidationDisposable) {
       this.injectedTextRowProviderInvalidationDisposables.set(provider, invalidationDisposable)
     }
-    this.events.onInjectedTextRowProvidersChanged?.()
+    const disposable = this.trackActivationRegistration(
+      disposableOnce(() => this.unregisterInjectedTextRowProvider(provider)),
+    )
+    notifyRegistrationAdded(disposable, () => this.events.onInjectedTextRowProvidersChanged?.())
 
-    return {
-      dispose: () => this.unregisterInjectedTextRowProvider(provider),
-    }
+    return disposable
   }
 
   private unregisterInjectedTextRowProvider(provider: EditorInjectedTextRowProvider): void {
@@ -781,6 +838,30 @@ export class EditorPluginHost implements EditorDisposable {
     this.injectedTextRowProviderInvalidationDisposables.delete(provider)
     this.events.onInjectedTextRowProvidersChanged?.()
   }
+
+  private trackActivationRegistration(disposable: EditorDisposable): EditorDisposable {
+    const registrations = this.currentActivationRegistrations()
+    if (registrations) registrations.push(disposable)
+
+    return disposable
+  }
+
+  private currentActivationRegistrations(): EditorDisposable[] | null {
+    return this.activationRegistrationStack.at(-1) ?? null
+  }
+}
+
+function activationDisposableFromResult(
+  result: void | EditorDisposable | readonly EditorDisposable[],
+  registrations: readonly EditorDisposable[],
+): EditorDisposable | null {
+  const disposable = disposableFromActivationResult(result)
+  if (!disposable && registrations.length === 0) return null
+
+  return disposableOnce(() => {
+    disposable?.dispose()
+    disposeAll(registrations)
+  })
 }
 
 function disposableFromActivationResult(
@@ -808,6 +889,15 @@ function disposableOnce(dispose: () => void): EditorDisposable {
       disposed = true
       dispose()
     },
+  }
+}
+
+function notifyRegistrationAdded(disposable: EditorDisposable, notify: () => void): void {
+  try {
+    notify()
+  } catch (error) {
+    disposable.dispose()
+    throw error
   }
 }
 

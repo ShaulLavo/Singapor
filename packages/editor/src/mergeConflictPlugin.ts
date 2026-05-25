@@ -15,6 +15,7 @@ import type {
   EditorViewContributionUpdateKind,
   EditorViewSnapshot,
 } from './plugins'
+import { createEditorCapabilityToken } from './plugins'
 import type { TextEdit } from './tokens'
 import type { VirtualizedTextHighlightStyle } from './virtualization'
 
@@ -25,6 +26,9 @@ export type EditorMergeConflictFeature = {
   resolveConflict(index: number, resolution: MergeConflictResolution): boolean
   revealConflict(index: number): boolean
 }
+
+export const EDITOR_MERGE_CONFLICT_FEATURE =
+  createEditorCapabilityToken<EditorMergeConflictFeature>(EDITOR_MERGE_CONFLICT_FEATURE_ID)
 
 export type EditorMergeConflictPluginOptions = {
   readonly actions?: boolean
@@ -389,7 +393,7 @@ function createMergeConflictFeatureContribution(
     resolveConflict: (index, resolution) => controller.resolveConflict(index, resolution),
     revealConflict: (index) => controller.revealConflict(index),
   }
-  const registration = context.registerFeature(EDITOR_MERGE_CONFLICT_FEATURE_ID, feature)
+  const registration = context.registerFeature(EDITOR_MERGE_CONFLICT_FEATURE, feature)
 
   return {
     handleEditorChange: (change) => controller.handleEditorChange(change),

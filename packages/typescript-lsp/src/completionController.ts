@@ -9,7 +9,7 @@ import type * as lsp from 'vscode-languageserver-protocol'
 
 import {
   COMPLETION_REQUEST_DEBOUNCE_MS,
-  TYPESCRIPT_LSP_COMPLETION_EDIT_FEATURE_ID,
+  TYPESCRIPT_LSP_COMPLETION_EDIT_FEATURE,
   completionAnchorRange,
   completionApplication,
   completionItems,
@@ -220,11 +220,7 @@ export class CompletionController {
   }
 
   private completionEditFeature(): TypeScriptLspCompletionEditFeature | null {
-    return (
-      this.context.getFeature?.<TypeScriptLspCompletionEditFeature>(
-        TYPESCRIPT_LSP_COMPLETION_EDIT_FEATURE_ID,
-      ) ?? null
-    )
+    return this.context.getFeature?.(TYPESCRIPT_LSP_COMPLETION_EDIT_FEATURE) ?? null
   }
 
   private cancelCompletionRequest(): void {

@@ -5,6 +5,7 @@ import type {
   EditorPlugin,
   EditorResolvedSelection,
 } from '@editor/core/extensions'
+import { EDITOR_FIND_FEATURE, EDITOR_FIND_FEATURE_ID } from '@editor/core/extensions'
 import type { EditorFindOptions } from './types'
 import {
   EditorFindController,
@@ -12,7 +13,7 @@ import {
   type EditorFindSelectionRange,
 } from './findController'
 
-export const EDITOR_FIND_FEATURE_ID = 'editor.find'
+export { EDITOR_FIND_FEATURE, EDITOR_FIND_FEATURE_ID }
 
 export type EditorFindFeature = {
   openFind(): boolean
@@ -80,7 +81,7 @@ function registerFindFeature(
   const feature = createFindFeature(controller)
 
   return [
-    context.registerFeature<EditorFindFeature>(EDITOR_FIND_FEATURE_ID, feature),
+    context.registerFeature(EDITOR_FIND_FEATURE, feature),
     context.registerCommand('find', () => controller.toggleFind()),
     context.registerCommand('findReplace', () => controller.openFindReplace()),
     context.registerCommand('findNext', () => controller.findNext()),

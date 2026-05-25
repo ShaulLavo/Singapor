@@ -1,5 +1,11 @@
-export { EDITOR_MINIMAP_FEATURE_ID } from '../plugins'
+export {
+  createEditorCapabilityToken,
+  EDITOR_MINIMAP_FEATURE,
+  EDITOR_MINIMAP_FEATURE_ID,
+} from '../plugins'
+export { EDITOR_FIND_FEATURE, EDITOR_FIND_FEATURE_ID } from '../editor/findFeature'
 export type {
+  EditorCapabilityToken,
   EditorCommandHandler,
   EditorDisposable,
   EditorFeatureContribution,

@@ -11,7 +11,7 @@ import type {
 } from '@editor/core/extensions'
 
 import {
-  TYPESCRIPT_LSP_COMPLETION_EDIT_FEATURE_ID,
+  TYPESCRIPT_LSP_COMPLETION_EDIT_FEATURE,
   type TypeScriptLspCompletionApplication,
   type TypeScriptLspCompletionEditFeature,
 } from './completion'
@@ -127,7 +127,7 @@ class TypeScriptLspCommandContribution implements EditorFeatureContribution {
       context.registerCommand(command.id, () => command.run(this.state)),
     )
     this.completionFeature = context.registerFeature(
-      TYPESCRIPT_LSP_COMPLETION_EDIT_FEATURE_ID,
+      TYPESCRIPT_LSP_COMPLETION_EDIT_FEATURE,
       completionEditFeature(context),
     )
   }

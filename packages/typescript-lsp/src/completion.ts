@@ -1,5 +1,6 @@
 import type { DocumentSessionChange, TextEdit } from '@editor/core/document'
 import type { EditorSelectionRange } from '@editor/core/extensions'
+import { createEditorCapabilityToken } from '@editor/core/extensions'
 import { lspPositionToOffset } from '@editor/lsp'
 import type * as lsp from 'vscode-languageserver-protocol'
 
@@ -10,6 +11,11 @@ export const COMPLETION_REQUEST_DEBOUNCE_MS = 80
 export type TypeScriptLspCompletionEditFeature = {
   applyCompletion(application: TypeScriptLspCompletionApplication): boolean
 }
+
+export const TYPESCRIPT_LSP_COMPLETION_EDIT_FEATURE =
+  createEditorCapabilityToken<TypeScriptLspCompletionEditFeature>(
+    TYPESCRIPT_LSP_COMPLETION_EDIT_FEATURE_ID,
+  )
 
 export type TypeScriptLspCompletionApplication = {
   readonly edits: readonly TextEdit[]

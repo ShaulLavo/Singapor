@@ -1,5 +1,5 @@
 import {
-  EDITOR_MINIMAP_FEATURE_ID,
+  EDITOR_MINIMAP_FEATURE,
   type EditorMinimapDecoration,
   type EditorMinimapFeature,
   type EditorViewContributionContext,
@@ -129,7 +129,7 @@ export class DiagnosticsPresenter {
   }
 
   private minimapFeature(): EditorMinimapFeature | null {
-    return this.context.getFeature?.<EditorMinimapFeature>(EDITOR_MINIMAP_FEATURE_ID) ?? null
+    return this.context.getFeature?.(EDITOR_MINIMAP_FEATURE) ?? null
   }
 }
 

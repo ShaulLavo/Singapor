@@ -9,7 +9,7 @@ import type {
   EditorViewContributionProvider,
   EditorViewSnapshot,
 } from '@editor/core/extensions'
-import { EDITOR_MINIMAP_FEATURE_ID } from '@editor/core/extensions'
+import { EDITOR_MINIMAP_FEATURE } from '@editor/core/extensions'
 import type { LspWebSocketLike, LspWorkerLike } from '@editor/lsp'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTypeScriptLspPlugin, type TypeScriptLspDiagnosticSummary } from '../src'
@@ -233,9 +233,7 @@ describe('createTypeScriptLspPlugin', () => {
         lineCount: 3,
         lineStarts: [0, 17, 40],
       }),
-    )
-    vi.mocked(context.getFeature!).mockImplementation((id) =>
-      id === EDITOR_MINIMAP_FEATURE_ID ? minimap : null,
+      { features: new Map([[EDITOR_MINIMAP_FEATURE, minimap]]) },
     )
     const plugin = createTypeScriptLspPlugin({
       diagnosticDelayMs: 0,
@@ -1199,7 +1197,7 @@ function activatePluginWithCommands(
 ): {
   readonly provider: EditorViewContributionProvider
   readonly commands: ReadonlyMap<EditorCommandId, EditorCommandHandler>
-  readonly features: ReadonlyMap<string, unknown>
+  readonly features: ReadonlyMap<unknown, unknown>
 }
 function activatePluginWithCommands(
   plugin: ReturnType<typeof createTypeScriptLspPlugin>,
@@ -1207,7 +1205,7 @@ function activatePluginWithCommands(
 ): {
   readonly provider: EditorViewContributionProvider
   readonly commands: ReadonlyMap<EditorCommandId, EditorCommandHandler>
-  readonly features: ReadonlyMap<string, unknown>
+  readonly features: ReadonlyMap<unknown, unknown>
 } {
   let provider: EditorViewContributionProvider | null = null
   const commands = new Map<EditorCommandId, EditorCommandHandler>()
@@ -1234,7 +1232,7 @@ function activatePluginWithCommands(
 
 type FeatureContributionContextOptions = {
   readonly container?: HTMLDivElement
-  readonly features?: Map<string, unknown>
+  readonly features?: Map<unknown, unknown>
   readonly applyEdits?: EditorFeatureContributionContext['applyEdits']
 }
 
@@ -1282,12 +1280,12 @@ function viewContributionContext(
   snapshot: EditorViewSnapshot,
   options: {
     readonly container?: HTMLDivElement
-    readonly features?: ReadonlyMap<string, unknown>
+    readonly features?: ReadonlyMap<unknown, unknown>
   } = {},
 ): EditorViewContributionContext {
   const element = options.container ?? document.createElement('div')
-  const getFeature = vi.fn((id: string): unknown | null => {
-    const feature = options.features?.get(id)
+  const getFeature = vi.fn((token: unknown): unknown | null => {
+    const feature = options.features?.get(token)
     return feature === undefined ? null : feature
   }) as EditorViewContributionContext['getFeature']
   return {

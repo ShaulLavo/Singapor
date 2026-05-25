@@ -2,11 +2,14 @@ import { Window } from 'happy-dom'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { createEditorLoggingPlugin } from '../logging'
 import type {
+  EditorCapabilityToken,
+  EditorDisposable,
   EditorGutterContribution,
   EditorLogEvent,
   EditorPlugin,
   EditorPluginContext,
 } from '../plugins'
+import { createEditorCapabilityToken, EditorPluginHost } from '../plugins'
 import type { EditorOptions } from './types'
 import { setHighlightRegistry } from './runtime'
 import { Editor } from './Editor'
@@ -149,6 +152,78 @@ describe('editor plugin lifecycle', () => {
     })
     editor.dispose()
   })
+
+  test('contains plugin activation failure and cleans partial registrations', () => {
+    const events: EditorLogEvent[] = []
+    const editor = createEditor({
+      plugins: [createEditorLoggingPlugin((event) => events.push(event))],
+    })
+    const contribution: EditorGutterContribution = {
+      id: 'failing-gutter',
+      createCell: (document) => document.createElement('span'),
+      width: () => 8,
+      updateCell: () => undefined,
+    }
+    const plugin: EditorPlugin = {
+      name: 'failing-plugin',
+      activate: (context) => {
+        context.registerGutterContribution(contribution)
+        throw new Error('activation failed')
+      },
+    }
+
+    const lease = editor.addPlugin(plugin)
+
+    expect(findGutterCells('failing-gutter')).toHaveLength(0)
+    expect(editor.removePlugin(plugin)).toBe(false)
+    expect(events.some((event) => event.action === 'editor.plugin.activation_failed')).toBe(true)
+
+    lease.dispose()
+    editor.dispose()
+  })
+
+  test('rejects duplicate capability registrations without removing the owner', () => {
+    const token = createEditorCapabilityToken<{ readonly owner: string }>('test.capability')
+    const events: EditorLogEvent[] = []
+    const editor = createEditor({
+      plugins: [createEditorLoggingPlugin((event) => events.push(event))],
+    })
+    const owner = createCapabilityPlugin(token, 'owner')
+    const conflictingToken = createEditorCapabilityToken<{ readonly owner: string }>(
+      'test.capability',
+    )
+    const conflicting = createCapabilityPlugin(conflictingToken, 'conflicting')
+
+    editor.addPlugin(owner)
+    editor.addPlugin(conflicting)
+
+    expect(readCapabilityOwner(editor, token)).toBe('owner')
+    expect(events.some((event) => event.action === 'editor.plugin.activation_failed')).toBe(true)
+
+    editor.dispose()
+  })
+
+  test('makes contribution registration disposal idempotent', () => {
+    const host = new EditorPluginHost()
+    let registration: EditorDisposable | null = null
+    const plugin: EditorPlugin = {
+      activate: (context) => {
+        registration = context.registerSyntaxProvider({ createSession: () => null })
+        return registration
+      },
+    }
+
+    const lease = host.addPlugin(plugin)
+    const activeRegistration = requireDisposable(registration)
+
+    expect(host.hasSyntaxProviders()).toBe(true)
+    activeRegistration.dispose()
+    activeRegistration.dispose()
+    expect(host.hasSyntaxProviders()).toBe(false)
+
+    lease.dispose()
+    host.dispose()
+  })
 })
 
 function createEditor(options: EditorOptions = {}): Editor {
@@ -232,6 +307,47 @@ function createContextCapturePlugin(contexts: EditorPluginContext[]): EditorPlug
       contexts.push(context)
     },
   }
+}
+
+function createCapabilityPlugin(
+  token: EditorCapabilityToken<{ readonly owner: string }>,
+  owner: string,
+): EditorPlugin {
+  return {
+    name: owner,
+    activate: (context) =>
+      context.registerEditorFeatureContribution({
+        createContribution: (featureContext) => {
+          const registration = featureContext.registerFeature(token, { owner })
+          return { dispose: () => registration.dispose() }
+        },
+      }),
+  }
+}
+
+function readCapabilityOwner(
+  editor: Editor,
+  token: EditorCapabilityToken<{ readonly owner: string }>,
+): string | null {
+  let owner: string | null = null
+  const plugin: EditorPlugin = {
+    activate: (context) =>
+      context.registerViewContribution({
+        createContribution: (viewContext) => {
+          owner = viewContext.getFeature?.(token)?.owner ?? null
+          return { update: () => undefined, dispose: () => undefined }
+        },
+      }),
+  }
+
+  const lease = editor.addPlugin(plugin)
+  lease.dispose()
+  return owner
+}
+
+function requireDisposable(disposable: EditorDisposable | null): EditorDisposable {
+  if (!disposable) throw new Error('missing disposable')
+  return disposable
 }
 
 function findGutterCells(id: string): HTMLElement[] {

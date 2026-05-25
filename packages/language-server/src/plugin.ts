@@ -11,7 +11,7 @@ import type {
 } from '@editor/core/extensions'
 
 import {
-  LANGUAGE_SERVER_COMPLETION_EDIT_FEATURE_ID,
+  LANGUAGE_SERVER_COMPLETION_EDIT_FEATURE,
   type LanguageServerCompletionApplication,
   type LanguageServerCompletionEditFeature,
 } from './completion'
@@ -101,7 +101,7 @@ class LanguageServerCommandContribution implements EditorFeatureContribution {
       context.registerCommand(command.id, () => command.run(this.state)),
     )
     this.completionFeature = context.registerFeature(
-      LANGUAGE_SERVER_COMPLETION_EDIT_FEATURE_ID,
+      LANGUAGE_SERVER_COMPLETION_EDIT_FEATURE,
       completionEditFeature(context),
     )
   }

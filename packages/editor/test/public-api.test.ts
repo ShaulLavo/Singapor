@@ -9,7 +9,12 @@ import {
   type TextEdit,
 } from '@editor/core/document'
 import { Editor } from '@editor/core/editor'
-import { EDITOR_MINIMAP_FEATURE_ID, type EditorPluginContext } from '@editor/core/extensions'
+import {
+  createEditorCapabilityToken,
+  EDITOR_MINIMAP_FEATURE,
+  EDITOR_MINIMAP_FEATURE_ID,
+  type EditorPluginContext,
+} from '@editor/core/extensions'
 import { applyEditorTheme, type EditorTheme } from '@editor/core/rendering'
 import { createEmptySyntaxResult, treeSitterCapturesToEditorTokens } from '@editor/core/syntax'
 import { EditorPluginHost } from '@editor/core/testing'
@@ -17,6 +22,7 @@ import { debugPieceTable } from '@editor/core/debug'
 import { VirtualizedTextView } from '@editor/core/internal'
 import {
   createMergeConflictDocumentText,
+  EDITOR_MERGE_CONFLICT_FEATURE,
   parseMergeConflicts,
   type EditorState,
   type MergeConflictRegion,
@@ -38,6 +44,7 @@ describe('public API facade', () => {
       }),
     ).toBe('abc')
     expect(parseMergeConflicts('')).toEqual([])
+    expect(EDITOR_MERGE_CONFLICT_FEATURE.id).toBe('editor.mergeConflicts')
     expect(materializePieceTableFullText(snapshot)).toBe('abc')
     expect(readPieceTableTextRange(snapshot, 1, 3)).toBe('bc')
     expect(wordRangeAtOffset('abc', 1)).toEqual({ start: 0, end: 3 })
@@ -56,8 +63,11 @@ describe('public API facade', () => {
     const host = new EditorPluginHost([])
     const syntax = createEmptySyntaxResult()
     const theme: EditorTheme = { foregroundColor: 'red' }
+    const token = createEditorCapabilityToken('test.capability')
 
     expect(EDITOR_MINIMAP_FEATURE_ID).toBe('editor.minimap')
+    expect(EDITOR_MINIMAP_FEATURE.id).toBe('editor.minimap')
+    expect(token.id).toBe('test.capability')
     expect(applyEditorTheme).toBeTypeOf('function')
     expect(theme.foregroundColor).toBe('red')
     expect(treeSitterCapturesToEditorTokens([])).toEqual([])

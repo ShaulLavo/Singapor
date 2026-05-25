@@ -46,7 +46,7 @@ import {
   viewContributionKindForChange,
   type SessionChangeOptions,
 } from './editorUtils'
-import { EDITOR_FIND_FEATURE_ID, type EditorFindFeature } from './findFeature'
+import { EDITOR_FIND_FEATURE, type EditorFindFeature } from './findFeature'
 import { foldCandidateAtLocation, type FoldOperation } from './foldOperations'
 import { groupedRangeDecorations, sameEditorRangeDecorations } from './rangeDecorations'
 import { selectionRevealOffset, type EditorSelectionRevealTarget } from './selectionReveal'
@@ -72,6 +72,7 @@ import type { BlockLane, BlockRow, InjectedTextRow } from '../displayTransforms'
 import { offsetToPoint } from '../pieceTable/positions'
 import {
   EditorPluginHost,
+  type EditorCapabilityToken,
   type EditorCommandHandler,
   type EditorDisposable,
   type EditorFeatureContribution,
@@ -138,6 +139,7 @@ const PLUGIN_BLOCK_LANES_PROJECTION_OWNER = 'editor.blockLanes.plugins'
 const PLUGIN_GUTTER_PROJECTION_OWNER = 'editor.gutters.plugins'
 const PLUGIN_INJECTED_ROWS_PROJECTION_OWNER = 'editor.injectedRows.plugins'
 
+type EditorFeatureKey<T = unknown> = string | EditorCapabilityToken<T>
 type SyntaxScrollDirection = -1 | 0 | 1
 
 export class Editor {
@@ -152,7 +154,8 @@ export class Editor {
   private readonly pluginHost: EditorPluginHost
   private readonly commandRouter: EditorCommandRouter
   private readonly document: EditorDocumentController
-  private readonly editorFeatures = new Map<string, unknown>()
+  private readonly editorFeatures = new Map<EditorFeatureKey, unknown>()
+  private readonly editorFeatureKeysById = new Map<string, EditorFeatureKey>()
   private readonly editorFeatureContributions: EditorFeatureContribution[] = []
   private readonly viewContributionsByProvider = new Map<
     EditorViewContributionProvider,
@@ -1432,7 +1435,7 @@ export class Editor {
       scrollElement: this.el,
       highlightPrefix: this.highlightPrefix,
       getSnapshot: () => this.createViewSnapshot(),
-      getFeature: (id) => this.getFeature(id),
+      getFeature: (key) => this.getFeature(key),
       log: (event) => this.log(event),
       revealLine: (row) => this.view.scrollToRow(row),
       focusEditor: () => this.focus(),
@@ -1473,7 +1476,7 @@ export class Editor {
         this.setSourceRowDecorations(sourceId, decorations),
       clearRowDecorations: (sourceId) => this.clearSourceRowDecorations(sourceId),
       registerCommand: (command, handler) => this.registerCommandHandler(command, handler),
-      registerFeature: (id, feature) => this.registerFeature(id, feature),
+      registerFeature: (key, feature) => this.registerFeature(key, feature),
     }
   }
 
@@ -1621,28 +1624,36 @@ export class Editor {
     return this.commandRouter.registerCommandHandler(command, handler)
   }
 
-  private registerFeature<T>(id: string, feature: T): EditorDisposable {
-    this.editorFeatures.set(id, feature)
-
-    return {
-      dispose: () => this.unregisterFeature(id, feature),
+  private registerFeature<T>(key: EditorFeatureKey<T>, feature: T): EditorDisposable {
+    const id = editorFeatureKeyId(key)
+    if (this.editorFeatureKeysById.has(id)) {
+      throw new Error(`Editor feature already registered: ${id}`)
     }
+
+    this.editorFeatures.set(key, feature)
+    this.editorFeatureKeysById.set(id, key)
+
+    return disposableOnce(() => this.unregisterFeature(key, feature))
   }
 
-  private unregisterFeature<T>(id: string, feature: T): void {
-    if (this.editorFeatures.get(id) !== feature) return
+  private unregisterFeature<T>(key: EditorFeatureKey<T>, feature: T): void {
+    if (this.editorFeatures.get(key) !== feature) return
 
-    this.editorFeatures.delete(id)
+    this.editorFeatures.delete(key)
+    this.editorFeatureKeysById.delete(editorFeatureKeyId(key))
   }
 
-  private getFeature<T>(id: string): T | null {
-    return (this.editorFeatures.get(id) as T | undefined) ?? null
+  private getFeature<T>(key: EditorFeatureKey<T>): T | null {
+    if (this.editorFeatures.has(key)) return (this.editorFeatures.get(key) as T | undefined) ?? null
+
+    const registeredKey = this.editorFeatureKeysById.get(editorFeatureKeyId(key))
+    if (!registeredKey) return null
+
+    return (this.editorFeatures.get(registeredKey) as T | undefined) ?? null
   }
 
   private findFeature(): EditorFindFeature | null {
-    return (
-      (this.editorFeatures.get(EDITOR_FIND_FEATURE_ID) as EditorFindFeature | undefined) ?? null
-    )
+    return (this.editorFeatures.get(EDITOR_FIND_FEATURE) as EditorFindFeature | undefined) ?? null
   }
 
   private reserveOverlayWidth(side: EditorOverlaySide, width: number): void {
@@ -2169,4 +2180,22 @@ function joinClassNames(left: string | undefined, right: string | undefined): st
   if (!left) return right
   if (!right) return left
   return `${left} ${right}`
+}
+
+function editorFeatureKeyId(key: EditorFeatureKey): string {
+  if (typeof key === 'string') return key
+  return key.id
+}
+
+function disposableOnce(dispose: () => void): EditorDisposable {
+  let disposed = false
+
+  return {
+    dispose() {
+      if (disposed) return
+
+      disposed = true
+      dispose()
+    },
+  }
 }
