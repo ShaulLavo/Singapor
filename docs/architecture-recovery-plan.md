@@ -333,6 +333,8 @@ Purpose: make virtualization understandable without reading the entire editor.
 
 ## Phase 6: Input and Selection
 
+Status: complete
+
 Purpose: make input correctness independent of browser event timing accidents.
 
 ### Work
@@ -667,4 +669,3 @@ The recovery is complete when:
 - Public API is small, intentional, and documented.
 - CI enforces typecheck, lint, tests, cycles, public API, and browser rendering checks.
 - The architecture docs describe the code that exists.
-
