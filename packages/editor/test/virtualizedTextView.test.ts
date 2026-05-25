@@ -973,6 +973,25 @@ describe('VirtualizedTextView', () => {
     expect(view.textOffsetFromDomBoundary(view.getState().mountedRows[2]!.textNode, 1)).toBe(6)
   })
 
+  it('rebuilds projected rows on fallback edits without materializing the full next snapshot', () => {
+    view.setText('abc\ndef')
+    view.setBlockRows([
+      {
+        id: 'inline-detail',
+        anchorBufferRow: 0,
+        placement: 'after',
+        heightRows: 1,
+        text: 'detail',
+      },
+    ])
+    view.setScrollMetrics(0, 80)
+
+    view.applyEdit({ from: 1, to: 1, text: 'X' }, throwingFullTextSnapshot('aXbc\ndef'))
+
+    expect(view.getState()).toMatchObject({ lineCount: 2, blockRowCount: 1 })
+    expect(view.getState().mountedRows.map((row) => row.text)).toEqual(['aXbc', 'detail', 'def'])
+  })
+
   it('does not read layout while rendering seeded long-line metrics', () => {
     view.dispose()
     view = new VirtualizedTextView(container, {

@@ -17,28 +17,28 @@ export type VirtualizedTextProjectionInput = {
   readonly tabSize: number
 }
 
-export type VirtualizedTextViewModel = {
-  readonly textSnapshot: TextSnapshot
-  readonly textLength: number
-  readonly lineCount: number
-  readonly visibleLineCount: number
-  readonly foldMap: FoldMap | null
-  readonly wrapColumn: number | null
-  readonly blockRows: readonly BlockRow[]
-  readonly injectedTextRows: readonly InjectedTextRow[]
-  readonly tabSize: number
-  readonly rows: readonly DisplayRow[]
+export type VirtualizedTextViewModelState = {
+  textSnapshot: TextSnapshot
+  textLength: number
+  lineCount: number
+  visibleLineCount: number
+  foldMap: FoldMap | null
+  wrapColumn: number | null
+  blockRows: readonly BlockRow[]
+  injectedTextRows: readonly InjectedTextRow[]
+  tabSize: number
+  rows: DisplayRow[]
 }
 
 export function createVirtualizedTextViewModel(
   input: VirtualizedTextProjectionInput,
-): VirtualizedTextViewModel {
+): VirtualizedTextViewModelState {
   const textLength = input.textSnapshot.length
   const lineCount = Math.max(1, input.lineStarts.length)
   const foldMap = foldMapForText(input.foldMap, textLength)
-  const visibleLineCount = foldedVisibleLineCount(lineCount, foldMap)
+  const foldedLineCount = foldedVisibleLineCount(lineCount, foldMap)
   const rows = createDisplayRowsFromLines({
-    visibleLineCount,
+    visibleLineCount: foldedLineCount,
     bufferRowForVisibleRow: (row) => bufferRowForVisibleRow(row, lineCount, foldMap),
     lineText: (row) => lineText(input.textSnapshot, input.lineStarts, textLength, row),
     lineStartOffset: (row) => lineStartOffset(input.lineStarts, textLength, row),
@@ -53,7 +53,7 @@ export function createVirtualizedTextViewModel(
     textSnapshot: input.textSnapshot,
     textLength,
     lineCount,
-    visibleLineCount,
+    visibleLineCount: Math.max(1, rows.length),
     foldMap,
     wrapColumn: input.wrapColumn,
     blockRows: input.blockRows,

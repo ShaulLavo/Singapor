@@ -54,6 +54,7 @@ import {
   normalizeHiddenCharactersMode,
   renderHiddenCharacters,
 } from './virtualizedTextViewHiddenCharacters'
+import { createVirtualizedTextViewModel } from './virtualizedTextViewModel'
 import {
   applyMultiLineTextLayout,
   applySameLineTextLayout,
@@ -195,6 +196,18 @@ export class VirtualizedTextView {
     const virtualizer = new FixedRowVirtualizer(
       createVirtualizerOptions(rowHeight, overscan, rowGap),
     )
+    const initialTextSnapshot = createStringTextSnapshot('')
+    const initialBlockRows = options.blockRows ?? []
+    const initialInjectedTextRows = options.injectedTextRows ?? []
+    const initialModel = createVirtualizedTextViewModel({
+      textSnapshot: initialTextSnapshot,
+      lineStarts: [0],
+      foldMap: null,
+      blockRows: initialBlockRows,
+      injectedTextRows: initialInjectedTextRows,
+      wrapColumn: null,
+      tabSize,
+    })
 
     this.scrollElement = scrollElement
     this.inputElement = inputElement
@@ -226,9 +239,8 @@ export class VirtualizedTextView {
       selectionHighlight: null,
       rangeHighlightGroups: new Map(),
       selectionHighlightRegistered: false,
+      model: initialModel,
       text: '',
-      textSnapshot: createStringTextSnapshot(''),
-      textLength: 0,
       textRevision: 0,
       tokens: [],
       tokenRenderEntries: [],
@@ -237,14 +249,10 @@ export class VirtualizedTextView {
       tokenRenderIndexDirty: true,
       lineStarts: [0],
       lineStartOffsetIndex: null,
-      displayRows: [],
-      foldMap: null,
       foldMarkers: [],
       rowDecorations: new Map(),
       foldMarkerByStartRow: new Map(),
       foldMarkerByKey: new Map(),
-      blockRows: options.blockRows ?? [],
-      injectedTextRows: options.injectedTextRows ?? [],
       rowHeightIndex: null,
       rowHeightIndexDisplayRows: null,
       rowHeightIndexRowHeight: rowHeight,
@@ -253,7 +261,6 @@ export class VirtualizedTextView {
       blockLanes: [],
       blockLaneElements: new Map(),
       wrapEnabled: options.wrap ?? false,
-      currentWrapColumn: null,
       tabSize,
       tokenGroups: new Map(),
       rowTokenSignatures: new Map(),
@@ -344,7 +351,7 @@ export class VirtualizedTextView {
   }
 
   public setFoldMarkers(markers: readonly VirtualizedFoldMarker[]): void {
-    this.setFoldState(markers, this.view.foldMap)
+    this.setFoldState(markers, this.view.model.foldMap)
   }
 
   public setFoldState(markers: readonly VirtualizedFoldMarker[], foldMap: FoldMap | null): void {
@@ -619,7 +626,7 @@ export class VirtualizedTextView {
     return {
       lineCount: view.lineStarts.length,
       contentWidth: view.contentWidth,
-      foldMapActive: view.foldMap !== null,
+      foldMapActive: view.model.foldMap !== null,
       metrics: view.metrics,
       scrollHeight: Math.max(snapshot.viewportHeight, snapshot.scrollHeight),
       scrollLeft: snapshot.scrollLeft,
@@ -634,7 +641,7 @@ export class VirtualizedTextView {
       mountedRows: getMountedRows(view),
       foldMarkers: view.foldMarkers,
       wrapActive: view.wrapEnabled,
-      blockRowCount: view.blockRows.length,
+      blockRowCount: view.model.blockRows.length,
       blockLaneCount: view.blockLanes.length,
       tabSize: view.tabSize,
     }
@@ -669,7 +676,7 @@ export class VirtualizedTextView {
     if (metrics.verticalDirection > 0) return lineEndOffset(view, rowForViewportY(view, metrics.y))
 
     const row = rowForViewportY(view, metrics.y)
-    if (!isDocumentTextDisplayRow(view.displayRows[row])) return null
+    if (!isDocumentTextDisplayRow(view.model.rows[row])) return null
 
     const mounted = view.rowElements.get(row)
     if (mounted?.kind === 'text') return xToOffset(view, mounted, metrics.x)
@@ -841,7 +848,7 @@ function nextDocumentTextRow(view: VirtualizedTextViewInternal, row: number, ste
   let current = row
   while (current !== end) {
     current += step
-    if (isDocumentTextDisplayRow(view.displayRows[current])) return current
+    if (isDocumentTextDisplayRow(view.model.rows[current])) return current
   }
 
   return row
@@ -867,7 +874,7 @@ function projectFoldMarkersThroughMultiLineEdit(
   const rowDelta = multiLineEditRowDelta(patch)
   const offsetDelta = patch.delta
   const markers = view.foldMarkers.map((marker) =>
-    projectFoldMarkerThroughEdit(marker, edit, offsetDelta, rowDelta, view.textLength),
+    projectFoldMarkerThroughEdit(marker, edit, offsetDelta, rowDelta, view.model.textLength),
   )
   view.foldMarkers = markers
   view.foldMarkerByStartRow = indexFoldMarkersByStartRow(markers)

@@ -5,6 +5,7 @@ import {
   visualColumnToBufferColumn,
   type DisplayBlockRow,
   type DisplayInjectedTextRow,
+  type DisplayRow,
 } from '../displayTransforms'
 import { clamp } from '../style-utils'
 import type {
@@ -396,7 +397,7 @@ function rowUpdateState(
   index: number,
   updatePass: RowUpdatePass,
 ): RowUpdateState {
-  const displayRow = view.displayRows[index]
+  const displayRow = view.model.rows[index]
   const bufferRow = bufferRowForDisplayRow(view, index)
   const primaryText = isDocumentTextDisplayRow(displayRow) && displayRow.sourceStartColumn === 0
 
@@ -455,30 +456,24 @@ function mountedRowUpdateState(
 }
 
 function bufferRowForDisplayRow(view: VirtualizedTextViewInternal, index: number): number {
-  const displayRow = view.displayRows[index]
+  const displayRow = view.model.rows[index]
   if (displayRow?.kind === 'text') return displayRow.bufferRow
   if (displayRow?.kind === 'block') return displayRow.anchorBufferRow
   return bufferRowForVirtualRow(view, index)
 }
 
-function displayRowSource(
-  row: VirtualizedTextViewInternal['displayRows'][number] | undefined,
-): EditorGutterRowContext['source'] {
+function displayRowSource(row: DisplayRow | undefined): EditorGutterRowContext['source'] {
   if (!row) return 'document'
   if (row.kind === 'block') return 'block'
   return row.source
 }
 
-function injectedTextRowId(
-  row: VirtualizedTextViewInternal['displayRows'][number] | undefined,
-): string | undefined {
+function injectedTextRowId(row: DisplayRow | undefined): string | undefined {
   if (!isInjectedTextDisplayRow(row)) return undefined
   return row.id
 }
 
-function displayRowMetadata(
-  row: VirtualizedTextViewInternal['displayRows'][number] | undefined,
-): unknown {
+function displayRowMetadata(row: DisplayRow | undefined): unknown {
   if (!isInjectedTextDisplayRow(row)) return undefined
   return row.metadata
 }
@@ -1291,7 +1286,7 @@ export function foldMarkerForVirtualRow(
 }
 
 function isPrimaryTextRow(view: VirtualizedTextViewInternal, row: number): boolean {
-  const displayRow = view.displayRows[row]
+  const displayRow = view.model.rows[row]
   if (!isDocumentTextDisplayRow(displayRow)) return false
   return displayRow.sourceStartColumn === 0
 }
@@ -1312,7 +1307,7 @@ function isRowCurrent(
 
   const rowKind = displayRowKind(view, item.index)
   if (row.displayKind !== rowKind) return false
-  const displayRow = view.displayRows[item.index]
+  const displayRow = view.model.rows[item.index]
   if (row.source !== displayRowSource(displayRow)) return false
   if (row.injectedTextRowId !== injectedTextRowId(displayRow)) return false
   if (row.metadata !== displayRowMetadata(displayRow)) return false
@@ -1349,7 +1344,7 @@ function blockDisplayRowForIndex(
   view: VirtualizedTextViewInternal,
   index: number,
 ): DisplayBlockRow | null {
-  const displayRow = view.displayRows[index]
+  const displayRow = view.model.rows[index]
   if (displayRow?.kind !== 'block') return null
   return displayRow
 }
@@ -1367,7 +1362,7 @@ function rowDecorationForVirtualRow(
   view: VirtualizedTextViewInternal,
   virtualRow: number,
 ): VirtualizedTextRowDecoration | undefined {
-  const displayRow = view.displayRows[virtualRow]
+  const displayRow = view.model.rows[virtualRow]
   if (isInjectedTextDisplayRow(displayRow)) return injectedRowDecoration(displayRow)
 
   return view.rowDecorations.get(bufferRowForVirtualRow(view, virtualRow))
@@ -1886,7 +1881,7 @@ export function resolveMountedOffset(
   view: VirtualizedTextViewInternal,
   offset: number,
 ): { readonly node: Node; readonly offset: number } | null {
-  const clamped = clamp(offset, 0, view.textLength)
+  const clamped = clamp(offset, 0, view.model.textLength)
   const targetRow = rowForOffset(view, clamped)
   for (const row of getMountedRows(view)) {
     if (row.index !== targetRow) continue

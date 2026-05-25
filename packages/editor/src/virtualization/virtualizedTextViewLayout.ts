@@ -50,12 +50,15 @@ export function setTextLayoutState(
 ): { readonly lineCountChanged: boolean } {
   const previousLineCount = view.lineStarts.length
   view.text = text
-  view.textSnapshot = textSnapshot
-  view.textLength = text.length
+  view.model.textSnapshot = textSnapshot
+  view.model.textLength = text.length
   view.textRevision += 1
   view.lineStarts = computeLineStarts(text)
   view.lineStartOffsetIndex = null
-  view.foldMap = foldMapMatchesText(view.foldMap, view.textLength) ? view.foldMap : null
+  view.model.lineCount = view.lineStarts.length
+  view.model.foldMap = foldMapMatchesText(view.model.foldMap, view.model.textLength)
+    ? view.model.foldMap
+    : null
   return { lineCountChanged: previousLineCount !== view.lineStarts.length }
 }
 
@@ -65,12 +68,15 @@ export function setTextSnapshotLayoutState(
 ): { readonly lineCountChanged: boolean } {
   const previousLineCount = view.lineStarts.length
   view.text = ''
-  view.textSnapshot = textSnapshot
-  view.textLength = textSnapshot.length
+  view.model.textSnapshot = textSnapshot
+  view.model.textLength = textSnapshot.length
   view.textRevision += 1
   view.lineStarts = computeLineStartsFromSnapshot(textSnapshot)
   view.lineStartOffsetIndex = null
-  view.foldMap = foldMapMatchesText(view.foldMap, view.textLength) ? view.foldMap : null
+  view.model.lineCount = view.lineStarts.length
+  view.model.foldMap = foldMapMatchesText(view.model.foldMap, view.model.textLength)
+    ? view.model.foldMap
+    : null
   return { lineCountChanged: previousLineCount !== view.lineStarts.length }
 }
 
@@ -80,12 +86,13 @@ export function applySameLineTextLayout(
   textSnapshot: TextSnapshot,
 ): void {
   const delta = patch.text.length - patch.deleteLength
-  view.textSnapshot = textSnapshot
-  view.textLength = textSnapshot.length
+  view.model.textSnapshot = textSnapshot
+  view.model.textLength = textSnapshot.length
   view.textRevision += 1
-  view.foldMap = null
+  view.model.foldMap = null
   shiftLineStartsAfterRow(view, patch.rowIndex, delta)
   updateDisplayRowsAfterSameLineEdit(view, patch, delta)
+  syncViewModelCounts(view)
 }
 
 export function applyMultiLineTextLayout(
@@ -94,13 +101,14 @@ export function applyMultiLineTextLayout(
   edit: TextEdit,
   textSnapshot: TextSnapshot,
 ): void {
-  view.textSnapshot = textSnapshot
-  view.textLength = textSnapshot.length
+  view.model.textSnapshot = textSnapshot
+  view.model.textLength = textSnapshot.length
   view.textRevision += 1
-  view.foldMap = null
+  view.model.foldMap = null
   view.lineStarts = lineStartsAfterMultiLineEdit(view.lineStarts, edit)
   view.lineStartOffsetIndex = null
   updateDisplayRowsAfterMultiLineEdit(view, patch)
+  syncViewModelCounts(view)
 }
 
 export function setFoldStateLayout(
@@ -108,13 +116,13 @@ export function setFoldStateLayout(
   markers: readonly VirtualizedFoldMarker[],
   foldMap: FoldMap | null,
 ): FoldStateUpdate {
-  const nextFoldMap = foldMapMatchesText(foldMap, view.textLength) ? foldMap : null
-  const foldMapChanged = view.foldMap !== nextFoldMap
+  const nextFoldMap = foldMapMatchesText(foldMap, view.model.textLength) ? foldMap : null
+  const foldMapChanged = view.model.foldMap !== nextFoldMap
   if (!foldMapChanged && markers.length === 0 && view.foldMarkers.length === 0) {
     return { foldMapChanged: false, foldMarkersChanged: false, changed: false }
   }
 
-  const nextFoldMarkers = normalizeFoldMarkers(markers, view.textLength)
+  const nextFoldMarkers = normalizeFoldMarkers(markers, view.model.textLength)
   const foldMarkersChanged = !foldMarkersEqual(view.foldMarkers, nextFoldMarkers)
   if (!foldMapChanged && !foldMarkersChanged) {
     return { foldMapChanged: false, foldMarkersChanged: false, changed: false }
@@ -126,7 +134,7 @@ export function setFoldStateLayout(
     view.foldMarkerByKey = indexFoldMarkersByKey(nextFoldMarkers)
   }
 
-  view.foldMap = nextFoldMap
+  view.model.foldMap = nextFoldMap
   return { foldMapChanged, foldMarkersChanged, changed: true }
 }
 
@@ -135,19 +143,16 @@ export function rebuildDisplayRows(
   viewportColumns: number | null,
 ): void {
   materializeLineStarts(view)
-  view.currentWrapColumn = view.wrapEnabled ? viewportColumns : null
   const model = createVirtualizedTextViewModel({
-    textSnapshot: view.textSnapshot,
+    textSnapshot: view.model.textSnapshot,
     lineStarts: view.lineStarts,
-    foldMap: view.foldMap,
-    blockRows: view.blockRows,
-    injectedTextRows: view.injectedTextRows,
-    wrapColumn: view.currentWrapColumn,
+    foldMap: view.model.foldMap,
+    blockRows: view.model.blockRows,
+    injectedTextRows: view.model.injectedTextRows,
+    wrapColumn: view.wrapEnabled ? viewportColumns : null,
     tabSize: view.tabSize,
   })
-  view.textLength = model.textLength
-  view.foldMap = model.foldMap
-  view.displayRows = [...model.rows]
+  view.model = model
 }
 
 export function refreshDisplayRowsForWrapWidth(
@@ -155,7 +160,7 @@ export function refreshDisplayRowsForWrapWidth(
   viewportColumns: number,
 ): boolean {
   if (!view.wrapEnabled) return false
-  if (viewportColumns === view.currentWrapColumn) return false
+  if (viewportColumns === view.model.wrapColumn) return false
 
   rebuildDisplayRows(view, viewportColumns)
   return true
@@ -169,7 +174,7 @@ export function setWrapEnabledLayout(
   if (view.wrapEnabled === enabled) return false
 
   view.wrapEnabled = enabled
-  view.currentWrapColumn = null
+  view.model.wrapColumn = null
   rebuildDisplayRows(view, viewportColumns)
   return true
 }
@@ -179,7 +184,7 @@ export function setBlockRowsLayout(
   blockRows: readonly BlockRow[],
   viewportColumns: number | null,
 ): void {
-  view.blockRows = blockRows
+  view.model.blockRows = blockRows
   rebuildDisplayRows(view, viewportColumns)
 }
 
@@ -188,7 +193,7 @@ export function setInjectedTextRowsLayout(
   injectedTextRows: readonly InjectedTextRow[],
   viewportColumns: number | null,
 ): void {
-  view.injectedTextRows = injectedTextRows
+  view.model.injectedTextRows = injectedTextRows
   rebuildDisplayRows(view, viewportColumns)
 }
 
@@ -206,7 +211,7 @@ export function rowSizes(view: VirtualizedTextViewInternal): readonly number[] |
 }
 
 export function hasVariableRows(view: VirtualizedTextViewInternal): boolean {
-  for (const row of view.blockRows) {
+  for (const row of view.model.blockRows) {
     if (row.heightPx !== undefined && row.heightPx !== view.metrics.rowHeight) return true
     if (normalizeBlockHeightRows(row.heightRows) !== 1) return true
   }
@@ -241,12 +246,12 @@ export function scrollableHeight(
 }
 
 export function displayRowKind(view: VirtualizedTextViewInternal, row: number): 'text' | 'block' {
-  return view.displayRows[row]?.kind ?? 'text'
+  return view.model.rows[row]?.kind ?? 'text'
 }
 
 export function visualColumnForOffset(view: VirtualizedTextViewInternal, offset: number): number {
   const row = rowForOffset(view, offset)
-  const displayRow = view.displayRows[row]
+  const displayRow = view.model.rows[row]
   if (!isDocumentTextDisplayRow(displayRow)) return 0
 
   const localOffset = clamp(offset - displayRowStartOffset(view, row), 0, displayRow.text.length)
@@ -258,8 +263,8 @@ export function offsetForViewportColumn(
   row: number,
   visualColumn: number,
 ): number {
-  const displayRow = view.displayRows[row]
-  if (!displayRow) return view.textLength
+  const displayRow = view.model.rows[row]
+  if (!displayRow) return view.model.textLength
   const startOffset = displayRowStartOffset(view, row)
   if (!isDocumentTextDisplayRow(displayRow)) return startOffset
 
@@ -283,18 +288,18 @@ export function lineEndOffset(view: VirtualizedTextViewInternal, row: number): n
 }
 
 export function bufferLineStartOffset(view: VirtualizedTextViewInternal, row: number): number {
-  if (row < 0 || row >= view.lineStarts.length) return view.textLength
+  if (row < 0 || row >= view.lineStarts.length) return view.model.textLength
   const offset = view.lineStartOffsetIndex?.offsetAt(row) ?? 0
   return (view.lineStarts[row] ?? 0) + offset
 }
 
 export function lineText(view: VirtualizedTextViewInternal, row: number): string {
-  return view.displayRows[row]?.text ?? ''
+  return view.model.rows[row]?.text ?? ''
 }
 
 function bufferLineEndOffset(view: VirtualizedTextViewInternal, row: number): number {
-  if (row < 0) return view.textLength
-  if (row >= view.lineStarts.length - 1) return view.textLength
+  if (row < 0) return view.model.textLength
+  if (row >= view.lineStarts.length - 1) return view.model.textLength
 
   return Math.max(bufferLineStartOffset(view, row), bufferLineStartOffset(view, row + 1) - 1)
 }
@@ -337,11 +342,11 @@ function updateDisplayRowsAfterSameLineEdit(
   patch: SameLineEditPatch,
   delta: number,
 ): void {
-  const row = view.displayRows[patch.rowIndex]
+  const row = view.model.rows[patch.rowIndex]
   if (!row) return
   if (row.kind !== 'text') return
 
-  view.displayRows[patch.rowIndex] = updateTextDisplayRow(row, patch, delta)
+  view.model.rows[patch.rowIndex] = updateTextDisplayRow(row, patch, delta)
 }
 
 function updateDisplayRowsAfterMultiLineEdit(
@@ -354,12 +359,12 @@ function updateDisplayRowsAfterMultiLineEdit(
     patch.startRow + patch.insertedLineBreaks,
   )
   const suffix = shiftPlainDisplayRows(
-    view.displayRows.slice(patch.endRow + 1),
+    view.model.rows.slice(patch.endRow + 1),
     patch.insertedLineBreaks - (patch.endRow - patch.startRow),
     patch.delta,
   )
 
-  view.displayRows = view.displayRows.slice(0, patch.startRow).concat(replacementRows, suffix)
+  view.model.rows = view.model.rows.slice(0, patch.startRow).concat(replacementRows, suffix)
 }
 
 function createPlainDisplayRowsForRange(
@@ -372,7 +377,7 @@ function createPlainDisplayRowsForRange(
   for (let rowIndex = startRow; rowIndex <= endRow && rowIndex <= lastRow; rowIndex += 1) {
     const startOffset = bufferLineStartOffset(view, rowIndex)
     const endOffset = bufferLineEndOffset(view, rowIndex)
-    const text = view.textSnapshot.readRange(startOffset, endOffset)
+    const text = view.model.textSnapshot.readRange(startOffset, endOffset)
     rows.push({
       kind: 'text',
       source: 'document',
@@ -461,9 +466,9 @@ export function sameLineEditPatch(
   view: VirtualizedTextViewInternal,
   edit: TextEdit,
 ): SameLineEditPatch | null {
-  if (view.foldMap) return null
-  if (view.wrapEnabled || view.blockRows.length > 0 || view.injectedTextRows.length > 0) return null
-  if (edit.from < 0 || edit.to < edit.from || edit.to > view.textLength) return null
+  if (view.model.foldMap) return null
+  if (view.wrapEnabled || hasModelRowProjections(view)) return null
+  if (edit.from < 0 || edit.to < edit.from || edit.to > view.model.textLength) return null
   if (edit.text.includes('\n')) return null
 
   const rowIndex = bufferRowForOffset(view, edit.from)
@@ -481,9 +486,9 @@ export function multiLineEditPatch(
   view: VirtualizedTextViewInternal,
   edit: TextEdit,
 ): MultiLineEditPatch | null {
-  if (view.foldMap) return null
-  if (view.wrapEnabled || view.blockRows.length > 0 || view.injectedTextRows.length > 0) return null
-  if (edit.from < 0 || edit.to < edit.from || edit.to > view.textLength) return null
+  if (view.model.foldMap) return null
+  if (view.wrapEnabled || hasModelRowProjections(view)) return null
+  if (edit.from < 0 || edit.to < edit.from || edit.to > view.model.textLength) return null
 
   materializeLineStarts(view)
   const startRow = bufferRowForOffset(view, edit.from)
@@ -501,14 +506,14 @@ export function rowForOffset(view: VirtualizedTextViewInternal, offset: number):
   const bufferRow = bufferRowForOffset(view, offset)
   if (!usesDisplayRowTransforms(view)) return foldVirtualRowForBufferRow(view, bufferRow)
 
-  const displayRow = textDisplayRowForOffset(view, clamp(offset, 0, view.textLength))
+  const displayRow = textDisplayRowForOffset(view, clamp(offset, 0, view.model.textLength))
   if (displayRow) return displayRow.index
 
   return virtualRowForBufferRow(view, bufferRow)
 }
 
 export function bufferRowForOffset(view: VirtualizedTextViewInternal, offset: number): number {
-  const clamped = clamp(offset, 0, view.textLength)
+  const clamped = clamp(offset, 0, view.model.textLength)
   let low = 0
   let high = view.lineStarts.length - 1
 
@@ -539,44 +544,39 @@ export function rowForViewportY(view: VirtualizedTextViewInternal, y: number): n
 }
 
 export function visibleLineCount(view: VirtualizedTextViewInternal): number {
-  return Math.max(1, view.displayRows.length)
+  return Math.max(1, view.model.visibleLineCount)
 }
 
 export function foldVisibleLineCount(view: VirtualizedTextViewInternal): number {
-  if (!view.foldMap) return view.lineStarts.length
-
-  const hidden = view.foldMap.ranges.reduce((count, range) => {
-    return count + Math.max(0, range.endPoint.row - range.startPoint.row)
-  }, 0)
-  return Math.max(1, view.lineStarts.length - hidden)
+  return visibleLineCount(view)
 }
 
 export function bufferRowForVirtualRow(view: VirtualizedTextViewInternal, row: number): number {
-  const displayRow = view.displayRows[row]
+  const displayRow = view.model.rows[row]
   if (displayRow?.kind === 'text') return displayRow.bufferRow
   if (displayRow?.kind === 'block') return displayRow.anchorBufferRow
   return foldBufferRowForVisibleRow(view, row)
 }
 
 export function foldBufferRowForVisibleRow(view: VirtualizedTextViewInternal, row: number): number {
-  if (!view.foldMap) return clamp(row, 0, view.lineStarts.length - 1)
-  const point = foldPointToBufferPoint(view.foldMap, asFoldPoint({ row, column: 0 }))
+  if (!view.model.foldMap) return clamp(row, 0, view.lineStarts.length - 1)
+  const point = foldPointToBufferPoint(view.model.foldMap, asFoldPoint({ row, column: 0 }))
   return clamp(point.row, 0, view.lineStarts.length - 1)
 }
 
 export function virtualRowForBufferRow(view: VirtualizedTextViewInternal, row: number): number {
   if (!usesDisplayRowTransforms(view)) return foldVirtualRowForBufferRow(view, row)
 
-  const match = textDisplayRowForBufferRow(view.displayRows, row)
+  const match = textDisplayRowForBufferRow(view.model.rows, row)
   if (match) return match.index
 
   return transformedRowForProjectedBufferRow(view, row)
 }
 
 export function foldVirtualRowForBufferRow(view: VirtualizedTextViewInternal, row: number): number {
-  if (!view.foldMap) return clamp(row, 0, visibleLineCount(view) - 1)
+  if (!view.model.foldMap) return clamp(row, 0, visibleLineCount(view) - 1)
 
-  const point = bufferPointToFoldPoint(view.foldMap, { row, column: 0 })
+  const point = bufferPointToFoldPoint(view.model.foldMap, { row, column: 0 })
   return clamp(point.row, 0, visibleLineCount(view) - 1)
 }
 
@@ -612,18 +612,17 @@ function fixedRowForOffset(view: VirtualizedTextViewInternal, offset: number): n
 
 function usesDisplayRowTransforms(view: VirtualizedTextViewInternal): boolean {
   if (view.wrapEnabled) return true
-  if (view.blockRows.length > 0) return true
-  return view.injectedTextRows.length > 0
+  return hasModelRowProjections(view)
 }
 
 function usesPlainDisplayRows(view: VirtualizedTextViewInternal): boolean {
-  if (view.foldMap) return false
+  if (view.model.foldMap) return false
   return !usesDisplayRowTransforms(view)
 }
 
 function displayRowStartOffset(view: VirtualizedTextViewInternal, row: number): number {
-  const displayRow = view.displayRows[row]
-  if (!displayRow) return view.textLength
+  const displayRow = view.model.rows[row]
+  if (!displayRow) return view.model.textLength
   if (usesPlainDisplayRows(view) && isDocumentTextDisplayRow(displayRow))
     return bufferLineStartOffset(view, displayRow.bufferRow)
 
@@ -631,8 +630,8 @@ function displayRowStartOffset(view: VirtualizedTextViewInternal, row: number): 
 }
 
 function displayRowEndOffset(view: VirtualizedTextViewInternal, row: number): number {
-  const displayRow = view.displayRows[row]
-  if (!displayRow) return view.textLength
+  const displayRow = view.model.rows[row]
+  if (!displayRow) return view.model.textLength
   if (usesPlainDisplayRows(view) && isDocumentTextDisplayRow(displayRow))
     return bufferLineEndOffset(view, displayRow.bufferRow)
 
@@ -653,19 +652,19 @@ function variableRowHeightIndex(view: VirtualizedTextViewInternal): RowHeightInd
   const rowHeight = getRowHeight(view)
   if (cachedRowHeightIndexValid(view, rowHeight)) return view.rowHeightIndex
 
-  view.rowHeightIndexDisplayRows = view.displayRows
+  view.rowHeightIndexDisplayRows = view.model.rows
   view.rowHeightIndexRowHeight = rowHeight
   view.rowHeightIndexRowGap = view.rowGap
   view.rowHeightIndexVariable = hasVariableRows(view)
   view.rowHeightIndex = view.rowHeightIndexVariable
-    ? createRowHeightIndex(createRowSizes(view.displayRows, rowHeight), view.rowGap)
+    ? createRowHeightIndex(createRowSizes(view.model.rows, rowHeight), view.rowGap)
     : null
   return view.rowHeightIndex
 }
 
 function cachedRowHeightIndexValid(view: VirtualizedTextViewInternal, rowHeight: number): boolean {
   if (view.rowHeightIndexVariable === null) return false
-  if (view.rowHeightIndexDisplayRows !== view.displayRows) return false
+  if (view.rowHeightIndexDisplayRows !== view.model.rows) return false
   if (view.rowHeightIndexRowHeight !== rowHeight) return false
   return view.rowHeightIndexRowGap === view.rowGap
 }
@@ -683,7 +682,7 @@ function textDisplayRowForOffset(
   view: VirtualizedTextViewInternal,
   offset: number,
 ): DisplayTextRow | null {
-  const rows = view.displayRows
+  const rows = view.model.rows
   const start = firstDisplayRowEndingAtOrAfter(rows, offset)
   if (start === -1) return null
 
@@ -765,8 +764,18 @@ function transformedRowForProjectedBufferRow(
 ): number {
   const foldedRow = foldVirtualRowForBufferRow(view, row)
   const bufferRow = foldBufferRowForVisibleRow(view, foldedRow)
-  const match = textDisplayRowForBufferRow(view.displayRows, bufferRow)
+  const match = textDisplayRowForBufferRow(view.model.rows, bufferRow)
   if (match) return match.index
 
   return foldedRow
+}
+
+function syncViewModelCounts(view: VirtualizedTextViewInternal): void {
+  view.model.lineCount = Math.max(1, view.lineStarts.length)
+  view.model.visibleLineCount = Math.max(1, view.model.rows.length)
+}
+
+function hasModelRowProjections(view: VirtualizedTextViewInternal): boolean {
+  if (view.model.blockRows.length > 0) return true
+  return view.model.injectedTextRows.length > 0
 }

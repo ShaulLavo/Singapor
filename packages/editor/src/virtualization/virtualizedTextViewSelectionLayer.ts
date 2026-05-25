@@ -99,9 +99,9 @@ function emptyRowSelectionOffset(
   row: MountedVirtualizedTextRow,
 ): number | null {
   if (row.text.length !== 0) return null
-  if (row.startOffset < view.textLength) return row.startOffset
+  if (row.startOffset < view.model.textLength) return row.startOffset
   if (row.startOffset === 0) return null
-  if (view.textSnapshot.readRange(row.startOffset - 1, row.startOffset) !== '\n') return null
+  if (view.model.textSnapshot.readRange(row.startOffset - 1, row.startOffset) !== '\n') return null
   return row.startOffset - 1
 }
 

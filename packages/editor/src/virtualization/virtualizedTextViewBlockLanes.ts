@@ -128,7 +128,7 @@ function textDisplayRowForIndex(
   view: VirtualizedTextViewInternal,
   rowIndex: number,
 ): DisplayTextRow | null {
-  const displayRow = view.displayRows[rowIndex]
+  const displayRow = view.model.rows[rowIndex]
   if (!isDocumentTextDisplayRow(displayRow)) return null
   return displayRow
 }

@@ -191,7 +191,7 @@ describe('virtualized text view layout', () => {
       createStringTextSnapshot('aX\nb\nc\nd'),
     )
 
-    expect(view.displayRows[0]).toMatchObject({ text: 'aX' })
+    expect(view.model.rows[0]).toMatchObject({ text: 'aX' })
     expect(bufferLineStartOffset(view, 1)).toBe(3)
     expect(rowForOffset(view, 3)).toBe(1)
   })
@@ -217,7 +217,7 @@ describe('virtualized text view layout', () => {
       createStringTextSnapshot('aX\nbY\nc'),
     )
 
-    expect(view.displayRows[1]).toMatchObject({ text: 'bY' })
+    expect(view.model.rows[1]).toMatchObject({ text: 'bY' })
     expect(bufferLineStartOffset(view, 1)).toBe(3)
     expect(bufferLineStartOffset(view, 2)).toBe(6)
     expect(rowForOffset(view, 6)).toBe(2)
@@ -263,18 +263,33 @@ describe('line start offset index', () => {
   })
 })
 
-type LayoutFields = Pick<
-  VirtualizedTextViewInternal,
-  'text' | 'lineStarts' | 'displayRows' | 'foldMap' | 'blockRows' | 'wrapEnabled'
->
+type LayoutFields = Pick<VirtualizedTextViewInternal, 'text' | 'lineStarts' | 'wrapEnabled'> & {
+  readonly displayRows: DisplayRow[]
+  readonly foldMap: VirtualizedTextViewInternal['model']['foldMap']
+  readonly blockRows: VirtualizedTextViewInternal['model']['blockRows']
+}
 
 function layoutView(fields: LayoutFields): VirtualizedTextViewInternal {
+  const textSnapshot = createStringTextSnapshot(fields.text)
+  const injectedTextRows: VirtualizedTextViewInternal['model']['injectedTextRows'] = []
   return {
-    ...fields,
+    text: fields.text,
+    lineStarts: fields.lineStarts,
+    wrapEnabled: fields.wrapEnabled,
+    model: {
+      textSnapshot,
+      textLength: fields.text.length,
+      lineCount: Math.max(1, fields.lineStarts.length),
+      visibleLineCount: Math.max(1, fields.displayRows.length),
+      foldMap: fields.foldMap,
+      wrapColumn: null,
+      blockRows: fields.blockRows,
+      injectedTextRows,
+      tabSize: 4,
+      rows: fields.displayRows,
+    },
     scrollElement: { scrollTop: 0 } as HTMLDivElement,
-    textLength: fields.text.length,
     lineStartOffsetIndex: null,
-    injectedTextRows: [],
     virtualizer: throwingVirtualizer(),
     metrics: { rowHeight: 20, characterWidth: 8 },
     rowGap: 0,

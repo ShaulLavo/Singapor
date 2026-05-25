@@ -1,12 +1,11 @@
-import type { FoldMap } from '../foldMap'
-import type { BlockLane, BlockRow, DisplayRow, InjectedTextRow } from '../displayTransforms'
-import type { TextSnapshot } from '../documentTextSnapshot'
+import type { BlockLane, DisplayRow } from '../displayTransforms'
 import type { EditorGutterContribution, EditorGutterWidthContext } from '../plugins'
 import type { EditorToken, EditorTokenStyle } from '../tokens'
 import type { BrowserTextMetrics } from './browserMetrics'
 import type { FixedRowVirtualizer } from './fixedRowVirtualizer'
 import type { LineStartOffsetIndex } from './lineStartIndex'
 import type { RowHeightIndex } from './rowHeightIndex'
+import type { VirtualizedTextViewModelState } from './virtualizedTextViewModel'
 import type {
   EditorCursorLineHighlightOptions,
   HiddenCharactersMode,
@@ -98,9 +97,8 @@ export interface VirtualizedTextViewInternal {
   readonly selectionHighlight: Highlight | null
   readonly rangeHighlightGroups: Map<string, VirtualizedTextHighlightGroup>
   selectionHighlightRegistered: boolean
+  model: VirtualizedTextViewModelState
   text: string
-  textSnapshot: TextSnapshot
-  textLength: number
   textRevision: number
   tokens: readonly EditorToken[]
   tokenRenderEntries: readonly TokenRenderEntry[]
@@ -109,14 +107,10 @@ export interface VirtualizedTextViewInternal {
   tokenRenderIndexDirty: boolean
   lineStarts: number[]
   lineStartOffsetIndex: LineStartOffsetIndex | null
-  displayRows: DisplayRow[]
-  foldMap: FoldMap | null
   foldMarkers: readonly VirtualizedFoldMarker[]
   rowDecorations: ReadonlyMap<number, VirtualizedTextRowDecoration>
   foldMarkerByStartRow: ReadonlyMap<number, VirtualizedFoldMarker>
   foldMarkerByKey: ReadonlyMap<string, VirtualizedFoldMarker>
-  blockRows: readonly BlockRow[]
-  injectedTextRows: readonly InjectedTextRow[]
   rowHeightIndex: RowHeightIndex | null
   rowHeightIndexDisplayRows: readonly DisplayRow[] | null
   rowHeightIndexRowHeight: number
@@ -125,7 +119,6 @@ export interface VirtualizedTextViewInternal {
   blockLanes: readonly BlockLane[]
   blockLaneElements: Map<string, MountedVirtualizedBlockLane>
   wrapEnabled: boolean
-  currentWrapColumn: number | null
   tabSize: number
   tokenGroups: Map<string, TokenGroup>
   rowTokenSignatures: Map<number, string>
