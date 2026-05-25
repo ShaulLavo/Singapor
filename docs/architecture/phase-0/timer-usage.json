@@ -43,14 +43,6 @@
       "snippet": "next.timerId = view.setTimeout(() => {"
     },
     {
-      "api": "setTimeout",
-      "file": "packages/editor/src/editor/latestAsyncRequest.ts",
-      "id": "packages/editor/src/editor/latestAsyncRequest.ts:setTimeout:6ac56d91b9",
-      "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
-      "line": 28,
-      "snippet": "this.timer = setTimeout(() => {"
-    },
-    {
       "api": "requestAnimationFrame",
       "file": "packages/editor/src/editor/mouseSelection.ts",
       "id": "packages/editor/src/editor/mouseSelection.ts:requestAnimationFrame:e2ace6097b",
@@ -105,6 +97,14 @@
       "justification": "Phase 0 legacy baseline; keep until Phase 3 scheduler migration or replace with a specific scheduler-owned justification.",
       "line": 360,
       "snippet": "globalThis.setTimeout(dispose, 0)"
+    },
+    {
+      "api": "setTimeout",
+      "file": "packages/editor/src/editor/workScheduler.ts",
+      "id": "packages/editor/src/editor/workScheduler.ts:setTimeout:e34be5e183",
+      "justification": "Phase 3 scheduler owner; all delayed editor work enters through EditorWorkScheduler, which provides keyed cancellation, stale-result checks, budget aborts, and observability.",
+      "line": 103,
+      "snippet": "setTimeout(handler, timeout)) as typeof globalThis.setTimeout"
     },
     {
       "api": "setTimeout",

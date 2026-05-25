@@ -1,101 +1,100 @@
+import {
+  EditorWorkScheduler,
+  type EditorScheduledWorkHandle,
+  type EditorWorkPriority,
+  type EditorWorkTags,
+  type EditorWorkTaskClass,
+} from './workScheduler'
+
 export type LatestAsyncRequestOptions<T> = {
   readonly delayMs?: number
+  readonly budgetMs?: number
+  readonly taskClass?: EditorWorkTaskClass
+  readonly priority?: EditorWorkPriority
+  readonly tags?: EditorWorkTags
   readonly run: () => Promise<T>
   readonly apply: (result: T, startedAt: number) => void
   readonly fail?: (error: unknown, startedAt: number) => void
 }
 
+export type LatestAsyncRequestControllerOptions = {
+  readonly key?: string
+  readonly taskClass?: EditorWorkTaskClass
+  readonly scheduler?: EditorWorkScheduler
+}
+
 export class LatestAsyncRequest<T> {
-  private requestId = 0
-  private timer: ReturnType<typeof setTimeout> | null = null
-  private activeRequestId: number | null = null
+  private readonly key: string
+  private readonly taskClass: EditorWorkTaskClass
+  private readonly scheduler: EditorWorkScheduler
+  private readonly ownsScheduler: boolean
+  private handle: EditorScheduledWorkHandle | null = null
   private disposed = false
 
+  constructor(options: LatestAsyncRequestControllerOptions = {}) {
+    this.key = options.key ?? 'editor.latestAsyncRequest'
+    this.taskClass = options.taskClass ?? 'background-derived'
+    this.scheduler = options.scheduler ?? new EditorWorkScheduler()
+    this.ownsScheduler = !options.scheduler
+  }
+
   public isActive(): boolean {
-    return this.timer !== null || this.activeRequestId !== null
+    return this.handle?.isActive() ?? false
   }
 
   public schedule(options: LatestAsyncRequestOptions<T>): void {
     if (this.disposed) return
 
-    const requestId = this.nextRequestId()
-    const delayMs = normalizeDelay(options.delayMs)
-    if (delayMs === 0) {
-      this.start(requestId, options)
-      return
-    }
-
-    this.timer = setTimeout(() => {
-      this.timer = null
-      this.start(requestId, options)
-    }, delayMs)
+    this.cancel()
+    this.handle = this.scheduler.schedule({
+      key: this.key,
+      taskClass: options.taskClass ?? this.taskClass,
+      priority: options.priority,
+      delayMs: normalizeDelay(options.delayMs),
+      budgetMs: options.budgetMs,
+      tags: options.tags,
+      run: options.run,
+      apply: (result, context) =>
+        this.apply(result as T, options, context.token, context.startedAt),
+      fail: (error, context) => this.fail(error, options, context.token, context.startedAt),
+    })
   }
 
   public cancel(): void {
-    this.requestId += 1
-    this.activeRequestId = null
-    this.clearTimer()
+    this.handle?.cancel()
+    this.handle = null
   }
 
   public dispose(): void {
     this.disposed = true
     this.cancel()
-  }
-
-  private nextRequestId(): number {
-    this.cancel()
-    return this.requestId
-  }
-
-  private start(requestId: number, options: LatestAsyncRequestOptions<T>): void {
-    if (!this.isCurrent(requestId)) return
-
-    const startedAt = nowMs()
-    this.activeRequestId = requestId
-    void options
-      .run()
-      .then((result) => this.apply(requestId, result, options, startedAt))
-      .catch((error) => this.fail(requestId, error, options, startedAt))
+    if (this.ownsScheduler) this.scheduler.dispose()
   }
 
   private apply(
-    requestId: number,
     result: T,
     options: LatestAsyncRequestOptions<T>,
+    token: number,
     startedAt: number,
-  ): void {
-    if (!this.isCurrent(requestId)) return
-    this.clearActiveRequest(requestId)
+  ) {
+    this.clearHandle(token)
     options.apply(result, startedAt)
   }
 
   private fail(
-    requestId: number,
     error: unknown,
     options: LatestAsyncRequestOptions<T>,
+    token: number,
     startedAt: number,
   ): void {
-    if (!this.isCurrent(requestId)) return
-    this.clearActiveRequest(requestId)
+    this.clearHandle(token)
     options.fail?.(error, startedAt)
   }
 
-  private clearActiveRequest(requestId: number): void {
-    if (this.activeRequestId !== requestId) return
+  private clearHandle(token: number): void {
+    if (this.handle?.token !== token) return
 
-    this.activeRequestId = null
-  }
-
-  private isCurrent(requestId: number): boolean {
-    if (this.disposed) return false
-    return requestId === this.requestId
-  }
-
-  private clearTimer(): void {
-    if (this.timer === null) return
-
-    clearTimeout(this.timer)
-    this.timer = null
+    this.handle = null
   }
 }
 
@@ -103,5 +102,3 @@ const normalizeDelay = (delayMs: number | undefined): number => {
   if (!delayMs || delayMs <= 0) return 0
   return delayMs
 }
-
-const nowMs = (): number => globalThis.performance?.now() ?? Date.now()

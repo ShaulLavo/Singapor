@@ -78,6 +78,18 @@ type CachedSyntaxFoldRange = {
 
 const BACKGROUND_SYNTAX_TILE_CHARS = 120_000
 
+const syntaxWorkTags = (
+  documentVersion: number,
+  contentVersion: number,
+  source: EditorSyntaxLoadSource,
+  range?: EditorSyntaxRange,
+) => ({
+  version: documentVersion,
+  snapshotVersion: contentVersion,
+  configuration: source,
+  viewport: range ? `${range.startIndex}:${range.endIndex}` : null,
+})
+
 export class EditorSyntaxController {
   private syntaxStatus: 'plain' | 'loading' | 'ready' | 'error' = 'plain'
   private syntaxSession: EditorSyntaxSession | null = null
@@ -86,14 +98,32 @@ export class EditorSyntaxController {
   private highlighterTheme: EditorTheme | null = null
   private cachedSyntaxRanges: readonly EditorSyntaxRange[] = []
   private cachedSyntaxFoldRanges: readonly CachedSyntaxFoldRange[] = []
-  private readonly syntaxRequests = new LatestAsyncRequest<EditorSyntaxLoadResult>()
-  private readonly rangeRequests = new LatestAsyncRequest<EditorSyntaxLoadResult>()
-  private readonly prefetchRangeRequests = new LatestAsyncRequest<EditorSyntaxLoadResult>()
-  private readonly warmRangeRequests = new LatestAsyncRequest<EditorSyntaxLoadResult>()
-  private readonly highlightRequests = new LatestAsyncRequest<EditorHighlightResult>()
+  private readonly syntaxRequests = new LatestAsyncRequest<EditorSyntaxLoadResult>({
+    key: 'editor.syntax.document',
+    taskClass: 'background-derived',
+  })
+  private readonly rangeRequests = new LatestAsyncRequest<EditorSyntaxLoadResult>({
+    key: 'editor.syntax.visibleRange',
+    taskClass: 'viewport-derived',
+  })
+  private readonly prefetchRangeRequests = new LatestAsyncRequest<EditorSyntaxLoadResult>({
+    key: 'editor.syntax.prefetchRange',
+    taskClass: 'idle-cache',
+  })
+  private readonly warmRangeRequests = new LatestAsyncRequest<EditorSyntaxLoadResult>({
+    key: 'editor.syntax.warmRange',
+    taskClass: 'idle-cache',
+  })
+  private readonly highlightRequests = new LatestAsyncRequest<EditorHighlightResult>({
+    key: 'editor.syntax.highlight',
+    taskClass: 'background-derived',
+  })
   private readonly highlighterThemeRequests = new LatestAsyncRequest<
     EditorTheme | null | undefined
-  >()
+  >({
+    key: 'editor.syntax.highlighterTheme',
+    taskClass: 'background-derived',
+  })
   private currentTokens: readonly EditorToken[] = []
   private syntaxContentVersion = 0
   private parsedSyntaxContentVersion: number | null = null
@@ -185,6 +215,7 @@ export class EditorSyntaxController {
     }
 
     this.highlighterThemeRequests.schedule({
+      tags: { configuration: 'highlighterTheme' },
       run: () => this.options.pluginHost.loadHighlighterTheme(),
       apply: (theme) => this.setProviderHighlighterTheme(theme),
       fail: () => this.setProviderHighlighterTheme(null),
@@ -351,6 +382,7 @@ export class EditorSyntaxController {
     const contentVersion = this.syntaxContentVersion
     request.schedule({
       delayMs: options.delayMs ?? 50,
+      tags: syntaxWorkTags(documentVersion, contentVersion, kind, range),
       run: () => this.loadSyntaxRangeResult(range, kind, { contentVersion }),
       apply: (result, startedAt) => {
         const applied = this.applySyntaxResult(result, documentVersion, startedAt)
@@ -397,6 +429,7 @@ export class EditorSyntaxController {
     const delayMs = options.delayMs ?? syntaxRefreshDelay(change)
     this.syntaxRequests.schedule({
       delayMs,
+      tags: syntaxWorkTags(documentVersion, contentVersion, 'full'),
       run: () => this.loadSyntaxResult(change, contentVersion),
       apply: (result, startedAt) => this.applySyntaxResult(result, documentVersion, startedAt),
       fail: (error, startedAt) =>
@@ -415,6 +448,7 @@ export class EditorSyntaxController {
     const delayMs = options.delayMs ?? syntaxRefreshDelay(change)
     this.highlightRequests.schedule({
       delayMs,
+      tags: { version: documentVersion, configuration: 'highlight' },
       run: () => this.loadHighlightResult(change),
       apply: (result, startedAt) => this.applyHighlightResult(result, documentVersion, startedAt),
       fail: (_error, startedAt) =>
@@ -613,6 +647,7 @@ export class EditorSyntaxController {
 
     this.warmRangeRequests.schedule({
       delayMs: pending.delayMs,
+      tags: syntaxWorkTags(pending.documentVersion, pending.contentVersion, 'warm', range),
       run: () =>
         this.loadSyntaxRangeResult(range, 'warm', { contentVersion: pending.contentVersion }),
       apply: (result, startedAt) => {
