@@ -316,15 +316,19 @@ function installCaretRangeFromPoint(textNode: Text, offset: number): () => void 
 }
 
 function setCollapsedDomSelection(offset: number): void {
+  setNativeDomSelection(offset, offset)
+  editorRoot().dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+}
+
+function setNativeDomSelection(anchorOffset: number, headOffset: number): void {
   const range = document.createRange()
   const textNode = rowTextNode()
-  range.setStart(textNode, offset)
-  range.setEnd(textNode, offset)
+  range.setStart(textNode, anchorOffset)
+  range.setEnd(textNode, headOffset)
 
   const selection = window.getSelection()!
   selection.removeAllRanges()
   selection.addRange(range)
-  editorRoot().dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
 }
 
 function editorInput(): HTMLTextAreaElement {
@@ -344,6 +348,17 @@ function dispatchEditorKey(key: string, init: KeyboardEventInit = {}): KeyboardE
 
 function dispatchInputKey(key: string, init: KeyboardEventInit = {}): KeyboardEvent {
   const event = new KeyboardEvent('keydown', {
+    bubbles: true,
+    cancelable: true,
+    key,
+    ...init,
+  })
+  editorInput().dispatchEvent(event)
+  return event
+}
+
+function dispatchInputKeyUp(key: string, init: KeyboardEventInit = {}): KeyboardEvent {
+  const event = new KeyboardEvent('keyup', {
     bubbles: true,
     cancelable: true,
     key,
@@ -2257,7 +2272,7 @@ describe('Editor', () => {
       expect(editor.materializeFullText()).toBe('abc!')
     })
 
-    it('lets native beforeinput cancel the focused keydown fallback', async () => {
+    it('lets native beforeinput cancel the focused keydown fallback', () => {
       const changes: DocumentSessionChange[] = []
       editor.dispose()
       editor = new Editor(container, {
@@ -2272,7 +2287,7 @@ describe('Editor', () => {
 
       const keydown = dispatchInputKey('X')
       editorInput().dispatchEvent(createInsertEvent('X'))
-      await flushTimers()
+      dispatchInputKeyUp('X')
 
       const timingNames = changes.flatMap((change) => change.timings.map(({ name }) => name))
       expect(keydown.defaultPrevented).toBe(false)
@@ -2282,37 +2297,36 @@ describe('Editor', () => {
       expect(timingNames).not.toContain('input.keydownFallback')
     })
 
-    it('falls back to keydown text when native beforeinput never arrives', async () => {
+    it('falls back to keydown text when native beforeinput never arrives', () => {
       const session = createDocumentSession('abc')
       editor.attachSession(session)
       editor.focus()
 
       dispatchInputKey('X')
-      await flushTimers()
+      expect(session.materializeFullText()).toBe('abc')
+
+      dispatchInputKeyUp('X')
 
       expect(session.materializeFullText()).toBe('abcX')
       expect(editor.materializeFullText()).toBe('abcX')
     })
 
-    it('applies focused keydown text synchronously after native input is missing', async () => {
+    it('applies focused keydown text synchronously after native input is missing', () => {
       const session = createDocumentSession('abc')
       editor.attachSession(session)
       editor.focus()
 
       dispatchInputKey('X')
-      await flushTimers()
+      dispatchInputKeyUp('X')
 
       const event = dispatchInputKey('Y')
 
       expect(event.defaultPrevented).toBe(true)
       expect(session.materializeFullText()).toBe('abcXY')
       expect(editor.materializeFullText()).toBe('abcXY')
-      await flushTimers()
-      expect(session.materializeFullText()).toBe('abcXY')
-      expect(editor.materializeFullText()).toBe('abcXY')
     })
 
-    it('coalesces rapid focused keydown fallback text into one change', async () => {
+    it('coalesces rapid focused keydown fallback text into one change', () => {
       const changes: DocumentSessionChange[] = []
       editor.dispose()
       editor = new Editor(container, {
@@ -2328,7 +2342,8 @@ describe('Editor', () => {
       dispatchInputKey('X')
       dispatchInputKey('Y')
       dispatchInputKey('Z')
-      await flushTimers()
+      expect(session.materializeFullText()).toBe('abc')
+      dispatchInputKeyUp('Z')
 
       const fallbackChanges = changes.filter((change) =>
         change.timings.some(({ name }) => name === 'input.keydownFallback'),
@@ -2424,13 +2439,15 @@ describe('Editor', () => {
       expect(session.materializeFullText()).toBe('a\nb\nc')
     })
 
-    it('falls back to keydown line breaks when native beforeinput never arrives', async () => {
+    it('falls back to keydown line breaks when native beforeinput never arrives', () => {
       const session = createDocumentSession('abc')
       editor.attachSession(session)
       editor.focus()
 
       dispatchInputKey('Enter')
-      await flushTimers()
+      expect(session.materializeFullText()).toBe('abc')
+
+      dispatchInputKeyUp('Enter')
 
       expect(session.materializeFullText()).toBe('abc\n')
       expect(editor.materializeFullText()).toBe('abc\n')
@@ -2461,7 +2478,7 @@ describe('Editor', () => {
 
       editorInput().dispatchEvent(createCompositionEvent('compositionend'))
       dispatchInputKey('X')
-      await flushTimers()
+      dispatchInputKeyUp('X')
 
       expect(session.materializeFullText()).toBe('abcX')
       expect(editor.materializeFullText()).toBe('abcX')
@@ -2501,14 +2518,15 @@ describe('Editor', () => {
       expect(editor.materializeFullText()).toBe('abc文')
     })
 
-    it('clears pending keydown fallback on dispose', async () => {
+    it('clears pending keydown fallback on dispose', () => {
       const session = createDocumentSession('abc')
       editor.attachSession(session)
       editor.focus()
 
+      const input = editorInput()
       dispatchInputKey('X')
       editor.dispose()
-      await flushTimers()
+      input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, cancelable: true, key: 'X' }))
 
       expect(session.materializeFullText()).toBe('abc')
       editor = new Editor(container, { plugins: withTestLanguagePlugins() })
@@ -2729,6 +2747,21 @@ describe('Editor', () => {
       expect(copy.event.defaultPrevented).toBe(true)
     })
 
+    it('copies multiple selected ranges with newline separators', () => {
+      const session = createDocumentSession('alpha beta gamma')
+      session.setSelections([
+        { anchor: 0, head: 5 },
+        { anchor: 11, head: 16 },
+      ])
+      editor.attachSession(session)
+
+      const copy = createCopyEvent()
+      editorRoot().dispatchEvent(copy.event)
+
+      expect(copy.materializeFullText()).toBe('alpha\ngamma')
+      expect(copy.event.defaultPrevented).toBe(true)
+    })
+
     it('does not intercept copy for collapsed selections', () => {
       const session = createDocumentSession('abc')
       editor.attachSession(session)
@@ -2775,6 +2808,29 @@ describe('Editor', () => {
       expect(editorRoot().scrollTop).toBeGreaterThan(0)
     })
 
+    it('pastes plain text at each active cursor as one undoable edit', () => {
+      const session = createDocumentSession('abcd')
+      session.setSelections([{ anchor: 1 }, { anchor: 3 }])
+      editor.attachSession(session)
+      editor.focus()
+
+      editorInput().dispatchEvent(createPasteEvent('X'))
+
+      expect(session.materializeFullText()).toBe('aXbcXd')
+      expect(resolvedSelectionRanges(session)).toEqual([
+        { anchor: 2, head: 2, start: 2, end: 2 },
+        { anchor: 5, head: 5, start: 5, end: 5 },
+      ])
+
+      editor.dispatchCommand('undo')
+
+      expect(session.materializeFullText()).toBe('abcd')
+      expect(resolvedSelectionRanges(session)).toEqual([
+        { anchor: 1, head: 1, start: 1, end: 1 },
+        { anchor: 3, head: 3, start: 3, end: 3 },
+      ])
+    })
+
     it('inserts dropped plain text at the hit-tested offset', () => {
       const session = createDocumentSession('abcd')
       session.setSelection(0)
@@ -2787,6 +2843,28 @@ describe('Editor', () => {
         editorRoot().dispatchEvent(drop)
 
         expect(drop.defaultPrevented).toBe(true)
+        expect(session.materializeFullText()).toBe('abXcd')
+        expect(resolvedSelectionRanges(session)).toEqual([{ anchor: 3, end: 3, head: 3, start: 3 }])
+
+        editor.dispatchCommand('undo')
+
+        expect(session.materializeFullText()).toBe('abcd')
+        expect(resolvedSelectionRanges(session)).toEqual([{ anchor: 2, end: 2, head: 2, start: 2 }])
+      } finally {
+        restoreCaretRangeFromPoint()
+      }
+    })
+
+    it('drops plain text at the hit-tested offset instead of every active cursor', () => {
+      const session = createDocumentSession('abcd')
+      session.setSelections([{ anchor: 1 }, { anchor: 3 }])
+      editor.attachSession(session)
+      mockEditorViewport(editorRoot(), 120, 40)
+      const restoreCaretRangeFromPoint = installCaretRangeFromPoint(rowTextNode(), 2)
+
+      try {
+        editorRoot().dispatchEvent(createDropEvent('X', { clientX: 20, clientY: 10 }))
+
         expect(session.materializeFullText()).toBe('abXcd')
         expect(resolvedSelectionRanges(session)).toEqual([{ anchor: 3, end: 3, head: 3, start: 3 }])
 
@@ -3063,6 +3141,47 @@ describe('Editor', () => {
 
       expect(session.materializeFullText()).toBe('aXd')
       expect(editorRoot().textContent).toBe('aXd')
+    })
+
+    it('keeps session-owned selections authoritative when browser selection drifts', () => {
+      const session = createDocumentSession('abcd')
+      editor.attachSession(session)
+
+      dispatchEditorKey('a', primaryModifier())
+      setNativeDomSelection(0, 0)
+      document.dispatchEvent(new Event('selectionchange'))
+
+      expect(resolvedSelectionRanges(session)).toEqual([{ anchor: 0, head: 4, start: 0, end: 4 }])
+
+      editorInput().dispatchEvent(createPasteEvent('X'))
+
+      expect(session.materializeFullText()).toBe('X')
+      expect(resolvedSelectionRanges(session)).toEqual([{ anchor: 1, head: 1, start: 1, end: 1 }])
+    })
+
+    it('reconciles undo and redo selections before later browser selection drift', () => {
+      const session = createDocumentSession('abcd')
+      session.setSelection(1, 3)
+      editor.attachSession(session)
+
+      editorRoot().dispatchEvent(createInsertEvent('X'))
+      editor.dispatchCommand('undo')
+      setNativeDomSelection(0, 0)
+      document.dispatchEvent(new Event('selectionchange'))
+
+      expect(session.materializeFullText()).toBe('abcd')
+      expect(resolvedSelectionRanges(session)).toEqual([{ anchor: 1, head: 3, start: 1, end: 3 }])
+
+      editor.dispatchCommand('redo')
+      setNativeDomSelection(0, 0)
+      document.dispatchEvent(new Event('selectionchange'))
+
+      expect(session.materializeFullText()).toBe('aXd')
+      expect(resolvedSelectionRanges(session)).toEqual([{ anchor: 2, head: 2, start: 2, end: 2 }])
+
+      editorRoot().dispatchEvent(createInsertEvent('!'))
+
+      expect(session.materializeFullText()).toBe('aX!d')
     })
 
     it('renders range selections with custom selection geometry', () => {

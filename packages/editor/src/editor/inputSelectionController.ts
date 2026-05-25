@@ -89,7 +89,6 @@ export class InputSelectionController {
   private mouseSelectionAutoScrollFrame = 0
   private inputState: EditorInputState = createEditorInputState()
   private nativeInputHandlersInstalled = false
-  private pendingKeyboardTextFallbackTimerId = 0
 
   constructor(private readonly options: InputSelectionControllerOptions) {}
 
@@ -104,7 +103,7 @@ export class InputSelectionController {
     el.addEventListener('compositionstart', this.handleCompositionStart)
     el.addEventListener('compositionupdate', this.handleCompositionUpdate)
     el.addEventListener('compositionend', this.handleCompositionEnd)
-    el.addEventListener('keyup', this.syncSessionSelectionFromDom)
+    el.addEventListener('keyup', this.handleKeyUp)
     el.addEventListener('mouseup', this.syncSessionSelectionFromDom)
     el.ownerDocument.addEventListener('selectionchange', this.syncCustomSelectionFromDom)
   }
@@ -122,7 +121,7 @@ export class InputSelectionController {
     el.removeEventListener('compositionstart', this.handleCompositionStart)
     el.removeEventListener('compositionupdate', this.handleCompositionUpdate)
     el.removeEventListener('compositionend', this.handleCompositionEnd)
-    el.removeEventListener('keyup', this.syncSessionSelectionFromDom)
+    el.removeEventListener('keyup', this.handleKeyUp)
     el.removeEventListener('mouseup', this.syncSessionSelectionFromDom)
     el.ownerDocument.removeEventListener('selectionchange', this.syncCustomSelectionFromDom)
     this.stopMouseSelectionDrag()
@@ -144,6 +143,7 @@ export class InputSelectionController {
 
     const start = context.event ? eventStartMs(context.event) : nowMs()
     const change = command === 'undo' ? session.undo() : session.redo()
+    if (change.kind !== 'none') this.markSessionSelectionForNextInput()
     this.options.applySessionChange(change, command === 'undo' ? 'input.undo' : 'input.redo', start)
     return true
   }
@@ -973,14 +973,19 @@ export class InputSelectionController {
     if (this.inputState.compositionActive) return
 
     if (this.canWaitForNativeTextInput(event, fallbackText)) {
-      this.scheduleKeyboardTextFallback(event, fallbackText)
+      this.startKeyboardTextFallbackWait(event, fallbackText)
       return
     }
 
     event.preventDefault()
-    this.flushPendingKeyboardTextFallback()
+    this.resolvePendingKeyboardTextFallback()
     this.applyKeyboardTextFallback(fallbackText, eventStartMs(event))
     if (event.target !== this.options.view.inputElement) this.options.view.focusInput()
+  }
+
+  private handleKeyUp = (event: KeyboardEvent): void => {
+    this.resolvePendingKeyboardTextFallback()
+    this.syncSessionSelectionFromDom(event)
   }
 
   private canWaitForNativeTextInput(event: KeyboardEvent, text: string): boolean {
@@ -990,63 +995,38 @@ export class InputSelectionController {
     })
   }
 
-  private scheduleKeyboardTextFallback(event: KeyboardEvent, text: string): void {
+  private startKeyboardTextFallbackWait(event: KeyboardEvent, text: string): void {
     const start = eventStartMs(event)
     const nativeInputGeneration = this.inputState.nativeInputGeneration
 
     if (hasPendingKeyboardTextFallbackForGeneration(this.inputState, nativeInputGeneration)) {
-      this.transitionInputState({ startMs: start, text, type: 'fallback-appended' })
+      this.transitionInputState({ startMs: start, text, type: 'native-input-wait-appended' })
       return
     }
-
-    const view = this.options.el.ownerDocument.defaultView
-    if (!view) return
 
     this.cancelPendingKeyboardTextFallback()
     this.transitionInputState({
       generation: nativeInputGeneration,
       startMs: start,
       text,
-      type: 'fallback-scheduled',
+      type: 'native-input-wait-started',
     })
-    const timerId = view.setTimeout(() => {
-      this.flushPendingKeyboardTextFallback(nativeInputGeneration, timerId)
-    }, 0)
-    this.pendingKeyboardTextFallbackTimerId = timerId
   }
 
   private cancelPendingKeyboardTextFallback(): void {
     const pending = pendingKeyboardTextFallback(this.inputState)
-    this.clearPendingKeyboardTextFallbackTimer()
     if (!pending) return
 
-    this.transitionInputState({ type: 'fallback-cancelled' })
+    this.transitionInputState({ type: 'native-input-wait-cancelled' })
   }
 
-  private flushPendingKeyboardTextFallback(
-    expectedGeneration?: number,
-    expectedTimerId?: number,
-  ): void {
+  private resolvePendingKeyboardTextFallback(): void {
     const pending = pendingKeyboardTextFallback(this.inputState)
     if (!pending) return
-    if (expectedGeneration !== undefined && pending.generation !== expectedGeneration) return
-    if (
-      expectedTimerId !== undefined &&
-      this.pendingKeyboardTextFallbackTimerId !== expectedTimerId
-    )
-      return
 
-    this.clearPendingKeyboardTextFallbackTimer()
-    this.transitionInputState({ type: 'fallback-cancelled' })
+    this.transitionInputState({ generation: pending.generation, type: 'native-input-missing' })
+    this.transitionInputState({ type: 'native-input-wait-cancelled' })
     this.applyKeyboardTextFallback(pending.text, pending.startMs, pending.generation)
-  }
-
-  private clearPendingKeyboardTextFallbackTimer(): void {
-    const timerId = this.pendingKeyboardTextFallbackTimerId
-    if (timerId === 0) return
-
-    this.pendingKeyboardTextFallbackTimerId = 0
-    this.options.el.ownerDocument.defaultView?.clearTimeout(timerId)
   }
 
   private applyKeyboardTextFallback(
@@ -1064,9 +1044,6 @@ export class InputSelectionController {
       return
     }
 
-    if (nativeInputGeneration !== undefined) {
-      this.transitionInputState({ generation: nativeInputGeneration, type: 'native-input-missing' })
-    }
     const selectionChange = measureEditorPerformance('input.selectionChangeBeforeEdit', () =>
       this.selectionChangeBeforeEdit(),
     )

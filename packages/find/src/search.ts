@@ -1,9 +1,13 @@
+import {
+  codePointSizeAt,
+  isWholeWordRange,
+  normalizeTextOffsetRanges,
+  type TextOffsetRange,
+} from '@editor/core/document'
+
 export const FIND_MATCHES_LIMIT = 19_999
 
-export type FindRange = {
-  readonly start: number
-  readonly end: number
-}
+export type FindRange = TextOffsetRange
 
 export type FindQuery = {
   readonly searchString: string
@@ -101,14 +105,7 @@ function normalizedSearchRanges(
   ranges: readonly FindRange[] | null,
 ): readonly FindRange[] {
   if (!ranges || ranges.length === 0) return [{ start: 0, end: text.length }]
-
-  return ranges
-    .map((range) => ({
-      start: clamp(range.start, 0, text.length),
-      end: clamp(range.end, 0, text.length),
-    }))
-    .filter((range) => range.start <= range.end)
-    .toSorted((left, right) => left.start - right.start || left.end - right.end)
+  return normalizeTextOffsetRanges(text, ranges)
 }
 
 function appendMatchesInRange(
@@ -205,57 +202,5 @@ function validWholeWordMatch(
   wholeWord: boolean,
 ): boolean {
   if (!wholeWord) return true
-  return leftIsWordBoundary(text, start, length) && rightIsWordBoundary(text, start, length)
-}
-
-function leftIsWordBoundary(text: string, start: number, length: number): boolean {
-  if (start === 0) return true
-  if (!isWordCodePointBefore(text, start)) return true
-  if (length === 0) return false
-  return !isWordCodePointAt(text, start)
-}
-
-function rightIsWordBoundary(text: string, start: number, length: number): boolean {
-  const end = start + length
-  if (end === text.length) return true
-  if (!isWordCodePointAt(text, end)) return true
-  if (length === 0) return false
-  return !isWordCodePointBefore(text, end)
-}
-
-function isWordCodePointBefore(text: string, offset: number): boolean {
-  if (offset <= 0) return false
-
-  const previous = previousCodePointStart(text, offset)
-  return previous !== null && isWordCodePointAt(text, previous)
-}
-
-function isWordCodePointAt(text: string, offset: number): boolean {
-  const codePoint = text.codePointAt(offset)
-  if (codePoint === undefined) return false
-  return /^[\p{L}\p{N}_]$/u.test(String.fromCodePoint(codePoint))
-}
-
-function previousCodePointStart(text: string, offset: number): number | null {
-  if (offset <= 0) return null
-
-  const previous = offset - 1
-  const codeUnit = text.charCodeAt(previous)
-  const beforePrevious = previous - 1
-  const isLowSurrogate = codeUnit >= 0xdc00 && codeUnit <= 0xdfff
-  if (!isLowSurrogate || beforePrevious < 0) return previous
-
-  const previousCodeUnit = text.charCodeAt(beforePrevious)
-  const isHighSurrogate = previousCodeUnit >= 0xd800 && previousCodeUnit <= 0xdbff
-  return isHighSurrogate ? beforePrevious : previous
-}
-
-function codePointSizeAt(text: string, offset: number): number {
-  const codePoint = text.codePointAt(offset)
-  if (codePoint === undefined) return 0
-  return codePoint > 0xffff ? 2 : 1
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value))
+  return isWholeWordRange(text, { start, end: start + length })
 }

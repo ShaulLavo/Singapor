@@ -5,6 +5,7 @@ import {
   createPieceTableSnapshot,
   materializePieceTableFullText,
   readPieceTableTextRange,
+  wordRangeAtOffset,
   type TextEdit,
 } from '@editor/core/document'
 import { Editor } from '@editor/core/editor'
@@ -39,6 +40,7 @@ describe('public API facade', () => {
     expect(parseMergeConflicts('')).toEqual([])
     expect(materializePieceTableFullText(snapshot)).toBe('abc')
     expect(readPieceTableTextRange(snapshot, 1, 3)).toBe('bc')
+    expect(wordRangeAtOffset('abc', 1)).toEqual({ start: 0, end: 3 })
     expect(edit).toEqual({ from: 1, to: 2, text: 'B' })
     expect({ index: 0 } as MergeConflictRegion).toMatchObject({ index: 0 })
     expect(state.documentId).toBeNull()

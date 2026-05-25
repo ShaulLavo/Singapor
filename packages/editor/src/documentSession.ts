@@ -1,19 +1,21 @@
 import {
-  applyTextToSelections,
-  backspaceSelections,
   createAnchorSelection,
   createSelectionIdFactory,
   createSelectionSet,
-  deleteSelections,
-  indentSelections,
   markSelectionSetDirty,
   normalizeSelectionSet,
-  outdentSelections,
   type AnchorSelection,
   type SelectionIdFactory,
   type SelectionGoal,
   type SelectionSet,
 } from './selections'
+import {
+  applyTextToSelections,
+  backspaceSelections,
+  deleteSelections,
+  indentSelections,
+  outdentSelections,
+} from './documentSelectionEdits'
 import {
   commitEditorHistory,
   createEditorHistory,

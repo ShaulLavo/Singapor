@@ -43,12 +43,12 @@ describe('editor input state machine', () => {
       generation: state.nativeInputGeneration,
       startMs: 10,
       text: 'A',
-      type: 'fallback-scheduled',
+      type: 'native-input-wait-started',
     })
     state = transitionEditorInputState(state, {
       startMs: 11,
       text: 'B',
-      type: 'fallback-appended',
+      type: 'native-input-wait-appended',
     })
 
     expect(state).toMatchObject({

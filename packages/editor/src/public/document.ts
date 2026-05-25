@@ -20,6 +20,24 @@ export {
 } from '../pieceTable'
 export { createDocumentSession, createStaticDocumentSession } from '../documentSession'
 export { createDocumentTextSnapshot, createStringTextSnapshot } from '../documentTextSnapshot'
+export {
+  characterClassAt,
+  clampTextOffset,
+  clampTextOffsetRange,
+  codePointSizeAt,
+  compareTextOffsetRanges,
+  isWholeWordRange,
+  isWordCodePointAt,
+  isWordCodePointBefore,
+  lineRangeAtOffset,
+  nextCodePointOffset,
+  nextWordOffset,
+  normalizeTextOffsetRanges,
+  previousCodePointOffset,
+  previousCodePointStart,
+  previousWordOffset,
+  wordRangeAtOffset,
+} from '../textRanges'
 export type {
   AnchorBias,
   AnchorLiveness,
@@ -44,3 +62,4 @@ export type {
 } from '../documentSession'
 export type { DocumentTextSnapshot, TextSnapshot } from '../documentTextSnapshot'
 export type { EditorDocument, TextEdit } from '../tokens'
+export type { TextCharacterClass, TextOffsetRange } from '../textRanges'

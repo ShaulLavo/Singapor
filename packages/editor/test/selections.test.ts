@@ -5,15 +5,17 @@ import {
   materializePieceTableFullText,
 } from '../src/public/document'
 import {
-  applyTextToSelections,
-  backspaceSelections,
   createAnchorSelection,
   createSelectionSet,
-  deleteSelections,
   normalizeSelectionSet,
   resolveSelection,
   SelectionGoal,
 } from '../src/selections'
+import {
+  applyTextToSelections,
+  backspaceSelections,
+  deleteSelections,
+} from '../src/documentSelectionEdits'
 import {
   commitEditorHistory,
   createEditorHistory,

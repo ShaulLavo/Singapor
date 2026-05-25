@@ -27,6 +27,17 @@ describe('editor search', () => {
     ).toEqual([{ start: 0, end: 3 }])
   })
 
+  it('uses shared unicode word boundaries', () => {
+    expect(
+      findMatches('café cafe café_2', {
+        searchString: 'café',
+        isRegex: false,
+        matchCase: true,
+        wholeWord: true,
+      }).map(({ start, end }) => ({ start, end })),
+    ).toEqual([{ start: 0, end: 4 }])
+  })
+
   it('finds regex, multiline, invalid-regex, zero-length, and limited matches', () => {
     const regexMatches = findMatches(
       'one\ntwo\nthree',

@@ -46,13 +46,13 @@ export type EditorInputStateTransition =
   | { readonly type: 'drop-pending'; readonly text: string }
   | { readonly type: 'native-input-observed' }
   | {
-      readonly type: 'fallback-scheduled'
+      readonly type: 'native-input-wait-started'
       readonly generation: number
       readonly startMs: number
       readonly text: string
     }
-  | { readonly type: 'fallback-appended'; readonly startMs: number; readonly text: string }
-  | { readonly type: 'fallback-cancelled' }
+  | { readonly type: 'native-input-wait-appended'; readonly startMs: number; readonly text: string }
+  | { readonly type: 'native-input-wait-cancelled' }
   | { readonly type: 'native-input-missing'; readonly generation: number }
   | { readonly type: 'transaction-committed' }
   | { readonly type: 'selection-reconciled'; readonly owner: EditorInputSelectionOwner }
@@ -117,9 +117,13 @@ export function transitionEditorInputState(
   if (transition.type === 'paste-pending') return setPendingText(state, 'paste', transition.text)
   if (transition.type === 'drop-pending') return setPendingText(state, 'drop', transition.text)
   if (transition.type === 'native-input-observed') return nativeInputObserved(state)
-  if (transition.type === 'fallback-scheduled') return scheduleFallback(state, transition)
-  if (transition.type === 'fallback-appended') return appendFallbackText(state, transition)
-  if (transition.type === 'fallback-cancelled') return cancelFallback(state)
+  if (transition.type === 'native-input-wait-started') {
+    return startNativeInputWait(state, transition)
+  }
+  if (transition.type === 'native-input-wait-appended') {
+    return appendNativeInputWaitText(state, transition)
+  }
+  if (transition.type === 'native-input-wait-cancelled') return cancelNativeInputWait(state)
   if (transition.type === 'native-input-missing') return nativeInputMissing(state, transition)
   if (transition.type === 'transaction-committed') {
     return commitTransaction(state)
@@ -268,9 +272,9 @@ function nativeInputMissing(
   return { ...state, nativeTextInputState: 'missing' }
 }
 
-function scheduleFallback(
+function startNativeInputWait(
   state: EditorInputState,
-  transition: Extract<EditorInputStateTransition, { readonly type: 'fallback-scheduled' }>,
+  transition: Extract<EditorInputStateTransition, { readonly type: 'native-input-wait-started' }>,
 ): EditorInputState {
   return {
     ...state,
@@ -282,9 +286,9 @@ function scheduleFallback(
   }
 }
 
-function appendFallbackText(
+function appendNativeInputWaitText(
   state: EditorInputState,
-  transition: Extract<EditorInputStateTransition, { readonly type: 'fallback-appended' }>,
+  transition: Extract<EditorInputStateTransition, { readonly type: 'native-input-wait-appended' }>,
 ): EditorInputState {
   if (state.phase !== 'fallback-pending') return state
   if (state.fallbackGeneration === null) return state
@@ -297,7 +301,7 @@ function appendFallbackText(
   }
 }
 
-function cancelFallback(state: EditorInputState): EditorInputState {
+function cancelNativeInputWait(state: EditorInputState): EditorInputState {
   const phase = state.phase === 'fallback-pending' ? 'idle' : state.phase
   return clearPendingText({ ...state, phase })
 }
