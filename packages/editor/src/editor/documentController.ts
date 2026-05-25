@@ -1,7 +1,7 @@
 import type { DocumentSession } from '../documentSession'
 import {
   createStringTextSnapshot,
-  defineLazyTextProperty,
+  defineLazyFullTextProperty,
   type DocumentTextSnapshot,
   type TextSnapshot,
 } from '../documentTextSnapshot'
@@ -31,7 +31,7 @@ export type EditorDocumentAttachment = {
   readonly languageId: EditorSyntaxLanguageId | null
   readonly session: DocumentSession
   readonly textSnapshot: DocumentTextSnapshot
-  readonly text: string
+  readonly fullText: string
 }
 
 export class EditorDocumentController {
@@ -55,7 +55,7 @@ export class EditorDocumentController {
   }
 
   get text(): string {
-    return this.currentTextSnapshot.getText()
+    return this.currentTextSnapshot.materializeFullText()
   }
 
   get textSnapshot(): TextSnapshot {
@@ -192,8 +192,8 @@ export class EditorDocumentController {
   }
 
   private createAttachment(
-    attachment: Omit<EditorDocumentAttachment, 'text'>,
+    attachment: Omit<EditorDocumentAttachment, 'fullText'>,
   ): EditorDocumentAttachment {
-    return defineLazyTextProperty(attachment)
+    return defineLazyFullTextProperty(attachment)
   }
 }

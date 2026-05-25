@@ -10,6 +10,7 @@
     "./types": "./src/types.ts"
   },
   "scripts": {
+    "test": "vitest run",
     "typecheck": "tsgo --noEmit",
     "lint": "oxlint .",
     "format": "oxfmt --write .",

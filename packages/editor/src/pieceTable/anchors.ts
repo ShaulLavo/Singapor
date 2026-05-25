@@ -8,7 +8,7 @@ import type {
   ResolvedAnchor,
 } from './pieceTableTypes'
 import { getBufferText } from './buffers'
-import { getPieceTableText } from './reads'
+import { readPieceTableTextRange } from './reads'
 import {
   coversAnchorOffset,
   lookupReverseIndex,
@@ -33,7 +33,7 @@ export const Anchor = {
 const ensureCodePointBoundary = (snapshot: PieceTableTreeSnapshot, offset: number): void => {
   if (offset <= 0 || offset >= snapshot.length) return
 
-  const text = getPieceTableText(snapshot, offset - 1, offset + 1)
+  const text = readPieceTableTextRange(snapshot, offset - 1, offset + 1)
   const before = text.charCodeAt(0)
   const after = text.charCodeAt(1)
   const beforeIsHighSurrogate = before >= 0xd800 && before <= 0xdbff

@@ -1,5 +1,5 @@
 import type { DocumentSession, DocumentSessionChange } from '../documentSession'
-import { defineLazyTextProperty, type DocumentTextSnapshot } from '../documentTextSnapshot'
+import { defineLazyFullTextProperty, type DocumentTextSnapshot } from '../documentTextSnapshot'
 import type { PieceTableSnapshot } from '../pieceTable/pieceTableTypes'
 import type { EditorHighlightResult, EditorHighlighterSession, EditorPluginHost } from '../plugins'
 import { createEmptySyntaxResult } from '../syntax/session'
@@ -303,7 +303,7 @@ export class EditorSyntaxController {
       textSnapshot: document.textSnapshot,
       snapshot: document.snapshot,
     }
-    const sessionOptions = defineLazyTextProperty(options)
+    const sessionOptions = defineLazyFullTextProperty(options)
     return (
       this.options.pluginHost.createSyntaxSession(sessionOptions) ??
       getEditorSyntaxSessionFactory()?.(sessionOptions) ??
@@ -318,7 +318,7 @@ export class EditorSyntaxController {
     snapshot: PieceTableSnapshot,
   ): EditorHighlighterSession | null {
     return this.options.pluginHost.createHighlighterSession(
-      defineLazyTextProperty({
+      defineLazyFullTextProperty({
         documentId,
         languageId,
         textSnapshot,

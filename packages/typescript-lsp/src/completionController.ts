@@ -170,7 +170,7 @@ export class CompletionController {
         'textDocument/completion',
         {
           textDocument: { uri: active.uri },
-          position: offsetToLspPosition(active.text, offset),
+          position: offsetToLspPosition(active.fullText, offset),
           context: trigger,
         } satisfies lsp.CompletionParams,
         { signal: abort.signal },
@@ -191,7 +191,7 @@ export class CompletionController {
     if (active !== this.options.getActiveDocument()) return
     if (items.length === 0) return this.hide()
 
-    const range = completionAnchorRange(active.text, offset)
+    const range = completionAnchorRange(active.fullText, offset)
     const rect = this.context.getRangeClientRect(range.start, range.end)
     if (!rect) return this.hide()
 
@@ -209,7 +209,7 @@ export class CompletionController {
     if (!session || !item) return false
     if (session.active !== this.options.getActiveDocument()) return false
 
-    const application = completionApplication(session.active.text, session.offset, item)
+    const application = completionApplication(session.active.fullText, session.offset, item)
     if (!application) return false
 
     const feature = this.completionEditFeature()

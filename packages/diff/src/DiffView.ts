@@ -718,7 +718,7 @@ export class DiffView {
       const session = backend.provider.createSession({
         documentId: `${file.path}:${source.side}`,
         languageId: file.languageId ?? shikiLanguageForFile(file),
-        text: source.text,
+        fullText: source.text,
         snapshot: createPieceTableSnapshot(source.text),
       })
       if (!session) continue
@@ -774,7 +774,7 @@ export class DiffView {
     const session = createShikiHighlighterSession({
       documentId: `${file.path}:${pane.side}`,
       languageId: file.languageId ?? lang,
-      text: syntaxText,
+      fullText: syntaxText,
       snapshot,
       langs: [lang],
       lang,

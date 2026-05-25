@@ -55,16 +55,16 @@ describe('useEditor', () => {
     })
 
     expect(mounted.controller.getEditor()).not.toBeNull()
-    expect(mounted.controller.getText()).toBe('alpha')
+    expect(mounted.controller.materializeFullText()).toBe('alpha')
     expect(mounted.controller.getState()?.length).toBe(5)
-    expect(mounted.controller.getSnapshot()?.text).toBe('alpha')
+    expect(mounted.controller.getSnapshot()?.fullText).toBe('alpha')
 
     mounted.dispose()
 
     expect(mounted.controller.getEditor()).toBeNull()
     expect(mounted.controller.getState()).toBeNull()
     expect(mounted.controller.getSnapshot()).toBeNull()
-    expect(mounted.controller.getText()).toBe('')
+    expect(mounted.controller.materializeFullText()).toBe('')
   })
 
   it('syncs state and last change after editor commands', () => {
@@ -74,10 +74,10 @@ describe('useEditor', () => {
 
     act(() => mounted.controller.commands.edit({ from: 5, to: 5, text: '!' }))
 
-    expect(mounted.controller.getText()).toBe('alpha!')
+    expect(mounted.controller.materializeFullText()).toBe('alpha!')
     expect(mounted.controller.getState()?.length).toBe(6)
     expect(mounted.controller.getLastChange()?.kind).toBe('edit')
-    expect(mounted.controller.getSnapshot()?.text).toBe('alpha!')
+    expect(mounted.controller.getSnapshot()?.fullText).toBe('alpha!')
 
     mounted.dispose()
   })
@@ -94,7 +94,7 @@ describe('useEditor', () => {
     expect(textSnapshotReads(diagnostics)).toHaveLength(0)
     expect(mounted.controller.getTextSnapshot()?.length).toBe(6)
     expect(textSnapshotReads(diagnostics)).toHaveLength(0)
-    expect(mounted.controller.getText()).toBe('alpha!')
+    expect(mounted.controller.materializeFullText()).toBe('alpha!')
     expect(textSnapshotReads(diagnostics)).toHaveLength(1)
 
     mounted.dispose()
@@ -144,13 +144,13 @@ describe('useEditor', () => {
     })
 
     expect(mounted.controller.getEditor()).not.toBeNull()
-    expect(mounted.controller.getText()).toBe('alpha')
+    expect(mounted.controller.materializeFullText()).toBe('alpha')
     expect(mounted.controller.getSnapshot()).toBeNull()
 
     act(() => mounted.controller.commands.setSelection(1, 4))
     act(() => mounted.controller.commands.edit({ from: 5, to: 5, text: '!' }))
 
-    expect(mounted.controller.getText()).toBe('alpha!')
+    expect(mounted.controller.materializeFullText()).toBe('alpha!')
     expect(mounted.controller.getState()?.length).toBe(6)
     expect(mounted.controller.getUpdateKind()).toBeNull()
     expect(mounted.controller.getSnapshot()).toBeNull()
@@ -168,13 +168,13 @@ describe('useEditor', () => {
       document: { text: 'server alpha', documentId: 'a.ts', revision: 1 },
     })
 
-    expect(mounted.controller.getText()).toBe('alpha!')
+    expect(mounted.controller.materializeFullText()).toBe('alpha!')
 
     mounted.render({
       document: { text: 'server beta', documentId: 'a.ts', revision: 2 },
     })
 
-    expect(mounted.controller.getText()).toBe('server beta')
+    expect(mounted.controller.materializeFullText()).toBe('server beta')
     expect(mounted.controller.getSnapshot()?.documentId).toBe('a.ts')
 
     mounted.dispose()
@@ -215,7 +215,7 @@ describe('useEditor', () => {
         languageId: 'typescript',
       }),
     )
-    expect(mounted.controller.getText()).toBe('alpha beta')
+    expect(mounted.controller.materializeFullText()).toBe('alpha beta')
     expect(mounted.controller.getLastChange()?.kind).toBe('edit')
     expect(mounted.controller.getState()).toMatchObject({
       documentId: 'generated:/a.ts',
@@ -233,13 +233,13 @@ describe('useEditor', () => {
         documentId: 'a.ts',
         revision: 1,
         session: alphaSession,
-        text: alphaSession.getText(),
+        text: alphaSession.materializeFullText(),
       },
     })
 
     act(() => mounted.controller.commands.edit({ from: 5, to: 5, text: '!' }))
 
-    expect(alphaSession.getText()).toBe('alpha!')
+    expect(alphaSession.materializeFullText()).toBe('alpha!')
     expect(mounted.controller.getState()?.isDirty).toBe(true)
 
     mounted.render({
@@ -247,7 +247,7 @@ describe('useEditor', () => {
         documentId: 'b.ts',
         revision: 1,
         session: betaSession,
-        text: betaSession.getText(),
+        text: betaSession.materializeFullText(),
       },
     })
     mounted.render({
@@ -255,16 +255,16 @@ describe('useEditor', () => {
         documentId: 'a.ts',
         revision: 1,
         session: alphaSession,
-        text: alphaSession.getText(),
+        text: alphaSession.materializeFullText(),
       },
     })
 
-    expect(mounted.controller.getText()).toBe('alpha!')
+    expect(mounted.controller.materializeFullText()).toBe('alpha!')
     expect(mounted.controller.getState()?.canUndo).toBe(true)
 
     act(() => mounted.controller.commands.dispatchCommand('undo'))
 
-    expect(mounted.controller.getText()).toBe('alpha')
+    expect(mounted.controller.materializeFullText()).toBe('alpha')
     expect(mounted.controller.getState()?.isDirty).toBe(false)
 
     mounted.dispose()
@@ -277,7 +277,7 @@ describe('useEditor', () => {
         documentId: 'a.ts',
         revision: 1,
         session,
-        text: session.getText(),
+        text: session.materializeFullText(),
       },
     })
     const instance = mounted.controller.getEditor()
@@ -294,7 +294,7 @@ describe('useEditor', () => {
     })
 
     expect(attachSpy).not.toHaveBeenCalled()
-    expect(mounted.controller.getText()).toBe('alpha')
+    expect(mounted.controller.materializeFullText()).toBe('alpha')
 
     mounted.dispose()
   })
@@ -463,7 +463,7 @@ function TextProbe({
   readonly renders: { text: number }
 }): null {
   renders.text += 1
-  const text = useEditorSelector(controller, (snapshot) => snapshot.text)
+  const text = useEditorSelector(controller, (snapshot) => snapshot.fullText)
   void text
   return null
 }
@@ -588,5 +588,5 @@ function collectDiagnostics(): Diagnostic[] {
 }
 
 function textSnapshotReads(diagnostics: readonly Diagnostic[]): readonly Diagnostic[] {
-  return diagnostics.filter((diagnostic) => diagnostic.name === 'textSnapshot.getText')
+  return diagnostics.filter((diagnostic) => diagnostic.name === 'textSnapshot.materializeFullText')
 }

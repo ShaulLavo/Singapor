@@ -33,7 +33,7 @@ import {
 export type EditorBlockSurfaceControllerOptions = {
   readonly view: VirtualizedTextView
   getDocumentId(): string | null
-  getText(): string
+  materializeFullText(): string
   focusEditor(): void
   setSelection(anchor: number, head: number): void
   notifyLayout(): void
@@ -116,7 +116,7 @@ export class EditorBlockSurfaceController {
   private createEditorBlockProviderContext(): EditorBlockProviderContext {
     return {
       documentId: this.options.getDocumentId(),
-      text: this.options.getText(),
+      text: this.options.materializeFullText(),
       lineCount: this.options.view.getLineCount(),
     }
   }
@@ -315,7 +315,7 @@ export class EditorBlockSurfaceController {
       surface: surface.slot,
       anchor: surface.block.anchor,
       documentId: this.options.getDocumentId(),
-      text: this.options.getText(),
+      text: this.options.materializeFullText(),
       focusEditor: () => this.options.focusEditor(),
       setSelection: (anchor, head) => this.options.setSelection(anchor, head),
       requestMeasure: () => this.measureEditorBlockSurface(surface, container),

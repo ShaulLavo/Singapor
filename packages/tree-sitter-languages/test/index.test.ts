@@ -62,7 +62,7 @@ describe('Tree-sitter language contributions', () => {
         documentId: 'main.ts',
         languageId: 'typescript',
         includeHighlights: true,
-        text: 'const a = 1;',
+        fullText: 'const a = 1;',
         snapshot: createPieceTableSnapshot('const a = 1;'),
       }),
     ).not.toBeNull()

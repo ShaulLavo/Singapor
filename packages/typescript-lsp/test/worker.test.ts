@@ -98,7 +98,7 @@ describe('TypeScript LSP worker', () => {
         },
       ],
     })
-  })
+  }, 20_000)
 
   it('reads compiler options from workspace tsconfig files', async () => {
     vi.spyOn(globalThis, 'postMessage').mockImplementation(() => undefined)

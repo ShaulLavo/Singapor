@@ -8,7 +8,7 @@ import type {
 import { anchorAt, resolveAnchor } from './pieceTable/anchors'
 import { applyBatchToPieceTable } from './pieceTable/edits'
 import { offsetToPoint, pointToOffset } from './pieceTable/positions'
-import { getPieceTableText } from './pieceTable/reads'
+import { readPieceTableTextRange } from './pieceTable/reads'
 import { normalizeTabSize } from './displayTransforms'
 
 export type SelectionGoal =
@@ -451,7 +451,7 @@ const previousCodePointOffset = (snapshot: PieceTableSnapshot, offset: number): 
   if (offset <= 0) return 0
   if (offset < 2) return offset - 1
 
-  const text = getPieceTableText(snapshot, offset - 2, offset)
+  const text = readPieceTableTextRange(snapshot, offset - 2, offset)
   const before = text.charCodeAt(0)
   const after = text.charCodeAt(1)
   const beforeIsHighSurrogate = before >= 0xd800 && before <= 0xdbff
@@ -513,7 +513,7 @@ const outdentEditForRow = (
   const end = lineEnd(snapshot, row)
   if (start >= end) return null
 
-  const prefix = getPieceTableText(snapshot, start, Math.min(end, start + tabSize))
+  const prefix = readPieceTableTextRange(snapshot, start, Math.min(end, start + tabSize))
   const length = outdentLength(prefix, tabSize)
   if (length === 0) return null
   return rangeToEdit({ start, end: start + length }, '')

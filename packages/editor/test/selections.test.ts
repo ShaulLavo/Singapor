@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createPieceTableSnapshot,
   deleteFromPieceTable,
-  getPieceTableText,
+  materializePieceTableFullText,
 } from '../src/public/document'
 import {
   applyTextToSelections,
@@ -76,7 +76,7 @@ describe('selections', () => {
 
     const result = applyTextToSelections(edited, normalized, 'X')
 
-    expect(getPieceTableText(result.snapshot)).toBe('aX')
+    expect(materializePieceTableFullText(result.snapshot)).toBe('aX')
     expect(result.edits).toEqual([{ from: 1, to: 3, text: 'X' }])
   })
 
@@ -89,7 +89,7 @@ describe('selections', () => {
 
     const result = applyTextToSelections(snapshot, set, 'X')
 
-    expect(getPieceTableText(result.snapshot)).toBe('aXcdX')
+    expect(materializePieceTableFullText(result.snapshot)).toBe('aXcdX')
     expect(result.edits).toEqual([
       { from: 1, to: 2, text: 'X' },
       { from: 4, to: 6, text: 'X' },
@@ -109,7 +109,7 @@ describe('selections', () => {
     const first = applyTextToSelections(snapshot, set, 'X')
     const second = applyTextToSelections(first.snapshot, first.selections, 'Y')
 
-    expect(getPieceTableText(second.snapshot)).toBe('abcXYdef')
+    expect(materializePieceTableFullText(second.snapshot)).toBe('abcXYdef')
     expect(resolveSelection(second.snapshot, second.selections.selections[0]!)).toMatchObject({
       startOffset: 5,
       endOffset: 5,
@@ -122,7 +122,7 @@ describe('selections', () => {
 
     const result = backspaceSelections(snapshot, set)
 
-    expect(getPieceTableText(result.snapshot)).toBe('ab')
+    expect(materializePieceTableFullText(result.snapshot)).toBe('ab')
     expect(result.edits).toEqual([{ from: 1, to: 3, text: '' }])
     expect(resolveSelection(result.snapshot, result.selections.selections[0]!)).toMatchObject({
       startOffset: 1,
@@ -154,7 +154,7 @@ describe('selections', () => {
 
     const result = deleteSelections(snapshot, set)
 
-    expect(getPieceTableText(result.snapshot)).toBe('adef')
+    expect(materializePieceTableFullText(result.snapshot)).toBe('adef')
     expect(result.edits).toEqual([{ from: 1, to: 3, text: '' }])
     expect(resolveSelection(result.snapshot, result.selections.selections[0]!)).toMatchObject({
       startOffset: 1,
@@ -171,7 +171,7 @@ describe('selections', () => {
 
     const result = backspaceSelections(snapshot, set)
 
-    expect(getPieceTableText(result.snapshot)).toBe('adf')
+    expect(materializePieceTableFullText(result.snapshot)).toBe('adf')
     expect(result.edits).toEqual([
       { from: 1, to: 3, text: '' },
       { from: 4, to: 5, text: '' },
@@ -187,12 +187,12 @@ describe('selections', () => {
     const undone = undoEditorHistory(committed)
     const redone = redoEditorHistory(undone)
 
-    expect(getPieceTableText(committed.current)).toBe('abc!')
+    expect(materializePieceTableFullText(committed.current)).toBe('abc!')
     expect(committed.undo?.size).toBe(1)
-    expect(getPieceTableText(undone.current)).toBe('abc')
+    expect(materializePieceTableFullText(undone.current)).toBe('abc')
     expect(undone.undo).toBeNull()
     expect(undone.redo?.size).toBe(1)
-    expect(getPieceTableText(redone.current)).toBe('abc!')
+    expect(materializePieceTableFullText(redone.current)).toBe('abc!')
     expect(redone.undo?.size).toBe(1)
     expect(redone.redo).toBeNull()
     expect(redone.selections.selections).toHaveLength(1)

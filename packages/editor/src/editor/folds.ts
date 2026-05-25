@@ -125,7 +125,7 @@ function editLineDelta(edit: TextEdit, previousText: string | TextSnapshot): num
 
 function textInRange(text: string | TextSnapshot, start: number, end: number): string {
   if (typeof text === 'string') return text.slice(start, end)
-  return text.getTextInRange(start, end)
+  return text.readRange(start, end)
 }
 
 function countLineBreaks(text: string): number {

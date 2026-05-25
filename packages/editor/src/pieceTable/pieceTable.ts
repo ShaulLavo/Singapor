@@ -24,11 +24,10 @@ export { offsetToPoint, pointToOffset } from './positions'
 export {
   getPieceTableLength,
   getPieceTableOriginalText,
-  getPieceTableText,
-  materializePieceTableText,
+  readPieceTableTextRange,
+  materializePieceTableFullText,
   forEachPieceTableTextChunk,
   pieceTableSnapshotsHaveSameText,
-  readPieceTableRange,
   streamPieceTablePieces,
   streamPieceTableTextChunks,
 } from './reads'

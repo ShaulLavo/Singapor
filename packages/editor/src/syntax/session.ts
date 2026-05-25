@@ -61,13 +61,13 @@ export type EditorSyntaxSessionOptions = {
   readonly includeHighlights?: boolean
   readonly includeCaptures?: boolean
   readonly syntaxMode?: 'full' | 'range'
-  readonly text: string
+  readonly fullText: string
   readonly textSnapshot?: DocumentTextSnapshot
   readonly snapshot: PieceTableSnapshot
 }
 
 export type EditorSyntaxSession = {
-  refresh(snapshot: PieceTableSnapshot, text?: string): Promise<EditorSyntaxResult>
+  refresh(snapshot: PieceTableSnapshot, fullText?: string): Promise<EditorSyntaxResult>
   applyChange(change: DocumentSessionChange): Promise<EditorSyntaxResult>
   canQueryRange?(): boolean
   queryRange?(range: EditorSyntaxRange): Promise<EditorSyntaxResult>

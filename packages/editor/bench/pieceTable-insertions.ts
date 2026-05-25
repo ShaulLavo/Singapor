@@ -2,8 +2,8 @@ import { performance } from 'node:perf_hooks'
 
 import {
   createPieceTableSnapshot,
-  getPieceTableText,
   insertIntoPieceTable,
+  materializePieceTableFullText,
 } from '../src/pieceTable'
 
 type Sample = {
@@ -47,7 +47,7 @@ const measureAppendInsertions = (): Sample => {
     batchDurations.push(performance.now() - batchStart)
   }
 
-  const text = getPieceTableText(snapshot)
+  const text = materializePieceTableFullText(snapshot)
   const expectedLength = INSERTION_COUNT * INSERTION_TEXT.length
   if (text.length !== expectedLength) {
     throw new Error(`expected final length ${expectedLength}, got ${text.length}`)

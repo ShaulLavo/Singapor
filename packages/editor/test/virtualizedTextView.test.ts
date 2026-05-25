@@ -52,10 +52,10 @@ class MockHighlight extends Set<Range> {
 function throwingFullTextSnapshot(text: string): TextSnapshot {
   return {
     length: text.length,
-    getText: () => {
+    materializeFullText: () => {
       throw new Error('unexpected full text read')
     },
-    getTextInRange: (start, end) => text.slice(start, end),
+    readRange: (start, end) => text.slice(start, end),
     forEachTextChunk: (visit) => {
       if (text.length > 0) visit(text, 0, text.length)
     },

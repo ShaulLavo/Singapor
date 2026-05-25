@@ -283,7 +283,7 @@ function lineBreakProbe(
 ): string {
   const lineStart = lineStartForSnapshotLine(document, line)
   const probeStart = Math.max(lineStart, nextStart - 2)
-  return document.textSnapshot.getTextInRange(probeStart, nextStart)
+  return document.textSnapshot.readRange(probeStart, nextStart)
 }
 
 function nonNegativeInteger(value: number): number {
@@ -298,7 +298,7 @@ const fullSnapshotContentChange = (
   reason: string,
 ): readonly lsp.TextDocumentContentChangeEvent[] => {
   recordContentChangePath(reason, document, document, [])
-  return [createFullContentChange(document.textSnapshot.getText())]
+  return [createFullContentChange(document.textSnapshot.materializeFullText())]
 }
 
 const applyTextEdits = (text: string, edits: readonly LspTextEdit[]): string | null => {

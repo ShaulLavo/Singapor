@@ -153,7 +153,7 @@ class EditorDiffFeatureContribution {
       oldFile: this.state.baseFile,
       newFile: {
         path: this.state.baseFile.path,
-        text: this.context.getText(),
+        text: this.context.materializeFullText(),
         languageId: this.state.baseFile.languageId,
       },
     })

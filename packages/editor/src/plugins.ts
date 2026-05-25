@@ -57,13 +57,13 @@ export type EditorHighlightResult = {
 export type EditorHighlighterSessionOptions = {
   readonly documentId: string
   readonly languageId: EditorSyntaxLanguageId | null
-  readonly text: string
+  readonly fullText: string
   readonly textSnapshot?: DocumentTextSnapshot
   readonly snapshot: PieceTableSnapshot
 }
 
 export type EditorHighlighterSession = EditorDisposable & {
-  refresh(snapshot: PieceTableSnapshot, text?: string): Promise<EditorHighlightResult>
+  refresh(snapshot: PieceTableSnapshot, fullText?: string): Promise<EditorHighlightResult>
   applyChange(change: DocumentSessionChange): Promise<EditorHighlightResult>
 }
 
@@ -111,7 +111,7 @@ export type EditorViewSnapshot = {
   readonly languageId: EditorSyntaxLanguageId | null
   readonly theme?: EditorTheme | null
   readonly textSnapshot?: TextSnapshot
-  readonly text: string
+  readonly fullText: string
   readonly textVersion: number
   readonly lineStarts: readonly number[]
   readonly tokens: readonly EditorToken[]
@@ -182,7 +182,7 @@ export type EditorFeatureContributionContext = {
   readonly scrollElement: HTMLDivElement
   readonly highlightPrefix: string
   hasDocument(): boolean
-  getText(): string
+  materializeFullText(): string
   getTextSnapshot?(): TextSnapshot | null
   getSelections(): readonly EditorResolvedSelection[]
   focusEditor(): void

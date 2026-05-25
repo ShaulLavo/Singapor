@@ -87,7 +87,12 @@ export class DiagnosticsPresenter {
     const selection = this.context.getSnapshot().selections[0]
     if (!selection) return false
 
-    const range = diagnosticMarkerTarget(active.text, diagnostics, selection.headOffset, direction)
+    const range = diagnosticMarkerTarget(
+      active.fullText,
+      diagnostics,
+      selection.headOffset,
+      direction,
+    )
     if (!range) return false
 
     const timingName = `languageServer.marker.${direction}`

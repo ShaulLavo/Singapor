@@ -98,7 +98,7 @@ export type ReactEditorStoreSnapshot = {
   readonly state: EditorState | null
   readonly snapshot: EditorViewSnapshot | null
   readonly textSnapshot: TextSnapshot | null
-  readonly text: string
+  readonly fullText: string
   readonly lastChange: DocumentSessionChange | null
   readonly updateKind: EditorViewContributionUpdateKind | null
 }
@@ -113,14 +113,14 @@ export type ReactEditorController = {
   getState(): EditorState | null
   getSnapshot(): EditorViewSnapshot | null
   getTextSnapshot(): TextSnapshot | null
-  getText(): string
+  materializeFullText(): string
   getLastChange(): DocumentSessionChange | null
   getUpdateKind(): EditorViewContributionUpdateKind | null
   useEditorInstance(): Editor | null
   useState(): EditorState | null
   useSnapshot(): EditorViewSnapshot | null
   useTextSnapshot(): TextSnapshot | null
-  useText(): string
+  useFullText(): string
   useLastChange(): DocumentSessionChange | null
   useUpdateKind(): EditorViewContributionUpdateKind | null
   readonly commands: ReactEditorCommands
@@ -132,7 +132,7 @@ export type EditorHostProps = {
   readonly style?: CSSProperties
 }
 
-type ReactEditorStoreSnapshotFields = Omit<ReactEditorStoreSnapshot, 'text'>
+type ReactEditorStoreSnapshotFields = Omit<ReactEditorStoreSnapshot, 'fullText'>
 
 type ReactEditorStorePatch = Partial<ReactEditorStoreSnapshotFields>
 
@@ -166,7 +166,7 @@ const selectSnapshot = (snapshot: ReactEditorStoreSnapshot): EditorViewSnapshot 
   snapshot.snapshot
 const selectTextSnapshot = (snapshot: ReactEditorStoreSnapshot): TextSnapshot | null =>
   snapshot.textSnapshot
-const selectText = (snapshot: ReactEditorStoreSnapshot): string => snapshot.text
+const selectFullText = (snapshot: ReactEditorStoreSnapshot): string => snapshot.fullText
 const selectLastChange = (snapshot: ReactEditorStoreSnapshot): DocumentSessionChange | null =>
   snapshot.lastChange
 const selectUpdateKind = (
@@ -270,8 +270,8 @@ class ReactEditorControllerImplementation implements ReactEditorController {
     return this.store.read().textSnapshot ?? this.getEditor()?.getTextSnapshot() ?? null
   }
 
-  public getText(): string {
-    return this.getEditor()?.getText() ?? ''
+  public materializeFullText(): string {
+    return this.getEditor()?.materializeFullText() ?? ''
   }
 
   public getLastChange(): DocumentSessionChange | null {
@@ -288,7 +288,7 @@ class ReactEditorControllerImplementation implements ReactEditorController {
     useEditorSelector(this, selectSnapshot)
   public readonly useTextSnapshot = (): TextSnapshot | null =>
     useEditorSelector(this, selectTextSnapshot)
-  public readonly useText = (): string => useEditorSelector(this, selectText)
+  public readonly useFullText = (): string => useEditorSelector(this, selectFullText)
   public readonly useLastChange = (): DocumentSessionChange | null =>
     useEditorSelector(this, selectLastChange)
   public readonly useUpdateKind = (): EditorViewContributionUpdateKind | null =>
@@ -822,11 +822,11 @@ function createStoreSnapshot(fields: ReactEditorStoreSnapshotFields): ReactEdito
   let textCache: string | undefined
   const snapshot: ReactEditorStoreSnapshotFields = { ...fields }
 
-  Object.defineProperty(snapshot, 'text', {
+  Object.defineProperty(snapshot, 'fullText', {
     configurable: true,
     enumerable: true,
     get: () => {
-      textCache ??= snapshot.textSnapshot?.getText() ?? ''
+      textCache ??= snapshot.textSnapshot?.materializeFullText() ?? ''
       return textCache
     },
   })

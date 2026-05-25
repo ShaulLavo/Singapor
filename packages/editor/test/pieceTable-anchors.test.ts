@@ -6,7 +6,7 @@ import {
   insertIntoPieceTable,
 } from '../src/pieceTable/edits.ts'
 import { createPieceTableSnapshot } from '../src/pieceTable/pieceTable.ts'
-import { getPieceTableText } from '../src/pieceTable/reads.ts'
+import { materializePieceTableFullText } from '../src/pieceTable/reads.ts'
 import {
   Anchor,
   anchorAfter,
@@ -76,7 +76,7 @@ describe('piece table anchors', () => {
     const deleted = deleteFromPieceTable(initial, 4, 3)
     const retyped = insertIntoPieceTable(deleted, 4, 'TWO')
 
-    expect(getPieceTableText(retyped)).toBe('one TWO three')
+    expect(materializePieceTableFullText(retyped)).toBe('one TWO three')
     expectIndexedMatchesLinear(retyped, anchors)
     expect(resolveAnchor(retyped, leftStart)).toEqual({ offset: 4, liveness: 'live' })
     expect(resolveAnchor(retyped, rightStart)).toEqual({ offset: 7, liveness: 'deleted' })
@@ -98,12 +98,12 @@ describe('piece table anchors', () => {
       { from: 17, to: 22, text: 'DELTA' },
     ])
 
-    expect(getPieceTableText(single)).toBe('alpha BETA gamma delta')
+    expect(materializePieceTableFullText(single)).toBe('alpha BETA gamma delta')
     expectIndexedMatchesLinear(single, [singleLeft, singleRight])
     expect(resolveAnchor(single, singleLeft)).toEqual({ offset: 6, liveness: 'deleted' })
     expect(resolveAnchor(single, singleRight)).toEqual({ offset: 10, liveness: 'deleted' })
 
-    expect(getPieceTableText(batched)).toBe('ALPHA beta gamma DELTA')
+    expect(materializePieceTableFullText(batched)).toBe('ALPHA beta gamma DELTA')
     expectIndexedMatchesLinear(batched, [batchLeft, batchRight])
     expect(resolveAnchor(batched, batchLeft)).toEqual({ offset: 0, liveness: 'deleted' })
     expect(resolveAnchor(batched, batchRight)).toEqual({ offset: 22, liveness: 'deleted' })
@@ -118,13 +118,13 @@ describe('piece table anchors', () => {
     const prefixDeleted = deleteFromPieceTable(initial, 0, 2)
     const suffixDeleted = deleteFromPieceTable(initial, 4, 2)
 
-    expect(getPieceTableText(prefixDeleted)).toBe('cdef')
+    expect(materializePieceTableFullText(prefixDeleted)).toBe('cdef')
     expectIndexedMatchesLinear(prefixDeleted, [prefixLeft, prefixRight, Anchor.MIN, Anchor.MAX])
     expect(resolveAnchor(prefixDeleted, prefixLeft)).toEqual({ offset: 0, liveness: 'deleted' })
     expect(resolveAnchor(prefixDeleted, prefixRight)).toEqual({ offset: 0, liveness: 'deleted' })
     expect(resolveAnchor(prefixDeleted, Anchor.MAX)).toEqual({ offset: 4, liveness: 'live' })
 
-    expect(getPieceTableText(suffixDeleted)).toBe('abcd')
+    expect(materializePieceTableFullText(suffixDeleted)).toBe('abcd')
     expectIndexedMatchesLinear(suffixDeleted, [suffixLeft, suffixRight, Anchor.MIN, Anchor.MAX])
     expect(resolveAnchor(suffixDeleted, suffixLeft)).toEqual({ offset: 4, liveness: 'deleted' })
     expect(resolveAnchor(suffixDeleted, suffixRight)).toEqual({ offset: 4, liveness: 'deleted' })

@@ -40,7 +40,7 @@ export type EditorFindHost = {
   readonly container: HTMLElement
   readonly scrollElement: HTMLDivElement
   hasDocument(): boolean
-  getText(): string
+  materializeFullText(): string
   getSelections(): readonly EditorFindResolvedSelection[]
   focusEditor(): void
   setSelection(anchor: number, head: number, timingName: string, revealOffset?: number): void
@@ -317,7 +317,7 @@ export class EditorFindController {
 
   private findAll(captureMatches: boolean): readonly FindMatch[] {
     return findMatches(
-      this.host.getText(),
+      this.host.materializeFullText(),
       this.state,
       this.scopes,
       captureMatches,
@@ -384,7 +384,7 @@ export class EditorFindController {
   private seedSearchString(): string {
     if (this.options.seedSearchStringFromSelection === 'never') return ''
 
-    const text = this.host.getText()
+    const text = this.host.materializeFullText()
     const selection = this.primarySelection()
     if (!selection) return ''
     if (!selection.collapsed) return selectedSingleLineText(text, selection)
@@ -404,7 +404,11 @@ export class EditorFindController {
       return
     }
 
-    if (!scopes.some((scope) => this.host.getText().slice(scope.start, scope.end).includes('\n')))
+    if (
+      !scopes.some((scope) =>
+        this.host.materializeFullText().slice(scope.start, scope.end).includes('\n'),
+      )
+    )
       return
 
     this.state = { ...this.state, inSelection: true }

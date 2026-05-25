@@ -216,8 +216,8 @@ function materializingSnapshotDocument(text: string): LspTextDocumentSnapshot {
   return {
     textSnapshot: {
       length: text.length,
-      getText: () => text,
-      getTextInRange: (start, end) => text.slice(start, end),
+      materializeFullText: () => text,
+      readRange: (start, end) => text.slice(start, end),
     },
     lineStarts: lineStarts(text),
   }
@@ -226,10 +226,10 @@ function materializingSnapshotDocument(text: string): LspTextDocumentSnapshot {
 function throwingFullTextSnapshot(text: string): LspTextSnapshot {
   return {
     length: text.length,
-    getText: () => {
+    materializeFullText: () => {
       throw new Error('unexpected full text materialization')
     },
-    getTextInRange: (start, end) => text.slice(start, end),
+    readRange: (start, end) => text.slice(start, end),
   }
 }
 

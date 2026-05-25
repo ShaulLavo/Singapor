@@ -1,8 +1,8 @@
 import type { PieceTableSnapshot } from './pieceTable/pieceTableTypes'
 import {
   forEachPieceTableTextChunk,
-  materializePieceTableText,
-  readPieceTableRange,
+  materializePieceTableFullText,
+  readPieceTableTextRange,
 } from './pieceTable/reads'
 import {
   measureEditorPerformance,
@@ -11,9 +11,8 @@ import {
 
 export type TextSnapshot = {
   readonly length: number
-  materializeText(): string
-  getText(): string
-  getTextInRange(start: number, end?: number): string
+  readRange(start: number, end: number): string
+  materializeFullText(): string
   forEachTextChunk(visit: (text: string, start: number, end: number) => void): void
 }
 
@@ -21,20 +20,35 @@ export type DocumentTextSnapshot = TextSnapshot & {
   readonly snapshot: PieceTableSnapshot
 }
 
+export function defineLazyFullTextProperty<TTarget extends { readonly textSnapshot: TextSnapshot }>(
+  target: TTarget,
+): TTarget & { readonly fullText: string } {
+  let fullTextCache: string | undefined
+  Object.defineProperty(target, 'fullText', {
+    configurable: true,
+    enumerable: true,
+    get: () => {
+      fullTextCache ??= target.textSnapshot.materializeFullText()
+      return fullTextCache
+    },
+  })
+  return target as TTarget & { readonly fullText: string }
+}
+
 export function createDocumentTextSnapshot(
   snapshot: PieceTableSnapshot,
   materializedText?: string,
 ): DocumentTextSnapshot {
   const retainedText = materializedText?.length === snapshot.length ? materializedText : undefined
-  const materializeText = (): string => {
+  const materializeFullText = (): string => {
     if (retainedText !== undefined) {
-      recordFullTextSnapshotRead('textSnapshot.materializeText', snapshot.length, true)
+      recordFullTextSnapshotRead('textSnapshot.materializeFullText', snapshot.length, true)
       return retainedText
     }
 
     return measureEditorPerformance(
-      'textSnapshot.materializeText',
-      () => materializePieceTableText(snapshot),
+      'textSnapshot.materializeFullText',
+      () => materializePieceTableFullText(snapshot),
       () => fullTextSnapshotDetail(snapshot.length, false),
     )
   }
@@ -42,24 +56,22 @@ export function createDocumentTextSnapshot(
   return {
     snapshot,
     length: snapshot.length,
-    materializeText,
-    getText: materializeText,
-    getTextInRange: (start, end) => {
-      const effectiveEnd = end ?? snapshot.length
-      if (retainedText !== undefined && start === 0 && effectiveEnd === snapshot.length) {
-        recordFullTextSnapshotRead('textSnapshot.getTextInRange', snapshot.length, true)
+    materializeFullText,
+    readRange: (start, end) => {
+      if (retainedText !== undefined && start === 0 && end === snapshot.length) {
+        recordFullTextSnapshotRead('textSnapshot.readRange', snapshot.length, true)
         return retainedText
       }
 
-      if (start === 0 && effectiveEnd === snapshot.length) {
+      if (start === 0 && end === snapshot.length) {
         return measureEditorPerformance(
-          'textSnapshot.getTextInRange',
-          () => readPieceTableRange(snapshot, start, effectiveEnd),
+          'textSnapshot.readRange',
+          () => readPieceTableTextRange(snapshot, start, end),
           () => fullTextSnapshotDetail(snapshot.length, false),
         )
       }
 
-      return readPieceTableRange(snapshot, start, effectiveEnd)
+      return readPieceTableTextRange(snapshot, start, end)
     },
     forEachTextChunk: (visit) => {
       if (retainedText !== undefined) {
@@ -75,24 +87,12 @@ export function createDocumentTextSnapshot(
 export function createStringTextSnapshot(text: string): TextSnapshot {
   return {
     length: text.length,
-    materializeText: () => text,
-    getText: () => text,
-    getTextInRange: (start, end) => text.slice(start, end),
+    materializeFullText: () => text,
+    readRange: (start, end) => text.slice(start, end),
     forEachTextChunk: (visit) => {
       if (text.length > 0) visit(text, 0, text.length)
     },
   }
-}
-
-export function defineLazyTextProperty<T extends { readonly textSnapshot: TextSnapshot }>(
-  target: T,
-): T & { readonly text: string } {
-  Object.defineProperty(target, 'text', {
-    configurable: true,
-    enumerable: true,
-    get: () => target.textSnapshot.getText(),
-  })
-  return target as T & { readonly text: string }
 }
 
 function recordFullTextSnapshotRead(name: string, length: number, retained: boolean): void {

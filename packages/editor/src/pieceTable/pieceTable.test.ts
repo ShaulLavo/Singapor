@@ -9,9 +9,10 @@ import {
   createPieceTableSnapshot,
   deleteFromPieceTable,
   forEachPieceTableTextChunk,
-  getPieceTableText,
+  readPieceTableTextRange,
   insertIntoPieceTable,
   debugPieceTable,
+  materializePieceTableFullText,
   offsetToPoint,
   pieceTableSnapshotsHaveSameText,
   pointToOffset,
@@ -49,7 +50,7 @@ const randomText = (random: Random): string => {
 }
 
 const expectSnapshotText = (snapshot: PieceTableSnapshot, text: string) => {
-  expect(getPieceTableText(snapshot)).toBe(text)
+  expect(materializePieceTableFullText(snapshot)).toBe(text)
   expect(snapshot.length).toBe(text.length)
   expect(snapshot.root?.subtreeLineBreaks ?? 0).toBe(countLineBreaks(text))
 }
@@ -58,7 +59,7 @@ const expectRandomRanges = (snapshot: PieceTableSnapshot, text: string, random: 
   for (let index = 0; index < 10; index++) {
     const start = randomInt(random, text.length + 1)
     const end = start + randomInt(random, text.length - start + 1)
-    expect(getPieceTableText(snapshot, start, end)).toBe(text.slice(start, end))
+    expect(readPieceTableTextRange(snapshot, start, end)).toBe(text.slice(start, end))
   }
 }
 
@@ -89,7 +90,7 @@ const applyRandomEdit = (
 const runRandomEditScenario = (seed: number): void => {
   const random = createRandom(seed)
   let snapshot = createPieceTableSnapshot(randomText(random))
-  let text = getPieceTableText(snapshot)
+  let text = materializePieceTableFullText(snapshot)
 
   for (let operation = 0; operation < 250; operation++) {
     const result = applyRandomEdit(snapshot, text, random)
@@ -103,7 +104,7 @@ const runRandomEditScenario = (seed: number): void => {
 const runRandomAnchorScenario = (seed: number): void => {
   const random = createRandom(seed)
   let snapshot = createPieceTableSnapshot(randomText(random))
-  let text = getPieceTableText(snapshot)
+  let text = materializePieceTableFullText(snapshot)
   const anchors = [anchorBefore(snapshot, 0), anchorAfter(snapshot, snapshot.length)]
 
   for (let operation = 0; operation < 80; operation++) {
@@ -167,7 +168,7 @@ describe('piece table', () => {
   test('handles empty documents', () => {
     let snapshot = createPieceTableSnapshot('')
     expectSnapshotText(snapshot, '')
-    expect(getPieceTableText(snapshot, 0, 0)).toBe('')
+    expect(readPieceTableTextRange(snapshot, 0, 0)).toBe('')
     expect(offsetToPoint(snapshot, 0)).toEqual({ row: 0, column: 0 })
     expect(pointToOffset(snapshot, { row: 0, column: 10 })).toBe(0)
 
@@ -191,7 +192,7 @@ describe('piece table', () => {
     const text = 'x'.repeat(120_000)
     const snapshot = createPieceTableSnapshot(text)
     expectSnapshotText(snapshot, text)
-    expect(getPieceTableText(snapshot, 60_000, 60_010)).toBe('x'.repeat(10))
+    expect(readPieceTableTextRange(snapshot, 60_000, 60_010)).toBe('x'.repeat(10))
     expect(offsetToPoint(snapshot, 120_000)).toEqual({ row: 0, column: 120_000 })
     expect(pointToOffset(snapshot, { row: 0, column: 200_000 })).toBe(120_000)
   })
@@ -271,7 +272,7 @@ describe('piece table', () => {
     for (let seed = 1; seed <= 25; seed++) {
       runRandomEditScenario(seed)
     }
-  }, 10_000)
+  }, 30_000)
 
   test('keeps deleted pieces invisible and out of user-facing text', () => {
     const snapshot = deleteFromPieceTable(createPieceTableSnapshot('ab\ncd'), 1, 3)

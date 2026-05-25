@@ -1,5 +1,5 @@
 import type { DocumentSession, DocumentSessionChange } from '../documentSession'
-import { getPieceTableText } from '../pieceTable/reads'
+import { readPieceTableTextRange } from '../pieceTable/reads'
 import {
   SelectionGoal,
   resolveSelection,
@@ -56,7 +56,7 @@ export type InputSelectionControllerOptions = {
   getLanguageId(): EditorSyntaxLanguageId | null
   getSession(): DocumentSession | null
   getSessionOptions(): EditorSessionOptions
-  getText(): string
+  materializeFullText(): string
   canEditDocument(): boolean
   applySessionChange(
     change: DocumentSessionChange,
@@ -188,7 +188,7 @@ export class InputSelectionController {
     const selections = session
       .getSelections()
       .selections.map((selection) => resolveSelection(snapshot, selection))
-    const action = editActionForCommand(command, session.getText(), selections, {
+    const action = editActionForCommand(command, session.materializeFullText(), selections, {
       languageId: this.options.getLanguageId(),
       tabSize: this.options.tabSize,
     })
@@ -273,7 +273,7 @@ export class InputSelectionController {
     const session = this.session
     if (!session) return false
 
-    const text = session.getText()
+    const text = session.materializeFullText()
     const query = this.occurrenceQueryForCurrentSelection(text)
     if (!query) return false
 
@@ -296,7 +296,7 @@ export class InputSelectionController {
     const session = this.session
     if (!session) return false
 
-    const text = session.getText()
+    const text = session.materializeFullText()
     const resolved = this.resolvedSelections()
     const source = resolved.at(-1)
     if (!source) return false
@@ -351,7 +351,7 @@ export class InputSelectionController {
     if (!session) return false
 
     const snapshot = session.getSnapshot()
-    const text = session.getText()
+    const text = session.materializeFullText()
     const resolvedSelections = session
       .getSelections()
       .selections.map((selection) => resolveSelection(snapshot, selection))
@@ -544,7 +544,7 @@ export class InputSelectionController {
   }
 
   private get text(): string {
-    return this.options.getText()
+    return this.options.materializeFullText()
   }
 
   private installNativeInputHandlers(): void {
@@ -789,7 +789,7 @@ export class InputSelectionController {
     const session = this.session
     if (!session) return
 
-    const range = lineRangeAtOffset(session.getText(), offset)
+    const range = lineRangeAtOffset(session.materializeFullText(), offset)
     this.selectRange(event, range, 'input.tripleClick')
   }
 
@@ -797,7 +797,7 @@ export class InputSelectionController {
     const session = this.session
     if (!session) return
 
-    const range = wordRangeAtOffset(session.getText(), offset)
+    const range = wordRangeAtOffset(session.materializeFullText(), offset)
     if (range.start === range.end) return
 
     this.selectRange(event, range, 'input.doubleClick')
@@ -1024,7 +1024,7 @@ export class InputSelectionController {
     const session = this.session
     if (!session) return null
 
-    const text = session.getText()
+    const text = session.materializeFullText()
     const resolved = this.resolvedSelections()
     const primary = resolved[0]
     if (!primary) return null
@@ -1087,7 +1087,9 @@ export class InputSelectionController {
       .getSelections()
       .selections.map((selection) => resolveSelection(snapshot, selection))
       .filter((selection) => !selection.collapsed)
-      .map((selection) => getPieceTableText(snapshot, selection.startOffset, selection.endOffset))
+      .map((selection) =>
+        readPieceTableTextRange(snapshot, selection.startOffset, selection.endOffset),
+      )
     if (texts.length === 0) return null
 
     return texts.join('\n')

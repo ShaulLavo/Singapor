@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build:markdown-wasm": "node scripts/build-markdown-wasm.mjs",
+    "test": "vitest run",
     "typecheck": "tsgo --noEmit",
     "lint": "oxlint .",
     "format": "oxfmt --write .",

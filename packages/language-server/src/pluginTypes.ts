@@ -42,7 +42,7 @@ export type ActiveDocument = {
   readonly languageId: string
   readonly textSnapshot: TextSnapshot
   readonly lineStarts: readonly number[]
-  readonly text: string
+  readonly fullText: string
   readonly textVersion: number
   readonly lspVersion: number
 }
@@ -52,6 +52,6 @@ export type DocumentDescriptor = {
   readonly languageId: string
   readonly textSnapshot: TextSnapshot
   readonly lineStarts: readonly number[]
-  readonly text: string
+  readonly fullText: string
   readonly textVersion: number
 }

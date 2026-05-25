@@ -290,7 +290,7 @@ function createRecordingSyntaxBackend(parsedTexts: string[]): DiffSyntaxBackend 
     kind: 'tree-sitter',
     provider: {
       createSession(options) {
-        parsedTexts.push(options.text)
+        parsedTexts.push(options.fullText)
         return {
           applyChange: async () => emptySyntaxResult(),
           dispose: () => undefined,

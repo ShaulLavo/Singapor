@@ -4,8 +4,8 @@ import type { Node, Query, Range as TreeSitterRange, Tree } from 'web-tree-sitte
 import {
   applyBatchToPieceTable,
   createPieceTableSnapshot,
-  getPieceTableText,
   insertIntoPieceTable,
+  materializePieceTableFullText,
 } from '@editor/core/document'
 import {
   createTreeSitterSourceDescriptor,
@@ -97,7 +97,9 @@ describe('tree-sitter worker internals', () => {
 
     expect(edited.length).toBe(next.length)
     expect(edited.chunks).toHaveLength(1)
-    expect(readTreeSitterInputRange(input, 0, next.length)).toBe(getPieceTableText(next))
+    expect(readTreeSitterInputRange(input, 0, next.length)).toBe(
+      materializePieceTableFullText(next),
+    )
   })
 
   it('reads string and shared UTF-16 source chunks across piece boundaries', () => {

@@ -181,7 +181,7 @@ describe('createTypeScriptLspPlugin', () => {
       editorSnapshot({
         documentId: 'src/index.js',
         languageId: 'javascript',
-        text: 'const value = 1;',
+        fullText: 'const value = 1;',
       }),
     )
     const plugin = createTypeScriptLspPlugin({ workerFactory: () => worker })
@@ -208,7 +208,7 @@ describe('createTypeScriptLspPlugin', () => {
       editorSnapshot({
         documentId: 'README.md',
         languageId: 'markdown',
-        text: '# Notes',
+        fullText: '# Notes',
       }),
     )
     const plugin = createTypeScriptLspPlugin({ workerFactory: () => worker })
@@ -229,7 +229,7 @@ describe('createTypeScriptLspPlugin', () => {
     const minimap = minimapFeature()
     const context = viewContributionContext(
       editorSnapshot({
-        text: 'const value = 1;\nconst next: string = 2;\n',
+        fullText: 'const value = 1;\nconst next: string = 2;\n',
         lineCount: 3,
         lineStarts: [0, 17, 40],
       }),
@@ -393,7 +393,7 @@ describe('createTypeScriptLspPlugin', () => {
     worker.receive(initializeResponse(message(worker.sent[0])))
     await flushPromises()
     contribution.update(
-      editorSnapshot({ text: 'const value: string = 2;', textVersion: 2 }),
+      editorSnapshot({ fullText: 'const value: string = 2;', textVersion: 2 }),
       'content',
       documentChange([{ from: 22, to: 23, text: '2' }]),
     )
@@ -421,7 +421,7 @@ describe('createTypeScriptLspPlugin', () => {
     expect(context.setRangeHighlight).not.toHaveBeenCalled()
   })
 
-  it('syncs content updates from text snapshots without reading snapshot.text', async () => {
+  it('syncs content updates from text snapshots without reading snapshot.fullText', async () => {
     const worker = new FakeWorker()
     const context = viewContributionContext(editorSnapshot())
     const plugin = createTypeScriptLspPlugin({ workerFactory: () => worker })
@@ -454,7 +454,9 @@ describe('createTypeScriptLspPlugin', () => {
 
   it('optimistically shortens diagnostic highlights through local deletion', async () => {
     const worker = new FakeWorker()
-    const context = viewContributionContext(editorSnapshot({ text: 'const value: string = 123;' }))
+    const context = viewContributionContext(
+      editorSnapshot({ fullText: 'const value: string = 123;' }),
+    )
     const plugin = createTypeScriptLspPlugin({ workerFactory: () => worker })
     const provider = activatePlugin(plugin)
     const contribution = provider.createContribution(context)
@@ -472,7 +474,7 @@ describe('createTypeScriptLspPlugin', () => {
     )
 
     contribution.update(
-      editorSnapshot({ text: 'const value: string = 1;', textVersion: 2 }),
+      editorSnapshot({ fullText: 'const value: string = 1;', textVersion: 2 }),
       'content',
       documentChange([{ from: 23, to: 25, text: '' }]),
     )
@@ -484,7 +486,9 @@ describe('createTypeScriptLspPlugin', () => {
 
   it('optimistically clears diagnostic highlights when local deletion removes the range', async () => {
     const worker = new FakeWorker()
-    const context = viewContributionContext(editorSnapshot({ text: 'const value: string = 123;' }))
+    const context = viewContributionContext(
+      editorSnapshot({ fullText: 'const value: string = 123;' }),
+    )
     const plugin = createTypeScriptLspPlugin({ workerFactory: () => worker })
     const provider = activatePlugin(plugin)
     const contribution = provider.createContribution(context)
@@ -502,7 +506,7 @@ describe('createTypeScriptLspPlugin', () => {
     )
 
     contribution.update(
-      editorSnapshot({ text: 'const value: string = ;', textVersion: 2 }),
+      editorSnapshot({ fullText: 'const value: string = ;', textVersion: 2 }),
       'content',
       documentChange([{ from: 22, to: 25, text: '' }]),
     )
@@ -736,7 +740,7 @@ describe('createTypeScriptLspPlugin', () => {
     vi.useFakeTimers()
     const worker = new FakeWorker()
     const context = viewContributionContext(
-      editorSnapshot({ text: 'const source = value; const value = 1;' }),
+      editorSnapshot({ fullText: 'const source = value; const value = 1;' }),
     )
     vi.mocked(context.textOffsetFromPoint).mockReturnValue(15)
     const plugin = createTypeScriptLspPlugin({ workerFactory: () => worker })
@@ -797,7 +801,7 @@ describe('createTypeScriptLspPlugin', () => {
     vi.useFakeTimers()
     const worker = new FakeWorker()
     const context = viewContributionContext(
-      editorSnapshot({ text: 'const source = value; const value = 1;' }),
+      editorSnapshot({ fullText: 'const source = value; const value = 1;' }),
     )
     vi.mocked(context.textOffsetFromPoint).mockReturnValue(15)
     const plugin = createTypeScriptLspPlugin({ workerFactory: () => worker })
@@ -970,7 +974,7 @@ describe('createTypeScriptLspPlugin', () => {
     )
     const context = viewContributionContext(
       editorSnapshot({
-        text: 'const va',
+        fullText: 'const va',
         selections: [collapsedSelection(8)],
       }),
       { container, features },
@@ -982,7 +986,7 @@ describe('createTypeScriptLspPlugin', () => {
     await flushPromises()
     contribution.update(
       editorSnapshot({
-        text: 'const val',
+        fullText: 'const val',
         textVersion: 2,
         selections: [collapsedSelection(9)],
       }),
@@ -1074,7 +1078,7 @@ describe('createTypeScriptLspPlugin', () => {
     const worker = new FakeWorker()
     const context = viewContributionContext(
       editorSnapshot({
-        text: 'const value = 1; console.log(value);',
+        fullText: 'const value = 1; console.log(value);',
         selections: [{ anchorOffset: 6, headOffset: 6, startOffset: 6, endOffset: 6 }],
       }),
     )
@@ -1244,7 +1248,7 @@ function featureContributionContext(
     scrollElement: element,
     highlightPrefix: 'editor-test',
     hasDocument: () => true,
-    getText: () => '',
+    materializeFullText: () => '',
     getSelections: () => [],
     focusEditor: vi.fn(),
     setSelection: vi.fn(),
@@ -1314,11 +1318,11 @@ function minimapFeature(): EditorMinimapFeature {
 }
 
 function editorSnapshot(options: Partial<EditorViewSnapshot> = {}): EditorViewSnapshot {
-  const text = options.text ?? 'const value: string = 1;'
+  const fullText = options.fullText ?? 'const value: string = 1;'
   return {
     documentId: 'src/index.ts',
     languageId: 'typescript',
-    text,
+    fullText,
     textVersion: 1,
     lineStarts: [0],
     tokens: [],
@@ -1349,15 +1353,15 @@ function snapshotWithThrowingText(
 ): EditorViewSnapshot {
   const snapshot = editorSnapshot({
     ...options,
-    text,
+    fullText: text,
     textSnapshot: stringTextSnapshot(text),
     lineStarts: lineStarts(text),
   })
-  Object.defineProperty(snapshot, 'text', {
+  Object.defineProperty(snapshot, 'fullText', {
     configurable: true,
     enumerable: true,
     get: () => {
-      throw new Error('unexpected snapshot.text materialization')
+      throw new Error('unexpected snapshot.fullText materialization')
     },
   })
   return snapshot
@@ -1366,9 +1370,8 @@ function snapshotWithThrowingText(
 function stringTextSnapshot(text: string): TextSnapshot {
   return {
     length: text.length,
-    materializeText: () => text,
-    getText: () => text,
-    getTextInRange: (start, end) => text.slice(start, end),
+    materializeFullText: () => text,
+    readRange: (start, end) => text.slice(start, end),
     forEachTextChunk: (visit) => visit(text, 0, text.length),
   }
 }
@@ -1398,7 +1401,6 @@ function documentChange(edits: readonly TextEdit[]): DocumentSessionChange {
   return {
     kind: 'edit',
     edits,
-    text: '',
     tokens: [],
     timings: [],
     canUndo: false,

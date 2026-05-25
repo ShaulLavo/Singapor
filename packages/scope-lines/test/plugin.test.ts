@@ -62,7 +62,7 @@ describe('createScopeLinesPlugin', () => {
     const text = 'function f() {\n    if (x) {\n        y()\n    }\n}\n'
     const testContext = context(
       snapshot({
-        text,
+        fullText: text,
         lineStarts: lineStarts(text),
         lineCount: 6,
         tabSize: 4,
@@ -86,7 +86,7 @@ describe('createScopeLinesPlugin', () => {
     const readRows: number[] = []
     const testContext = context(
       snapshot({
-        text,
+        fullText: text,
         textSnapshot: countingTextSnapshot(text, starts, readRows),
         lineStarts: starts,
         foldMarkers: foldMarkers(),
@@ -106,7 +106,7 @@ describe('createScopeLinesPlugin', () => {
     const readRows: number[] = []
     const testContext = context(
       snapshot({
-        text,
+        fullText: text,
         textSnapshot: countingTextSnapshot(text, starts, readRows),
         lineStarts: starts,
         lineCount: starts.length,
@@ -296,7 +296,7 @@ function snapshot(overrides: Partial<EditorViewSnapshot> = {}): EditorViewSnapsh
   return {
     documentId: 'scope-test',
     languageId: 'typescript',
-    text,
+    fullText: text,
     textVersion: 1,
     lineStarts: lineStarts(text),
     tokens: [],
@@ -409,13 +409,10 @@ function countingTextSnapshot(
 ): TextSnapshot {
   return {
     length: text.length,
-    materializeText: () => {
+    materializeFullText: () => {
       throw new Error('unexpected full text materialization')
     },
-    getText: () => {
-      throw new Error('unexpected full text materialization')
-    },
-    getTextInRange: (start, end) => {
+    readRange: (start, end) => {
       readRows.push(starts.indexOf(start))
       return text.slice(start, end)
     },

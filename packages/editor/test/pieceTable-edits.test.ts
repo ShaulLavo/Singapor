@@ -6,7 +6,7 @@ import {
   insertIntoPieceTable,
 } from '../src/pieceTable/edits.ts'
 import { createPieceTableSnapshot } from '../src/pieceTable/pieceTable.ts'
-import { getPieceTableText } from '../src/pieceTable/reads.ts'
+import { materializePieceTableFullText } from '../src/pieceTable/reads.ts'
 
 describe('piece table edits', () => {
   it('inserts and deletes text while preserving the original snapshot', () => {
@@ -14,9 +14,9 @@ describe('piece table edits', () => {
     const inserted = insertIntoPieceTable(initial, 5, ' world')
     const deleted = deleteFromPieceTable(inserted, 5, 1)
 
-    expect(getPieceTableText(initial)).toBe('hello')
-    expect(getPieceTableText(inserted)).toBe('hello world')
-    expect(getPieceTableText(deleted)).toBe('helloworld')
+    expect(materializePieceTableFullText(initial)).toBe('hello')
+    expect(materializePieceTableFullText(inserted)).toBe('hello world')
+    expect(materializePieceTableFullText(deleted)).toBe('helloworld')
   })
 
   it('returns the same snapshot for no-op edits', () => {
@@ -34,8 +34,8 @@ describe('piece table edits', () => {
       { from: 4, to: 6, text: 'Y' },
     ])
 
-    expect(getPieceTableText(edited)).toBe('aXXdY')
-    expect(getPieceTableText(snapshot)).toBe('abcdef')
+    expect(materializePieceTableFullText(edited)).toBe('aXXdY')
+    expect(materializePieceTableFullText(snapshot)).toBe('abcdef')
   })
 
   it('rejects invalid or overlapping ranges', () => {

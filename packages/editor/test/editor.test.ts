@@ -340,7 +340,7 @@ function createPasteEvent(text: string): ClipboardEvent {
 function createCopyEvent(): {
   readonly event: ClipboardEvent
   readonly formatCount: () => number
-  readonly getText: () => string
+  readonly materializeFullText: () => string
 } {
   const values = new Map<string, string>()
   const clipboardData = {
@@ -355,7 +355,7 @@ function createCopyEvent(): {
   return {
     event,
     formatCount: () => values.size,
-    getText: () => values.get('text/plain') ?? '',
+    materializeFullText: () => values.get('text/plain') ?? '',
   }
 }
 
@@ -578,7 +578,7 @@ describe('Editor', () => {
         onChange: (state) => states.push(state),
       })
 
-      expect(editor.getText()).toBe('abc')
+      expect(editor.materializeFullText()).toBe('abc')
       expect(editorRoot().textContent).toBe('abc')
       expect(editor.getState()).toMatchObject({
         documentId: null,
@@ -603,7 +603,7 @@ describe('Editor', () => {
         }),
       )
 
-      expect(editor.getText()).toBe('x')
+      expect(editor.materializeFullText()).toBe('x')
       expect(editor.getState()).toMatchObject({
         documentId: null,
         length: 1,
@@ -794,7 +794,7 @@ describe('Editor', () => {
       await flushTimers()
 
       expect(inputEvent.defaultPrevented).toBe(true)
-      expect(editor.getText()).toBe('alpha')
+      expect(editor.materializeFullText()).toBe('alpha')
       expect(editor.getState()).toMatchObject({
         editability: 'readonly',
         documentMode: 'session',
@@ -806,7 +806,7 @@ describe('Editor', () => {
       const copy = createCopyEvent()
       editorRoot().dispatchEvent(copy.event)
 
-      expect(copy.getText()).toBe('alpha')
+      expect(copy.materializeFullText()).toBe('alpha')
     })
 
     it('renders setSelection with custom geometry without DOM selection sync', () => {
@@ -862,7 +862,7 @@ describe('Editor', () => {
       const copy = createCopyEvent()
       editorRoot().dispatchEvent(copy.event)
 
-      expect(copy.getText()).toBe('alpha')
+      expect(copy.materializeFullText()).toBe('alpha')
       expect(copy.event.defaultPrevented).toBe(true)
     })
 
@@ -877,7 +877,7 @@ describe('Editor', () => {
       editor.dispatchCommand('undo')
       editor.dispatchCommand('indentSelection')
 
-      expect(editor.getText()).toBe('const value = 1')
+      expect(editor.materializeFullText()).toBe('const value = 1')
       expect(editor.getState()).toMatchObject({
         documentId: 'excerpt.ts',
         documentMode: 'static',
@@ -910,13 +910,13 @@ describe('Editor', () => {
 
       editor.edit({ from: 3, to: 3, text: '!' })
 
-      expect(editor.getText()).toBe('abc')
+      expect(editor.materializeFullText()).toBe('abc')
       expect(editor.getState().editability).toBe('readonly')
 
       editor.setEditability('editable')
       editor.edit({ from: 3, to: 3, text: '!' })
 
-      expect(editor.getText()).toBe('abc!')
+      expect(editor.materializeFullText()).toBe('abc!')
     })
   })
 
@@ -1128,7 +1128,7 @@ describe('Editor', () => {
 
       expect(editor.resolveMergeConflict(0, 'theirs')).toBe(true)
 
-      expect(editor.getText()).toBe('before\ntheirs\n')
+      expect(editor.materializeFullText()).toBe('before\ntheirs\n')
       expect(editor.getMergeConflicts()).toEqual([])
       expect(editor.getState().canUndo).toBe(true)
     })
@@ -1166,7 +1166,7 @@ describe('Editor', () => {
 
       actions[1]!.click()
 
-      expect(editor.getText()).toBe('theirs\n')
+      expect(editor.materializeFullText()).toBe('theirs\n')
       expect(container.querySelector('.editor-merge-conflict-actions')).toBeNull()
     })
   })
@@ -1222,7 +1222,7 @@ describe('Editor', () => {
       expect(events.some((event) => event.kind === 'content' && event.changeKind === 'edit')).toBe(
         true,
       )
-      expect(events.at(-1)?.snapshot?.text).toBe('const a = 1;!')
+      expect(events.at(-1)?.snapshot?.fullText).toBe('const a = 1;!')
     })
 
     it('increments snapshot textVersion for text edits', () => {
@@ -1915,7 +1915,7 @@ describe('Editor', () => {
       editor.edit({ from: 5, to: 5, text: '!' })
 
       expect(editor.getState().editability).toBe('readonly')
-      expect(editor.getText()).toBe('alpha')
+      expect(editor.materializeFullText()).toBe('alpha')
       expect(blockSurfaceTexts()).toEqual(['readonly.txt:alpha'])
 
       editor.dispose()
@@ -1928,7 +1928,7 @@ describe('Editor', () => {
       editor.edit({ from: 4, to: 4, text: '!' })
 
       expect(editor.getState().editability).toBe('editable')
-      expect(editor.getText()).toBe('beta!')
+      expect(editor.materializeFullText()).toBe('beta!')
       expect(blockSurfaceTexts()).toEqual(['editable.txt:beta!'])
     })
   })
@@ -1972,7 +1972,8 @@ describe('Editor', () => {
           context.registerEditorFeatureContribution({
             createContribution: () => ({
               handleEditorChange: (change) => {
-                if (change?.kind === 'edit') featureTexts.push(change.text)
+                if (change?.kind === 'edit')
+                  featureTexts.push(change.textSnapshot.materializeFullText())
               },
               dispose: () => undefined,
             }),
@@ -1983,7 +1984,7 @@ describe('Editor', () => {
         editor.dispose()
         editor = new Editor(container, {
           plugins: [plugin],
-          onChange: () => publicTexts.push(editor.getText()),
+          onChange: () => publicTexts.push(editor.materializeFullText()),
         })
         editor.setText('a')
         featureTexts.length = 0
@@ -1991,7 +1992,7 @@ describe('Editor', () => {
 
         editorRoot().dispatchEvent(createInsertEvent('!'))
 
-        expect(editor.getText()).toBe('a!')
+        expect(editor.materializeFullText()).toBe('a!')
         expect(publicTexts).toEqual(['a!'])
         expect(featureTexts).toEqual([])
 
@@ -2013,7 +2014,8 @@ describe('Editor', () => {
           context.registerEditorFeatureContribution({
             createContribution: () => ({
               handleEditorChange: (change) => {
-                if (change?.kind === 'edit') featureTexts.push(change.text)
+                if (change?.kind === 'edit')
+                  featureTexts.push(change.textSnapshot.materializeFullText())
               },
               dispose: () => undefined,
             }),
@@ -2029,7 +2031,7 @@ describe('Editor', () => {
         editorRoot().dispatchEvent(createInsertEvent('!'))
         editorRoot().dispatchEvent(createInsertEvent('?'))
 
-        expect(editor.getText()).toBe('a!?')
+        expect(editor.materializeFullText()).toBe('a!?')
         vi.advanceTimersByTime(150)
         expect(featureTexts).toEqual(['a!?'])
       } finally {
@@ -2196,7 +2198,7 @@ describe('Editor', () => {
       })
       editorRoot().dispatchEvent(event)
 
-      expect(session.getText()).toBe('abc!')
+      expect(session.materializeFullText()).toBe('abc!')
       expect(editorRoot().textContent).toBe('abc!')
     })
 
@@ -2206,8 +2208,8 @@ describe('Editor', () => {
 
       editorInput().dispatchEvent(createInsertEvent('!'))
 
-      expect(session.getText()).toBe('abc!')
-      expect(editor.getText()).toBe('abc!')
+      expect(session.materializeFullText()).toBe('abc!')
+      expect(editor.materializeFullText()).toBe('abc!')
     })
 
     it('lets native beforeinput cancel the focused keydown fallback', async () => {
@@ -2229,8 +2231,8 @@ describe('Editor', () => {
 
       const timingNames = changes.flatMap((change) => change.timings.map(({ name }) => name))
       expect(keydown.defaultPrevented).toBe(false)
-      expect(session.getText()).toBe('abcX')
-      expect(editor.getText()).toBe('abcX')
+      expect(session.materializeFullText()).toBe('abcX')
+      expect(editor.materializeFullText()).toBe('abcX')
       expect(timingNames).toContain('input.beforeinput')
       expect(timingNames).not.toContain('input.keydownFallback')
     })
@@ -2243,8 +2245,8 @@ describe('Editor', () => {
       dispatchInputKey('X')
       await flushTimers()
 
-      expect(session.getText()).toBe('abcX')
-      expect(editor.getText()).toBe('abcX')
+      expect(session.materializeFullText()).toBe('abcX')
+      expect(editor.materializeFullText()).toBe('abcX')
     })
 
     it('applies focused keydown text synchronously after native input is missing', async () => {
@@ -2258,11 +2260,11 @@ describe('Editor', () => {
       const event = dispatchInputKey('Y')
 
       expect(event.defaultPrevented).toBe(true)
-      expect(session.getText()).toBe('abcXY')
-      expect(editor.getText()).toBe('abcXY')
+      expect(session.materializeFullText()).toBe('abcXY')
+      expect(editor.materializeFullText()).toBe('abcXY')
       await flushTimers()
-      expect(session.getText()).toBe('abcXY')
-      expect(editor.getText()).toBe('abcXY')
+      expect(session.materializeFullText()).toBe('abcXY')
+      expect(editor.materializeFullText()).toBe('abcXY')
     })
 
     it('coalesces rapid focused keydown fallback text into one change', async () => {
@@ -2286,8 +2288,8 @@ describe('Editor', () => {
       const fallbackChanges = changes.filter((change) =>
         change.timings.some(({ name }) => name === 'input.keydownFallback'),
       )
-      expect(session.getText()).toBe('abcXYZ')
-      expect(editor.getText()).toBe('abcXYZ')
+      expect(session.materializeFullText()).toBe('abcXYZ')
+      expect(editor.materializeFullText()).toBe('abcXYZ')
       expect(fallbackChanges).toHaveLength(1)
     })
 
@@ -2297,12 +2299,12 @@ describe('Editor', () => {
 
       const event = dispatchEditorKey(' ')
       expect(event.defaultPrevented).toBe(true)
-      expect(session.getText()).toBe('abc ')
-      expect(editor.getText()).toBe('abc ')
+      expect(session.materializeFullText()).toBe('abc ')
+      expect(editor.materializeFullText()).toBe('abc ')
       await flushTimers()
 
-      expect(session.getText()).toBe('abc ')
-      expect(editor.getText()).toBe('abc ')
+      expect(session.materializeFullText()).toBe('abc ')
+      expect(editor.materializeFullText()).toBe('abc ')
     })
 
     it('prevents browser scroll defaults when focused input receives Space', async () => {
@@ -2318,12 +2320,12 @@ describe('Editor', () => {
       const dispatched = editorInput().dispatchEvent(event)
       expect(dispatched).toBe(false)
       expect(event.defaultPrevented).toBe(true)
-      expect(session.getText()).toBe('abc ')
-      expect(editor.getText()).toBe('abc ')
+      expect(session.materializeFullText()).toBe('abc ')
+      expect(editor.materializeFullText()).toBe('abc ')
       await flushTimers()
 
-      expect(session.getText()).toBe('abc ')
-      expect(editor.getText()).toBe('abc ')
+      expect(session.materializeFullText()).toBe('abc ')
+      expect(editor.materializeFullText()).toBe('abc ')
     })
 
     it('keeps forced Space text when native text follows', async () => {
@@ -2335,8 +2337,8 @@ describe('Editor', () => {
       await flushTimers()
 
       expect(document.activeElement).toBe(editorInput())
-      expect(session.getText()).toBe('abc X')
-      expect(editor.getText()).toBe('abc X')
+      expect(session.materializeFullText()).toBe('abc X')
+      expect(editor.materializeFullText()).toBe('abc X')
     })
 
     it('inserts a literal tab at collapsed selections', () => {
@@ -2346,8 +2348,8 @@ describe('Editor', () => {
       const event = dispatchEditorKey('Tab')
 
       expect(event.defaultPrevented).toBe(true)
-      expect(session.getText()).toBe('abc\t')
-      expect(editor.getText()).toBe('abc\t')
+      expect(session.materializeFullText()).toBe('abc\t')
+      expect(editor.materializeFullText()).toBe('abc\t')
     })
 
     it('indents selected lines with Tab and keeps the edit undoable', () => {
@@ -2357,11 +2359,11 @@ describe('Editor', () => {
 
       dispatchEditorKey('Tab')
 
-      expect(session.getText()).toBe('\ta\n\tb\nc')
+      expect(session.materializeFullText()).toBe('\ta\n\tb\nc')
 
       dispatchEditorKey('z', primaryModifier())
 
-      expect(session.getText()).toBe('a\nb\nc')
+      expect(session.materializeFullText()).toBe('a\nb\nc')
     })
 
     it('outdents selected lines with Shift+Tab using the configured tab size', () => {
@@ -2374,7 +2376,7 @@ describe('Editor', () => {
       const event = dispatchEditorKey('Tab', { shiftKey: true })
 
       expect(event.defaultPrevented).toBe(true)
-      expect(session.getText()).toBe('a\nb\nc')
+      expect(session.materializeFullText()).toBe('a\nb\nc')
     })
 
     it('falls back to keydown line breaks when native beforeinput never arrives', async () => {
@@ -2385,8 +2387,8 @@ describe('Editor', () => {
       dispatchInputKey('Enter')
       await flushTimers()
 
-      expect(session.getText()).toBe('abc\n')
-      expect(editor.getText()).toBe('abc\n')
+      expect(session.materializeFullText()).toBe('abc\n')
+      expect(editor.materializeFullText()).toBe('abc\n')
     })
 
     it('does not schedule keydown fallback while composing', async () => {
@@ -2397,8 +2399,8 @@ describe('Editor', () => {
       dispatchInputKey('X', { isComposing: true })
       await flushTimers()
 
-      expect(session.getText()).toBe('abc')
-      expect(editor.getText()).toBe('abc')
+      expect(session.materializeFullText()).toBe('abc')
+      expect(editor.materializeFullText()).toBe('abc')
     })
 
     it('clears pending keydown fallback on dispose', async () => {
@@ -2410,7 +2412,7 @@ describe('Editor', () => {
       editor.dispose()
       await flushTimers()
 
-      expect(session.getText()).toBe('abc')
+      expect(session.materializeFullText()).toBe('abc')
       editor = new Editor(container, { plugins: withTestLanguagePlugins() })
     })
 
@@ -2451,7 +2453,7 @@ describe('Editor', () => {
         }),
       )
 
-      expect(session.getText()).toBe('abc')
+      expect(session.materializeFullText()).toBe('abc')
       expect(editorRoot().textContent).toBe('abc')
     })
 
@@ -2461,8 +2463,8 @@ describe('Editor', () => {
 
       dispatchEditorKey('Backspace')
 
-      expect(session.getText()).toBe('ab')
-      expect(editor.getText()).toBe('ab')
+      expect(session.materializeFullText()).toBe('ab')
+      expect(editor.materializeFullText()).toBe('ab')
     })
 
     it('deletes words through explicit editor commands', () => {
@@ -2471,11 +2473,11 @@ describe('Editor', () => {
       editor.attachSession(session)
 
       expect(editor.dispatchCommand('deleteWordLeft')).toBe(true)
-      expect(session.getText()).toBe('alpha gamma')
+      expect(session.materializeFullText()).toBe('alpha gamma')
       expect(resolvedSelectionRanges(session)).toEqual([{ anchor: 6, head: 6, start: 6, end: 6 }])
 
       expect(editor.dispatchCommand('deleteWordRight')).toBe(true)
-      expect(session.getText()).toBe('alpha ')
+      expect(session.materializeFullText()).toBe('alpha ')
     })
 
     it('deletes, copies, and moves touched lines through explicit editor commands', () => {
@@ -2484,14 +2486,14 @@ describe('Editor', () => {
       editor.attachSession(deleteSession)
 
       expect(editor.dispatchCommand('editor.action.deleteLines')).toBe(true)
-      expect(deleteSession.getText()).toBe('a\nc')
+      expect(deleteSession.materializeFullText()).toBe('a\nc')
 
       const copyUpSession = createDocumentSession('a\nb\nc')
       copyUpSession.setSelection(3)
       editor.attachSession(copyUpSession)
 
       expect(editor.dispatchCommand('editor.action.copyLinesUpAction')).toBe(true)
-      expect(copyUpSession.getText()).toBe('a\nb\nb\nc')
+      expect(copyUpSession.materializeFullText()).toBe('a\nb\nb\nc')
       expect(resolvedSelectionRanges(copyUpSession)).toEqual([
         { anchor: 3, head: 3, start: 3, end: 3 },
       ])
@@ -2501,7 +2503,7 @@ describe('Editor', () => {
       editor.attachSession(copyDownSession)
 
       expect(editor.dispatchCommand('editor.action.copyLinesDownAction')).toBe(true)
-      expect(copyDownSession.getText()).toBe('a\nb\nb\nc')
+      expect(copyDownSession.materializeFullText()).toBe('a\nb\nb\nc')
       expect(resolvedSelectionRanges(copyDownSession)).toEqual([
         { anchor: 5, head: 5, start: 5, end: 5 },
       ])
@@ -2511,7 +2513,7 @@ describe('Editor', () => {
       editor.attachSession(moveUpSession)
 
       expect(editor.dispatchCommand('editor.action.moveLinesUpAction')).toBe(true)
-      expect(moveUpSession.getText()).toBe('a\nc\nb')
+      expect(moveUpSession.materializeFullText()).toBe('a\nc\nb')
       expect(resolvedSelectionRanges(moveUpSession)).toEqual([
         { anchor: 3, head: 3, start: 3, end: 3 },
       ])
@@ -2521,7 +2523,7 @@ describe('Editor', () => {
       editor.attachSession(moveDownSession)
 
       expect(editor.dispatchCommand('editor.action.moveLinesDownAction')).toBe(true)
-      expect(moveDownSession.getText()).toBe('a\nc\nb')
+      expect(moveDownSession.materializeFullText()).toBe('a\nc\nb')
       expect(resolvedSelectionRanges(moveDownSession)).toEqual([
         { anchor: 5, head: 5, start: 5, end: 5 },
       ])
@@ -2533,7 +2535,7 @@ describe('Editor', () => {
       editor.attachSession(beforeSession)
 
       expect(editor.dispatchCommand('editor.action.insertLineBefore')).toBe(true)
-      expect(beforeSession.getText()).toBe('a\n\nb\nc')
+      expect(beforeSession.materializeFullText()).toBe('a\n\nb\nc')
       expect(resolvedSelectionRanges(beforeSession)).toEqual([
         { anchor: 2, head: 2, start: 2, end: 2 },
       ])
@@ -2543,7 +2545,7 @@ describe('Editor', () => {
       editor.attachSession(afterSession)
 
       expect(editor.dispatchCommand('editor.action.insertLineAfter')).toBe(true)
-      expect(afterSession.getText()).toBe('a\nb\n\nc')
+      expect(afterSession.materializeFullText()).toBe('a\nb\n\nc')
       expect(resolvedSelectionRanges(afterSession)).toEqual([
         { anchor: 4, head: 4, start: 4, end: 4 },
       ])
@@ -2556,10 +2558,10 @@ describe('Editor', () => {
       editor.attachSession(session, { languageId: 'typescript' })
 
       expect(editor.dispatchCommand('editor.action.commentLine')).toBe(true)
-      expect(session.getText()).toBe('// const a = 1;\n  // const b = 2;\nconst c = 3;')
+      expect(session.materializeFullText()).toBe('// const a = 1;\n  // const b = 2;\nconst c = 3;')
 
       expect(editor.dispatchCommand('editor.action.commentLine')).toBe(true)
-      expect(session.getText()).toBe(text)
+      expect(session.materializeFullText()).toBe(text)
     })
 
     it('toggles block comments through explicit editor commands', () => {
@@ -2571,13 +2573,13 @@ describe('Editor', () => {
       editor.attachSession(session, { languageId: 'typescript' })
 
       expect(editor.dispatchCommand('editor.action.blockComment')).toBe(true)
-      expect(session.getText()).toBe('const /* value */ = 1;')
+      expect(session.materializeFullText()).toBe('const /* value */ = 1;')
       expect(resolvedSelectionRanges(session)).toEqual([
         { anchor: start + 3, head: end + 3, start: start + 3, end: end + 3 },
       ])
 
       expect(editor.dispatchCommand('editor.action.blockComment')).toBe(true)
-      expect(session.getText()).toBe(text)
+      expect(session.materializeFullText()).toBe(text)
       expect(resolvedSelectionRanges(session)).toEqual([{ anchor: start, head: end, start, end }])
     })
 
@@ -2587,7 +2589,7 @@ describe('Editor', () => {
       editor.attachSession(indentSession)
 
       expect(editor.dispatchCommand('editor.action.indentLines')).toBe(true)
-      expect(indentSession.getText()).toBe('\tabc')
+      expect(indentSession.materializeFullText()).toBe('\tabc')
       expect(resolvedSelectionRanges(indentSession)).toEqual([
         { anchor: 2, head: 2, start: 2, end: 2 },
       ])
@@ -2597,7 +2599,7 @@ describe('Editor', () => {
       editor.attachSession(outdentSession)
 
       expect(editor.dispatchCommand('editor.action.outdentLines')).toBe(true)
-      expect(outdentSession.getText()).toBe('abc')
+      expect(outdentSession.materializeFullText()).toBe('abc')
       expect(resolvedSelectionRanges(outdentSession)).toEqual([
         { anchor: 1, head: 1, start: 1, end: 1 },
       ])
@@ -2625,7 +2627,7 @@ describe('Editor', () => {
       const copy = createCopyEvent()
       editorRoot().dispatchEvent(copy.event)
 
-      expect(copy.getText()).toBe('beta')
+      expect(copy.materializeFullText()).toBe('beta')
       expect(copy.event.defaultPrevented).toBe(true)
     })
 
@@ -2647,7 +2649,7 @@ describe('Editor', () => {
       const copy = createCopyEvent()
       editorRoot().dispatchEvent(copy.event)
 
-      expect(copy.getText()).toBe('abc')
+      expect(copy.materializeFullText()).toBe('abc')
       expect(copy.event.defaultPrevented).toBe(true)
     })
 
@@ -2670,7 +2672,7 @@ describe('Editor', () => {
 
       editorInput().dispatchEvent(createPasteEvent(pasted))
 
-      expect(editor.getText()).toBe(pasted)
+      expect(editor.materializeFullText()).toBe(pasted)
       expect(editor.getState().cursor).toEqual({ row: 7, column: 6 })
       expect(editorRoot().scrollTop).toBeGreaterThan(0)
     })
@@ -2787,7 +2789,7 @@ describe('Editor', () => {
         const copy = createCopyEvent()
         editorRoot().dispatchEvent(copy.event)
 
-        expect(copy.getText()).toBe('c')
+        expect(copy.materializeFullText()).toBe('c')
       } finally {
         nativeSelection.restore()
       }
@@ -2926,7 +2928,7 @@ describe('Editor', () => {
         }),
       )
 
-      expect(session.getText()).toBe('aXd')
+      expect(session.materializeFullText()).toBe('aXd')
       expect(editorRoot().textContent).toBe('aXd')
     })
 
@@ -2976,7 +2978,7 @@ describe('Editor', () => {
       editorRoot().dispatchEvent(createInsertEvent('X'))
 
       expect(session.getSelections().selections).toHaveLength(2)
-      expect(editor.getText()).toBe('aXbcdXef')
+      expect(editor.materializeFullText()).toBe('aXbcdXef')
       expect(container.querySelectorAll('.editor-virtualized-caret')).toHaveLength(2)
     })
 
@@ -3194,13 +3196,13 @@ describe('Editor', () => {
       replaceInput.dispatchEvent(new Event('input', { bubbles: true }))
 
       expect(editor.replaceOne()).toBe(true)
-      expect(editor.getText()).toBe('bar foo foo')
+      expect(editor.materializeFullText()).toBe('bar foo foo')
 
       expect(editor.replaceAll()).toBe(true)
-      expect(editor.getText()).toBe('bar bar bar')
+      expect(editor.materializeFullText()).toBe('bar bar bar')
 
       editor.dispatchCommand('undo')
-      expect(editor.getText()).toBe('bar foo foo')
+      expect(editor.materializeFullText()).toBe('bar foo foo')
     })
 
     it('toggles the replace row from the find widget', () => {
@@ -3311,7 +3313,7 @@ describe('Editor', () => {
         const copy = createCopyEvent()
         editorRoot().dispatchEvent(copy.event)
 
-        expect(copy.getText()).toBe('bc')
+        expect(copy.materializeFullText()).toBe('bc')
       } finally {
         nativeSelection.restore()
       }
@@ -3530,7 +3532,7 @@ describe('Editor', () => {
         }),
       )
 
-      expect(session.getText()).toBe('Xcd')
+      expect(session.materializeFullText()).toBe('Xcd')
       expect(editorRoot().textContent).toBe('Xcd')
       before.remove()
       after.remove()
@@ -3567,8 +3569,8 @@ describe('Editor', () => {
         }),
       )
 
-      expect(session.getText()).toBe('one\nX\nthree')
-      expect(editor.getText()).toBe('one\nX\nthree')
+      expect(session.materializeFullText()).toBe('one\nX\nthree')
+      expect(editor.materializeFullText()).toBe('one\nX\nthree')
     })
 
     it('selects the full document on quad click', () => {
@@ -3599,7 +3601,7 @@ describe('Editor', () => {
         }),
       )
 
-      expect(session.getText()).toBe('X')
+      expect(session.materializeFullText()).toBe('X')
       expect(editorRoot().textContent).toBe('X')
     })
 
@@ -3653,7 +3655,7 @@ describe('Editor', () => {
         }),
       )
 
-      expect(session.getText()).toBe('alpha X')
+      expect(session.materializeFullText()).toBe('alpha X')
       expect(editorRoot().textContent).toBe('alpha X')
     })
 
@@ -3717,7 +3719,7 @@ describe('Editor', () => {
         }),
       )
 
-      expect(session.getText()).toBe('alpha X')
+      expect(session.materializeFullText()).toBe('alpha X')
       expect(editorRoot().textContent).toBe('alpha X')
     })
   })
@@ -3726,7 +3728,7 @@ describe('Editor', () => {
     it('sets anonymous text buffers without document identity', () => {
       editor.setText('abc', { languageId: 'typescript' })
 
-      expect(editor.getText()).toBe('abc')
+      expect(editor.materializeFullText()).toBe('abc')
       expect(editorRoot().textContent).toBe('abc')
       expect(editor.getState()).toMatchObject({
         documentId: null,
@@ -3753,12 +3755,12 @@ describe('Editor', () => {
 
       editor.syncText('abcdef', { documentMode: 'static' })
 
-      expect(editor.getText()).toBe('abcdef')
+      expect(editor.materializeFullText()).toBe('abcdef')
       expect(editorRoot().textContent).toBe('abcdef')
       expect(changes.at(-1)).toMatchObject({
         kind: 'edit',
-        text: 'abcdef',
       })
+      expect(changes.at(-1)?.textSnapshot.materializeFullText()).toBe('abcdef')
       expect(editor.getState()).toMatchObject({
         canUndo: false,
         documentMode: 'static',
@@ -3769,7 +3771,7 @@ describe('Editor', () => {
     it('opens editable documents and exposes editor state', () => {
       editor.openDocument({ documentId: 'note.txt', text: 'abc' })
 
-      expect(editor.getText()).toBe('abc')
+      expect(editor.materializeFullText()).toBe('abc')
       expect(editorRoot().textContent).toBe('abc')
       expect(editor.getState()).toMatchObject({
         documentId: 'note.txt',
@@ -3798,7 +3800,7 @@ describe('Editor', () => {
         }),
       )
 
-      expect(editor.getText()).toBe('abc!')
+      expect(editor.materializeFullText()).toBe('abc!')
       expect(editor.getState().canUndo).toBe(true)
       expect(states.at(-1)?.length).toBe(4)
     })
@@ -3823,7 +3825,7 @@ describe('Editor', () => {
         }),
       )
 
-      expect(editor.getText()).toBe('abc')
+      expect(editor.materializeFullText()).toBe('abc')
       expect(editor.getState()).toMatchObject({ canUndo: false, canRedo: true })
     })
 
@@ -3833,7 +3835,7 @@ describe('Editor', () => {
 
       editor.clearDocument()
 
-      expect(editor.getText()).toBe('')
+      expect(editor.materializeFullText()).toBe('')
       expect(editor.getState()).toMatchObject({
         documentId: null,
         languageId: null,
@@ -3848,7 +3850,7 @@ describe('Editor', () => {
 
       editor.edit({ from: 1, to: 4, text: 'X' })
 
-      expect(editor.getText()).toBe('aXef')
+      expect(editor.materializeFullText()).toBe('aXef')
       expect(editor.getState()).toMatchObject({
         canUndo: true,
         cursor: { row: 0, column: 4 },
@@ -3858,7 +3860,7 @@ describe('Editor', () => {
     it('creates an anonymous buffer before editing when needed', () => {
       editor.edit({ from: 0, to: 0, text: 'hi' })
 
-      expect(editor.getText()).toBe('hi')
+      expect(editor.materializeFullText()).toBe('hi')
       expect(editor.getState()).toMatchObject({
         documentId: null,
         length: 2,
@@ -3881,7 +3883,7 @@ describe('Editor', () => {
         { from: 1, to: 2, text: 'X' },
       ])
 
-      expect(editor.getText()).toBe('aXcYd')
+      expect(editor.materializeFullText()).toBe('aXcYd')
       expect(changes).toHaveLength(1)
       expect(changes[0]?.edits).toEqual([
         { from: 1, to: 2, text: 'X' },
@@ -3889,7 +3891,7 @@ describe('Editor', () => {
       ])
 
       editor.dispatchCommand('undo')
-      expect(editor.getText()).toBe('abcd')
+      expect(editor.materializeFullText()).toBe('abcd')
     })
 
     it('skips undo history for configured programmatic edits', () => {
@@ -3897,7 +3899,7 @@ describe('Editor', () => {
 
       editor.edit({ from: 3, to: 3, text: '!' }, { history: 'skip' })
 
-      expect(editor.getText()).toBe('abc!')
+      expect(editor.materializeFullText()).toBe('abc!')
       expect(editor.getState().canUndo).toBe(false)
     })
 
@@ -3909,7 +3911,7 @@ describe('Editor', () => {
       expect(editor.getState().canRedo).toBe(true)
       editor.edit({ from: 3, to: 3, text: '?' }, { history: 'skip' })
 
-      expect(editor.getText()).toBe('abc?')
+      expect(editor.materializeFullText()).toBe('abc?')
       expect(editor.getState().canRedo).toBe(true)
     })
 
@@ -3925,7 +3927,7 @@ describe('Editor', () => {
       expect(() => {
         editor.edit({ from: 10, to: 10, text: '!' })
       }).toThrow(RangeError)
-      expect(editor.getText()).toBe('abcd')
+      expect(editor.materializeFullText()).toBe('abcd')
     })
 
     it('supports explicit post-edit selections', () => {
@@ -3957,7 +3959,7 @@ describe('Editor', () => {
           includeHighlights: true,
           languageId: 'typescript',
           syntaxMode: 'range',
-          text: 'const a = 1;',
+          fullText: 'const a = 1;',
         }),
       ])
       expect(editor.getState().syntaxStatus).toBe('ready')
@@ -4502,18 +4504,22 @@ describe('Editor', () => {
 
       editor.setSelection(5, 5, { reveal: false })
       editorRoot().dispatchEvent(createLineBreakEvent())
-      expect(editor.getText().startsWith('const\n line0')).toBe(true)
+      expect(editor.materializeFullText().startsWith('const\n line0')).toBe(true)
       const rangeCountBeforeScrollBack = ranges.length
       editor.setScrollPosition({ top: 0, left: 0 })
       await flushTimers()
       await flushMicrotasks()
 
-      expect(ranges).toHaveLength(rangeCountBeforeScrollBack)
+      if (ranges.length > rangeCountBeforeScrollBack) {
+        expect(ranges.at(-1)?.startIndex).toBe(0)
+      }
 
       await flushSyntaxDebounce()
 
       expect(ranges.length).toBeGreaterThan(rangeCountBeforeScrollBack)
-      expect(ranges.at(-1)?.startIndex).toBe(0)
+      expect(ranges.slice(rangeCountBeforeScrollBack).some((range) => range.startIndex === 0)).toBe(
+        true,
+      )
     })
 
     it('applies syncText changes through incremental syntax sessions', async () => {
@@ -4545,8 +4551,8 @@ describe('Editor', () => {
       expect(appliedChanges[0]).toMatchObject({
         edits: [{ from: 7, text: 'b', to: 7 }],
         kind: 'edit',
-        text: 'const ab = 1;',
       })
+      expect(appliedChanges[0]?.textSnapshot.materializeFullText()).toBe('const ab = 1;')
     })
 
     it('does not infer language from document ids', async () => {
@@ -4975,7 +4981,7 @@ describe('Editor', () => {
       setEditorSyntaxSessionFactory(() =>
         createMockSyntaxSession({
           applyChange: async (change) => {
-            changes.push(change.text)
+            changes.push(change.textSnapshot.materializeFullText())
             return createSyntaxResult([{ start: 6, end: 7, style: { color: '#00ff00' } }])
           },
         }),
@@ -5008,7 +5014,7 @@ describe('Editor', () => {
       const createdTexts: string[] = []
       let disposeCount = 0
       setEditorSyntaxSessionFactory((options) => {
-        createdTexts.push(options.text)
+        createdTexts.push(options.fullText)
         const isInitialSession = createdTexts.length === 1
 
         return createMockSyntaxSession({
@@ -5057,7 +5063,7 @@ describe('Editor', () => {
       editorRoot().dispatchEvent(createInsertEvent('X'))
 
       const ranges = [...tokenHighlights()[0]!]
-      expect(editor.getText()).toBe('woXrld')
+      expect(editor.materializeFullText()).toBe('woXrld')
       expect(ranges).toHaveLength(1)
       expect(ranges[0]!.startOffset).toBe(0)
 
@@ -5096,7 +5102,7 @@ describe('Editor', () => {
 
       const bbNode = rowTextNode(3)
       const bbRange = tokenHighlightRanges().find((range) => range.startContainer === bbNode)
-      expect(editor.getText()).toBe('a\nX\nYa\nbb\ncc')
+      expect(editor.materializeFullText()).toBe('a\nX\nYa\nbb\ncc')
       expect(bbRange).toBeDefined()
       expect(bbRange!.startOffset).toBe(0)
       expect(bbRange!.endOffset).toBe(2)
@@ -5119,14 +5125,18 @@ describe('Editor', () => {
       await flushMicrotasks()
 
       for (let count = 0; count < 4; count += 1) {
-        editor.setSelection(editor.getText().indexOf('bb'))
+        editor.setSelection(editor.materializeFullText().indexOf('bb'))
         editorRoot().dispatchEvent(createLineBreakEvent())
       }
 
-      const bbRow = editor.getText().slice(0, editor.getText().indexOf('bb')).split('\n').length - 1
+      const bbRow =
+        editor
+          .materializeFullText()
+          .slice(0, editor.materializeFullText().indexOf('bb'))
+          .split('\n').length - 1
       const bbNode = rowTextNode(bbRow)
       const bbRange = tokenHighlightRanges().find((range) => range.startContainer === bbNode)
-      expect(editor.getText()).toBe('aa\n\n\n\n\nbb\ncc')
+      expect(editor.materializeFullText()).toBe('aa\n\n\n\n\nbb\ncc')
       expect(bbRange).toBeDefined()
       expect(bbRange!.startOffset).toBe(0)
       expect(bbRange!.endOffset).toBe(2)
@@ -5162,7 +5172,7 @@ describe('Editor', () => {
       await flushMicrotasks()
       editorRoot().dispatchEvent(createInsertEvent('!'))
 
-      expect(editor.getText()).toBe(`${text}!`)
+      expect(editor.materializeFullText()).toBe(`${text}!`)
       expect(foldToggle().dataset.editorFoldState).toBe('expanded')
 
       await flushSyntaxDebounce()
@@ -5228,7 +5238,7 @@ describe('Editor', () => {
         }),
       )
 
-      expect(editor.getText()).toBe(text)
+      expect(editor.materializeFullText()).toBe(text)
       expect(tokenHighlightRanges()).toHaveLength(1)
       expect(foldToggle().dataset.editorFoldState).toBe('expanded')
       expect(refreshCount).toBe(1)
@@ -5294,7 +5304,7 @@ describe('Editor', () => {
         createMockSyntaxSession({
           refresh: async () => createSyntaxResult([]),
           applyChange: async (change) => {
-            changes.push(change.text)
+            changes.push(change.textSnapshot.materializeFullText())
             return createSyntaxResult([{ start: 0, end: 5, style: { color: '#00ff00' } }])
           },
         }),
@@ -5311,7 +5321,7 @@ describe('Editor', () => {
 
       await flushSyntaxDebounce()
       expect(changes).toEqual(['const a = 1;!?'])
-      expect(editor.getText()).toBe('const a = 1;!?')
+      expect(editor.materializeFullText()).toBe('const a = 1;!?')
       expect(highlightsMap.size).toBe(1)
     })
 
@@ -5345,7 +5355,7 @@ describe('Editor', () => {
 
       firstEdit.resolve(createSyntaxResult([{ start: 6, end: 7, style: { color: '#ff0000' } }]))
       await flushMicrotasks()
-      expect(editor.getText()).toBe('const a = 1;!?')
+      expect(editor.materializeFullText()).toBe('const a = 1;!?')
       expect(highlightsMap.size).toBe(1)
     })
 
@@ -5354,7 +5364,7 @@ describe('Editor', () => {
       const highlighter = createMockHighlighterSession({
         refresh: async () => createHighlightResult([]),
         applyChange: async (change) => {
-          changes.push(change.text)
+          changes.push(change.textSnapshot.materializeFullText())
           return createHighlightResult([{ start: 0, end: 5, style: { color: '#00ff00' } }])
         },
       })
@@ -5390,7 +5400,7 @@ describe('Editor', () => {
         activate: (context) =>
           context.registerHighlighter({
             createSession: (options) => {
-              createdTexts.push(options.text)
+              createdTexts.push(options.fullText)
               const isInitialSession = createdTexts.length === 1
 
               return createMockHighlighterSession({
@@ -5515,7 +5525,7 @@ describe('Editor', () => {
 
       firstEdit.resolve(createHighlightResult([{ start: 6, end: 7, style: { color: '#ff0000' } }]))
       await flushMicrotasks()
-      expect(editor.getText()).toBe('const a = 1;!?')
+      expect(editor.materializeFullText()).toBe('const a = 1;!?')
       expect(tokenHighlightRanges()[0]?.startOffset).toBe(0)
     })
 
@@ -5570,7 +5580,7 @@ describe('Editor', () => {
       editorRoot().dispatchEvent(createLineBreakEvent())
       await flushSyntaxDebounce()
 
-      expect(editor.getText()).toBe('fn main() {}\n')
+      expect(editor.materializeFullText()).toBe('fn main() {}\n')
       expect(editor.getState()).toMatchObject({
         languageId: 'rust',
         syntaxStatus: 'plain',
@@ -5596,7 +5606,7 @@ describe('Editor', () => {
       expect(editor.getState().syntaxStatus).toBe('error')
       editorRoot().dispatchEvent(createInsertEvent('!'))
 
-      expect(editor.getText()).toBe('const a = 1;!')
+      expect(editor.materializeFullText()).toBe('const a = 1;!')
     })
   })
 

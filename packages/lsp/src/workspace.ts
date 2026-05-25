@@ -145,7 +145,7 @@ function defineLazyDocumentText<TDocument extends Omit<LspDocument, 'text'>>(
   Object.defineProperty(document, 'text', {
     configurable: true,
     enumerable: true,
-    get: () => document.textSnapshot.getText(),
+    get: () => document.textSnapshot.materializeFullText(),
   })
   return document as TDocument & { readonly text: string }
 }
@@ -158,14 +158,14 @@ function documentSnapshot(document: MutableLspDocument): LspTextDocumentSnapshot
 }
 
 function materializeDocumentText(document: MutableLspDocument): string {
-  return document.textCache ?? document.textSnapshot.getText()
+  return document.textCache ?? document.textSnapshot.materializeFullText()
 }
 
 function createStringTextSnapshot(text: string): LspTextSnapshot {
   return {
     length: text.length,
-    getText: () => text,
-    getTextInRange: (start, end) => text.slice(start, end),
+    materializeFullText: () => text,
+    readRange: (start, end) => text.slice(start, end),
   }
 }
 

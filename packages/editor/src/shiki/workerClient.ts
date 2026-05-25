@@ -104,16 +104,16 @@ class ShikiHighlighterSession implements EditorHighlighterSession {
     this.themes = options.themes ?? []
     this.snapshot = options.snapshot
     this.textSnapshot =
-      options.textSnapshot ?? createDocumentTextSnapshot(options.snapshot, options.text)
+      options.textSnapshot ?? createDocumentTextSnapshot(options.snapshot, options.fullText)
   }
 
   public async refresh(
     snapshot: ShikiHighlighterSessionOptions['snapshot'],
-    text?: string,
+    fullText?: string,
   ): Promise<EditorHighlightResult> {
     return this.enqueueRequest(async () => {
-      const textSnapshot = createDocumentTextSnapshot(snapshot, text)
-      const documentText = textSnapshot.getText()
+      const textSnapshot = createDocumentTextSnapshot(snapshot, fullText)
+      const documentText = textSnapshot.materializeFullText()
       const result = await postRequest({
         type: 'open',
         ...this.documentOptions(documentText),
@@ -173,8 +173,9 @@ class ShikiHighlighterSession implements EditorHighlighterSession {
       }
     }
 
-    const text = nextTextSnapshot.getText()
-    const fallbackEdit = createTextDiffEdit(this.textSnapshot.getText(), text) ?? undefined
+    const text = nextTextSnapshot.materializeFullText()
+    const fallbackEdit =
+      createTextDiffEdit(this.textSnapshot.materializeFullText(), text) ?? undefined
     return {
       type: 'edit',
       ...this.documentOptions(text),

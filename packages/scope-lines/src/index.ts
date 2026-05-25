@@ -181,7 +181,7 @@ class ScopeLinesContribution implements EditorViewContribution {
 function createScopeLinesRenderContext(snapshot: EditorViewSnapshot): ScopeLinesRenderContext {
   return {
     snapshot,
-    textSnapshot: snapshot.textSnapshot ?? createStringTextSnapshot(snapshot.text),
+    textSnapshot: snapshot.textSnapshot ?? createStringTextSnapshot(snapshot.fullText),
     lineTextCache: new Map(),
     indentColumnCache: new Map(),
   }
@@ -419,7 +419,7 @@ function uncachedLineText(context: ScopeLinesRenderContext, row: number): string
   const textSnapshot = context.textSnapshot
   const nextStart = snapshot.lineStarts[row + 1] ?? textSnapshot.length + 1
   const end = Math.max(start, Math.min(textSnapshot.length, nextStart - 1))
-  return textSnapshot.getTextInRange(start, end)
+  return textSnapshot.readRange(start, end)
 }
 
 function indentColumnForRow(context: ScopeLinesRenderContext, row: number): number {

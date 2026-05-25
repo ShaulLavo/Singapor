@@ -36,16 +36,16 @@ describe('createEditor', () => {
     })
 
     expect(mounted.controller.editor()).not.toBeNull()
-    expect(mounted.controller.text()).toBe('alpha')
+    expect(mounted.controller.fullText()).toBe('alpha')
     expect(mounted.controller.state()?.length).toBe(5)
-    expect(mounted.controller.snapshot()?.text).toBe('alpha')
+    expect(mounted.controller.snapshot()?.fullText).toBe('alpha')
 
     mounted.dispose()
 
     expect(mounted.controller.editor()).toBeNull()
     expect(mounted.controller.state()).toBeNull()
     expect(mounted.controller.snapshot()).toBeNull()
-    expect(mounted.controller.text()).toBe('')
+    expect(mounted.controller.fullText()).toBe('')
   })
 
   it('syncs state and last change after editor commands', () => {
@@ -55,10 +55,10 @@ describe('createEditor', () => {
 
     mounted.controller.commands.edit({ from: 5, to: 5, text: '!' })
 
-    expect(mounted.controller.text()).toBe('alpha!')
+    expect(mounted.controller.fullText()).toBe('alpha!')
     expect(mounted.controller.state()?.length).toBe(6)
     expect(mounted.controller.lastChange()?.kind).toBe('edit')
-    expect(mounted.controller.snapshot()?.text).toBe('alpha!')
+    expect(mounted.controller.snapshot()?.fullText).toBe('alpha!')
 
     mounted.dispose()
   })
@@ -75,7 +75,7 @@ describe('createEditor', () => {
     expect(textSnapshotReads(diagnostics)).toHaveLength(0)
     expect(mounted.controller.textSnapshot()?.length).toBe(6)
     expect(textSnapshotReads(diagnostics)).toHaveLength(0)
-    expect(mounted.controller.text()).toBe('alpha!')
+    expect(mounted.controller.fullText()).toBe('alpha!')
     expect(textSnapshotReads(diagnostics)).toHaveLength(1)
 
     mounted.dispose()
@@ -115,12 +115,12 @@ describe('createEditor', () => {
     setDocument({ text: 'server alpha', documentId: 'a.ts', revision: 1 })
     await flushEffects()
 
-    expect(mounted.controller.text()).toBe('alpha!')
+    expect(mounted.controller.fullText()).toBe('alpha!')
 
     setDocument({ text: 'server beta', documentId: 'a.ts', revision: 2 })
     await flushEffects()
 
-    expect(mounted.controller.text()).toBe('server beta')
+    expect(mounted.controller.fullText()).toBe('server beta')
     expect(mounted.controller.snapshot()?.documentId).toBe('a.ts')
 
     mounted.dispose()
@@ -225,5 +225,5 @@ function collectDiagnostics(): Diagnostic[] {
 }
 
 function textSnapshotReads(diagnostics: readonly Diagnostic[]): readonly Diagnostic[] {
-  return diagnostics.filter((diagnostic) => diagnostic.name === 'textSnapshot.getText')
+  return diagnostics.filter((diagnostic) => diagnostic.name === 'textSnapshot.materializeFullText')
 }

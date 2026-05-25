@@ -16,8 +16,8 @@ export type LspTextEdit = {
 
 export type LspTextSnapshot = {
   readonly length: number
-  getText(): string
-  getTextInRange(start: number, end?: number): string
+  materializeFullText(): string
+  readRange(start: number, end?: number): string
 }
 
 export type LspTextDocumentSnapshot = {

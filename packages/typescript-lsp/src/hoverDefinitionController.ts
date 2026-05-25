@@ -239,7 +239,7 @@ export class HoverDefinitionController {
         'textDocument/hover',
         {
           textDocument: { uri: active.uri },
-          position: offsetToLspPosition(active.text, offset),
+          position: offsetToLspPosition(active.fullText, offset),
         } satisfies lsp.TextDocumentPositionParams,
         { signal: abort.signal },
       )
@@ -258,13 +258,14 @@ export class HoverDefinitionController {
     if (requestId !== this.hoverRequestId) return
     if (active !== this.options.getActiveDocument()) return
 
-    const diagnostics = diagnosticsAtOffset(active.text, offset, this.options.getDiagnostics())
+    const diagnostics = diagnosticsAtOffset(active.fullText, offset, this.options.getDiagnostics())
     if (!hover && diagnostics.length === 0) {
       this.hideHover()
       return
     }
 
-    const range = hoverRangeOffsets(active.text, hover) ?? visibleRangeAtOffset(active.text, offset)
+    const range =
+      hoverRangeOffsets(active.fullText, hover) ?? visibleRangeAtOffset(active.fullText, offset)
     const rect = this.context.getRangeClientRect(range.start, range.end)
     if (!rect) return this.hideHover()
 
@@ -297,7 +298,7 @@ export class HoverDefinitionController {
     this.definitionRequestId = requestId
     void requestNavigationTargets(this.client, {
       uri: active.uri,
-      text: active.text,
+      text: active.fullText,
       offset,
       kind: command.kind,
       includeDeclaration: command.includeDeclaration,
@@ -312,7 +313,7 @@ export class HoverDefinitionController {
     if (!active) return this.clearDefinitionLink()
     if (!this.client.initialized) return this.clearDefinitionLink()
 
-    const range = identifierRangeAtOffset(active.text, offset)
+    const range = identifierRangeAtOffset(active.fullText, offset)
     if (!range) return this.clearDefinitionLink()
     if (sameOffsetRange(this.linkRange, range)) return
 
@@ -320,7 +321,7 @@ export class HoverDefinitionController {
     this.definitionHoverRequestId = requestId
     void requestDefinition(this.client, {
       uri: active.uri,
-      text: active.text,
+      text: active.fullText,
       offset,
     })
       .then((result) => this.renderDefinitionLink(requestId, active, range, result))
@@ -335,7 +336,7 @@ export class HoverDefinitionController {
   ): void {
     if (requestId !== this.definitionHoverRequestId) return
     if (active !== this.options.getActiveDocument()) return
-    if (!preferredJumpableDefinitionTarget(active.uri, active.text, range, result))
+    if (!preferredJumpableDefinitionTarget(active.uri, active.fullText, range, result))
       return this.clearDefinitionLink()
 
     this.linkRange = range
@@ -374,7 +375,7 @@ export class HoverDefinitionController {
     })
     if (handled) return
 
-    const target = preferredReferenceTarget(active.uri, active.text, offset, result)
+    const target = preferredReferenceTarget(active.uri, active.fullText, offset, result)
     if (!target) return
     this.openNavigationTarget(active, target, {
       kind: 'references',
@@ -395,7 +396,7 @@ export class HoverDefinitionController {
     navigateToTarget(
       target,
       {
-        text: active.text,
+        text: active.fullText,
         setSelection: this.context.setSelection.bind(this.context),
         focusEditor: this.context.focusEditor.bind(this.context),
       },

@@ -94,7 +94,7 @@ describe('createLspPlugin', () => {
     })
 
     contribution.update(
-      editorSnapshot({ text: 'let aa = 1;', textVersion: 2 }),
+      editorSnapshot({ fullText: 'let aa = 1;', textVersion: 2 }),
       'content',
       documentChange([{ from: 4, to: 5, text: 'aa' }]),
     )
@@ -115,7 +115,7 @@ describe('createLspPlugin', () => {
       },
     ])
 
-    contribution.update(editorSnapshot({ documentId: null, text: '', textVersion: 3 }), 'clear')
+    contribution.update(editorSnapshot({ documentId: null, fullText: '', textVersion: 3 }), 'clear')
 
     expect(sentMethods(socket)).toEqual([
       'initialize',
@@ -167,11 +167,11 @@ function viewContributionContext(snapshot: EditorViewSnapshot): EditorViewContri
 }
 
 function editorSnapshot(options: Partial<EditorViewSnapshot> = {}): EditorViewSnapshot {
-  const text = options.text ?? 'let a = 1;'
+  const fullText = options.fullText ?? 'let a = 1;'
   return {
     documentId: 'src/main.ts',
     languageId: 'typescript',
-    text,
+    fullText,
     textVersion: 1,
     lineStarts: [0],
     tokens: [],
@@ -200,7 +200,6 @@ function documentChange(edits: readonly TextEdit[]): DocumentSessionChange {
   return {
     kind: 'edit',
     edits,
-    text: '',
     tokens: [],
     timings: [],
     canUndo: false,

@@ -22,14 +22,10 @@ import {
   type EditorHistory,
 } from './history'
 import type { EditorToken, TextEdit } from './tokens'
-import {
-  createDocumentTextSnapshot,
-  defineLazyTextProperty,
-  type DocumentTextSnapshot,
-} from './documentTextSnapshot'
+import { createDocumentTextSnapshot, type DocumentTextSnapshot } from './documentTextSnapshot'
 import type { Anchor as PieceTableAnchor, PieceTableSnapshot } from './pieceTable/pieceTableTypes'
 import { applyBatchToPieceTable } from './pieceTable/edits'
-import { getPieceTableText, pieceTableSnapshotsHaveSameText } from './pieceTable/reads'
+import { readPieceTableTextRange, pieceTableSnapshotsHaveSameText } from './pieceTable/reads'
 import { createPieceTableSnapshot } from './pieceTable/snapshot'
 
 export type DocumentSessionChangeKind = 'edit' | 'selection' | 'undo' | 'redo' | 'none'
@@ -46,7 +42,6 @@ export type DocumentSessionChange = {
   readonly snapshot: PieceTableSnapshot
   readonly selections: SelectionSet<PieceTableAnchor>
   readonly textSnapshot: DocumentTextSnapshot
-  readonly text: string
   readonly tokens: readonly EditorToken[]
   readonly timings: readonly EditorTimingMeasurement[]
   readonly canUndo: boolean
@@ -83,7 +78,7 @@ export type DocumentSession = {
   clearSecondarySelections(): DocumentSessionChange
   setTokens(tokens: readonly EditorToken[]): DocumentSessionChange
   adoptTokens(tokens: readonly EditorToken[]): DocumentSessionChange
-  getText(): string
+  materializeFullText(): string
   getTextSnapshot(): DocumentTextSnapshot
   getTokens(): readonly EditorToken[]
   getSelections(): SelectionSet<PieceTableAnchor>
@@ -376,8 +371,8 @@ class PieceTableDocumentSession implements DocumentSession {
     return appendTiming(this.createChange('none', []), 'session.setTokens', start)
   }
 
-  public getText(): string {
-    return this.textSnapshot.getText()
+  public materializeFullText(): string {
+    return this.textSnapshot.materializeFullText()
   }
 
   public getTextSnapshot(): DocumentTextSnapshot {
@@ -665,8 +660,8 @@ class StaticDocumentSession implements DocumentSession {
     return appendTiming(this.createChange('none', []), 'session.setTokens', start)
   }
 
-  public getText(): string {
-    return this.textSnapshot.getText()
+  public materializeFullText(): string {
+    return this.textSnapshot.materializeFullText()
   }
 
   public getTextSnapshot(): DocumentTextSnapshot {
@@ -782,18 +777,16 @@ export function createStaticDocumentSession(text: string): DocumentSession {
   return new StaticDocumentSession(text)
 }
 
-type DocumentSessionChangeFields = Omit<DocumentSessionChange, 'text'>
+type DocumentSessionChangeFields = DocumentSessionChange
 
 function createDocumentSessionChange(fields: DocumentSessionChangeFields): DocumentSessionChange {
-  return defineLazyTextProperty({ ...fields })
+  return { ...fields }
 }
 
 export function documentSessionChangeTextSnapshot(
   change: DocumentSessionChange,
 ): DocumentTextSnapshot {
-  const textSnapshot = (change as { readonly textSnapshot?: DocumentTextSnapshot }).textSnapshot
-  if (textSnapshot) return textSnapshot
-  return createDocumentTextSnapshot(change.snapshot, change.text)
+  return change.textSnapshot
 }
 
 export function withDocumentSessionChangeTimings(
@@ -839,7 +832,7 @@ function invertTextEdits(
     inverse.push({
       from,
       to,
-      text: getPieceTableText(snapshot, edit.from, edit.to),
+      text: readPieceTableTextRange(snapshot, edit.from, edit.to),
     })
     delta += edit.text.length - (edit.to - edit.from)
   }

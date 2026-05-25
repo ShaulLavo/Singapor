@@ -13,31 +13,21 @@ export const ensureValidRange = (snapshot: PieceTableTreeSnapshot, start: number
   }
 }
 
-export const readPieceTableRange = (
+export const readPieceTableTextRange = (
   snapshot: PieceTableTreeSnapshot,
-  start = 0,
-  end?: number,
+  start: number,
+  end: number,
 ): string => {
-  const effectiveEnd = end ?? snapshot.length
-  ensureValidRange(snapshot, start, effectiveEnd)
-  if (start === effectiveEnd) return ''
+  ensureValidRange(snapshot, start, end)
+  if (start === end) return ''
 
   const chunks: string[] = []
-  collectTextInRange(snapshot.root, snapshot.buffers, start, effectiveEnd, chunks)
+  collectTextInRange(snapshot.root, snapshot.buffers, start, end, chunks)
   return chunks.join('')
 }
 
-export const materializePieceTableText = (snapshot: PieceTableTreeSnapshot): string =>
-  readPieceTableRange(snapshot, 0, snapshot.length)
-
-export const getPieceTableText = (
-  snapshot: PieceTableTreeSnapshot,
-  start = 0,
-  end?: number,
-): string => {
-  if (start === 0 && end === undefined) return materializePieceTableText(snapshot)
-  return readPieceTableRange(snapshot, start, end)
-}
+export const materializePieceTableFullText = (snapshot: PieceTableTreeSnapshot): string =>
+  readPieceTableTextRange(snapshot, 0, snapshot.length)
 
 export const streamPieceTableTextChunks = (
   snapshot: PieceTableTreeSnapshot,

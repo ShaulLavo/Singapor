@@ -32,7 +32,7 @@ export type EditorMergeConflictPluginOptions = {
 
 type MergeConflictHost = {
   hasDocument(): boolean
-  getText(): string
+  materializeFullText(): string
   focusEditor(): void
   setSelection(anchor: number, head: number, timingName: string, revealOffset?: number): void
   applyEdits(
@@ -147,7 +147,7 @@ class EditorMergeConflictController {
 
   public resolveConflict(index: number, resolution: MergeConflictResolution): boolean {
     this.refresh()
-    const text = this.host.getText()
+    const text = this.host.materializeFullText()
     const conflict = this.conflicts[index]
     if (!conflict) return false
 
@@ -186,7 +186,7 @@ class EditorMergeConflictController {
       return
     }
 
-    this.setConflicts(parseMergeConflicts(this.host.getText()))
+    this.setConflicts(parseMergeConflicts(this.host.materializeFullText()))
   }
 
   private canSkipRefreshForChange(change: DocumentSessionChange | null): boolean {
@@ -403,7 +403,7 @@ function createMergeConflictFeatureContribution(
 function featureHost(context: EditorFeatureContributionContext): MergeConflictHost {
   return {
     hasDocument: () => context.hasDocument(),
-    getText: () => context.getText(),
+    materializeFullText: () => context.materializeFullText(),
     focusEditor: () => context.focusEditor(),
     setSelection: (anchor, head, timingName, revealOffset) =>
       context.setSelection(anchor, head, timingName, revealOffset),

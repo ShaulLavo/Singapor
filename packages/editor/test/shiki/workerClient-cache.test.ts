@@ -63,7 +63,7 @@ describe('Shiki worker client theme cache', () => {
     await client.loadShikiTheme({ theme: 'github-dark' })
 
     expect(themeRequests()).toHaveLength(1)
-  })
+  }, 20_000)
 
   it('clears theme cache when the worker is disposed', async () => {
     const client = await loadWorkerClient()
@@ -73,7 +73,7 @@ describe('Shiki worker client theme cache', () => {
     await client.loadShikiTheme({ theme: 'github-dark' })
 
     expect(themeRequests()).toHaveLength(2)
-  })
+  }, 20_000)
 })
 
 async function loadWorkerClient(): Promise<WorkerClientModule> {

@@ -21,11 +21,11 @@ describe('DocumentTextSnapshot', () => {
     const diagnostics = collectDiagnostics()
     const snapshot = createDocumentTextSnapshot(createPieceTableSnapshot('alpha'))
 
-    expect(snapshot.materializeText()).toBe('alpha')
-    expect(snapshot.materializeText()).toBe('alpha')
+    expect(snapshot.materializeFullText()).toBe('alpha')
+    expect(snapshot.materializeFullText()).toBe('alpha')
 
     const reads = diagnostics.filter(
-      (diagnostic) => diagnostic.name === 'textSnapshot.materializeText',
+      (diagnostic) => diagnostic.name === 'textSnapshot.materializeFullText',
     )
     expect(reads).toHaveLength(2)
     expect(reads.map((diagnostic) => diagnostic.detail)).toEqual([
@@ -38,11 +38,11 @@ describe('DocumentTextSnapshot', () => {
     const diagnostics = collectDiagnostics()
     const snapshot = createDocumentTextSnapshot(createPieceTableSnapshot('alpha'), 'alpha')
 
-    expect(snapshot.materializeText()).toBe('alpha')
-    expect(snapshot.materializeText()).toBe('alpha')
+    expect(snapshot.materializeFullText()).toBe('alpha')
+    expect(snapshot.materializeFullText()).toBe('alpha')
 
     const reads = diagnostics.filter(
-      (diagnostic) => diagnostic.name === 'textSnapshot.materializeText',
+      (diagnostic) => diagnostic.name === 'textSnapshot.materializeFullText',
     )
     expect(reads).toHaveLength(2)
     expect(reads.map((diagnostic) => diagnostic.detail)).toEqual([

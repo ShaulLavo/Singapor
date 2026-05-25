@@ -47,7 +47,7 @@ function createFindContribution(
       container: context.container,
       scrollElement: context.scrollElement,
       hasDocument: () => context.hasDocument(),
-      getText: () => context.getText(),
+      materializeFullText: () => context.materializeFullText(),
       getSelections: () => findSelections(context.getSelections()),
       focusEditor: () => context.focusEditor(),
       setSelection: (anchor, head, timingName, revealOffset) =>

@@ -88,7 +88,7 @@ import { editorThemesEqual, mergeEditorThemes } from '../theme'
 import type { EditorDocument, EditorToken, TextEdit } from '../tokens'
 import {
   createStringTextSnapshot,
-  defineLazyTextProperty,
+  defineLazyFullTextProperty,
   type TextSnapshot,
 } from '../documentTextSnapshot'
 import { clamp } from '../style-utils'
@@ -242,7 +242,7 @@ export class Editor {
     this.blockSurfaces = new EditorBlockSurfaceController({
       view: this.view,
       getDocumentId: () => this.documentId,
-      getText: () => this.text,
+      materializeFullText: () => this.text,
       focusEditor: () => this.focus(),
       setSelection: (anchor, head) =>
         this.inputSelection.applyFindSelection(anchor, head, 'editor.block.setSelection', head),
@@ -272,7 +272,7 @@ export class Editor {
       getLanguageId: () => this.languageId,
       getSession: () => this.session,
       getSessionOptions: () => this.sessionOptions,
-      getText: () => this.getText(),
+      materializeFullText: () => this.materializeFullText(),
       canEditDocument: () => this.canEditDocument(),
       applySessionChange: (change, totalName, totalStart, options) =>
         this.applySessionChange(change, totalName, totalStart, options),
@@ -435,7 +435,7 @@ export class Editor {
       this.setText(text, options)
       return
     }
-    if (this.getText() === text) return
+    if (this.materializeFullText() === text) return
 
     const scrollPosition = preservedScrollPosition(this.getScrollPosition(), options.scrollPosition)
     const change = this.session.applyEdits([syncTextEdit(this.text, text)], {
@@ -514,8 +514,8 @@ export class Editor {
     }
   }
 
-  getText(): string {
-    return this.session?.getText() ?? this.text
+  materializeFullText(): string {
+    return this.session?.materializeFullText() ?? this.text
   }
 
   getTextSnapshot(): TextSnapshot {
@@ -523,13 +523,13 @@ export class Editor {
   }
 
   getMergeConflicts(): readonly MergeConflictRegion[] {
-    return parseMergeConflicts(this.getText())
+    return parseMergeConflicts(this.materializeFullText())
   }
 
   resolveMergeConflict(index: number, resolution: MergeConflictResolution): boolean {
     if (!this.canEditDocument()) return false
 
-    const text = this.getText()
+    const text = this.materializeFullText()
     const conflict = parseMergeConflicts(text)[index]
     if (!conflict) return false
 
@@ -549,7 +549,7 @@ export class Editor {
   }
 
   revealMergeConflict(index: number): boolean {
-    const conflict = parseMergeConflicts(this.getText())[index]
+    const conflict = parseMergeConflicts(this.materializeFullText())[index]
     if (!conflict) return false
 
     this.setSelection(conflict.range.start)
@@ -682,7 +682,7 @@ export class Editor {
       snapshot: attachment.session.getSnapshot(),
     })
     this.syncViewEditability()
-    this.setDocument({ text: attachment.text, tokens: attachment.session.getTokens() })
+    this.setDocument({ text: attachment.fullText, tokens: attachment.session.getTokens() })
     this.applyDocumentScrollPosition(options.scrollPosition)
     this.inputSelection.syncDomSelection()
     this.notifyViewContributions('document', null)
@@ -731,7 +731,7 @@ export class Editor {
       snapshot: attachment.session.getSnapshot(),
     })
     this.syncViewEditability()
-    this.setDocument({ text: attachment.text, tokens: [] })
+    this.setDocument({ text: attachment.fullText, tokens: [] })
     this.applyRangeDecorations()
     this.applyDocumentScrollPosition(options.scrollPosition)
     this.inputSelection.syncDomSelection()
@@ -910,7 +910,7 @@ export class Editor {
   private createInjectedTextRowProviderContext(): EditorInjectedTextRowProviderContext {
     return {
       documentId: this.documentId,
-      text: this.getText(),
+      text: this.materializeFullText(),
       lineCount: this.view.getLineCount(),
     }
   }
@@ -1003,7 +1003,7 @@ export class Editor {
       scrollElement: this.el,
       highlightPrefix: this.highlightPrefix,
       hasDocument: () => this.session !== null,
-      getText: () => this.getText(),
+      materializeFullText: () => this.materializeFullText(),
       getTextSnapshot: () => this.session?.getTextSnapshot() ?? null,
       getSelections: () => this.inputSelection.resolveViewSelections(),
       focusEditor: () => this.focus(),
@@ -1077,7 +1077,7 @@ export class Editor {
       visibleRange: viewState.visibleRange,
     }
 
-    return defineLazyTextProperty({
+    return defineLazyFullTextProperty({
       documentId: this.documentId,
       languageId: this.languageId,
       theme: this.resolvedTheme(),
@@ -1310,7 +1310,7 @@ export class Editor {
     }
 
     this.clearSyntaxFolds()
-    this.setDocument({ text: change.text, tokens: [] })
+    this.setDocument({ text: change.textSnapshot.materializeFullText(), tokens: [] })
   }
 
   private legacyEditTextSnapshot(edit: TextEdit): TextSnapshot {
@@ -1435,7 +1435,7 @@ export class Editor {
   private primarySelectionHeadOffsetFromSession(): number {
     const snapshot = this.session?.getSnapshot()
     const selection = this.session?.getSelections().selections[0]
-    if (!snapshot || !selection) return this.getText().length
+    if (!snapshot || !selection) return this.materializeFullText().length
 
     return resolveSelection(snapshot, selection).headOffset
   }
@@ -1493,9 +1493,7 @@ function projectRowDecorationMapThroughLineEdit(
 }
 
 function editLineDelta(edit: TextEdit, previousText: TextSnapshot): number {
-  return (
-    countLineBreaks(edit.text) - countLineBreaks(previousText.getTextInRange(edit.from, edit.to))
-  )
+  return countLineBreaks(edit.text) - countLineBreaks(previousText.readRange(edit.from, edit.to))
 }
 
 function countLineBreaks(text: string): number {

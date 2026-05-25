@@ -7,9 +7,8 @@ import {
   forEachPieceTableTextChunk,
   getPieceTableLength,
   getPieceTableOriginalText,
-  getPieceTableText,
-  materializePieceTableText,
-  readPieceTableRange,
+  materializePieceTableFullText,
+  readPieceTableTextRange,
   streamPieceTablePieces,
 } from '../src/pieceTable/reads.ts'
 
@@ -20,11 +19,11 @@ describe('piece table reads', () => {
 
     expect(getPieceTableLength(edited)).toBe(8)
     expect(getPieceTableOriginalText(edited)).toBe('abcdef')
-    expect(getPieceTableText(edited)).toBe('abcXXdef')
-    expect(materializePieceTableText(edited)).toBe('abcXXdef')
-    expect(readPieceTableRange(edited, 2, 6)).toBe('cXXd')
-    expect(getPieceTableText(edited, 2, 6)).toBe('cXXd')
-    expect(getPieceTableText(edited, 2, 2)).toBe('')
+    expect(materializePieceTableFullText(edited)).toBe('abcXXdef')
+    expect(materializePieceTableFullText(edited)).toBe('abcXXdef')
+    expect(readPieceTableTextRange(edited, 2, 6)).toBe('cXXd')
+    expect(readPieceTableTextRange(edited, 2, 6)).toBe('cXXd')
+    expect(readPieceTableTextRange(edited, 2, 2)).toBe('')
   })
 
   it('visits visible text chunks without materializing the joined range', () => {
@@ -58,6 +57,6 @@ describe('piece table reads', () => {
     expect(() => ensureValidRange(snapshot, 0, 3)).not.toThrow()
     expect(() => ensureValidRange(snapshot, -1, 1)).toThrow(RangeError)
     expect(() => ensureValidRange(snapshot, 2, 1)).toThrow(RangeError)
-    expect(() => getPieceTableText(snapshot, 0, 4)).toThrow(RangeError)
+    expect(() => readPieceTableTextRange(snapshot, 0, 4)).toThrow(RangeError)
   })
 })

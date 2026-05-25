@@ -386,7 +386,7 @@ export class MinimapWorkerClient {
       'minimap.documentPayload',
       () => {
         payload = {
-          text: snapshot.text,
+          text: snapshot.fullText,
           lineStarts: snapshot.lineStarts,
           tokens: this.tokens(snapshot.tokens),
           selections: selections(snapshot),

@@ -75,7 +75,7 @@ export type SolidEditorController = {
   state: Accessor<EditorState | null>
   snapshot: Accessor<EditorViewSnapshot | null>
   textSnapshot: Accessor<TextSnapshot | null>
-  text: Accessor<string>
+  fullText: Accessor<string>
   lastChange: Accessor<DocumentSessionChange | null>
   updateKind: Accessor<EditorViewContributionUpdateKind | null>
   dispose(): void
@@ -99,7 +99,7 @@ export function createEditor(options: SolidEditorOptions = {}): SolidEditorContr
   const [state, setState] = createSignal<EditorState | null>(null)
   const [snapshot, setSnapshot] = createSignal<EditorViewSnapshot | null>(null)
   const [textSnapshot, setTextSnapshot] = createSignal<TextSnapshot | null>(null)
-  const text = createLazyTextAccessor(textSnapshot)
+  const fullText = createLazyFullTextAccessor(textSnapshot)
   const [lastChange, setLastChange] = createSignal<DocumentSessionChange | null>(null)
   const [updateKind, setUpdateKind] = createSignal<EditorViewContributionUpdateKind | null>(null)
   const runtime = {
@@ -132,7 +132,7 @@ export function createEditor(options: SolidEditorOptions = {}): SolidEditorContr
     state,
     snapshot,
     textSnapshot,
-    text,
+    fullText,
     lastChange,
     updateKind,
     dispose,
@@ -140,7 +140,7 @@ export function createEditor(options: SolidEditorOptions = {}): SolidEditorContr
   }
 }
 
-function createLazyTextAccessor(textSnapshot: Accessor<TextSnapshot | null>): Accessor<string> {
+function createLazyFullTextAccessor(textSnapshot: Accessor<TextSnapshot | null>): Accessor<string> {
   let cachedSnapshot: TextSnapshot | null = null
   let cachedText: string | undefined
 
@@ -155,7 +155,7 @@ function createLazyTextAccessor(textSnapshot: Accessor<TextSnapshot | null>): Ac
     if (snapshot === cachedSnapshot && cachedText !== undefined) return cachedText
 
     cachedSnapshot = snapshot
-    cachedText = snapshot.getText()
+    cachedText = snapshot.materializeFullText()
     return cachedText
   }
 }

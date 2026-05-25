@@ -28,7 +28,11 @@ describe('createEditorDiffPlugin', () => {
     expect(visibleDiffGutterTexts()).toContain('2-')
     expect(visibleDiffGutterTexts()).toContain('3+')
 
-    editor.edit({ from: editor.getText().length, to: editor.getText().length, text: 'more\n' })
+    editor.edit({
+      from: editor.materializeFullText().length,
+      to: editor.materializeFullText().length,
+      text: 'more\n',
+    })
 
     expect([...container.querySelectorAll('.editor-diff-row-addition')].at(-1)?.textContent).toBe(
       'more',

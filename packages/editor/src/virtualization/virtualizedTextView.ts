@@ -431,7 +431,7 @@ export class VirtualizedTextView {
       return
     }
 
-    this.setText(textSnapshot.getText(), textSnapshot)
+    this.setText(textSnapshot.materializeFullText(), textSnapshot)
   }
 
   public setTokens(tokens: readonly EditorToken[]): void {

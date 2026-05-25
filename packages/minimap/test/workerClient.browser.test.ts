@@ -52,7 +52,7 @@ function snapshot(text: string): EditorViewSnapshot {
   return {
     documentId: 'test.ts',
     languageId: 'typescript',
-    text,
+    fullText: text,
     textVersion: 1,
     lineStarts: lineStarts(text),
     tokens: [{ start: 0, end: 5, style: { color: 'var(--editor-syntax-keyword)' } }],

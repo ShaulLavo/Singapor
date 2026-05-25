@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import * as core from '@editor/core'
-import { createPieceTableSnapshot, getPieceTableText, type TextEdit } from '@editor/core/document'
+import {
+  createPieceTableSnapshot,
+  materializePieceTableFullText,
+  readPieceTableTextRange,
+  type TextEdit,
+} from '@editor/core/document'
 import { Editor } from '@editor/core/editor'
 import { EDITOR_MINIMAP_FEATURE_ID, type EditorPluginContext } from '@editor/core/extensions'
 import { applyEditorTheme, type EditorTheme } from '@editor/core/rendering'
@@ -32,7 +37,8 @@ describe('public API facade', () => {
       }),
     ).toBe('abc')
     expect(parseMergeConflicts('')).toEqual([])
-    expect(getPieceTableText(snapshot)).toBe('abc')
+    expect(materializePieceTableFullText(snapshot)).toBe('abc')
+    expect(readPieceTableTextRange(snapshot, 1, 3)).toBe('bc')
     expect(edit).toEqual({ from: 1, to: 2, text: 'B' })
     expect({ index: 0 } as MergeConflictRegion).toMatchObject({ index: 0 })
     expect(state.documentId).toBeNull()
@@ -40,6 +46,7 @@ describe('public API facade', () => {
     expect('VirtualizedTextView' in core).toBe(false)
     expect('EditorPluginHost' in core).toBe(false)
     expect('defineLazyTextProperty' in core).toBe(false)
+    expect('getPieceTableText' in core).toBe(false)
     expect('createAnchorSelection' in core).toBe(false)
   })
 

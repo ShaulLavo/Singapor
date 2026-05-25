@@ -316,7 +316,7 @@ function snapshot(viewport: Partial<EditorViewSnapshot['viewport']> = {}): Edito
   return {
     documentId: 'minimap-test',
     languageId: 'typescript',
-    text: '',
+    fullText: '',
     textVersion: 1,
     lineStarts: [0],
     tokens: [],

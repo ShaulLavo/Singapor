@@ -53,7 +53,7 @@ describe('MinimapWorkerClient', () => {
 
       const edit: TextEdit = { from: 6, to: 6, text: 'x' }
       client.update(
-        snapshot({ scrollWidth: 168 }, { text: 'line 1x\nline 2\nline 3', contentWidth: 168 }),
+        snapshot({ scrollWidth: 168 }, { fullText: 'line 1x\nline 2\nline 3', contentWidth: 168 }),
         'content',
         documentEdit(edit, 'line 1x\nline 2\nline 3'),
       )
@@ -94,7 +94,7 @@ describe('MinimapWorkerClient', () => {
       client.update(
         snapshot(
           { scrollTop: 120, visibleRange: { start: 6, end: 18 } },
-          { text: 'line 1x\nline 2\nline 3' },
+          { fullText: 'line 1x\nline 2\nline 3' },
         ),
         'content',
         documentEdit(edit, 'line 1x\nline 2\nline 3'),
@@ -142,7 +142,7 @@ describe('MinimapWorkerClient', () => {
         snapshot(
           { scrollWidth: 168 },
           {
-            text: 'line 1x\nline 2\nline 3',
+            fullText: 'line 1x\nline 2\nline 3',
             contentWidth: 168,
             tokens: [{ start: 0, end: 7, style: { color: '#ff0000' } }],
           },
@@ -176,7 +176,7 @@ describe('MinimapWorkerClient', () => {
       const client = new MinimapWorkerClient({
         host,
         options: resolveMinimapOptions(),
-        snapshot: snapshot({}, { text: 'abc' }),
+        snapshot: snapshot({}, { fullText: 'abc' }),
         decorations: [],
         onLayoutWidth: vi.fn(),
       })
@@ -185,7 +185,7 @@ describe('MinimapWorkerClient', () => {
       worker.postMessage.mockClear()
 
       const edit: TextEdit = { from: 2, to: 3, text: '' }
-      client.update(snapshot({}, { text: 'ab' }), 'content', documentEdit(edit, 'ab'))
+      client.update(snapshot({}, { fullText: 'ab' }), 'content', documentEdit(edit, 'ab'))
       runtime.flushAnimationFrames()
 
       const requests = worker.postMessage.mock.calls.map((call) => call[0] as { type: string })
@@ -211,7 +211,7 @@ describe('MinimapWorkerClient', () => {
       const client = new MinimapWorkerClient({
         host,
         options: resolveMinimapOptions(),
-        snapshot: snapshot({}, { text: 'line 1\nline 2\nline 3' }),
+        snapshot: snapshot({}, { fullText: 'line 1\nline 2\nline 3' }),
         decorations: [],
         onLayoutWidth: vi.fn(),
       })
@@ -221,7 +221,7 @@ describe('MinimapWorkerClient', () => {
 
       const edit: TextEdit = { from: 6, to: 7, text: '' }
       client.update(
-        snapshot({}, { text: 'line 1line 2\nline 3' }),
+        snapshot({}, { fullText: 'line 1line 2\nline 3' }),
         'content',
         documentEdit(edit, 'line 1line 2\nline 3'),
       )
@@ -260,7 +260,7 @@ describe('MinimapWorkerClient', () => {
 
       const firstEdit: TextEdit = { from: 6, to: 6, text: 'x' }
       client.update(
-        snapshot({}, { text: 'line 1x\nline 2\nline 3' }),
+        snapshot({}, { fullText: 'line 1x\nline 2\nline 3' }),
         'content',
         documentEdit(firstEdit, 'line 1x\nline 2\nline 3'),
       )
@@ -270,12 +270,12 @@ describe('MinimapWorkerClient', () => {
       const secondEdit: TextEdit = { from: 7, to: 7, text: 'y' }
       const thirdEdit: TextEdit = { from: 8, to: 8, text: 'z' }
       client.update(
-        snapshot({}, { text: 'line 1xy\nline 2\nline 3' }),
+        snapshot({}, { fullText: 'line 1xy\nline 2\nline 3' }),
         'content',
         documentEdit(secondEdit, 'line 1xy\nline 2\nline 3'),
       )
       client.update(
-        snapshot({}, { text: 'line 1xyz\nline 2\nline 3' }),
+        snapshot({}, { fullText: 'line 1xyz\nline 2\nline 3' }),
         'content',
         documentEdit(thirdEdit, 'line 1xyz\nline 2\nline 3'),
       )
@@ -312,7 +312,7 @@ describe('MinimapWorkerClient', () => {
       const client = new MinimapWorkerClient({
         host,
         options: resolveMinimapOptions(),
-        snapshot: snapshot({}, { text: 'abc def ghi' }),
+        snapshot: snapshot({}, { fullText: 'abc def ghi' }),
         decorations: [],
         onLayoutWidth: vi.fn(),
       })
@@ -325,7 +325,7 @@ describe('MinimapWorkerClient', () => {
         { from: 4, to: 4, text: 'y' },
       ]
       client.update(
-        snapshot({}, { text: 'xabc ydef ghi' }),
+        snapshot({}, { fullText: 'xabc ydef ghi' }),
         'content',
         documentEdits(edits, 'xabc ydef ghi'),
       )
@@ -429,7 +429,7 @@ describe('MinimapWorkerClient', () => {
         { start: 13, end: 19, style: { color: '#0000ff' } },
       ]
       client.update(
-        snapshot({}, { text: 'line 1x\nline 2\nline 3', tokens: projectedTokens }),
+        snapshot({}, { fullText: 'line 1x\nline 2\nline 3', tokens: projectedTokens }),
         'content',
         documentEdit(edit, 'line 1x\nline 2\nline 3'),
       )
@@ -441,7 +441,7 @@ describe('MinimapWorkerClient', () => {
         snapshot(
           {},
           {
-            text: 'line 1x\nline 2\nline 3',
+            fullText: 'line 1x\nline 2\nline 3',
             tokens: [
               projectedTokens[0]!,
               { start: 8, end: 12, style: { color: '#ffffff' } },
@@ -490,15 +490,15 @@ function createHost(): MinimapHost {
 
 function snapshot(
   viewport: Partial<EditorViewSnapshot['viewport']> = {},
-  overrides: Partial<Pick<EditorViewSnapshot, 'contentWidth' | 'text' | 'tokens'>> = {},
+  overrides: Partial<Pick<EditorViewSnapshot, 'contentWidth' | 'fullText' | 'tokens'>> = {},
 ): EditorViewSnapshot {
-  const text = overrides.text ?? 'line 1\nline 2\nline 3'
+  const text = overrides.fullText ?? 'line 1\nline 2\nline 3'
   const starts = lineStarts(text)
   const contentWidth = overrides.contentWidth ?? 160
   return {
     documentId: 'minimap-test',
     languageId: 'typescript',
-    text,
+    fullText: text,
     textVersion: 1,
     lineStarts: starts,
     tokens: overrides.tokens ?? [],
@@ -525,12 +525,12 @@ function snapshot(
   }
 }
 
-function documentEdit(edit: TextEdit, text: string): DocumentSessionChange {
-  return documentEdits([edit], text)
+function documentEdit(edit: TextEdit, _fullText: string): DocumentSessionChange {
+  return documentEdits([edit])
 }
 
-function documentEdits(edits: readonly TextEdit[], text: string): DocumentSessionChange {
-  return { kind: 'edit', edits, text } as unknown as DocumentSessionChange
+function documentEdits(edits: readonly TextEdit[], _fullText?: string): DocumentSessionChange {
+  return { kind: 'edit', edits } as unknown as DocumentSessionChange
 }
 
 function lineStarts(text: string): readonly number[] {

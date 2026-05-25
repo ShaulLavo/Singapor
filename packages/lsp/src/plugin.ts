@@ -7,7 +7,7 @@ import type {
   EditorViewSnapshot,
 } from '@editor/core/extensions'
 import { createStringTextSnapshot } from '@editor/core/document'
-import { defineLazyTextProperty } from '@editor/core/internal'
+import { defineLazyFullTextProperty } from '@editor/core/internal'
 import type * as lsp from 'vscode-languageserver-protocol'
 import { LspClient, type LspClientConfig } from './client'
 import type { LspTextEdit } from './types'
@@ -55,7 +55,7 @@ type ActiveDocument = {
   readonly languageId: string
   readonly textSnapshot: TextSnapshot
   readonly lineStarts: readonly number[]
-  readonly text: string
+  readonly fullText: string
   readonly textVersion: number
 }
 
@@ -64,7 +64,7 @@ type DocumentDescriptor = {
   readonly languageId: string
   readonly textSnapshot: TextSnapshot
   readonly lineStarts: readonly number[]
-  readonly text: string
+  readonly fullText: string
   readonly textVersion: number
 }
 
@@ -190,7 +190,11 @@ class LspPluginContribution implements EditorViewContribution {
     const active = this.activeDocument
     if (!active || active.uri !== descriptor.uri || active.languageId !== descriptor.languageId) {
       this.closeActiveDocument()
-      workspace.openDocument(descriptor)
+      workspace.openDocument({
+        uri: descriptor.uri,
+        languageId: descriptor.languageId,
+        text: descriptor.fullText,
+      })
       this.activeDocument = descriptor
       return
     }
@@ -228,10 +232,10 @@ class LspPluginContribution implements EditorViewContribution {
     const uri = this.resolveDocumentUri(snapshot)
     if (!uri) return null
 
-    return defineLazyTextProperty({
+    return defineLazyFullTextProperty({
       uri,
       languageId: this.resolveLanguageId(snapshot),
-      textSnapshot: snapshot.textSnapshot ?? createStringTextSnapshot(snapshot.text),
+      textSnapshot: snapshot.textSnapshot ?? createStringTextSnapshot(snapshot.fullText),
       lineStarts: snapshot.lineStarts,
       textVersion: snapshot.textVersion,
     })

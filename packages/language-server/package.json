@@ -9,6 +9,7 @@
     "./websocket": "./src/websocket.ts"
   },
   "scripts": {
+    "test": "vitest run --passWithNoTests",
     "typecheck": "tsgo --noEmit",
     "lint": "oxlint .",
     "format": "oxfmt --write .",

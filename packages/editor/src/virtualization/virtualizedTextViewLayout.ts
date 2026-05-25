@@ -277,7 +277,7 @@ export function lineText(view: VirtualizedTextViewInternal, row: number): string
 }
 
 function materializeViewText(view: VirtualizedTextViewInternal): void {
-  const text = view.textSnapshot.getText()
+  const text = view.textSnapshot.materializeFullText()
   view.text = text
   view.textLength = text.length
 }
@@ -351,7 +351,7 @@ function createPlainDisplayRowsForRange(
   for (let rowIndex = startRow; rowIndex <= endRow && rowIndex <= lastRow; rowIndex += 1) {
     const startOffset = bufferLineStartOffset(view, rowIndex)
     const endOffset = bufferLineEndOffset(view, rowIndex)
-    const text = view.textSnapshot.getTextInRange(startOffset, endOffset)
+    const text = view.textSnapshot.readRange(startOffset, endOffset)
     rows.push({
       kind: 'text',
       source: 'document',

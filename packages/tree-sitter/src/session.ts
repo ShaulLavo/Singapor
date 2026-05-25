@@ -37,7 +37,7 @@ export type TreeSitterSyntaxSessionOptions = {
   readonly includeHighlights?: boolean
   readonly includeCaptures?: boolean
   readonly syntaxMode?: 'full' | 'range'
-  readonly text?: string
+  readonly fullText?: string
   readonly textSnapshot?: DocumentTextSnapshot
   readonly snapshot: PieceTableSnapshot
   readonly backend?: TreeSitterBackend
@@ -66,14 +66,17 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
     this.includeCaptures = options.includeCaptures ?? true
     this.syntaxMode = options.syntaxMode ?? 'full'
     this.textSnapshot =
-      options.textSnapshot ?? createDocumentTextSnapshot(options.snapshot, options.text)
+      options.textSnapshot ?? createDocumentTextSnapshot(options.snapshot, options.fullText)
     this.snapshot = options.snapshot
     this.backend = options.backend ?? createTreeSitterWorkerBackend()
   }
 
-  public async refresh(snapshot: PieceTableSnapshot, text?: string): Promise<EditorSyntaxResult> {
+  public async refresh(
+    snapshot: PieceTableSnapshot,
+    fullText?: string,
+  ): Promise<EditorSyntaxResult> {
     const snapshotVersion = ++this.snapshotVersion
-    const textSnapshot = createDocumentTextSnapshot(snapshot, text)
+    const textSnapshot = createDocumentTextSnapshot(snapshot, fullText)
 
     if (!(await this.ensureLanguageRegistered())) {
       return this.updateFromUnavailableLanguage(textSnapshot, snapshot)
@@ -361,8 +364,8 @@ const createSyntaxTextEdits = (
   if (changeEditsApplyToSnapshot(previousSnapshot, change)) return change.edits
 
   const edit = createTextDiffEdit(
-    previousTextSnapshot.getText(),
-    documentSessionChangeTextSnapshot(change).getText(),
+    previousTextSnapshot.materializeFullText(),
+    documentSessionChangeTextSnapshot(change).materializeFullText(),
   )
   return edit ? [edit] : []
 }

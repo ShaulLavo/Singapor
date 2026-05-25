@@ -82,7 +82,7 @@ class ReplacePieceBuilder {
 
   public emitMatch(index: number, toIndex: number, caseOps: readonly string[]): void {
     this.flushStatic()
-    this.pieces.push({ kind: 'match', index, caseOps })
+    this.pieces.push({ kind: 'match', index, caseOps: [...caseOps] })
     this.lastIndex = toIndex
   }
 

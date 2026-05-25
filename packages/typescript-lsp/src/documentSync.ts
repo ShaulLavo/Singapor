@@ -1,7 +1,7 @@
 import type { DocumentSessionChange } from '@editor/core/document'
 import type { EditorViewContributionUpdateKind, EditorViewSnapshot } from '@editor/core/extensions'
 import { createStringTextSnapshot } from '@editor/core/document'
-import { defineLazyTextProperty } from '@editor/core/internal'
+import { defineLazyFullTextProperty } from '@editor/core/internal'
 import type { LspWorkspace } from '@editor/lsp'
 import type * as lsp from 'vscode-languageserver-protocol'
 
@@ -70,7 +70,7 @@ export class DocumentSync {
     if (diagnostics.version !== null && diagnostics.version !== active.lspVersion) return
 
     this.diagnosticItems = diagnostics.diagnostics
-    this.presenter.render(active.text, diagnostics.diagnostics)
+    this.presenter.render(active.fullText, diagnostics.diagnostics)
     this.presenter.publishSummary(active.uri, diagnostics.version, diagnostics.diagnostics)
   }
 
@@ -93,7 +93,7 @@ export class DocumentSync {
     const document = this.workspace.openDocument({
       uri: descriptor.uri,
       languageId: descriptor.languageId,
-      text: descriptor.text,
+      text: descriptor.fullText,
     })
     this.document = { ...descriptor, lspVersion: document.version }
   }
@@ -117,7 +117,7 @@ export class DocumentSync {
     if (diagnostics === this.diagnosticItems) return
 
     this.diagnosticItems = diagnostics
-    this.presenter.render(descriptor.text, diagnostics)
+    this.presenter.render(descriptor.fullText, diagnostics)
   }
 }
 
@@ -128,10 +128,10 @@ function documentDescriptor(snapshot: EditorViewSnapshot): DocumentDescriptor | 
 
   const uri = pathOrUriToDocumentUri(snapshot.documentId)
   if (!isTypeScriptLspSourceFileName(uri)) return null
-  return defineLazyTextProperty({
+  return defineLazyFullTextProperty({
     uri,
     languageId: snapshot.languageId,
-    textSnapshot: snapshot.textSnapshot ?? createStringTextSnapshot(snapshot.text),
+    textSnapshot: snapshot.textSnapshot ?? createStringTextSnapshot(snapshot.fullText),
     lineStarts: snapshot.lineStarts,
     textVersion: snapshot.textVersion,
   })

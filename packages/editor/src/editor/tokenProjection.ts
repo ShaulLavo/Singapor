@@ -876,7 +876,7 @@ function projectionTextLength(text: TokenProjectionText): number {
 
 function getProjectionTextInRange(text: TokenProjectionText, start: number, end: number): string {
   if (typeof text === 'string') return text.slice(start, end)
-  return text.getTextInRange(start, end)
+  return text.readRange(start, end)
 }
 
 function recordTokenProjectionPath(

@@ -8,7 +8,7 @@ const coreEntry = `/@fs/${fileURLToPath(
 type TestWindow = Window & {
   __editor?: {
     focus(): void
-    getText(): string
+    materializeFullText(): string
   }
   __editorInputEvents?: string[]
 }
@@ -100,7 +100,7 @@ test('routes real keyboard typing after clicking the editor surface', async ({ p
 
   await expect
     .poll(() => {
-      return page.evaluate(() => (window as TestWindow).__editor?.getText())
+      return page.evaluate(() => (window as TestWindow).__editor?.materializeFullText())
     })
     .toBe('abcXYZ')
   await expect
@@ -133,7 +133,7 @@ test('keeps Space from scrolling the focused editor', async ({ page }) => {
   await page.keyboard.press('Space')
 
   await expect
-    .poll(() => page.evaluate(() => (window as TestWindow).__editor?.getText()))
+    .poll(() => page.evaluate(() => (window as TestWindow).__editor?.materializeFullText()))
     .toContain('line  0')
   await expect
     .poll(() => page.evaluate(() => document.querySelector('.editor-virtualized')?.scrollTop))
@@ -164,7 +164,7 @@ test('inserts repeated typing at a placed caret', async ({ page }) => {
 
   await expect
     .poll(() => {
-      return page.evaluate(() => (window as TestWindow).__editor?.getText())
+      return page.evaluate(() => (window as TestWindow).__editor?.materializeFullText())
     })
     .toBe('abcXYZdef')
   await expect
@@ -198,7 +198,7 @@ test('routes native line break input at a placed caret', async ({ page }) => {
 
   await expect
     .poll(() => {
-      return page.evaluate(() => (window as TestWindow).__editor?.getText())
+      return page.evaluate(() => (window as TestWindow).__editor?.materializeFullText())
     })
     .toBe('abc\ndef')
   await expect
@@ -235,7 +235,7 @@ test('keeps focus and inserts a tab when Tab is pressed', async ({ page }) => {
 
   await expect(page.locator('.editor-virtualized-input')).toBeFocused()
   await expect
-    .poll(() => page.evaluate(() => (window as TestWindow).__editor?.getText()))
+    .poll(() => page.evaluate(() => (window as TestWindow).__editor?.materializeFullText()))
     .toBe('abc\t')
 })
 
