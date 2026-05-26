@@ -16,6 +16,17 @@ export { defineLazyFullTextProperty } from './documentTextSnapshot'
 export { EditorWorkScheduler } from './editor/workScheduler'
 export { VirtualizedTextView } from './virtualization'
 export type {
+  EditorDocumentContributionContext,
+  EditorFeatureContribution,
+  EditorFeatureContributionContext,
+  EditorFeatureContributionProvider,
+  EditorFeatureDomContributionContext,
+  EditorInternalPluginContext,
+  EditorRangeHighlightContributionContext,
+  EditorRowDecorationContributionContext,
+  EditorSelectionContributionContext,
+} from './plugins'
+export type {
   EditorScheduleWorkOptions,
   EditorScheduledWorkHandle,
   EditorWorkContext,

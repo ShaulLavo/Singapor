@@ -1,8 +1,9 @@
 import type { EditorCommandId } from '@editor/core/editor'
 import type { DocumentSessionChange, TextEdit, TextSnapshot } from '@editor/core/document'
 import type {
+  EditorCommandContributionContext,
   EditorCommandHandler,
-  EditorFeatureContributionContext,
+  EditorEditContributionContext,
   EditorMinimapFeature,
   EditorPluginContext,
   EditorViewContributionContext,
@@ -965,7 +966,7 @@ describe('createTypeScriptLspPlugin', () => {
     vi.useFakeTimers()
     const worker = new FakeWorker()
     const container = document.createElement('div')
-    const applyEdits = vi.fn<EditorFeatureContributionContext['applyEdits']>()
+    const applyEdits = vi.fn<EditorEditContributionContext['applyEdits']>()
     const { provider, features } = activatePluginWithCommands(
       createTypeScriptLspPlugin({ workerFactory: () => worker }),
       { container, applyEdits },
@@ -1183,7 +1184,8 @@ function activatePlugin(
     },
     registerCommandContribution: () => ({ dispose: () => undefined }),
     registerCapabilityContribution: () => ({ dispose: () => undefined }),
-    registerEditorFeatureContribution: () => ({ dispose: () => undefined }),
+    registerEditContribution: () => ({ dispose: () => undefined }),
+    registerDecorationContribution: () => ({ dispose: () => undefined }),
     registerGutterContribution: () => ({ dispose: () => undefined }),
     registerBlockProvider: () => ({ dispose: () => undefined }),
     registerInjectedTextRowProvider: () => ({ dispose: () => undefined }),
@@ -1219,10 +1221,14 @@ function activatePluginWithCommands(
       provider = value
       return { dispose: () => undefined }
     },
-    registerCommandContribution: () => ({ dispose: () => undefined }),
+    registerCommandContribution: (value) => {
+      value.createContribution(commandContributionContext(commands))
+      return { dispose: () => undefined }
+    },
     registerCapabilityContribution: () => ({ dispose: () => undefined }),
-    registerEditorFeatureContribution: (value) => {
-      value.createContribution(featureContributionContext(commands, { ...options, features }))
+    registerDecorationContribution: () => ({ dispose: () => undefined }),
+    registerEditContribution: (value) => {
+      value.createContribution(editContributionContext({ ...options, features }))
       return { dispose: () => undefined }
     },
     registerGutterContribution: () => ({ dispose: () => undefined }),
@@ -1237,33 +1243,29 @@ function activatePluginWithCommands(
 type FeatureContributionContextOptions = {
   readonly container?: HTMLDivElement
   readonly features?: Map<unknown, unknown>
-  readonly applyEdits?: EditorFeatureContributionContext['applyEdits']
+  readonly applyEdits?: EditorEditContributionContext['applyEdits']
 }
 
-function featureContributionContext(
+function commandContributionContext(
   commands: Map<EditorCommandId, EditorCommandHandler>,
-  options: FeatureContributionContextOptions = {},
-): EditorFeatureContributionContext {
-  const element = options.container ?? document.createElement('div')
+): EditorCommandContributionContext {
   return {
-    container: element,
-    scrollElement: element,
-    highlightPrefix: 'editor-test',
-    hasDocument: () => true,
-    materializeFullText: () => '',
-    getSelections: () => [],
-    focusEditor: vi.fn(),
-    setSelection: vi.fn(),
-    setSelections: vi.fn(),
-    applyEdits: options.applyEdits ?? vi.fn(),
-    setRangeHighlight: vi.fn(),
-    clearRangeHighlight: vi.fn(),
-    setRowDecorations: vi.fn(),
-    clearRowDecorations: vi.fn(),
     registerCommand: (commandId, handler) => {
       commands.set(commandId, handler)
       return { dispose: () => commands.delete(commandId) }
     },
+  }
+}
+
+function editContributionContext(
+  options: FeatureContributionContextOptions = {},
+): EditorEditContributionContext {
+  return {
+    hasDocument: () => true,
+    materializeFullText: () => '',
+    getTextSnapshot: () => null,
+    focusEditor: vi.fn(),
+    applyEdits: options.applyEdits ?? vi.fn(),
     registerFeature: (id, feature) => {
       options.features?.set(id, feature)
       return { dispose: () => options.features?.delete(id) }

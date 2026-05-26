@@ -1,6 +1,6 @@
 # Architecture Recovery Plan
 
-Status: proposed
+Status: in progress
 
 This document turns the architectural teardown into a phased recovery plan. It is deliberately large.
 The current system did not accumulate its problems in one subsystem, so it cannot be repaired by one
@@ -31,8 +31,9 @@ The main problems are:
 - Derived data is promoted into durable state in too many places: document sessions, syntax
   controllers, virtualized views, minimap workers, and diff views all retain their own versions of
   text-adjacent truth.
-- The plugin API is a broad service locator. It gives extensions too much access to editor internals
-  and does not preserve invariants.
+- The old plugin API was a broad service locator. Phase 8 has moved the public surface to typed
+  domain registries, but a temporary internal feature-contribution bridge still exists for first-party
+  migration.
 - Rendering is split into files but not split into architecture. A large mutable internal view object
   is still the real boundary.
 - Multiple local schedulers, timeouts, generation counters, and stale-result guards have replaced a
@@ -95,7 +96,7 @@ These rules are the refactor's guardrails.
 | 5 | Rendering architecture | Split view model, layout, and DOM renderer honestly |
 | 6 | Input and selection | Replace implicit DOM/session timing coupling with a state machine |
 | 7 | Folds, blocks, and decorations | Move display features into typed projection registries |
-| 8 | Extension system | Delete the service-locator plugin API |
+| 8 | Extension system | Replace service-locator plugin API with typed public extension points |
 | 9 | Minimap and diff | Stop duplicating editor pipelines |
 | 10 | LSP and language packages | Collapse cloned LSP code into one core plus adapters |
 | 11 | Worker topology | Make worker ownership, caches, and disposal explicit |
@@ -429,6 +430,10 @@ Initial slice:
 
 Purpose: replace the broad plugin service locator with typed extension points.
 
+Status: in progress. The public extension surface now favors typed domain registries, and the broad
+feature-contribution context has been moved behind internal/test-only entry points while remaining
+first-party users are migrated.
+
 ### Work
 
 - Define a small extension host with explicit lifecycle:
@@ -439,32 +444,76 @@ Purpose: replace the broad plugin service locator with typed extension points.
   - dispose
 - Replace broad plugin context methods with typed contribution APIs:
   - command contribution
+  - capability contribution
+  - edit contribution
   - syntax contribution
   - decoration contribution
   - gutter contribution
   - block contribution
-  - input contribution, if truly required
-- Remove generic `getFeature<T>(id)` access.
+  - injected row contribution
+  - view contribution for mounted DOM and viewport integration
+- Keep input contribution out of the public API unless a concrete use case proves it belongs there.
+- Remove generic string `getFeature<T>(id)` access.
 - Replace stringly feature IDs with typed capability tokens.
 - Make contribution disposal mandatory and idempotent.
+- Split public and internal surfaces:
+  - public: `@editor/core/extensions`, root `@editor/core`, and documented editor entry points
+  - internal/test-only: `EditorPluginHost`, host events, `EditorInternalPluginContext`, and
+    `EditorFeatureContribution*`
 - Add extension isolation tests:
-  - duplicate registration
+  - duplicate command handlers
+  - duplicate gutter ids
+  - block provider conflicts
+  - decoration source ownership conflicts
   - disposal order
-  - plugin failure
-  - contribution conflict
+  - plugin activation failure
+  - contribution factory failure
+  - contribution `update()` failure
+  - contribution disposal failure
   - editor destruction
+- Contain failures after activation:
+  - contribution factory failures are logged and skipped
+  - contribution update failures are logged and the failed contribution is removed
+  - contribution disposal failures are logged while remaining disposal continues
+
+### Completed in Current Pass
+
+- `EditorPlugin` now has `install`, `activate`, `update`, `deactivate`, and `dispose` lifecycle
+  hooks.
+- `EditorPluginContext` exposes typed public registries for commands, capabilities, edits,
+  decorations, gutters, blocks, injected rows, syntax/highlighters, and view contributions.
+- `registerEditorFeatureContribution` is no longer public; it is available only through
+  `EditorInternalPluginContext`.
+- Redundant view-overlay type aliases and registration APIs were removed in favor of
+  `EditorViewContribution`.
+- Conflict tests cover duplicate command handlers, duplicate gutter ids, duplicate block provider
+  ownership, and duplicate decoration source ownership.
+- Failure containment tests cover contribution factory, update, and disposal failures.
+- Minimap and diff now use public domain/view contribution APIs where applicable.
+
+### Remaining Work
+
+- Migrate the remaining first-party users of `EditorInternalPluginContext` and
+  `EditorFeatureContribution*` to domain registries or `EditorViewContribution`.
+- Delete the internal feature-contribution bridge once no first-party feature depends on the broad
+  context.
+- Keep auditing public exports so `@editor/core/extensions` stays powerful but intentional.
 
 ### Must Delete
 
 - Stringly typed service locator features.
-- Plugin APIs that expose editor internals for convenience.
+- Public plugin APIs that expose editor internals for convenience.
 - Manual/reference-counted plugin behavior that obscures ownership.
+- Before Phase 8 exit: `EditorInternalPluginContext` and `EditorFeatureContribution*` usage in
+  first-party packages.
 
 ### Exit Criteria
 
 - A plugin cannot mutate unrelated editor subsystems by accident.
 - Plugin failure is contained and observable.
 - Extension APIs describe domain contributions, not implementation escape hatches.
+- Public exports make the supported extension API clear; internal/test-only exports are named and
+  temporary.
 
 ## Phase 9: Minimap and Diff
 

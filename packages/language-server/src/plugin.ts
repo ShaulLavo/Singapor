@@ -1,9 +1,10 @@
 import type { EditorCommandId } from '@editor/core/editor'
 import type { DocumentSessionChange } from '@editor/core/document'
 import type {
+  EditorCommandContributionContext,
   EditorDisposable,
-  EditorFeatureContribution,
-  EditorFeatureContributionContext,
+  EditorEditContribution,
+  EditorEditContributionContext,
   EditorViewContribution,
   EditorViewContributionContext,
   EditorViewContributionUpdateKind,
@@ -45,9 +46,13 @@ export function createLanguageServerPlugin(
           createContribution: (contributionContext) =>
             new LanguageServerContribution(contributionContext, state, resolved),
         }),
-        context.registerEditorFeatureContribution({
+        context.registerCommandContribution({
           createContribution: (contributionContext) =>
             new LanguageServerCommandContribution(contributionContext, state),
+        }),
+        context.registerEditContribution({
+          createContribution: (contributionContext) =>
+            new LanguageServerCompletionEditContribution(contributionContext),
         }),
       ]
     },
@@ -89,17 +94,27 @@ class LanguageServerPluginState {
   }
 }
 
-class LanguageServerCommandContribution implements EditorFeatureContribution {
+class LanguageServerCommandContribution implements EditorDisposable {
   private readonly commands: readonly EditorDisposable[]
-  private readonly completionFeature: EditorDisposable
 
   public constructor(
-    context: EditorFeatureContributionContext,
+    context: EditorCommandContributionContext,
     private readonly state: LanguageServerPluginState,
   ) {
     this.commands = LANGUAGE_SERVER_COMMANDS.map((command) =>
       context.registerCommand(command.id, () => command.run(this.state)),
     )
+  }
+
+  public dispose(): void {
+    for (const command of this.commands) command.dispose()
+  }
+}
+
+class LanguageServerCompletionEditContribution implements EditorEditContribution {
+  private readonly completionFeature: EditorDisposable
+
+  public constructor(context: EditorEditContributionContext) {
     this.completionFeature = context.registerFeature(
       LANGUAGE_SERVER_COMPLETION_EDIT_FEATURE,
       completionEditFeature(context),
@@ -107,7 +122,6 @@ class LanguageServerCommandContribution implements EditorFeatureContribution {
   }
 
   public dispose(): void {
-    for (const command of this.commands) command.dispose()
     this.completionFeature.dispose()
   }
 }
@@ -217,7 +231,7 @@ class LanguageServerContribution implements EditorViewContribution {
 }
 
 function completionEditFeature(
-  context: EditorFeatureContributionContext,
+  context: EditorEditContributionContext,
 ): LanguageServerCompletionEditFeature {
   return {
     applyCompletion(application: LanguageServerCompletionApplication): boolean {

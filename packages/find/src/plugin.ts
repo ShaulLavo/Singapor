@@ -1,10 +1,13 @@
 import type {
   EditorDisposable,
-  EditorFeatureContribution,
-  EditorFeatureContributionContext,
   EditorPlugin,
   EditorResolvedSelection,
 } from '@editor/core/extensions'
+import type {
+  EditorFeatureContribution,
+  EditorFeatureContributionContext,
+  EditorInternalPluginContext,
+} from '@editor/core/internal'
 import { EDITOR_FIND_FEATURE, EDITOR_FIND_FEATURE_ID } from '@editor/core/extensions'
 import type { EditorFindOptions } from './types'
 import {
@@ -31,7 +34,8 @@ export function createEditorFindPlugin(options: EditorFindOptions = {}): EditorP
   return {
     name: 'editor.find',
     activate(context) {
-      return context.registerEditorFeatureContribution({
+      const internalContext = context as EditorInternalPluginContext
+      return internalContext.registerEditorFeatureContribution({
         createContribution: (contributionContext) =>
           createFindContribution(contributionContext, options),
       })

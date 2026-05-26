@@ -9,6 +9,7 @@ import type {
   EditorDisposable,
   EditorFeatureContribution,
   EditorFeatureContributionContext,
+  EditorInternalPluginContext,
   EditorPlugin,
   EditorViewContribution,
   EditorViewContributionContext,
@@ -68,8 +69,9 @@ export function createMergeConflictPlugin(
   return {
     name: EDITOR_MERGE_CONFLICT_FEATURE_ID,
     activate(context) {
+      const internalContext = context as EditorInternalPluginContext
       return [
-        context.registerEditorFeatureContribution({
+        internalContext.registerEditorFeatureContribution({
           createContribution(contributionContext) {
             controller = new EditorMergeConflictController(
               featureHost(contributionContext),

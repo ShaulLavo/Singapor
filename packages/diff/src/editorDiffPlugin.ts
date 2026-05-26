@@ -1,7 +1,7 @@
 import type {
+  EditorDecorationContribution,
+  EditorDecorationContributionContext,
   EditorDisposable,
-  EditorFeatureContribution,
-  EditorFeatureContributionContext,
   EditorGutterContribution,
   EditorGutterRowContext,
   EditorInjectedTextRow,
@@ -73,7 +73,7 @@ class EditorDiffPluginRuntime {
         onDidChangeInjectedTextRows: (listener) => this.setInjectedTextRowsListener(listener),
       }),
       context.registerGutterContribution(createEditorDiffGutterContribution(this.state)),
-      context.registerEditorFeatureContribution({
+      context.registerDecorationContribution({
         createContribution: (featureContext) => this.createFeatureContribution(featureContext),
       }),
     ]
@@ -102,8 +102,8 @@ class EditorDiffPluginRuntime {
   }
 
   private createFeatureContribution(
-    context: EditorFeatureContributionContext,
-  ): EditorFeatureContribution {
+    context: EditorDecorationContributionContext,
+  ): EditorDecorationContribution {
     const contribution = new EditorDiffFeatureContribution(context, this.state, () =>
       this.notifyInjectedTextRowsChanged(),
     )
@@ -121,7 +121,7 @@ class EditorDiffPluginRuntime {
 
 class EditorDiffFeatureContribution {
   constructor(
-    private readonly context: EditorFeatureContributionContext,
+    private readonly context: EditorDecorationContributionContext,
     private readonly state: EditorDiffPluginState,
     private readonly notifyInjectedTextRowsChanged: () => void,
   ) {}

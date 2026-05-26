@@ -1,9 +1,10 @@
 import type { EditorCommandId } from '@editor/core/editor'
 import type { DocumentSessionChange } from '@editor/core/document'
 import type {
+  EditorCommandContributionContext,
   EditorDisposable,
-  EditorFeatureContribution,
-  EditorFeatureContributionContext,
+  EditorEditContribution,
+  EditorEditContributionContext,
   EditorViewContribution,
   EditorViewContributionContext,
   EditorViewContributionUpdateKind,
@@ -52,9 +53,13 @@ export function createTypeScriptLspPlugin(
           createContribution: (contributionContext) =>
             new TypeScriptLspContribution(contributionContext, state, resolved),
         }),
-        context.registerEditorFeatureContribution({
+        context.registerCommandContribution({
           createContribution: (contributionContext) =>
             new TypeScriptLspCommandContribution(contributionContext, state),
+        }),
+        context.registerEditContribution({
+          createContribution: (contributionContext) =>
+            new TypeScriptLspCompletionEditContribution(contributionContext),
         }),
       ]
     },
@@ -115,17 +120,27 @@ class TypeScriptLspPluginState {
   }
 }
 
-class TypeScriptLspCommandContribution implements EditorFeatureContribution {
+class TypeScriptLspCommandContribution implements EditorDisposable {
   private readonly commands: readonly EditorDisposable[]
-  private readonly completionFeature: EditorDisposable
 
   public constructor(
-    context: EditorFeatureContributionContext,
+    context: EditorCommandContributionContext,
     private readonly state: TypeScriptLspPluginState,
   ) {
     this.commands = TYPESCRIPT_LSP_COMMANDS.map((command) =>
       context.registerCommand(command.id, () => command.run(this.state)),
     )
+  }
+
+  public dispose(): void {
+    for (const command of this.commands) command.dispose()
+  }
+}
+
+class TypeScriptLspCompletionEditContribution implements EditorEditContribution {
+  private readonly completionFeature: EditorDisposable
+
+  public constructor(context: EditorEditContributionContext) {
     this.completionFeature = context.registerFeature(
       TYPESCRIPT_LSP_COMPLETION_EDIT_FEATURE,
       completionEditFeature(context),
@@ -133,7 +148,6 @@ class TypeScriptLspCommandContribution implements EditorFeatureContribution {
   }
 
   public dispose(): void {
-    for (const command of this.commands) command.dispose()
     this.completionFeature.dispose()
   }
 }
@@ -249,7 +263,7 @@ class TypeScriptLspContribution implements EditorViewContribution {
 }
 
 function completionEditFeature(
-  context: EditorFeatureContributionContext,
+  context: EditorEditContributionContext,
 ): TypeScriptLspCompletionEditFeature {
   return {
     applyCompletion(application: TypeScriptLspCompletionApplication): boolean {

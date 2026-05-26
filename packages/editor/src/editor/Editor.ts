@@ -80,7 +80,13 @@ import {
   type EditorCommandContributionContext,
   type EditorCommandContributionProvider,
   type EditorCommandHandler,
+  type EditorDecorationContribution,
+  type EditorDecorationContributionContext,
+  type EditorDecorationContributionProvider,
   type EditorDisposable,
+  type EditorEditContribution,
+  type EditorEditContributionContext,
+  type EditorEditContributionProvider,
   type EditorFeatureContribution,
   type EditorFeatureContributionContext,
   type EditorFeatureContributionProvider,
@@ -146,6 +152,8 @@ const PLUGIN_GUTTER_PROJECTION_OWNER = 'editor.gutters.plugins'
 const PLUGIN_INJECTED_ROWS_PROJECTION_OWNER = 'editor.injectedRows.plugins'
 
 type SyntaxScrollDirection = -1 | 0 | 1
+type EditorContributionKind = 'capability' | 'command' | 'decoration' | 'edit' | 'feature' | 'view'
+type EditorContributionFailurePhase = 'dispose' | 'factory' | 'initial-update' | 'update'
 
 export class Editor {
   private readonly container: HTMLElement
@@ -161,8 +169,16 @@ export class Editor {
   private readonly document: EditorDocumentController
   private readonly editorFeatures = new Map<EditorCapabilityToken<unknown>, unknown>()
   private readonly editorFeatureTokensById = new Map<string, EditorCapabilityToken<unknown>>()
+  private readonly rowDecorationSourceOwners = new Map<string, symbol>()
+  private readonly rowDecorationSourcesByOwner = new Map<symbol, Set<string>>()
+  private readonly rowDecorationContributionOwners = new Map<
+    EditorDecorationContribution | EditorFeatureContribution,
+    symbol
+  >()
   private readonly commandContributions: EditorCommandContribution[] = []
   private readonly capabilityContributions: EditorCapabilityContribution[] = []
+  private readonly editContributions: EditorEditContribution[] = []
+  private readonly decorationContributions: EditorDecorationContribution[] = []
   private readonly editorFeatureContributions: EditorFeatureContribution[] = []
   private readonly viewContributionsByProvider = new Map<
     EditorViewContributionProvider,
@@ -179,6 +195,14 @@ export class Editor {
   private readonly capabilityContributionsByProvider = new Map<
     EditorCapabilityContributionProvider,
     EditorCapabilityContribution
+  >()
+  private readonly editContributionsByProvider = new Map<
+    EditorEditContributionProvider,
+    EditorEditContribution
+  >()
+  private readonly decorationContributionsByProvider = new Map<
+    EditorDecorationContributionProvider,
+    EditorDecorationContribution
   >()
   private readonly keymap: EditorKeymapController
   private readonly viewContributions: EditorViewContributionController
@@ -344,6 +368,8 @@ export class Editor {
     if (this.pluginHost.hasHighlighterProviders()) this.syntax.refreshHighlighterTheme()
     this.createInitialCommandContributions(this.pluginHost.getCommandContributionProviders())
     this.createInitialCapabilityContributions(this.pluginHost.getCapabilityContributionProviders())
+    this.createInitialEditContributions(this.pluginHost.getEditContributionProviders())
+    this.createInitialDecorationContributions(this.pluginHost.getDecorationContributionProviders())
     this.createInitialEditorFeatureContributions(
       this.pluginHost.getEditorFeatureContributionProviders(),
     )
@@ -355,6 +381,7 @@ export class Editor {
     this.viewContributions = new EditorViewContributionController(
       this.createInitialViewContributions(this.pluginHost.getViewContributionProviders()),
       () => this.createViewSnapshot(),
+      (_contribution, phase, error) => this.logContributionFailure('view', phase, error),
     )
     this.pluginHost.setEvents({
       onPluginInstalled: (name, durationMs) =>
@@ -436,6 +463,13 @@ export class Editor {
         this.addCapabilityContributionProvider(provider),
       onCapabilityContributionProviderRemoved: (provider) =>
         this.removeCapabilityContributionProvider(provider),
+      onEditContributionProviderAdded: (provider) => this.addEditContributionProvider(provider),
+      onEditContributionProviderRemoved: (provider) =>
+        this.removeEditContributionProvider(provider),
+      onDecorationContributionProviderAdded: (provider) =>
+        this.addDecorationContributionProvider(provider),
+      onDecorationContributionProviderRemoved: (provider) =>
+        this.removeDecorationContributionProvider(provider),
       onEditorFeatureContributionProviderAdded: (provider) =>
         this.addEditorFeatureContributionProvider(provider),
       onEditorFeatureContributionProviderRemoved: (provider) =>
@@ -992,6 +1026,8 @@ export class Editor {
     this.inputSelection.dispose()
     this.viewContributions.dispose()
     this.disposeEditorFeatureContributions()
+    this.disposeDecorationContributions()
+    this.disposeEditContributions()
     this.disposeCapabilityContributions()
     this.disposeCommandContributions()
     this.keymap.dispose()
@@ -1107,7 +1143,12 @@ export class Editor {
   private createViewContribution(
     provider: EditorViewContributionProvider,
   ): EditorViewContribution | null {
-    return provider.createContribution(this.createViewContributionContext(this.container))
+    try {
+      return provider.createContribution(this.createViewContributionContext(this.container))
+    } catch (error) {
+      this.logContributionFailure('view', 'factory', error)
+      return null
+    }
   }
 
   private createInitialCommandContributions(
@@ -1117,11 +1158,22 @@ export class Editor {
   }
 
   private addCommandContributionProvider(provider: EditorCommandContributionProvider): void {
-    const contribution = provider.createContribution(this.createCommandContributionContext())
+    const contribution = this.createCommandContribution(provider)
     if (!contribution) return
 
     this.commandContributionsByProvider.set(provider, contribution)
     this.commandContributions.push(contribution)
+  }
+
+  private createCommandContribution(
+    provider: EditorCommandContributionProvider,
+  ): EditorCommandContribution | null {
+    try {
+      return provider.createContribution(this.createCommandContributionContext())
+    } catch (error) {
+      this.logContributionFailure('command', 'factory', error)
+      return null
+    }
   }
 
   private removeCommandContributionProvider(provider: EditorCommandContributionProvider): void {
@@ -1130,12 +1182,13 @@ export class Editor {
 
     this.commandContributionsByProvider.delete(provider)
     removeArrayItem(this.commandContributions, contribution)
-    contribution.dispose()
+    this.disposeContributionSafely(contribution, 'command')
   }
 
   private disposeCommandContributions(): void {
     while (this.commandContributions.length > 0) {
-      this.commandContributions.pop()?.dispose()
+      const contribution = this.commandContributions.pop()
+      if (contribution) this.disposeContributionSafely(contribution, 'command')
     }
     this.commandContributionsByProvider.clear()
   }
@@ -1147,11 +1200,22 @@ export class Editor {
   }
 
   private addCapabilityContributionProvider(provider: EditorCapabilityContributionProvider): void {
-    const contribution = provider.createContribution(this.createCapabilityContributionContext())
+    const contribution = this.createCapabilityContribution(provider)
     if (!contribution) return
 
     this.capabilityContributionsByProvider.set(provider, contribution)
     this.capabilityContributions.push(contribution)
+  }
+
+  private createCapabilityContribution(
+    provider: EditorCapabilityContributionProvider,
+  ): EditorCapabilityContribution | null {
+    try {
+      return provider.createContribution(this.createCapabilityContributionContext())
+    } catch (error) {
+      this.logContributionFailure('capability', 'factory', error)
+      return null
+    }
   }
 
   private removeCapabilityContributionProvider(
@@ -1162,14 +1226,117 @@ export class Editor {
 
     this.capabilityContributionsByProvider.delete(provider)
     removeArrayItem(this.capabilityContributions, contribution)
-    contribution.dispose()
+    this.disposeContributionSafely(contribution, 'capability')
   }
 
   private disposeCapabilityContributions(): void {
     while (this.capabilityContributions.length > 0) {
-      this.capabilityContributions.pop()?.dispose()
+      const contribution = this.capabilityContributions.pop()
+      if (contribution) this.disposeContributionSafely(contribution, 'capability')
     }
     this.capabilityContributionsByProvider.clear()
+  }
+
+  private createInitialEditContributions(
+    providers: readonly EditorEditContributionProvider[],
+  ): void {
+    for (const provider of providers) this.addEditContributionProvider(provider)
+  }
+
+  private addEditContributionProvider(provider: EditorEditContributionProvider): void {
+    const contribution = this.createEditContribution(provider)
+    if (!contribution) return
+
+    this.editContributionsByProvider.set(provider, contribution)
+    this.editContributions.push(contribution)
+  }
+
+  private createEditContribution(
+    provider: EditorEditContributionProvider,
+  ): EditorEditContribution | null {
+    try {
+      return provider.createContribution(this.createEditContributionContext())
+    } catch (error) {
+      this.logContributionFailure('edit', 'factory', error)
+      return null
+    }
+  }
+
+  private removeEditContributionProvider(provider: EditorEditContributionProvider): void {
+    const contribution = this.editContributionsByProvider.get(provider)
+    if (!contribution) return
+
+    this.editContributionsByProvider.delete(provider)
+    removeArrayItem(this.editContributions, contribution)
+    this.disposeContributionSafely(contribution, 'edit')
+  }
+
+  private disposeEditContributions(): void {
+    while (this.editContributions.length > 0) {
+      const contribution = this.editContributions.pop()
+      if (contribution) this.disposeContributionSafely(contribution, 'edit')
+    }
+    this.editContributionsByProvider.clear()
+  }
+
+  private createInitialDecorationContributions(
+    providers: readonly EditorDecorationContributionProvider[],
+  ): void {
+    for (const provider of providers) this.addDecorationContributionProvider(provider, false)
+  }
+
+  private addDecorationContributionProvider(
+    provider: EditorDecorationContributionProvider,
+    notify = true,
+  ): void {
+    const owner = Symbol('editor.decorationContribution')
+    const contribution = this.createDecorationContribution(provider, owner)
+    if (!contribution) return
+
+    this.decorationContributionsByProvider.set(provider, contribution)
+    this.rowDecorationContributionOwners.set(contribution, owner)
+    this.decorationContributions.push(contribution)
+    if (notify) contribution.handleEditorChange?.(null)
+  }
+
+  private createDecorationContribution(
+    provider: EditorDecorationContributionProvider,
+    owner: symbol,
+  ): EditorDecorationContribution | null {
+    try {
+      const contribution = provider.createContribution(
+        this.createDecorationContributionContext(owner),
+      )
+      if (!contribution) this.clearRowDecorationSourcesForOwner(owner)
+      return contribution
+    } catch (error) {
+      this.clearRowDecorationSourcesForOwner(owner)
+      this.logContributionFailure('decoration', 'factory', error)
+      return null
+    }
+  }
+
+  private removeDecorationContributionProvider(
+    provider: EditorDecorationContributionProvider,
+  ): void {
+    const contribution = this.decorationContributionsByProvider.get(provider)
+    if (!contribution) return
+
+    this.decorationContributionsByProvider.delete(provider)
+    removeArrayItem(this.decorationContributions, contribution)
+    this.disposeContributionSafely(contribution, 'decoration')
+    this.clearContributionRowDecorationSources(contribution)
+  }
+
+  private disposeDecorationContributions(): void {
+    while (this.decorationContributions.length > 0) {
+      const contribution = this.decorationContributions.pop()
+      if (!contribution) continue
+
+      this.disposeContributionSafely(contribution, 'decoration')
+      this.clearContributionRowDecorationSources(contribution)
+    }
+    this.decorationContributionsByProvider.clear()
   }
 
   private createInitialEditorFeatureContributions(
@@ -1182,14 +1349,31 @@ export class Editor {
     provider: EditorFeatureContributionProvider,
     notify = true,
   ): void {
-    const contribution = provider.createContribution(
-      this.createEditorFeatureContributionContext(this.container),
-    )
+    const owner = Symbol('editor.featureContribution')
+    const contribution = this.createEditorFeatureContribution(provider, owner)
     if (!contribution) return
 
     this.editorFeatureContributionsByProvider.set(provider, contribution)
+    this.rowDecorationContributionOwners.set(contribution, owner)
     this.editorFeatureContributions.push(contribution)
     if (notify) contribution.handleEditorChange?.(null)
+  }
+
+  private createEditorFeatureContribution(
+    provider: EditorFeatureContributionProvider,
+    owner: symbol,
+  ): EditorFeatureContribution | null {
+    try {
+      const contribution = provider.createContribution(
+        this.createEditorFeatureContributionContext(this.container, owner),
+      )
+      if (!contribution) this.clearRowDecorationSourcesForOwner(owner)
+      return contribution
+    } catch (error) {
+      this.clearRowDecorationSourcesForOwner(owner)
+      this.logContributionFailure('feature', 'factory', error)
+      return null
+    }
   }
 
   private removeEditorFeatureContributionProvider(
@@ -1200,12 +1384,17 @@ export class Editor {
 
     this.editorFeatureContributionsByProvider.delete(provider)
     removeArrayItem(this.editorFeatureContributions, contribution)
-    contribution.dispose()
+    this.disposeContributionSafely(contribution, 'feature')
+    this.clearContributionRowDecorationSources(contribution)
   }
 
   private disposeEditorFeatureContributions(): void {
     while (this.editorFeatureContributions.length > 0) {
-      this.editorFeatureContributions.pop()?.dispose()
+      const contribution = this.editorFeatureContributions.pop()
+      if (!contribution) continue
+
+      this.disposeContributionSafely(contribution, 'feature')
+      this.clearContributionRowDecorationSources(contribution)
     }
     this.editorFeatureContributionsByProvider.clear()
   }
@@ -1238,6 +1427,30 @@ export class Editor {
       source: 'editor',
       timestamp: event.timestamp ?? new Date().toISOString(),
     })
+  }
+
+  private logContributionFailure(
+    kind: EditorContributionKind,
+    phase: EditorContributionFailurePhase,
+    error: unknown,
+  ): void {
+    this.log({
+      action: editorContributionFailureAction(phase),
+      level: 'error',
+      error: editorLogError(error),
+      contribution: { kind, phase },
+    })
+  }
+
+  private disposeContributionSafely(
+    contribution: EditorDisposable,
+    kind: EditorContributionKind,
+  ): void {
+    try {
+      contribution.dispose()
+    } catch (error) {
+      this.logContributionFailure(kind, 'dispose', error)
+    }
   }
 
   private syncGutterContributions(): void {
@@ -1499,8 +1712,10 @@ export class Editor {
   private setSourceRowDecorations(
     sourceId: string,
     decorations: ReadonlyMap<number, VirtualizedTextRowDecoration>,
+    owner: symbol,
   ): void {
     if (sourceId.length === 0) return
+    this.claimRowDecorationSource(sourceId, owner)
 
     this.displayProjections.set({
       kind: 'rowDecorations',
@@ -1515,11 +1730,55 @@ export class Editor {
     this.applyComposedRowDecorations()
   }
 
-  private clearSourceRowDecorations(sourceId: string): void {
+  private clearSourceRowDecorations(sourceId: string, owner: symbol): void {
+    if (this.rowDecorationSourceOwners.get(sourceId) !== owner) return
+
+    this.releaseRowDecorationSource(sourceId, owner)
     if (!this.displayProjections.delete('rowDecorations', sourceRowDecorationOwner(sourceId)))
       return
 
     this.applyComposedRowDecorations()
+  }
+
+  private claimRowDecorationSource(sourceId: string, owner: symbol): void {
+    const currentOwner = this.rowDecorationSourceOwners.get(sourceId)
+    if (currentOwner === owner) return
+    if (currentOwner)
+      throw new Error(`Editor row decoration source already registered: ${sourceId}`)
+
+    this.rowDecorationSourceOwners.set(sourceId, owner)
+    let sources = this.rowDecorationSourcesByOwner.get(owner)
+    if (!sources) {
+      sources = new Set()
+      this.rowDecorationSourcesByOwner.set(owner, sources)
+    }
+    sources.add(sourceId)
+  }
+
+  private releaseRowDecorationSource(sourceId: string, owner: symbol): void {
+    this.rowDecorationSourceOwners.delete(sourceId)
+    const sources = this.rowDecorationSourcesByOwner.get(owner)
+    if (!sources) return
+
+    sources.delete(sourceId)
+    if (sources.size === 0) this.rowDecorationSourcesByOwner.delete(owner)
+  }
+
+  private clearContributionRowDecorationSources(
+    contribution: EditorDecorationContribution | EditorFeatureContribution,
+  ): void {
+    const owner = this.rowDecorationContributionOwners.get(contribution)
+    if (!owner) return
+
+    this.rowDecorationContributionOwners.delete(contribution)
+    this.clearRowDecorationSourcesForOwner(owner)
+  }
+
+  private clearRowDecorationSourcesForOwner(owner: symbol): void {
+    const sources = this.rowDecorationSourcesByOwner.get(owner)
+    if (!sources) return
+
+    for (const sourceId of [...sources]) this.clearSourceRowDecorations(sourceId, owner)
   }
 
   private applyComposedRowDecorations(): void {
@@ -1598,8 +1857,36 @@ export class Editor {
     }
   }
 
+  private createEditContributionContext(): EditorEditContributionContext {
+    return {
+      hasDocument: () => this.session !== null,
+      log: (event) => this.log(event),
+      materializeFullText: () => this.materializeFullText(),
+      getTextSnapshot: () => this.session?.getTextSnapshot() ?? null,
+      registerFeature: (key, feature) => this.registerFeature(key, feature),
+      focusEditor: () => this.focus(),
+      applyEdits: (edits, timingName, selection) =>
+        this.inputSelection.applyFindEdits(edits, timingName, selection),
+    }
+  }
+
+  private createDecorationContributionContext(owner: symbol): EditorDecorationContributionContext {
+    return {
+      hasDocument: () => this.session !== null,
+      log: (event) => this.log(event),
+      materializeFullText: () => this.materializeFullText(),
+      getTextSnapshot: () => this.session?.getTextSnapshot() ?? null,
+      setRangeHighlight: (name, ranges, style) => this.view.setRangeHighlight(name, ranges, style),
+      clearRangeHighlight: (name) => this.view.clearRangeHighlight(name),
+      setRowDecorations: (sourceId, decorations) =>
+        this.setSourceRowDecorations(sourceId, decorations, owner),
+      clearRowDecorations: (sourceId) => this.clearSourceRowDecorations(sourceId, owner),
+    }
+  }
+
   private createEditorFeatureContributionContext(
     container: HTMLElement,
+    owner: symbol,
   ): EditorFeatureContributionContext {
     return {
       container,
@@ -1620,8 +1907,8 @@ export class Editor {
       setRangeHighlight: (name, ranges, style) => this.view.setRangeHighlight(name, ranges, style),
       clearRangeHighlight: (name) => this.view.clearRangeHighlight(name),
       setRowDecorations: (sourceId, decorations) =>
-        this.setSourceRowDecorations(sourceId, decorations),
-      clearRowDecorations: (sourceId) => this.clearSourceRowDecorations(sourceId),
+        this.setSourceRowDecorations(sourceId, decorations, owner),
+      clearRowDecorations: (sourceId) => this.clearSourceRowDecorations(sourceId, owner),
       registerCommand: (command, handler) => this.registerCommandHandler(command, handler),
       registerFeature: (key, feature) => this.registerFeature(key, feature),
     }
@@ -1759,9 +2046,51 @@ export class Editor {
   }
 
   private notifyEditorFeatureContributions(change: DocumentSessionChange | null): void {
-    for (const contribution of this.editorFeatureContributions) {
+    for (const contribution of [...this.decorationContributions])
+      this.notifyContributionChange(contribution, change, 'decoration')
+
+    for (const contribution of [...this.editorFeatureContributions])
+      this.notifyContributionChange(contribution, change, 'feature')
+  }
+
+  private notifyContributionChange(
+    contribution: EditorDecorationContribution | EditorFeatureContribution,
+    change: DocumentSessionChange | null,
+    kind: 'decoration' | 'feature',
+  ): void {
+    try {
       contribution.handleEditorChange?.(change)
+    } catch (error) {
+      this.removeFailedEditorContribution(contribution, kind, error)
     }
+  }
+
+  private removeFailedEditorContribution(
+    contribution: EditorDecorationContribution | EditorFeatureContribution,
+    kind: 'decoration' | 'feature',
+    error: unknown,
+  ): void {
+    this.logContributionFailure(kind, 'update', error)
+    if (kind === 'decoration') {
+      this.removeFailedDecorationContribution(contribution as EditorDecorationContribution)
+      return
+    }
+
+    this.removeFailedFeatureContribution(contribution as EditorFeatureContribution)
+  }
+
+  private removeFailedDecorationContribution(contribution: EditorDecorationContribution): void {
+    removeArrayItem(this.decorationContributions, contribution)
+    deleteMapValue(this.decorationContributionsByProvider, contribution)
+    this.disposeContributionSafely(contribution, 'decoration')
+    this.clearContributionRowDecorationSources(contribution)
+  }
+
+  private removeFailedFeatureContribution(contribution: EditorFeatureContribution): void {
+    removeArrayItem(this.editorFeatureContributions, contribution)
+    deleteMapValue(this.editorFeatureContributionsByProvider, contribution)
+    this.disposeContributionSafely(contribution, 'feature')
+    this.clearContributionRowDecorationSources(contribution)
   }
 
   private registerCommandHandler(
@@ -2294,6 +2623,21 @@ function editorLogError(error: unknown): EditorLogError {
   }
 
   return { message: String(error) }
+}
+
+function editorContributionFailureAction(phase: EditorContributionFailurePhase): string {
+  if (phase === 'factory') return 'editor.contribution.factory_failed'
+  if (phase === 'dispose') return 'editor.contribution.dispose_failed'
+  return 'editor.contribution.update_failed'
+}
+
+function deleteMapValue<Key, Value>(map: Map<Key, Value>, value: Value): void {
+  for (const [key, entry] of map) {
+    if (entry !== value) continue
+
+    map.delete(key)
+    return
+  }
 }
 
 function sameInjectedTextRows(

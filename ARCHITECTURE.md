@@ -164,6 +164,44 @@ CSS Highlight API renderer implemented. See `packages/editor/src/editor.ts`.
 
 ---
 
+### 5.12 Extension System (In Progress)
+
+Extensions run through a host lifecycle with explicit `install`, `activate`, `update`,
+`deactivate`, and `dispose` hooks. The public surface is `@editor/core/extensions`; consumers get
+power through typed domain registries instead of a broad editor service locator.
+
+**Public contribution APIs:**
+- Commands
+- Capabilities
+- Edit helpers
+- Decorations
+- Gutters
+- Blocks
+- Injected rows
+- Syntax and highlighters
+- View contributions
+
+`EditorViewContribution` is the public escape hatch for features that genuinely need mounted DOM
+access or viewport snapshots. Domain features should prefer their registry before using a view
+contribution.
+
+**Internal-only migration bridge:** `EditorPluginHost`, host events, `EditorInternalPluginContext`,
+and the broad `EditorFeatureContribution*` context are implementation/test surfaces. They are exposed
+through internal/testing entry points only while first-party features finish migrating to domain
+registries.
+
+**Locked:**
+- Public plugins do not receive `registerEditorFeatureContribution`.
+- Contribution conflicts fail near registration: duplicate command handlers, duplicate gutter ids,
+  duplicate block provider ownership, and duplicate row-decoration source ownership are rejected.
+- Contribution factory, `update()`, and disposal failures are contained and logged so one extension
+  does not break unrelated editor systems.
+
+**Open:** migrate the remaining first-party feature bridge users to public domain/view APIs, then
+delete the broad internal feature contribution bridge.
+
+---
+
 ## 6. Data Flow
 
 ### Typing Flow (Target)
@@ -189,3 +227,5 @@ CSS Highlight API renderer implemented. See `packages/editor/src/editor.ts`.
 6. ~~Scheduler design?~~ **Locked at contract level.**
 7. Decoration system design?
 8. Tree-sitter parser/query loading and memory policy?
+9. ~~Extension service locator?~~ **Replaced with typed domain registries; internal bridge pending
+   deletion.**

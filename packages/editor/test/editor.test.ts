@@ -6,6 +6,7 @@ import {
   createEditorLoggingPlugin,
   createMergeConflictPlugin,
   Editor,
+  type EditorDecorationContributionContext,
   type EditorKeymapOptions,
   type EditorLogEvent,
   type EditorState,
@@ -26,7 +27,6 @@ import type {
   EditorTheme,
 } from '../src/public/rendering'
 import type {
-  EditorFeatureContributionContext,
   EditorHighlighterSession,
   EditorHighlightResult,
   EditorPlugin,
@@ -2064,19 +2064,25 @@ describe('Editor', () => {
       let commandCalls = 0
       const changes: (DocumentSessionChange['kind'] | null)[] = []
       const plugin: EditorPlugin = {
-        activate: (context) =>
-          context.registerEditorFeatureContribution({
-            createContribution: (context) => {
-              const command = context.registerCommand('findNext', () => {
+        activate: (context) => [
+          context.registerCommandContribution({
+            createContribution: (commandContext) => {
+              const command = commandContext.registerCommand('findNext', () => {
                 commandCalls += 1
                 return true
               })
+              return { dispose: () => command.dispose() }
+            },
+          }),
+          context.registerDecorationContribution({
+            createContribution: () => {
               return {
                 handleEditorChange: (change) => changes.push(change?.kind ?? null),
-                dispose: () => command.dispose(),
+                dispose: () => undefined,
               }
             },
           }),
+        ],
       }
 
       editor.dispose()
@@ -2095,7 +2101,7 @@ describe('Editor', () => {
       const publicTexts: string[] = []
       const plugin: EditorPlugin = {
         activate: (context) =>
-          context.registerEditorFeatureContribution({
+          context.registerDecorationContribution({
             createContribution: () => ({
               handleEditorChange: (change) => {
                 if (change?.kind === 'edit')
@@ -2137,7 +2143,7 @@ describe('Editor', () => {
       const featureTexts: string[] = []
       const plugin: EditorPlugin = {
         activate: (context) =>
-          context.registerEditorFeatureContribution({
+          context.registerDecorationContribution({
             createContribution: () => ({
               handleEditorChange: (change) => {
                 if (change?.kind === 'edit')
@@ -2166,10 +2172,10 @@ describe('Editor', () => {
     })
 
     it('composes source-keyed row decorations without clobbering other sources', () => {
-      let featureContext: EditorFeatureContributionContext | null = null
+      let featureContext: EditorDecorationContributionContext | null = null
       const plugin: EditorPlugin = {
         activate: (context) =>
-          context.registerEditorFeatureContribution({
+          context.registerDecorationContribution({
             createContribution: (context) => {
               featureContext = context
               return { dispose: () => undefined }
@@ -2206,10 +2212,10 @@ describe('Editor', () => {
     })
 
     it('keeps row decoration conflict order stable when a source updates', () => {
-      let featureContext: EditorFeatureContributionContext | null = null
+      let featureContext: EditorDecorationContributionContext | null = null
       const plugin: EditorPlugin = {
         activate: (context) =>
-          context.registerEditorFeatureContribution({
+          context.registerDecorationContribution({
             createContribution: (context) => {
               featureContext = context
               return { dispose: () => undefined }

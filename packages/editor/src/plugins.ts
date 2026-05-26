@@ -259,10 +259,6 @@ export type EditorSelectionContributionContext = {
   ): void
 }
 
-export type EditorEditContributionContext = {
-  applyEdits(edits: readonly TextEdit[], timingName: string, selection?: EditorSelectionRange): void
-}
-
 export type EditorRangeHighlightContributionContext = {
   setRangeHighlight(
     name: string,
@@ -288,6 +284,16 @@ export type EditorCapabilityContributionContext = {
   registerFeature<T>(token: EditorCapabilityToken<T>, feature: T): EditorDisposable
 }
 
+export type EditorEditContributionContext = EditorDocumentContributionContext &
+  EditorCapabilityContributionContext & {
+    focusEditor(): void
+    applyEdits(
+      edits: readonly TextEdit[],
+      timingName: string,
+      selection?: EditorSelectionRange,
+    ): void
+  }
+
 export type EditorFeatureContributionContext = EditorFeatureDomContributionContext &
   EditorDocumentContributionContext &
   EditorSelectionContributionContext &
@@ -309,6 +315,26 @@ export type EditorCapabilityContributionProvider = {
   createContribution(
     context: EditorCapabilityContributionContext,
   ): EditorCapabilityContribution | null
+}
+
+export type EditorEditContribution = EditorDisposable
+
+export type EditorEditContributionProvider = {
+  createContribution(context: EditorEditContributionContext): EditorEditContribution | null
+}
+
+export type EditorDecorationContributionContext = EditorDocumentContributionContext &
+  EditorRangeHighlightContributionContext &
+  EditorRowDecorationContributionContext
+
+export type EditorDecorationContribution = EditorDisposable & {
+  handleEditorChange?(change: DocumentSessionChange | null): void
+}
+
+export type EditorDecorationContributionProvider = {
+  createContribution(
+    context: EditorDecorationContributionContext,
+  ): EditorDecorationContribution | null
 }
 
 export type EditorFeatureContribution = EditorDisposable & {
@@ -374,10 +400,15 @@ export type EditorPluginContext = {
   registerViewContribution(provider: EditorViewContributionProvider): EditorDisposable
   registerCommandContribution(provider: EditorCommandContributionProvider): EditorDisposable
   registerCapabilityContribution(provider: EditorCapabilityContributionProvider): EditorDisposable
-  registerEditorFeatureContribution(provider: EditorFeatureContributionProvider): EditorDisposable
+  registerEditContribution(provider: EditorEditContributionProvider): EditorDisposable
+  registerDecorationContribution(provider: EditorDecorationContributionProvider): EditorDisposable
   registerGutterContribution(contribution: EditorGutterContribution): EditorDisposable
   registerBlockProvider(provider: EditorBlockProvider): EditorDisposable
   registerInjectedTextRowProvider(provider: EditorInjectedTextRowProvider): EditorDisposable
+}
+
+export type EditorInternalPluginContext = EditorPluginContext & {
+  registerEditorFeatureContribution(provider: EditorFeatureContributionProvider): EditorDisposable
 }
 
 export type EditorPlugin = {
@@ -409,10 +440,14 @@ export type EditorPluginHostEvents = {
   onPluginDisposed?(name: string): void
   onViewContributionProviderAdded?(provider: EditorViewContributionProvider): void
   onViewContributionProviderRemoved?(provider: EditorViewContributionProvider): void
+  onDecorationContributionProviderAdded?(provider: EditorDecorationContributionProvider): void
+  onDecorationContributionProviderRemoved?(provider: EditorDecorationContributionProvider): void
   onCommandContributionProviderAdded?(provider: EditorCommandContributionProvider): void
   onCommandContributionProviderRemoved?(provider: EditorCommandContributionProvider): void
   onCapabilityContributionProviderAdded?(provider: EditorCapabilityContributionProvider): void
   onCapabilityContributionProviderRemoved?(provider: EditorCapabilityContributionProvider): void
+  onEditContributionProviderAdded?(provider: EditorEditContributionProvider): void
+  onEditContributionProviderRemoved?(provider: EditorEditContributionProvider): void
   onEditorFeatureContributionProviderAdded?(provider: EditorFeatureContributionProvider): void
   onEditorFeatureContributionProviderRemoved?(provider: EditorFeatureContributionProvider): void
   onGutterContributionsChanged?(): void
@@ -443,6 +478,8 @@ export class EditorPluginHost implements EditorDisposable {
   private readonly viewContributions: EditorViewContributionProvider[] = []
   private readonly commandContributions: EditorCommandContributionProvider[] = []
   private readonly capabilityContributions: EditorCapabilityContributionProvider[] = []
+  private readonly editContributions: EditorEditContributionProvider[] = []
+  private readonly decorationContributions: EditorDecorationContributionProvider[] = []
   private readonly editorFeatureContributions: EditorFeatureContributionProvider[] = []
   private readonly gutterContributions: EditorGutterContribution[] = []
   private readonly blockProviders: EditorBlockProvider[] = []
@@ -580,6 +617,28 @@ export class EditorPluginHost implements EditorDisposable {
     return contributions
   }
 
+  public createEditContributions(context: EditorEditContributionContext): EditorEditContribution[] {
+    const contributions: EditorEditContribution[] = []
+    for (const provider of this.editContributions) {
+      const contribution = provider.createContribution(context)
+      if (contribution) contributions.push(contribution)
+    }
+
+    return contributions
+  }
+
+  public createDecorationContributions(
+    context: EditorDecorationContributionContext,
+  ): EditorDecorationContribution[] {
+    const contributions: EditorDecorationContribution[] = []
+    for (const provider of this.decorationContributions) {
+      const contribution = provider.createContribution(context)
+      if (contribution) contributions.push(contribution)
+    }
+
+    return contributions
+  }
+
   public createEditorFeatureContributions(
     context: EditorFeatureContributionContext,
   ): EditorFeatureContribution[] {
@@ -614,6 +673,14 @@ export class EditorPluginHost implements EditorDisposable {
 
   public getCapabilityContributionProviders(): readonly EditorCapabilityContributionProvider[] {
     return this.capabilityContributions
+  }
+
+  public getEditContributionProviders(): readonly EditorEditContributionProvider[] {
+    return this.editContributions
+  }
+
+  public getDecorationContributionProviders(): readonly EditorDecorationContributionProvider[] {
+    return this.decorationContributions
   }
 
   public getEditorFeatureContributionProviders(): readonly EditorFeatureContributionProvider[] {
@@ -654,6 +721,8 @@ export class EditorPluginHost implements EditorDisposable {
     this.viewContributions.length = 0
     this.commandContributions.length = 0
     this.capabilityContributions.length = 0
+    this.editContributions.length = 0
+    this.decorationContributions.length = 0
     this.editorFeatureContributions.length = 0
     this.gutterContributions.length = 0
     for (const disposable of this.blockProviderInvalidationDisposables.values()) {
@@ -818,7 +887,7 @@ export class EditorPluginHost implements EditorDisposable {
     return true
   }
 
-  private createContext(): EditorPluginContext {
+  private createContext(): EditorInternalPluginContext {
     return {
       log: (event) => this.logInput(event),
       registerLogger: (logger) => this.registerLogger(logger),
@@ -827,6 +896,8 @@ export class EditorPluginHost implements EditorDisposable {
       registerViewContribution: (provider) => this.registerViewContribution(provider),
       registerCommandContribution: (provider) => this.registerCommandContribution(provider),
       registerCapabilityContribution: (provider) => this.registerCapabilityContribution(provider),
+      registerEditContribution: (provider) => this.registerEditContribution(provider),
+      registerDecorationContribution: (provider) => this.registerDecorationContribution(provider),
       registerEditorFeatureContribution: (provider) =>
         this.registerEditorFeatureContribution(provider),
       registerGutterContribution: (contribution) => this.registerGutterContribution(contribution),
@@ -912,7 +983,9 @@ export class EditorPluginHost implements EditorDisposable {
     this.events.onViewContributionProviderRemoved?.(provider)
   }
 
-  private registerCommandContribution(provider: EditorCommandContributionProvider): EditorDisposable {
+  private registerCommandContribution(
+    provider: EditorCommandContributionProvider,
+  ): EditorDisposable {
     this.commandContributions.push(provider)
     const disposable = this.trackLifecycleRegistration(
       disposableOnce(() => this.unregisterCommandContribution(provider)),
@@ -962,6 +1035,56 @@ export class EditorPluginHost implements EditorDisposable {
     this.events.onCapabilityContributionProviderRemoved?.(provider)
   }
 
+  private registerEditContribution(provider: EditorEditContributionProvider): EditorDisposable {
+    this.editContributions.push(provider)
+    const disposable = this.trackLifecycleRegistration(
+      disposableOnce(() => this.unregisterEditContribution(provider)),
+    )
+
+    try {
+      this.events.onEditContributionProviderAdded?.(provider)
+    } catch (error) {
+      disposable.dispose()
+      throw error
+    }
+
+    return disposable
+  }
+
+  private unregisterEditContribution(provider: EditorEditContributionProvider): void {
+    const index = this.editContributions.indexOf(provider)
+    if (index === -1) return
+
+    this.editContributions.splice(index, 1)
+    this.events.onEditContributionProviderRemoved?.(provider)
+  }
+
+  private registerDecorationContribution(
+    provider: EditorDecorationContributionProvider,
+  ): EditorDisposable {
+    this.decorationContributions.push(provider)
+    const disposable = this.trackLifecycleRegistration(
+      disposableOnce(() => this.unregisterDecorationContribution(provider)),
+    )
+
+    try {
+      this.events.onDecorationContributionProviderAdded?.(provider)
+    } catch (error) {
+      disposable.dispose()
+      throw error
+    }
+
+    return disposable
+  }
+
+  private unregisterDecorationContribution(provider: EditorDecorationContributionProvider): void {
+    const index = this.decorationContributions.indexOf(provider)
+    if (index === -1) return
+
+    this.decorationContributions.splice(index, 1)
+    this.events.onDecorationContributionProviderRemoved?.(provider)
+  }
+
   private registerEditorFeatureContribution(
     provider: EditorFeatureContributionProvider,
   ): EditorDisposable {
@@ -989,6 +1112,10 @@ export class EditorPluginHost implements EditorDisposable {
   }
 
   private registerGutterContribution(contribution: EditorGutterContribution): EditorDisposable {
+    if (this.gutterContributions.some((registered) => registered.id === contribution.id)) {
+      throw new Error(`Editor gutter contribution already registered: ${contribution.id}`)
+    }
+
     this.gutterContributions.push(contribution)
     const disposable = this.trackLifecycleRegistration(
       disposableOnce(() => this.unregisterGutterContribution(contribution)),
@@ -1007,6 +1134,10 @@ export class EditorPluginHost implements EditorDisposable {
   }
 
   private registerBlockProvider(provider: EditorBlockProvider): EditorDisposable {
+    if (this.blockProviders.includes(provider)) {
+      throw new Error('Editor block provider already registered')
+    }
+
     this.blockProviders.push(provider)
     const invalidationDisposable = provider.onDidChangeBlocks?.(() => {
       this.events.onBlockProvidersChanged?.()

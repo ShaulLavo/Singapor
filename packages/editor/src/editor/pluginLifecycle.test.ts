@@ -1,5 +1,6 @@
 import { Window } from 'happy-dom'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import type { EditorBlockProvider } from '../editorBlocks'
 import { createEditorLoggingPlugin } from '../logging'
 import type {
   EditorCapabilityToken,
@@ -275,7 +276,177 @@ describe('editor plugin lifecycle', () => {
     editor.addPlugin(conflicting)
 
     expect(readCapabilityOwner(editor, token)).toBe('owner')
+    expect(events.some((event) => event.action === 'editor.contribution.factory_failed')).toBe(true)
+
+    editor.dispose()
+  })
+
+  test('rejects duplicate command handlers without removing the owner', () => {
+    const events: EditorLogEvent[] = []
+    const editor = createEditor({
+      plugins: [createEditorLoggingPlugin((event) => events.push(event))],
+    })
+    const owner = createCommandPlugin('owner')
+    const conflicting = createCommandPlugin('conflicting')
+
+    editor.addPlugin(owner.plugin)
+    editor.addPlugin(conflicting.plugin)
+
+    expect(editor.dispatchCommand('goToDefinition')).toBe(true)
+    expect(owner.calls).toBe(1)
+    expect(conflicting.calls).toBe(0)
+    expect(events.some((event) => event.action === 'editor.contribution.factory_failed')).toBe(true)
+
+    editor.dispose()
+  })
+
+  test('rejects duplicate gutter ids without removing the owner', () => {
+    const events: EditorLogEvent[] = []
+    const editor = createEditor({
+      plugins: [createEditorLoggingPlugin((event) => events.push(event))],
+    })
+    const owner = createGutterPlugin('duplicate-gutter')
+    const conflicting = createGutterPlugin('duplicate-gutter')
+
+    editor.addPlugin(owner)
+    editor.addPlugin(conflicting)
+    syncEditorViewport(editor, 320, 120)
+
+    expect(findGutterCells('duplicate-gutter').length).toBeGreaterThan(0)
     expect(events.some((event) => event.action === 'editor.plugin.activation_failed')).toBe(true)
+
+    editor.dispose()
+  })
+
+  test('rejects duplicate block provider registration without removing the owner', () => {
+    const host = new EditorPluginHost()
+    const failures: string[] = []
+    const provider: EditorBlockProvider = { getBlocks: () => [] }
+    const owner: EditorPlugin = {
+      name: 'block-owner',
+      activate: (context) => context.registerBlockProvider(provider),
+    }
+    const conflicting: EditorPlugin = {
+      name: 'block-conflict',
+      activate: (context) => context.registerBlockProvider(provider),
+    }
+    host.setEvents({
+      onPluginActivationFailed: (name) => failures.push(name),
+    })
+
+    const ownerLease = host.addPlugin(owner)
+    const conflictingLease = host.addPlugin(conflicting)
+
+    expect(host.getBlockProviders()).toEqual([provider])
+    expect(failures).toEqual(['block-conflict'])
+
+    conflictingLease.dispose()
+    ownerLease.dispose()
+    host.dispose()
+  })
+
+  test('rejects duplicate decoration source ownership without removing the owner', () => {
+    const events: EditorLogEvent[] = []
+    const editor = createEditor({
+      plugins: [createEditorLoggingPlugin((event) => events.push(event))],
+    })
+    const owner = createRowDecorationPlugin('decoration-owner', 'shared-source', 'owner-row')
+    const conflicting = createRowDecorationPlugin(
+      'decoration-conflict',
+      'shared-source',
+      'conflicting-row',
+    )
+
+    editor.addPlugin(owner)
+    editor.addPlugin(conflicting)
+
+    const firstRow = findVirtualRow(0)
+    expect(firstRow?.className).toContain('owner-row')
+    expect(firstRow?.className).not.toContain('conflicting-row')
+    expect(events.some((event) => event.action === 'editor.contribution.factory_failed')).toBe(true)
+
+    editor.dispose()
+  })
+
+  test('contains contribution factory failures after activation', () => {
+    const events: EditorLogEvent[] = []
+    const editor = createEditor({
+      plugins: [createEditorLoggingPlugin((event) => events.push(event))],
+    })
+    const plugin: EditorPlugin = {
+      name: 'factory-failure',
+      activate: (context) =>
+        context.registerViewContribution({
+          createContribution: () => {
+            throw new Error('factory failed')
+          },
+        }),
+    }
+
+    const lease = editor.addPlugin(plugin)
+
+    expect(events.some((event) => event.action === 'editor.plugin.activation_failed')).toBe(false)
+    expect(events.some((event) => event.action === 'editor.contribution.factory_failed')).toBe(true)
+
+    lease.dispose()
+    editor.dispose()
+  })
+
+  test('contains contribution update failures after activation', () => {
+    const events: EditorLogEvent[] = []
+    const editor = createEditor({
+      plugins: [createEditorLoggingPlugin((event) => events.push(event))],
+    })
+    let updates = 0
+    let disposals = 0
+    const plugin: EditorPlugin = {
+      name: 'update-failure',
+      activate: (context) =>
+        context.registerViewContribution({
+          createContribution: () => ({
+            update: (_snapshot, kind) => {
+              updates += 1
+              if (kind !== 'document') throw new Error('update failed')
+            },
+            dispose: () => {
+              disposals += 1
+            },
+          }),
+        }),
+    }
+
+    editor.addPlugin(plugin)
+    editor.edit({ from: 0, to: 0, text: 'x' })
+    editor.edit({ from: 0, to: 0, text: 'y' })
+
+    expect(events.some((event) => event.action === 'editor.contribution.update_failed')).toBe(true)
+    expect(disposals).toBe(1)
+    expect(updates).toBe(2)
+
+    editor.dispose()
+  })
+
+  test('contains contribution disposal failures after activation', () => {
+    const events: EditorLogEvent[] = []
+    const editor = createEditor({
+      plugins: [createEditorLoggingPlugin((event) => events.push(event))],
+    })
+    const plugin: EditorPlugin = {
+      name: 'dispose-failure',
+      activate: (context) =>
+        context.registerCommandContribution({
+          createContribution: () => ({
+            dispose: () => {
+              throw new Error('dispose failed')
+            },
+          }),
+        }),
+    }
+
+    const lease = editor.addPlugin(plugin)
+    lease.dispose()
+
+    expect(events.some((event) => event.action === 'editor.contribution.dispose_failed')).toBe(true)
 
     editor.dispose()
   })
@@ -451,9 +622,73 @@ function readCapabilityOwner(
   return owner
 }
 
+function createCommandPlugin(name: string): {
+  readonly plugin: EditorPlugin
+  readonly calls: number
+} {
+  const state = { calls: 0 }
+  return {
+    plugin: {
+      name,
+      activate: (context) =>
+        context.registerCommandContribution({
+          createContribution: (commandContext) => {
+            const registration = commandContext.registerCommand('goToDefinition', () => {
+              state.calls += 1
+              return true
+            })
+            return { dispose: () => registration.dispose() }
+          },
+        }),
+    },
+    get calls() {
+      return state.calls
+    },
+  }
+}
+
+function createGutterPlugin(id: string): EditorPlugin {
+  return {
+    name: id,
+    activate: (context) => context.registerGutterContribution(createGutterContribution(id)),
+  }
+}
+
+function createGutterContribution(id: string): EditorGutterContribution {
+  return {
+    id,
+    createCell: (document) => document.createElement('span'),
+    width: () => 8,
+    updateCell: () => undefined,
+  }
+}
+
+function createRowDecorationPlugin(
+  name: string,
+  sourceId: string,
+  className: string,
+): EditorPlugin {
+  return {
+    name,
+    activate: (context) =>
+      context.registerDecorationContribution({
+        createContribution: (decorationContext) => {
+          decorationContext.setRowDecorations(sourceId, new Map([[0, { className }]]))
+          return {
+            dispose: () => decorationContext.clearRowDecorations(sourceId),
+          }
+        },
+      }),
+  }
+}
+
 function requireDisposable(disposable: EditorDisposable | null): EditorDisposable {
   if (!disposable) throw new Error('missing disposable')
   return disposable
+}
+
+function findVirtualRow(index: number): HTMLElement | null {
+  return document.body.querySelector(`[data-editor-virtual-row="${index}"]`)
 }
 
 function findGutterCells(id: string): HTMLElement[] {

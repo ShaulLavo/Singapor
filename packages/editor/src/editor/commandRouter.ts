@@ -66,6 +66,10 @@ export class EditorCommandRouter {
     command: EditorCommandId,
     handler: EditorCommandHandler,
   ): EditorDisposable {
+    if (this.commandHandlers.has(command)) {
+      throw new Error(`Editor command already registered: ${command}`)
+    }
+
     this.commandHandlers.set(command, handler)
 
     return {
