@@ -1,7 +1,14 @@
 import type { DocumentSessionChange, TextEdit } from '@editor/core/document'
 import type { EditorToken } from '@editor/core/syntax'
-import type { EditorMinimapDecoration, EditorViewSnapshot } from '@editor/core/extensions'
-import { EditorWorkScheduler } from '@editor/core/internal'
+import type {
+  EditorMinimapDecoration,
+  EditorResolvedSelection,
+  EditorViewSnapshot,
+} from '@editor/core/extensions'
+import {
+  createEditorSecondaryViewProjection,
+  EditorSecondaryViewScheduler,
+} from '@editor/core/secondary-views'
 import { parseCssColor, RGBA_BLACK, RGBA_WHITE, transparent } from './color'
 import type {
   MinimapBaseStyles,
@@ -48,7 +55,7 @@ export class MinimapWorkerClient {
   private readonly options: ResolvedMinimapOptions
   private readonly worker: Worker
   private readonly colorResolver: ColorResolver
-  private readonly scheduler = new EditorWorkScheduler()
+  private readonly scheduler = new EditorSecondaryViewScheduler()
   private readonly onLayoutWidth: (width: number) => void
   private externalDecorations: readonly EditorMinimapDecoration[]
   private pendingUpdate: PendingMinimapUpdate | null = null
@@ -276,7 +283,7 @@ export class MinimapWorkerClient {
       this.postTokenUpdate(snapshot, tokenColorsInvalidated)
     }
     if (update.syncSelection && update.edits.length === 0) {
-      this.post({ type: 'updateSelection', selections: selections(snapshot) })
+      this.post({ type: 'updateSelection', selections: selections(snapshot.selections) })
     }
     if (update.syncExternalDecorations) {
       this.post({
@@ -410,15 +417,16 @@ export class MinimapWorkerClient {
   }
 
   private documentPayload(snapshot: EditorViewSnapshot): MinimapDocumentPayload {
+    const projection = createEditorSecondaryViewProjection(snapshot)
     let payload: MinimapDocumentPayload | null = null
     return measureMinimapPerformance(
       'minimap.documentPayload',
       () => {
         payload = {
-          text: snapshot.fullText,
-          lineStarts: snapshot.lineStarts,
-          tokens: this.tokens(snapshot.tokens),
-          selections: selections(snapshot),
+          text: projection.text.materializeFullText(),
+          lineStarts: projection.text.lineStarts,
+          tokens: this.tokens(projection.syntaxColors.tokens),
+          selections: selections(projection.selections),
           decorations: this.externalDecorations,
           externalDecorations: this.externalDecorations,
         }
@@ -429,11 +437,12 @@ export class MinimapWorkerClient {
   }
 
   private documentEditPayload(snapshot: EditorViewSnapshot): MinimapDocumentEditPayload {
+    const projection = createEditorSecondaryViewProjection(snapshot)
     let payload: MinimapDocumentEditPayload | null = null
     return measureMinimapPerformance(
       'minimap.documentEditPayload',
       () => {
-        payload = { selections: selections(snapshot) }
+        payload = { selections: selections(projection.selections) }
         return payload
       },
       () => documentEditPayloadDiagnostics(payload),
@@ -643,11 +652,15 @@ export function canUseMinimapWorker(): boolean {
   )
 }
 
-function selections(snapshot: EditorViewSnapshot): readonly MinimapSelection[] {
-  return snapshot.selections.map((selection) => ({
+function selections(selections: readonly EditorResolvedSelection[]): readonly MinimapSelection[] {
+  return selections.map((selection) => minimapSelection(selection))
+}
+
+function minimapSelection(selection: EditorResolvedSelection): MinimapSelection {
+  return {
     startOffset: selection.startOffset,
     endOffset: selection.endOffset,
-  }))
+  }
 }
 
 function incrementalTextEdits(

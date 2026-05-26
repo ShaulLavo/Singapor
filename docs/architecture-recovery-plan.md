@@ -517,7 +517,31 @@ first-party users are migrated.
 
 ## Phase 9: Minimap and Diff
 
+Status: in progress
+
 Purpose: make secondary surfaces consume editor projections instead of cloning editor logic.
+
+### Initial Slice
+
+- Added `@editor/core/secondary-views` as the explicit entry point for secondary surfaces.
+- Defined `EditorSecondaryViewProjection`, which carries snapshot identity, text snapshot access,
+  visible line model, syntax tokens, selections, fold summaries, viewport, metrics, and optional
+  secondary-view decorations.
+- Moved diff's standalone virtualized panes and minimap's worker scheduling off the deprecated
+  `@editor/core/internal` bridge and onto the secondary-view entry point.
+- Routed minimap worker document payload creation through the shared secondary-view projection, with
+  full-text materialization occurring through the projection's explicit text boundary.
+- Added focused tests proving the projection does not read lazy `fullText` when a `TextSnapshot` is
+  available, and proving minimap opens documents through that text snapshot path.
+
+### Remaining Work
+
+- Teach the minimap worker/renderer to consume summarized line payloads so open/replace does not
+  serialize full document text by default.
+- Move diff syntax highlighting fully onto the syntax service contract, including the Shiki path.
+- Replace diff's private scroll/selection primitives with shared secondary-view helpers where the
+  current text-surface wrapper is still too low-level.
+- Add large-file diff and rapid-edit minimap regression tests once summarized minimap payloads exist.
 
 ### Work
 

@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { DocumentSessionChange, TextEdit } from '@editor/core/document'
+import {
+  createStringTextSnapshot,
+  type DocumentSessionChange,
+  type TextEdit,
+} from '@editor/core/document'
 import type { EditorViewSnapshot } from '@editor/core/extensions'
 import { resolveMinimapOptions } from '../src/options'
 import { MinimapWorkerClient, type MinimapHost } from '../src/workerClient'
@@ -31,6 +35,36 @@ describe('MinimapWorkerClient', () => {
 
       expect(render?.sequence).toBeGreaterThan(0)
       expect(host.mainCanvas.style.height).toBe('100px')
+
+      client.dispose()
+      host.root.remove()
+      host.colorScope.remove()
+    } finally {
+      runtime.restore()
+    }
+  })
+
+  it('opens documents through the secondary projection text snapshot', () => {
+    const runtime = installMinimapRuntime()
+    try {
+      const host = createHost()
+      const initialSnapshot = snapshotWithThrowingFullText('line 1\nline 2\nline 3')
+      const client = new MinimapWorkerClient({
+        host,
+        options: resolveMinimapOptions(),
+        snapshot: initialSnapshot,
+        decorations: [],
+        onLayoutWidth: vi.fn(),
+      })
+      const worker = runtime.workers[0]!
+      const openDocument = worker.postMessage.mock.calls
+        .map((call) => call[0] as MinimapWorkerRequest)
+        .find((request): request is Extract<MinimapWorkerRequest, { type: 'openDocument' }> => {
+          return request.type === 'openDocument'
+        })
+
+      expect(openDocument?.document.text).toBe('line 1\nline 2\nline 3')
+      expect(openDocument?.document.lineStarts).toEqual([0, 7, 14])
 
       client.dispose()
       host.root.remove()
@@ -603,6 +637,23 @@ function snapshot(
       ...viewport,
     },
   }
+}
+
+function snapshotWithThrowingFullText(text: string): EditorViewSnapshot {
+  const initialSnapshot = snapshot({}, { fullText: text })
+  Object.defineProperty(initialSnapshot, 'textSnapshot', {
+    configurable: true,
+    enumerable: true,
+    value: createStringTextSnapshot(text),
+  })
+  Object.defineProperty(initialSnapshot, 'fullText', {
+    configurable: true,
+    enumerable: true,
+    get: () => {
+      throw new Error('fullText should not be read')
+    },
+  })
+  return initialSnapshot
 }
 
 function documentEdit(edit: TextEdit, _fullText: string): DocumentSessionChange {

@@ -16,6 +16,7 @@ import {
   type EditorPluginContext,
 } from '@editor/core/extensions'
 import { applyEditorTheme, type EditorTheme } from '@editor/core/rendering'
+import { EditorSecondaryTextView, EditorSecondaryViewScheduler } from '@editor/core/secondary-views'
 import { createEmptySyntaxResult, treeSitterCapturesToEditorTokens } from '@editor/core/syntax'
 import { EditorPluginHost } from '@editor/core/testing'
 import { debugPieceTable } from '@editor/core/debug'
@@ -74,6 +75,8 @@ describe('public API facade', () => {
     expect(syntax.tokens).toEqual([])
     expect(debugPieceTable(createPieceTableSnapshot('abc')).length).toBeGreaterThan(0)
     expect(VirtualizedTextView).toBeTypeOf('function')
+    expect(EditorSecondaryTextView).toBeTypeOf('function')
+    expect(EditorSecondaryViewScheduler).toBeTypeOf('function')
     expect({} as EditorPluginContext).toMatchObject({})
     host.dispose()
   })

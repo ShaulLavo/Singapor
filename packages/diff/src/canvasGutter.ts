@@ -1,4 +1,7 @@
-import type { VirtualizedTextView, VirtualizedTextViewState } from '@editor/core/internal'
+import type {
+  EditorSecondaryTextView,
+  EditorSecondaryTextViewState,
+} from '@editor/core/secondary-views'
 import {
   diffGutterColor,
   diffGutterIndicatorColor,
@@ -64,7 +67,7 @@ const DEFAULT_PLACEHOLDER_BACKGROUND = 'rgba(255, 255, 255, 0.08)'
 const GUTTER_PADDING_RIGHT = 4
 
 export function createDiffCanvasGutterRenderer(
-  view: VirtualizedTextView,
+  view: EditorSecondaryTextView,
   getRows: () => readonly DiffRenderRow[],
   side: DiffGutterSide,
 ): DiffCanvasGutterRenderer {
@@ -107,7 +110,7 @@ function currentEntryCache(
 
 function renderDiffCanvasGutter(
   canvas: HTMLCanvasElement,
-  view: VirtualizedTextView,
+  view: EditorSecondaryTextView,
   cache: DiffGutterEntryCache,
   style: DiffGutterCanvasStyle,
   side: DiffGutterSide,
@@ -138,7 +141,7 @@ function renderDiffCanvasGutter(
   )
 }
 
-function canvasGutterHost(view: VirtualizedTextView): HTMLElement {
+function canvasGutterHost(view: EditorSecondaryTextView): HTMLElement {
   return (
     view.scrollElement.querySelector<HTMLElement>('.editor-virtualized-gutter') ??
     view.scrollElement
@@ -156,7 +159,7 @@ function canvasContext(canvas: HTMLCanvasElement): CanvasRenderingContext2D | nu
 function renderMountedGutterRows(
   context: CanvasRenderingContext2D,
   lineStarts: readonly number[],
-  state: VirtualizedTextViewState,
+  state: EditorSecondaryTextViewState,
   entries: readonly DiffGutterEntry[],
   font: string,
   layout: DiffGutterLayout,
@@ -172,7 +175,7 @@ function renderMountedGutterRows(
   }
 }
 
-function mountedGutterBounds(state: VirtualizedTextViewState): MountedGutterBounds {
+function mountedGutterBounds(state: EditorSecondaryTextViewState): MountedGutterBounds {
   let top = Number.POSITIVE_INFINITY
   let bottom = Number.NEGATIVE_INFINITY
   for (const row of state.mountedRows) {

@@ -5,10 +5,10 @@ import type {
   VirtualizedTextRowDecoration,
 } from '@editor/core/rendering'
 import {
-  EditorWorkScheduler,
-  VirtualizedTextView,
-  type EditorWorkContext,
-} from '@editor/core/internal'
+  EditorSecondaryTextView,
+  EditorSecondaryViewScheduler,
+  type EditorSecondaryWorkContext,
+} from '@editor/core/secondary-views'
 import { ResizablePaneGroup, type ResizablePaneLayout } from '@editor/panes'
 import { createDiffCanvasGutterRenderer, type DiffCanvasGutterRenderer } from './canvasGutter'
 import { diffGutterWidth } from './gutters'
@@ -29,7 +29,7 @@ type MountedPane = {
   rows: readonly DiffRenderRow[]
   tokens?: readonly EditorToken[]
   readonly side: 'old' | 'new' | 'stacked'
-  readonly view: VirtualizedTextView
+  readonly view: EditorSecondaryTextView
   readonly disposeEvents: () => void
   readonly gutterRenderer: DiffCanvasGutterRenderer
   syntaxSession?: { dispose(): void }
@@ -38,14 +38,14 @@ type MountedPane = {
 type PaneSelectionDrag = {
   readonly anchorOffset: number
   readonly getRows: () => readonly DiffRenderRow[]
-  readonly view: VirtualizedTextView
+  readonly view: EditorSecondaryTextView
   headOffset: number
 }
 
 type PaneSelection = {
   readonly anchorOffset: number
   readonly getRows: () => readonly DiffRenderRow[]
-  readonly view: VirtualizedTextView
+  readonly view: EditorSecondaryTextView
   headOffset: number
 }
 
@@ -64,7 +64,7 @@ export class DiffView {
   private readonly fileList: HTMLDivElement
   private readonly content: HTMLDivElement
   private readonly highlightPrefix: string
-  private readonly scheduler = new EditorWorkScheduler()
+  private readonly scheduler = new EditorSecondaryViewScheduler()
   private readonly options: DiffViewOptions
   private files: readonly DiffFile[] = []
   private selectedPath: string | null = null
@@ -270,7 +270,7 @@ export class DiffView {
     let mountedPane: MountedPane | null = null
     const getRows = () => mountedPane?.rows ?? rows
     let gutterRenderer: DiffCanvasGutterRenderer | null = null
-    const view = new VirtualizedTextView(host, {
+    const view = new EditorSecondaryTextView(host, {
       className: 'editor-diff-text editor-virtualized',
       gutterWidth: (context) =>
         diffGutterWidth(side, getRows(), context.lineCount, context.metrics.characterWidth),
@@ -304,7 +304,7 @@ export class DiffView {
   }
 
   private installPaneInteractions(
-    view: VirtualizedTextView,
+    view: EditorSecondaryTextView,
     getRows: () => readonly DiffRenderRow[],
   ): () => void {
     const onCopy = (event: ClipboardEvent) => this.handlePaneCopy(event, view, getRows)
@@ -328,7 +328,7 @@ export class DiffView {
 
   private handlePaneMouseDown(
     event: MouseEvent,
-    view: VirtualizedTextView,
+    view: EditorSecondaryTextView,
     getRows: () => readonly DiffRenderRow[],
   ): void {
     if (event.button !== 0) return
@@ -386,7 +386,7 @@ export class DiffView {
   }
 
   private setPaneSelection(
-    view: VirtualizedTextView,
+    view: EditorSecondaryTextView,
     getRows: () => readonly DiffRenderRow[],
     anchorOffset: number,
     headOffset: number,
@@ -395,7 +395,7 @@ export class DiffView {
     this.paneSelection = { anchorOffset, getRows, headOffset, view }
   }
 
-  private clearPaneSelection(except?: VirtualizedTextView): void {
+  private clearPaneSelection(except?: EditorSecondaryTextView): void {
     const selection = this.paneSelection
     if (!selection) return
     if (selection.view === except) return
@@ -406,7 +406,7 @@ export class DiffView {
 
   private handlePaneCopy(
     event: ClipboardEvent,
-    view: VirtualizedTextView,
+    view: EditorSecondaryTextView,
     getRows: () => readonly DiffRenderRow[],
   ): void {
     const selection = this.paneSelection
@@ -421,7 +421,7 @@ export class DiffView {
   }
 
   private textOffsetFromPanePoint(
-    view: VirtualizedTextView,
+    view: EditorSecondaryTextView,
     clientX: number,
     clientY: number,
   ): number {
@@ -434,7 +434,7 @@ export class DiffView {
 
   private updatePaneCursor(
     event: MouseEvent,
-    view: VirtualizedTextView,
+    view: EditorSecondaryTextView,
     getRows: () => readonly DiffRenderRow[],
   ): void {
     const cursor = this.isHunkTogglePointerEvent(event, view, getRows) ? 'pointer' : ''
@@ -443,7 +443,7 @@ export class DiffView {
     view.scrollElement.style.cursor = cursor
   }
 
-  private clearPaneCursor(view: VirtualizedTextView): void {
+  private clearPaneCursor(view: EditorSecondaryTextView): void {
     if (!view.scrollElement.style.cursor) return
 
     view.scrollElement.style.cursor = ''
@@ -451,7 +451,7 @@ export class DiffView {
 
   private handlePaneClick(
     event: MouseEvent,
-    view: VirtualizedTextView,
+    view: EditorSecondaryTextView,
     getRows: () => readonly DiffRenderRow[],
   ): void {
     const rowIndex = paneClickRowIndex(event, view)
@@ -462,7 +462,7 @@ export class DiffView {
 
   private isHunkTogglePointerEvent(
     event: MouseEvent,
-    view: VirtualizedTextView,
+    view: EditorSecondaryTextView,
     getRows: () => readonly DiffRenderRow[],
   ): boolean {
     const rowIndex = paneClickRowIndex(event, view)
@@ -538,7 +538,10 @@ export class DiffView {
     this.refreshSyntaxHighlighting(pane, file)
   }
 
-  private installScrollSync(left: VirtualizedTextView, right: VirtualizedTextView): () => void {
+  private installScrollSync(
+    left: EditorSecondaryTextView,
+    right: EditorSecondaryTextView,
+  ): () => void {
     const leftElement = left.scrollElement
     const rightElement = right.scrollElement
     let pendingSource: HTMLElement | null = null
@@ -734,7 +737,7 @@ export class DiffView {
   private async loadSyntaxHighlighting(
     pane: MountedPane,
     file: DiffFile,
-    context: EditorWorkContext,
+    context: EditorSecondaryWorkContext,
     sessions: { dispose(): void }[],
   ): Promise<DiffSyntaxHighlightResult | null> {
     if (this.options.syntaxHighlight === false) return null
@@ -749,7 +752,7 @@ export class DiffView {
   private async loadSyntaxProviderHighlighting(
     pane: MountedPane,
     file: DiffFile,
-    context: EditorWorkContext,
+    context: EditorSecondaryWorkContext,
     sessions: { dispose(): void }[],
     backend: Extract<DiffSyntaxBackend, { readonly kind: 'tree-sitter' }>,
   ): Promise<DiffSyntaxHighlightResult | null> {
@@ -796,7 +799,7 @@ export class DiffView {
   private async loadShikiHighlighting(
     pane: MountedPane,
     file: DiffFile,
-    context: EditorWorkContext,
+    context: EditorSecondaryWorkContext,
     sessions: { dispose(): void }[],
     backend: Extract<DiffSyntaxBackend, { readonly kind: 'shiki' }>,
   ): Promise<DiffSyntaxHighlightResult | null> {
@@ -836,7 +839,7 @@ export class DiffView {
     pane: MountedPane,
     result: DiffSyntaxHighlightResult | null,
     sessions: { dispose(): void }[],
-    context: EditorWorkContext,
+    context: EditorSecondaryWorkContext,
   ): void {
     if (!context.isCurrent() || !result) {
       disposeMutableSessions(sessions)
@@ -856,7 +859,7 @@ export class DiffView {
   }
 }
 
-function paneClickRowIndex(event: MouseEvent, view: VirtualizedTextView): number | null {
+function paneClickRowIndex(event: MouseEvent, view: EditorSecondaryTextView): number | null {
   const target = event.target
   if (target instanceof Element) {
     const rowElement = target.closest<HTMLElement>('[data-editor-virtual-row]')
@@ -866,7 +869,7 @@ function paneClickRowIndex(event: MouseEvent, view: VirtualizedTextView): number
   return paneRowIndexFromPoint(view, event.clientY)
 }
 
-function paneRowIndexFromPoint(view: VirtualizedTextView, clientY: number): number | null {
+function paneRowIndexFromPoint(view: EditorSecondaryTextView, clientY: number): number | null {
   const bounds = view.scrollElement.getBoundingClientRect()
   if (clientY < bounds.top || clientY > bounds.bottom) return null
 
