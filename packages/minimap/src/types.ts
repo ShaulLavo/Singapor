@@ -94,9 +94,18 @@ export type MinimapMetrics = {
   readonly devicePixelRatio: number
 }
 
-export type MinimapDocumentPayload = {
+export type MinimapDocumentLineSummary = {
   readonly text: string
+  readonly length: number
+}
+
+export type MinimapDocumentSummaryPayload = {
+  readonly textLength: number
   readonly lineStarts: readonly number[]
+  readonly lines: readonly MinimapDocumentLineSummary[]
+}
+
+export type MinimapDocumentPayload = MinimapDocumentSummaryPayload & {
   readonly tokens: readonly MinimapToken[]
   readonly selections: readonly MinimapSelection[]
   readonly decorations: readonly EditorMinimapDecoration[]
@@ -105,6 +114,7 @@ export type MinimapDocumentPayload = {
 
 export type MinimapDocumentEditPayload = {
   readonly selections: readonly MinimapSelection[]
+  readonly summary: MinimapDocumentSummaryPayload
 }
 
 export type MinimapRenderLayout = {

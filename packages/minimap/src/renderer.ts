@@ -16,6 +16,7 @@ import type {
   MinimapBaseStyles,
   MinimapDocumentEditPayload,
   MinimapDocumentPayload,
+  MinimapDocumentSummaryPayload,
   MinimapMetrics,
   MinimapRenderLayout,
   MinimapSelection,
@@ -45,8 +46,9 @@ type RendererState = {
 }
 
 const EMPTY_DOCUMENT: MinimapDocumentPayload = {
-  text: '',
+  textLength: 0,
   lineStarts: [0],
+  lines: [{ text: '', length: 0 }],
   tokens: [],
   selections: [],
   decorations: [],
@@ -89,10 +91,7 @@ export class MinimapWorkerRenderer {
     if (!this.state) return
     const externalDecorations =
       document.externalDecorations ?? externalDecorationsFrom(document.decorations)
-    const sectionHeaders = findSectionHeaderDecorations(
-      document.text.split('\n'),
-      this.state.options,
-    )
+    const sectionHeaders = findSectionHeaderDecorations(documentLines(document), this.state.options)
     this.state.externalDecorations = externalDecorations
     this.state.document = {
       ...document,
@@ -116,7 +115,7 @@ export class MinimapWorkerRenderer {
     }
 
     const previous = this.state.document
-    const next = applyTextEditsToMinimapDocument(previous, edits)
+    const next = applyTextEditsToMinimapDocument(previous, edits, document.summary)
     this.setEditedDocument(previous, next, edits, document.selections)
   }
 
@@ -136,8 +135,8 @@ export class MinimapWorkerRenderer {
   }
 
   private setEditedDocument(
-    previous: Pick<MinimapDocumentPayload, 'decorations' | 'lineStarts' | 'text'>,
-    document: Pick<MinimapDocumentPayload, 'lineStarts' | 'text' | 'tokens'>,
+    previous: SectionHeaderDocument,
+    document: MinimapDocumentSummaryPayload & Pick<MinimapDocumentPayload, 'tokens'>,
     edits: readonly TextEdit[],
     selections: readonly MinimapSelection[],
   ): void {
@@ -147,8 +146,9 @@ export class MinimapWorkerRenderer {
       ...state.externalDecorations,
     ]
     state.document = {
-      text: document.text,
+      textLength: document.textLength,
       lineStarts: document.lineStarts,
+      lines: document.lines,
       tokens: document.tokens,
       selections,
       decorations,
@@ -383,15 +383,12 @@ export class MinimapWorkerRenderer {
 
   private lineText(lineNumber: number): string {
     const state = this.requireState()
-    const start = this.lineStartOffset(lineNumber)
-    const next = state.document.lineStarts[lineNumber]
-    const end = next === undefined ? state.document.text.length : Math.max(start, next - 1)
-    return state.document.text.slice(start, end)
+    return state.document.lines[lineNumber - 1]?.text ?? ''
   }
 
   private lineStartOffset(lineNumber: number): number {
     const state = this.requireState()
-    return state.document.lineStarts[lineNumber - 1] ?? state.document.text.length
+    return state.document.lineStarts[lineNumber - 1] ?? state.document.textLength
   }
 
   private offsetRangeToLineRange(startOffset: number, endOffset: number): LineRange {
@@ -405,7 +402,7 @@ export class MinimapWorkerRenderer {
     const state = this.requireState()
     let low = 0
     let high = state.document.lineStarts.length - 1
-    const clamped = Math.max(0, Math.min(offset, state.document.text.length))
+    const clamped = Math.max(0, Math.min(offset, state.document.textLength))
 
     while (low <= high) {
       const middle = Math.floor((low + high) / 2)
@@ -747,87 +744,18 @@ function emptyRenderResult(): RenderResult {
   return { sliderNeeded: false, sliderTop: 0, sliderHeight: 0, shadowVisible: false }
 }
 
-function applyTextEdit(text: string, edit: TextEdit): string {
-  return `${text.slice(0, edit.from)}${edit.text}${text.slice(edit.to)}`
-}
-
 function applyTextEditsToMinimapDocument(
-  document: Pick<MinimapDocumentPayload, 'lineStarts' | 'text' | 'tokens'>,
+  document: Pick<MinimapDocumentPayload, 'lineStarts' | 'lines' | 'textLength' | 'tokens'>,
   edits: readonly TextEdit[],
-): Pick<MinimapDocumentPayload, 'lineStarts' | 'text' | 'tokens'> {
-  let text = document.text
-  let lineStarts = document.lineStarts
+  summary: MinimapDocumentSummaryPayload,
+): MinimapDocumentSummaryPayload & Pick<MinimapDocumentPayload, 'tokens'> {
   let tokens = document.tokens
 
   for (const edit of edits) {
-    tokens = projectMinimapTokensThroughEdit(tokens, edit, text)
-    const nextText = applyTextEdit(text, edit)
-    lineStarts = applyLineStartsEdit(lineStarts, edit, nextText)
-    text = nextText
+    tokens = projectMinimapTokensThroughEdit(tokens, edit, tokenProjectionText(document))
   }
 
-  return { text, lineStarts, tokens }
-}
-
-function applyLineStartsEdit(
-  lineStarts: readonly number[],
-  edit: TextEdit,
-  nextText: string,
-): readonly number[] {
-  if (editChangesLineStructure(lineStarts, edit)) {
-    return spliceLineStartsThroughEdit(lineStarts, edit, nextText.length)
-  }
-
-  const delta = edit.text.length - (edit.to - edit.from)
-  if (delta === 0) return lineStarts
-
-  const next = [...lineStarts]
-  const lineIndex = lineIndexForOffset(next, edit.from)
-  for (let index = lineIndex + 1; index < next.length; index += 1) {
-    next[index] = (next[index] ?? 0) + delta
-  }
-  return next
-}
-
-function spliceLineStartsThroughEdit(
-  lineStarts: readonly number[],
-  edit: TextEdit,
-  nextTextLength: number,
-): readonly number[] {
-  const startLine = lineIndexForOffset(lineStarts, edit.from)
-  const endLine = lineIndexForOffset(lineStarts, edit.to)
-  const delta = edit.text.length - (edit.to - edit.from)
-  const next = lineStarts.slice(0, startLine + 1)
-
-  appendInsertedLineStarts(next, edit)
-  appendShiftedLineStarts(next, lineStarts, endLine + 1, delta, nextTextLength)
-  return next
-}
-
-function appendInsertedLineStarts(target: number[], edit: TextEdit): void {
-  let index = edit.text.indexOf('\n')
-  while (index !== -1) {
-    target.push(edit.from + index + 1)
-    index = edit.text.indexOf('\n', index + 1)
-  }
-}
-
-function appendShiftedLineStarts(
-  target: number[],
-  lineStarts: readonly number[],
-  startIndex: number,
-  delta: number,
-  nextTextLength: number,
-): void {
-  for (let index = startIndex; index < lineStarts.length; index += 1) {
-    const nextStart = (lineStarts[index] ?? 0) + delta
-    if (nextStart <= nextTextLength) target.push(nextStart)
-  }
-}
-
-function editChangesLineStructure(lineStarts: readonly number[], edit: TextEdit): boolean {
-  if (edit.text.includes('\n')) return true
-  return lineIndexForOffset(lineStarts, edit.from) !== lineIndexForOffset(lineStarts, edit.to)
+  return { ...summary, tokens }
 }
 
 function lineIndexForOffset(lineStarts: readonly number[], offset: number): number {
@@ -855,8 +783,8 @@ function lineIndexForOffset(lineStarts: readonly number[], offset: number): numb
 
 const SECTION_HEADER_EDIT_CONTEXT_LINES = 10
 
-type SectionHeaderDocument = Pick<MinimapDocumentPayload, 'decorations' | 'lineStarts' | 'text'>
-type SectionHeaderTextDocument = Pick<MinimapDocumentPayload, 'lineStarts' | 'text'>
+type SectionHeaderDocument = Pick<MinimapDocumentPayload, 'decorations' | 'lineStarts' | 'lines'>
+type SectionHeaderTextDocument = Pick<MinimapDocumentPayload, 'lineStarts' | 'lines'>
 type LineNumberRange = {
   readonly start: number
   readonly end: number
@@ -962,29 +890,20 @@ function rescanSectionHeaders(
   range: LineNumberRange,
   options: ResolvedMinimapOptions,
 ): readonly EditorMinimapDecoration[] {
-  const lines = linesForRange(document.text, document.lineStarts, range)
+  const lines = linesForRange(document.lines, range)
   return findSectionHeaderDecorationsInRange(lines, range.start, options)
 }
 
 function linesForRange(
-  text: string,
-  lineStarts: readonly number[],
+  summaries: readonly { readonly text: string }[],
   range: LineNumberRange,
 ): readonly string[] {
   const lines: string[] = []
   for (let lineNumber = range.start; lineNumber <= range.end; lineNumber += 1) {
-    lines.push(lineTextByNumber(text, lineStarts, lineNumber))
+    lines.push(summaries[lineNumber - 1]?.text ?? '')
   }
 
   return lines
-}
-
-function lineTextByNumber(text: string, lineStarts: readonly number[], lineNumber: number): string {
-  const index = lineNumber - 1
-  const start = lineStarts[index] ?? 0
-  const rawEnd = lineStarts[index + 1] ?? text.length
-  const end = rawEnd > start && text[rawEnd - 1] === '\n' ? rawEnd - 1 : rawEnd
-  return text.slice(start, end)
 }
 
 function lineRangesIntersect(decoration: EditorMinimapDecoration, range: LineNumberRange): boolean {
@@ -1026,7 +945,7 @@ function clampTokenIndex(index: number, length: number): number {
 export function projectMinimapTokensThroughEdit(
   tokens: readonly MinimapToken[],
   edit: TextEdit,
-  previousText: string,
+  previousText: MinimapTokenProjectionText,
 ): readonly MinimapToken[] {
   const delta = edit.text.length - (edit.to - edit.from)
   const projected: MinimapToken[] = []
@@ -1040,7 +959,7 @@ export function projectMinimapTokensThroughEdit(
 function projectMinimapTokenThroughEdit(
   token: MinimapToken,
   edit: TextEdit,
-  previousText: string,
+  previousText: MinimapTokenProjectionText,
   delta: number,
 ): MinimapToken | null {
   if (edit.from === edit.to) return projectMinimapTokenThroughInsertion(token, edit, previousText)
@@ -1054,7 +973,7 @@ function projectMinimapTokenThroughEdit(
 function projectMinimapTokenThroughInsertion(
   token: MinimapToken,
   edit: TextEdit,
-  previousText: string,
+  previousText: MinimapTokenProjectionText,
 ): MinimapToken {
   if (shouldExpandMinimapTokenForInsertion(token, edit, previousText)) {
     return { ...token, end: token.end + edit.text.length }
@@ -1072,16 +991,17 @@ function canResizeMinimapTokenAcrossEdit(token: MinimapToken, edit: TextEdit): b
 function shouldExpandMinimapTokenForInsertion(
   token: MinimapToken,
   edit: TextEdit,
-  previousText: string,
+  previousText: MinimapTokenProjectionText,
 ): boolean {
   if (edit.text.length === 0) return false
   if (edit.text.includes('\n')) return false
   if (token.start < edit.from && edit.from < token.end) return true
   if (!isWordLikeText(edit.text)) return false
-  if (token.end === edit.from) return isWordBeforeOffset(previousText, edit.from)
+  if (token.end === edit.from) return textHasWordBeforeOffset(previousText, edit.from)
   if (token.start === edit.from) {
     return (
-      !isWordBeforeOffset(previousText, edit.from) && isWordCodePointAt(previousText, edit.from)
+      !textHasWordBeforeOffset(previousText, edit.from) &&
+      textHasWordCodePointAt(previousText, edit.from)
     )
   }
 
@@ -1105,13 +1025,77 @@ function isWordLikeText(text: string): boolean {
   return /^[\p{L}\p{N}_]+$/u.test(text)
 }
 
-function isWordBeforeOffset(text: string, offset: number): boolean {
-  const previous = previousCodePointStart(text, offset)
-  if (previous === null) return false
-  return isWordCodePointAt(text, previous)
+type MinimapTokenProjectionText =
+  | string
+  | {
+      isWordBeforeOffset(offset: number): boolean
+      isWordCodePointAt(offset: number): boolean
+    }
+
+function tokenProjectionText(
+  document: Pick<MinimapDocumentPayload, 'lineStarts' | 'lines' | 'textLength'>,
+): MinimapTokenProjectionText {
+  return {
+    isWordBeforeOffset: (offset) => summaryHasWordBeforeOffset(document, offset),
+    isWordCodePointAt: (offset) => summaryHasWordCodePointAt(document, offset),
+  }
 }
 
-function isWordCodePointAt(text: string, offset: number): boolean {
+function documentLines(document: Pick<MinimapDocumentPayload, 'lines'>): readonly string[] {
+  return document.lines.map((line) => line.text)
+}
+
+function textHasWordBeforeOffset(text: MinimapTokenProjectionText, offset: number): boolean {
+  if (typeof text !== 'string') return text.isWordBeforeOffset(offset)
+  return stringHasWordBeforeOffset(text, offset)
+}
+
+function textHasWordCodePointAt(text: MinimapTokenProjectionText, offset: number): boolean {
+  if (typeof text !== 'string') return text.isWordCodePointAt(offset)
+  return stringHasWordCodePointAt(text, offset)
+}
+
+function summaryHasWordBeforeOffset(
+  document: Pick<MinimapDocumentPayload, 'lineStarts' | 'lines' | 'textLength'>,
+  offset: number,
+): boolean {
+  const location = summaryOffsetLocation(document, offset)
+  if (!location) return false
+
+  return stringHasWordBeforeOffset(location.text, location.localOffset)
+}
+
+function summaryHasWordCodePointAt(
+  document: Pick<MinimapDocumentPayload, 'lineStarts' | 'lines' | 'textLength'>,
+  offset: number,
+): boolean {
+  const location = summaryOffsetLocation(document, offset)
+  if (!location) return false
+
+  return stringHasWordCodePointAt(location.text, location.localOffset)
+}
+
+function summaryOffsetLocation(
+  document: Pick<MinimapDocumentPayload, 'lineStarts' | 'lines' | 'textLength'>,
+  offset: number,
+): { readonly text: string; readonly localOffset: number } | null {
+  const clamped = Math.max(0, Math.min(offset, document.textLength))
+  const lineIndex = lineIndexForOffset(document.lineStarts, clamped)
+  const lineStart = document.lineStarts[lineIndex] ?? 0
+  const text = document.lines[lineIndex]?.text ?? ''
+  const localOffset = clamped - lineStart
+  if (localOffset < 0 || localOffset > text.length) return null
+
+  return { text, localOffset }
+}
+
+function stringHasWordBeforeOffset(text: string, offset: number): boolean {
+  const previous = previousCodePointStart(text, offset)
+  if (previous === null) return false
+  return stringHasWordCodePointAt(text, previous)
+}
+
+function stringHasWordCodePointAt(text: string, offset: number): boolean {
   const codePoint = text.codePointAt(offset)
   if (codePoint === undefined) return false
   return /^[\p{L}\p{N}_]$/u.test(String.fromCodePoint(codePoint))

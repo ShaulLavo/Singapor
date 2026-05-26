@@ -1,19 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { MinimapWorkerRenderer, projectMinimapTokensThroughEdit } from '../src/renderer'
 import { resolveMinimapOptions } from '../src/options'
-import type { MinimapDocumentPayload } from '../src/types'
+import type { MinimapDocumentPayload, MinimapDocumentSummaryPayload } from '../src/types'
 
 describe('MinimapWorkerRenderer', () => {
   it('ignores updates before initialization', () => {
     const renderer = new MinimapWorkerRenderer()
 
-    renderer.setDocument({
-      text: 'a',
-      lineStarts: [0],
-      tokens: [],
-      selections: [],
-      decorations: [],
-    })
+    renderer.setDocument(documentPayload('a'))
     renderer.updateViewport({
       scrollTop: 0,
       scrollLeft: 0,
@@ -82,19 +76,13 @@ describe('MinimapWorkerRenderer', () => {
   it('updates line starts and section headers through edited line windows', () => {
     const renderer = createInitializedRenderer()
     const text = ['// MARK: Setup', 'const a = 1;', '// MARK: Render', 'const b = 2;'].join('\n')
-    renderer.setDocument({
-      text,
-      lineStarts: lineStarts(text),
-      tokens: [],
-      selections: [],
-      decorations: [],
-    })
+    renderer.setDocument(documentPayload(text))
     const insertionPoint = text.indexOf('// MARK: Render')
     const nextText = `${text.slice(0, insertionPoint)}// MARK: Inserted\n${text.slice(insertionPoint)}`
 
     renderer.applyEdit(
       { from: insertionPoint, to: insertionPoint, text: '// MARK: Inserted\n' },
-      { selections: [] },
+      { selections: [], summary: documentSummary(nextText) },
     )
 
     const document = rendererDocument(renderer)
@@ -139,6 +127,48 @@ function rendererDocument(renderer: MinimapWorkerRenderer): MinimapDocumentPaylo
     .state
   if (!state) throw new Error('Expected initialized renderer')
   return state.document
+}
+
+function documentPayload(text: string): MinimapDocumentPayload {
+  return {
+    ...documentSummary(text),
+    tokens: [],
+    selections: [],
+    decorations: [],
+  }
+}
+
+function documentSummary(text: string): MinimapDocumentSummaryPayload {
+  const starts = lineStarts(text)
+  return {
+    textLength: text.length,
+    lineStarts: starts,
+    lines: starts.map((startOffset, index) => lineSummary(text, starts, startOffset, index)),
+  }
+}
+
+function lineSummary(
+  text: string,
+  starts: readonly number[],
+  startOffset: number,
+  index: number,
+): MinimapDocumentSummaryPayload['lines'][number] {
+  const endOffset = lineEndOffset(text, starts, startOffset, index)
+  return {
+    text: text.slice(startOffset, endOffset),
+    length: Math.max(0, endOffset - startOffset),
+  }
+}
+
+function lineEndOffset(
+  text: string,
+  starts: readonly number[],
+  startOffset: number,
+  index: number,
+): number {
+  const nextStart = starts[index + 1]
+  if (nextStart === undefined) return text.length
+  return Math.max(startOffset, nextStart - 1)
 }
 
 function lineStarts(text: string): readonly number[] {

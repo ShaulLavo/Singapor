@@ -533,15 +533,18 @@ Purpose: make secondary surfaces consume editor projections instead of cloning e
   full-text materialization occurring through the projection's explicit text boundary.
 - Added focused tests proving the projection does not read lazy `fullText` when a `TextSnapshot` is
   available, and proving minimap opens documents through that text snapshot path.
+- Added `MinimapDocumentSummaryPayload` so minimap open/replace/edit requests carry exact document
+  length, line starts, and clipped line summaries instead of serializing full document text.
+- Reworked the minimap worker renderer to store summarized lines, render from those summaries, and
+  keep section-header scanning on summarized line input.
 
 ### Remaining Work
 
-- Teach the minimap worker/renderer to consume summarized line payloads so open/replace does not
-  serialize full document text by default.
+- Optimize minimap content edits from whole-document summaries to affected-line summary deltas.
 - Move diff syntax highlighting fully onto the syntax service contract, including the Shiki path.
 - Replace diff's private scroll/selection primitives with shared secondary-view helpers where the
   current text-surface wrapper is still too low-level.
-- Add large-file diff and rapid-edit minimap regression tests once summarized minimap payloads exist.
+- Add large-file diff and rapid-edit minimap regression tests around the new summary payload path.
 
 ### Work
 

@@ -8,12 +8,14 @@ import type {
 import {
   createEditorSecondaryViewProjection,
   EditorSecondaryViewScheduler,
+  type EditorSecondaryViewTextProjection,
 } from '@editor/core/secondary-views'
 import { parseCssColor, RGBA_BLACK, RGBA_WHITE, transparent } from './color'
 import type {
   MinimapBaseStyles,
   MinimapDocumentEditPayload,
   MinimapDocumentPayload,
+  MinimapDocumentSummaryPayload,
   MinimapMetrics,
   MinimapSelection,
   MinimapToken,
@@ -423,8 +425,7 @@ export class MinimapWorkerClient {
       'minimap.documentPayload',
       () => {
         payload = {
-          text: projection.text.materializeFullText(),
-          lineStarts: projection.text.lineStarts,
+          ...documentSummaryPayload(projection.text, this.options.maxColumn),
           tokens: this.tokens(projection.syntaxColors.tokens),
           selections: selections(projection.selections),
           decorations: this.externalDecorations,
@@ -442,7 +443,10 @@ export class MinimapWorkerClient {
     return measureMinimapPerformance(
       'minimap.documentEditPayload',
       () => {
-        payload = { selections: selections(projection.selections) }
+        payload = {
+          selections: selections(projection.selections),
+          summary: documentSummaryPayload(projection.text, this.options.maxColumn),
+        }
         return payload
       },
       () => documentEditPayloadDiagnostics(payload),
@@ -661,6 +665,96 @@ function minimapSelection(selection: EditorResolvedSelection): MinimapSelection 
     startOffset: selection.startOffset,
     endOffset: selection.endOffset,
   }
+}
+
+function documentSummaryPayload(
+  text: EditorSecondaryViewTextProjection,
+  maxColumn: number,
+): MinimapDocumentSummaryPayload {
+  const textLength = text.length
+  if (textLength !== null) return documentSummaryFromSnapshot(text, textLength, maxColumn)
+
+  return documentSummaryFromMaterializedText(text.materializeFullText(), text.lineStarts, maxColumn)
+}
+
+function documentSummaryFromSnapshot(
+  text: EditorSecondaryViewTextProjection,
+  textLength: number,
+  maxColumn: number,
+): MinimapDocumentSummaryPayload {
+  if (!text.snapshot) {
+    return documentSummaryFromMaterializedText(
+      text.materializeFullText(),
+      text.lineStarts,
+      maxColumn,
+    )
+  }
+
+  return {
+    textLength,
+    lineStarts: text.lineStarts,
+    lines: text.lineStarts.map((startOffset, index) =>
+      lineSummaryFromSnapshot(
+        text,
+        startOffset,
+        lineEndOffset(text.lineStarts, index, textLength),
+        maxColumn,
+      ),
+    ),
+  }
+}
+
+function documentSummaryFromMaterializedText(
+  text: string,
+  lineStarts: readonly number[],
+  maxColumn: number,
+): MinimapDocumentSummaryPayload {
+  return {
+    textLength: text.length,
+    lineStarts,
+    lines: lineStarts.map((startOffset, index) =>
+      lineSummaryFromMaterializedText(
+        text,
+        startOffset,
+        lineEndOffset(lineStarts, index, text.length),
+        maxColumn,
+      ),
+    ),
+  }
+}
+
+function lineSummaryFromSnapshot(
+  text: EditorSecondaryViewTextProjection,
+  startOffset: number,
+  endOffset: number,
+  maxColumn: number,
+): MinimapDocumentSummaryPayload['lines'][number] {
+  const length = Math.max(0, endOffset - startOffset)
+  const clippedEnd = startOffset + Math.min(length, maxColumn)
+  return {
+    text: text.snapshot!.readRange(startOffset, clippedEnd),
+    length,
+  }
+}
+
+function lineSummaryFromMaterializedText(
+  text: string,
+  startOffset: number,
+  endOffset: number,
+  maxColumn: number,
+): MinimapDocumentSummaryPayload['lines'][number] {
+  const length = Math.max(0, endOffset - startOffset)
+  return {
+    text: text.slice(startOffset, startOffset + Math.min(length, maxColumn)),
+    length,
+  }
+}
+
+function lineEndOffset(lineStarts: readonly number[], index: number, textLength: number): number {
+  const startOffset = lineStarts[index] ?? textLength
+  const nextStart = lineStarts[index + 1]
+  if (nextStart === undefined) return textLength
+  return Math.max(startOffset, nextStart - 1)
 }
 
 function incrementalTextEdits(
@@ -1112,9 +1206,11 @@ function documentPayloadDiagnostics(
   return {
     decorations: payload?.decorations.length ?? 0,
     externalDecorations: payload?.externalDecorations?.length ?? 0,
+    lineSummaryTextLength: lineSummaryTextLength(payload?.lines ?? []),
     lineStarts: payload?.lineStarts.length ?? 0,
+    lines: payload?.lines.length ?? 0,
     selections: payload?.selections.length ?? 0,
-    textLength: payload?.text.length ?? 0,
+    textLength: payload?.textLength ?? 0,
     tokens: payload?.tokens.length ?? 0,
     type: 'document',
   }
@@ -1124,9 +1220,19 @@ function documentEditPayloadDiagnostics(
   payload: MinimapDocumentEditPayload | null,
 ): Readonly<Record<string, unknown>> {
   return {
+    lineSummaryTextLength: lineSummaryTextLength(payload?.summary.lines ?? []),
+    lineStarts: payload?.summary.lineStarts.length ?? 0,
+    lines: payload?.summary.lines.length ?? 0,
     selections: payload?.selections.length ?? 0,
+    textLength: payload?.summary.textLength ?? 0,
     type: 'edit',
   }
+}
+
+function lineSummaryTextLength(lines: readonly { readonly text: string }[]): number {
+  let length = 0
+  for (const line of lines) length += line.text.length
+  return length
 }
 
 function textLengthForEdits(edits: readonly TextEdit[]): number {

@@ -63,8 +63,47 @@ describe('MinimapWorkerClient', () => {
           return request.type === 'openDocument'
         })
 
-      expect(openDocument?.document.text).toBe('line 1\nline 2\nline 3')
+      expect('text' in (openDocument?.document ?? {})).toBe(false)
+      expect(openDocument?.document.textLength).toBe(20)
       expect(openDocument?.document.lineStarts).toEqual([0, 7, 14])
+      expect(openDocument?.document.lines).toEqual([
+        { text: 'line 1', length: 6 },
+        { text: 'line 2', length: 6 },
+        { text: 'line 3', length: 6 },
+      ])
+
+      client.dispose()
+      host.root.remove()
+      host.colorScope.remove()
+    } finally {
+      runtime.restore()
+    }
+  })
+
+  it('clips open-document line summaries to the minimap column budget', () => {
+    const runtime = installMinimapRuntime()
+    try {
+      const host = createHost()
+      const client = new MinimapWorkerClient({
+        host,
+        options: resolveMinimapOptions({ maxColumn: 5 }),
+        snapshot: snapshot({}, { fullText: 'abcdefghi\nshort' }),
+        decorations: [],
+        onLayoutWidth: vi.fn(),
+      })
+      const worker = runtime.workers[0]!
+      const openDocument = worker.postMessage.mock.calls
+        .map((call) => call[0] as MinimapWorkerRequest)
+        .find((request): request is Extract<MinimapWorkerRequest, { type: 'openDocument' }> => {
+          return request.type === 'openDocument'
+        })
+
+      expect('text' in (openDocument?.document ?? {})).toBe(false)
+      expect(openDocument?.document.textLength).toBe(15)
+      expect(openDocument?.document.lines).toEqual([
+        { text: 'abcde', length: 9 },
+        { text: 'short', length: 5 },
+      ])
 
       client.dispose()
       host.root.remove()
@@ -227,7 +266,7 @@ describe('MinimapWorkerClient', () => {
     }
   })
 
-  it('keeps full token payloads out of same-line edit updates', () => {
+  it('keeps token payloads out of same-line edit updates', () => {
     const runtime = installMinimapRuntime()
     try {
       const host = createHost()
@@ -264,7 +303,8 @@ describe('MinimapWorkerClient', () => {
 
       expect(applyEdit.type).toBe('applyEdit')
       expect('tokens' in applyEdit.document).toBe(false)
-      expect('lineStarts' in applyEdit.document).toBe(false)
+      expect(applyEdit.document.summary.lineStarts).toEqual([0, 8, 15])
+      expect(applyEdit.document.summary.lines[0]).toEqual({ text: 'line 1x', length: 7 })
 
       client.dispose()
       host.root.remove()
@@ -401,7 +441,7 @@ describe('MinimapWorkerClient', () => {
         'render',
       ])
       expect(applyEdits.edits).toEqual([secondEdit, thirdEdit])
-      expect('lineStarts' in applyEdits.document).toBe(false)
+      expect(applyEdits.document.summary.lines[0]).toEqual({ text: 'line 1xyz', length: 9 })
 
       client.dispose()
       host.root.remove()
@@ -449,7 +489,7 @@ describe('MinimapWorkerClient', () => {
         { from: 0, to: 0, text: 'x' },
         { from: 5, to: 5, text: 'y' },
       ])
-      expect('lineStarts' in applyEdits.document).toBe(false)
+      expect(applyEdits.document.summary.lines[0]).toEqual({ text: 'xabc ydef ghi', length: 13 })
 
       client.dispose()
       host.root.remove()
@@ -612,6 +652,7 @@ function snapshot(
   return {
     documentId: 'minimap-test',
     languageId: 'typescript',
+    textSnapshot: createStringTextSnapshot(text),
     fullText: text,
     textVersion: 1,
     lineStarts: starts,
