@@ -1,282 +1,168 @@
-import type { EditorCommandId } from '@editor/core/editor'
-import type { DocumentSessionChange } from '@editor/core/document'
-import type {
-  EditorCommandContributionContext,
-  EditorDisposable,
-  EditorEditContribution,
-  EditorEditContributionContext,
-  EditorViewContribution,
-  EditorViewContributionContext,
-  EditorViewContributionUpdateKind,
-  EditorViewSnapshot,
-} from '@editor/core/extensions'
-
+import type { EditorDisposable } from '@editor/core/extensions'
+import { createEditorCapabilityToken } from '@editor/core/extensions'
+import type { LspClient, LspWebSocketTransportOptions, LspWorkerLike } from '@editor/lsp'
 import {
-  TYPESCRIPT_LSP_COMPLETION_EDIT_FEATURE,
-  type TypeScriptLspCompletionApplication,
-  type TypeScriptLspCompletionEditFeature,
-} from './completion'
-import { CompletionController } from './completionController'
-import { DiagnosticsPresenter } from './diagnosticsPresenter'
-import { DocumentSync } from './documentSync'
-import { HoverDefinitionController } from './hoverDefinitionController'
-import { LspConnection } from './lspConnection'
-import type {
-  DiagnosticMarkerDirection,
-  TypeScriptLspNavigationCommand,
-  TypeScriptLspResolvedOptions,
-} from './pluginTypes'
+  createLanguageServerCorePlugin,
+  createWebSocketLspTransportFactory,
+  createWorkerLspTransportFactory,
+  type LanguageServerCommandSpec,
+  type LanguageServerConnectionContext,
+  type LspConnectionTransportFactory,
+} from '@editor/language-server'
+import type { LanguageServerCompletionEditFeature } from '@editor/language-server/completion'
+
+import { isTypeScriptLspSourceFileName } from './paths'
 import type {
   TypeScriptLspPlugin,
   TypeScriptLspPluginOptions,
   TypeScriptLspSourceFile,
 } from './types'
 
-export type { TypeScriptLspResolvedOptions } from './pluginTypes'
-
 const DEFAULT_DIAGNOSTIC_DELAY_MS = 150
 const DEFAULT_TIMEOUT_MS = 15000
+const TYPESCRIPT_LSP_COMPLETION_EDIT_FEATURE_ID = 'editor.typescript-lsp.completion-edit'
+const TYPESCRIPT_LSP_COMPLETION_EDIT_FEATURE =
+  createEditorCapabilityToken<LanguageServerCompletionEditFeature>(
+    TYPESCRIPT_LSP_COMPLETION_EDIT_FEATURE_ID,
+  )
+
+export type TypeScriptLspResolvedOptions = {
+  readonly rootUri: string | null
+  readonly compilerOptions: TypeScriptLspPluginOptions['compilerOptions']
+  readonly diagnosticDelayMs: number
+  readonly hoverMarkdownCodeBackground: boolean
+  readonly timeoutMs: number
+  readonly workerFactory?: () => LspWorkerLike
+  readonly webSocketRoute?: string | URL
+  readonly webSocketTransportOptions?: LspWebSocketTransportOptions
+  readonly onStatusChange: TypeScriptLspPluginOptions['onStatusChange']
+  readonly onDiagnostics: TypeScriptLspPluginOptions['onDiagnostics']
+  readonly onOpenDefinition: TypeScriptLspPluginOptions['onOpenDefinition']
+  readonly onOpenReferences: TypeScriptLspPluginOptions['onOpenReferences']
+  readonly onError: TypeScriptLspPluginOptions['onError']
+}
 
 export function createTypeScriptLspPlugin(
   options: TypeScriptLspPluginOptions = {},
 ): TypeScriptLspPlugin {
   const resolved = resolveOptions(options)
-  const state = new TypeScriptLspPluginState()
+  const workspaceFiles = new TypeScriptWorkspaceFiles()
+  const plugin = createLanguageServerCorePlugin({
+    name: 'editor.typescript-lsp',
+    rootUri: resolved.rootUri,
+    hoverMarkdownCodeBackground: resolved.hoverMarkdownCodeBackground,
+    initializationOptions: typeScriptInitializationOptions(resolved),
+    timeoutMs: resolved.timeoutMs,
+    createTransport: typeScriptTransportFactory(resolved),
+    defaultHighlightPrefix: 'editor-typescript-lsp',
+    documentSync: {
+      shouldSyncLanguageId: isTypeScriptLspLanguage,
+      shouldSyncUri: isTypeScriptLspSourceFileName,
+    },
+    diagnostics: {
+      minimapSourceId: 'editor.typescript-lsp.diagnostics',
+      highlightNameNamespace: 'typescript-lsp',
+      markerTimingNamePrefix: 'typescriptLsp.marker',
+    },
+    completion: {
+      editFeature: TYPESCRIPT_LSP_COMPLETION_EDIT_FEATURE,
+      acceptTimingName: 'typescriptLsp.completion.accept',
+      widgetClassNamespace: 'typescript-lsp',
+    },
+    hoverDefinition: {
+      linkHighlightNameNamespace: 'typescript-lsp',
+      tooltipClassNamespace: 'typescript-lsp',
+      navigationTimingNamePrefix: 'typescriptLsp',
+    },
+    commands: TYPESCRIPT_LSP_COMMANDS,
+    onConnectionCreated: (context) =>
+      registerTypeScriptConnection(context, workspaceFiles, resolved),
+    onConnected: (context) => workspaceFiles.syncClient(context.client),
+    onStatusChange: resolved.onStatusChange,
+    onDiagnostics: resolved.onDiagnostics,
+    onOpenDefinition: resolved.onOpenDefinition,
+    onOpenReferences: resolved.onOpenReferences,
+    onError: resolved.onError,
+  })
 
   return {
-    name: 'editor.typescript-lsp',
-    setWorkspaceFiles: (files) => state.setWorkspaceFiles(files),
-    clearWorkspaceFiles: () => state.clearWorkspaceFiles(),
-    activate(context) {
-      return [
-        context.registerViewContribution({
-          createContribution: (contributionContext) =>
-            new TypeScriptLspContribution(contributionContext, state, resolved),
-        }),
-        context.registerCommandContribution({
-          createContribution: (contributionContext) =>
-            new TypeScriptLspCommandContribution(contributionContext, state),
-        }),
-        context.registerEditContribution({
-          createContribution: (contributionContext) =>
-            new TypeScriptLspCompletionEditContribution(contributionContext),
-        }),
-      ]
-    },
+    ...plugin,
+    setWorkspaceFiles: (files) => workspaceFiles.setWorkspaceFiles(files),
+    clearWorkspaceFiles: () => workspaceFiles.clearWorkspaceFiles(),
   }
 }
 
-class TypeScriptLspPluginState {
-  private readonly contributions = new Set<TypeScriptLspContribution>()
+class TypeScriptWorkspaceFiles {
+  private readonly clients = new Map<LspClient, (error: unknown) => void>()
   private files: readonly TypeScriptLspSourceFile[] = []
-
-  public get workspaceFiles(): readonly TypeScriptLspSourceFile[] {
-    return this.files
-  }
 
   public setWorkspaceFiles(files: readonly TypeScriptLspSourceFile[]): void {
     this.files = files.map((file) => ({ path: file.path, text: file.text }))
-    this.notifyWorkspaceFilesChanged()
+    this.syncClients()
   }
 
   public clearWorkspaceFiles(): void {
     this.files = []
-    this.notifyWorkspaceFilesChanged()
+    this.syncClients()
   }
 
-  public register(contribution: TypeScriptLspContribution): void {
-    this.contributions.add(contribution)
-  }
-
-  public unregister(contribution: TypeScriptLspContribution): void {
-    this.contributions.delete(contribution)
-  }
-
-  public goToDefinitionFromSelection(): boolean {
-    return this.runNavigationCommand({
-      kind: 'definition',
-      openMode: 'default',
-    })
-  }
-
-  public runNavigationCommand(command: TypeScriptLspNavigationCommand): boolean {
-    for (const contribution of this.contributions) {
-      if (contribution.runNavigationCommand(command)) return true
+  public registerClient(
+    client: LspClient,
+    onError: ((error: unknown) => void) | undefined,
+  ): EditorDisposable {
+    this.clients.set(client, onError ?? ignoreConnectionError)
+    return {
+      dispose: () => {
+        this.clients.delete(client)
+      },
     }
-
-    return false
   }
 
-  public moveDiagnosticMarker(direction: DiagnosticMarkerDirection): boolean {
-    for (const contribution of this.contributions) {
-      if (contribution.moveDiagnosticMarker(direction)) return true
-    }
+  public syncClient(client: LspClient): void {
+    const onError = this.clients.get(client)
+    if (!onError) return
+    if (!client.initialized) return
 
-    return false
+    void client
+      .notify('editor/typescript/setWorkspaceFiles', { files: this.files })
+      .catch((error: unknown) => onError(error))
   }
 
-  private notifyWorkspaceFilesChanged(): void {
-    for (const contribution of this.contributions) contribution.syncWorkspaceFiles()
+  private syncClients(): void {
+    for (const client of this.clients.keys()) this.syncClient(client)
   }
 }
 
-class TypeScriptLspCommandContribution implements EditorDisposable {
-  private readonly commands: readonly EditorDisposable[]
+function registerTypeScriptConnection(
+  context: LanguageServerConnectionContext,
+  workspaceFiles: TypeScriptWorkspaceFiles,
+  options: TypeScriptLspResolvedOptions,
+): EditorDisposable {
+  return workspaceFiles.registerClient(context.client, options.onError)
+}
 
-  public constructor(
-    context: EditorCommandContributionContext,
-    private readonly state: TypeScriptLspPluginState,
-  ) {
-    this.commands = TYPESCRIPT_LSP_COMMANDS.map((command) =>
-      context.registerCommand(command.id, () => command.run(this.state)),
+function typeScriptTransportFactory(
+  options: TypeScriptLspResolvedOptions,
+): LspConnectionTransportFactory {
+  if (options.webSocketRoute) {
+    return createWebSocketLspTransportFactory(
+      options.webSocketRoute,
+      options.webSocketTransportOptions,
     )
   }
+  if (options.workerFactory) return createWorkerLspTransportFactory(options.workerFactory)
 
-  public dispose(): void {
-    for (const command of this.commands) command.dispose()
-  }
+  return missingWorkerTransportFactory
 }
 
-class TypeScriptLspCompletionEditContribution implements EditorEditContribution {
-  private readonly completionFeature: EditorDisposable
-
-  public constructor(context: EditorEditContributionContext) {
-    this.completionFeature = context.registerFeature(
-      TYPESCRIPT_LSP_COMPLETION_EDIT_FEATURE,
-      completionEditFeature(context),
-    )
-  }
-
-  public dispose(): void {
-    this.completionFeature.dispose()
-  }
+function missingWorkerTransportFactory(): never {
+  throw new Error('TypeScript LSP worker factory was not configured')
 }
 
-class TypeScriptLspContribution implements EditorViewContribution {
-  private readonly connection: LspConnection
-  private readonly diagnostics: DiagnosticsPresenter
-  private readonly documentSync: DocumentSync
-  private readonly completion: CompletionController
-  private readonly hoverDefinition: HoverDefinitionController
-  private disposed = false
-
-  public constructor(
-    context: EditorViewContributionContext,
-    private readonly state: TypeScriptLspPluginState,
-    private readonly options: TypeScriptLspResolvedOptions,
-  ) {
-    const prefix = context.highlightPrefix ?? 'editor-typescript-lsp'
-    this.diagnostics = new DiagnosticsPresenter(context, prefix, options.onDiagnostics)
-    this.connection = new LspConnection(options, {
-      onConnected: () => this.syncWorkspaceFiles(),
-      onUnavailable: () => this.clearRequestUi(),
-      onPublishDiagnostics: (params) => this.documentSync.publishDiagnostics(params),
-      onStatusChange: options.onStatusChange,
-      onError: options.onError,
-    })
-    this.documentSync = new DocumentSync(this.connection.workspace, this.diagnostics, {
-      onDocumentClosed: () => this.completion.hide(),
-    })
-    this.completion = new CompletionController({
-      context,
-      client: this.connection.client,
-      getActiveDocument: () => this.documentSync.activeDocument,
-      ignorePointerTarget: (target) => this.hoverDefinition.containsTarget(target),
-      onBeforeShow: () => this.hoverDefinition.clearPointerUi(),
-      onRequestError: (error) => this.handleRequestError(error),
-    })
-    this.hoverDefinition = new HoverDefinitionController({
-      context,
-      client: this.connection.client,
-      hoverMarkdownCodeBackground: options.hoverMarkdownCodeBackground,
-      getActiveDocument: () => this.documentSync.activeDocument,
-      getDiagnostics: () => this.documentSync.diagnostics,
-      completionContainsTarget: (target) => this.completion.containsTarget(target),
-      onOpenDefinition: options.onOpenDefinition,
-      onOpenReferences: options.onOpenReferences,
-      onRequestError: (error) => this.handleRequestError(error),
-    })
-    this.state.register(this)
-    this.connection.connect()
-    this.update(context.getSnapshot(), 'document', null)
-  }
-
-  public update(
-    snapshot: EditorViewSnapshot,
-    kind: EditorViewContributionUpdateKind,
-    change?: DocumentSessionChange | null,
-  ): void {
-    if (this.disposed) return
-
-    this.hoverDefinition.update(snapshot, kind)
-    if (this.documentSync.shouldSync(kind, snapshot))
-      this.documentSync.sync(snapshot, change ?? null)
-    this.completion.update(snapshot, kind, change ?? null)
-  }
-
-  public dispose(): void {
-    if (this.disposed) return
-
-    this.disposed = true
-    this.state.unregister(this)
-    this.hoverDefinition.dispose()
-    this.completion.hide()
-    this.documentSync.close()
-    this.completion.dispose()
-    this.connection.dispose()
-  }
-
-  public syncWorkspaceFiles(): void {
-    if (this.disposed) return
-
-    this.connection.syncWorkspaceFiles(this.state.workspaceFiles)
-  }
-
-  public goToDefinitionFromSelection(): boolean {
-    return this.runNavigationCommand({
-      kind: 'definition',
-      openMode: 'default',
-    })
-  }
-
-  public runNavigationCommand(command: TypeScriptLspNavigationCommand): boolean {
-    return this.hoverDefinition.runNavigationCommand(command)
-  }
-
-  public moveDiagnosticMarker(direction: DiagnosticMarkerDirection): boolean {
-    return this.diagnostics.moveMarker(
-      this.documentSync.activeDocument,
-      this.documentSync.diagnostics,
-      direction,
-    )
-  }
-
-  private clearRequestUi(): void {
-    this.hoverDefinition.clearPointerUi()
-    this.completion.hide()
-  }
-
-  private handleRequestError(error: unknown): void {
-    if (isAbortError(error)) return
-    this.options.onError?.(error)
-  }
-}
-
-function completionEditFeature(
-  context: EditorEditContributionContext,
-): TypeScriptLspCompletionEditFeature {
+function typeScriptInitializationOptions(options: TypeScriptLspResolvedOptions): unknown {
   return {
-    applyCompletion(application: TypeScriptLspCompletionApplication): boolean {
-      if (!context.hasDocument()) return false
-
-      context.applyEdits(
-        application.edits,
-        'typescriptLsp.completion.accept',
-        application.selection,
-      )
-      context.focusEditor()
-      return true
-    },
+    compilerOptions: options.compilerOptions,
+    diagnosticDelayMs: options.diagnosticDelayMs,
   }
 }
 
@@ -298,10 +184,16 @@ function resolveOptions(options: TypeScriptLspPluginOptions): TypeScriptLspResol
   }
 }
 
-const TYPESCRIPT_LSP_COMMANDS: readonly {
-  readonly id: EditorCommandId
-  run(state: TypeScriptLspPluginState): boolean
-}[] = [
+function isTypeScriptLspLanguage(languageId: string): boolean {
+  return (
+    languageId === 'javascript' ||
+    languageId === 'javascriptreact' ||
+    languageId === 'typescript' ||
+    languageId === 'typescriptreact'
+  )
+}
+
+const TYPESCRIPT_LSP_COMMANDS: readonly LanguageServerCommandSpec[] = [
   {
     id: 'goToDefinition',
     run: (state) => state.goToDefinitionFromSelection(),
@@ -353,11 +245,6 @@ const TYPESCRIPT_LSP_COMMANDS: readonly {
   },
 ]
 
-function isAbortError(error: unknown): boolean {
-  if (error instanceof DOMException && error.name === 'AbortError') return true
-  if (!isRecord(error)) return false
-  return error.name === 'LspRequestCancelledError'
+function ignoreConnectionError(): void {
+  return undefined
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)

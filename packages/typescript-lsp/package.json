@@ -6,7 +6,6 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
-    "./websocket": "./src/websocket.ts",
     "./server": "./src/server.ts",
     "./ts-diagnostics": "./src/tsDiagnostics.ts"
   },
@@ -18,13 +17,10 @@
     "format:check": "oxfmt --check ."
   },
   "dependencies": {
+    "@editor/language-server": "workspace:*",
     "@editor/lsp": "workspace:*",
     "@typescript/vfs": "^1.6.4",
-    "remark-gfm": "^4.0.1",
-    "remark-parse": "^11.0.0",
-    "remark-stringify": "^11.0.0",
     "typescript": "~5.9.3",
-    "unified": "^11.0.5",
     "vscode-languageserver-protocol": "^3.17.5"
   },
   "devDependencies": {

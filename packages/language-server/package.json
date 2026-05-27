@@ -6,6 +6,18 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./completion": "./src/completion.ts",
+    "./completion-controller": "./src/completionController.ts",
+    "./definition-navigation": "./src/definitionNavigation.ts",
+    "./diagnostics": "./src/diagnostics.ts",
+    "./diagnostics-presenter": "./src/diagnosticsPresenter.ts",
+    "./document-sync": "./src/documentSync.ts",
+    "./hover-definition-controller": "./src/hoverDefinitionController.ts",
+    "./markdown-tooltip": "./src/markdownTooltip.ts",
+    "./paths": "./src/paths.ts",
+    "./plugin-types": "./src/pluginTypes.ts",
+    "./plugin-styles": "./src/plugin.styles.ts",
+    "./tooltip": "./src/tooltip.ts",
     "./websocket": "./src/websocket.ts"
   },
   "scripts": {

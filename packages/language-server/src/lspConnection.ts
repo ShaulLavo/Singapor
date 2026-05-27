@@ -1,14 +1,26 @@
 import {
   createWebSocketLspTransport,
+  createWorkerLspTransport,
   LspClient,
   LspWorkspace,
   type LspManagedTransport,
+  type LspWebSocketTransportOptions,
+  type LspWorkerLike,
 } from '@editor/lsp'
+import type * as lsp from 'vscode-languageserver-protocol'
 
-import type { LanguageServerResolvedOptions } from './pluginTypes'
 import type { LanguageServerStatus } from './types'
 
-type LspConnectionCallbacks = {
+export type LspConnectionTransportFactory = () => LspManagedTransport | Promise<LspManagedTransport>
+
+export type LspConnectionOptions = {
+  readonly rootUri: lsp.DocumentUri | null
+  readonly initializationOptions: unknown
+  readonly timeoutMs: number
+  createTransport(): LspManagedTransport | Promise<LspManagedTransport>
+}
+
+export type LspConnectionCallbacks = {
   onConnected(): void
   onUnavailable(): void
   onPublishDiagnostics(params: unknown): void
@@ -25,7 +37,7 @@ export class LspConnection {
   private status: LanguageServerStatus = 'idle'
 
   public constructor(
-    private readonly options: LanguageServerResolvedOptions,
+    private readonly options: LspConnectionOptions,
     private readonly callbacks: LspConnectionCallbacks,
   ) {
     this.client = this.createClient()
@@ -33,7 +45,7 @@ export class LspConnection {
 
   public connect(): void {
     this.setStatus('loading')
-    void this.connectWebSocket()
+    this.connectTransport()
   }
 
   public dispose(): void {
@@ -62,25 +74,35 @@ export class LspConnection {
     })
   }
 
-  private async connectWebSocket(): Promise<void> {
-    const route = this.options.webSocketRoute
-
+  private connectTransport(): void {
     try {
-      const transport = await createWebSocketLspTransport(route, {
-        protocols: this.options.webSocketTransportOptions?.protocols,
-        WebSocketCtor: this.options.webSocketTransportOptions?.WebSocketCtor,
-      })
-      if (this.disposed) {
-        transport.close()
+      const transport = this.options.createTransport()
+      if (isTransportPromise(transport)) {
+        void transport
+          .then((value) => this.connectManagedTransport(value))
+          .catch((error) => {
+            this.handleConnectError(error)
+          })
         return
       }
 
-      this.transport = transport
-      await this.client.connect(transport)
-      this.handleConnected()
+      this.connectManagedTransport(transport)
     } catch (error) {
       this.handleConnectError(error)
     }
+  }
+
+  private connectManagedTransport(transport: LspManagedTransport): void {
+    if (this.disposed) {
+      transport.close()
+      return
+    }
+
+    this.transport = transport
+    void this.client
+      .connect(transport)
+      .then(() => this.handleConnected())
+      .catch((error: unknown) => this.handleConnectError(error))
   }
 
   private handleConnected(): void {
@@ -115,4 +137,31 @@ export class LspConnection {
   private handleError(error: unknown): void {
     this.callbacks.onError?.(error)
   }
+}
+
+export function createWebSocketLspTransportFactory(
+  route: string | URL,
+  options?: LspWebSocketTransportOptions,
+): LspConnectionTransportFactory {
+  return () =>
+    createWebSocketLspTransport(route, {
+      protocols: options?.protocols,
+      WebSocketCtor: options?.WebSocketCtor,
+    })
+}
+
+export function createWorkerLspTransportFactory(
+  workerFactory: () => LspWorkerLike,
+): LspConnectionTransportFactory {
+  return () =>
+    createWorkerLspTransport(workerFactory(), {
+      messageFormat: 'json',
+      terminateOnClose: true,
+    })
+}
+
+function isTransportPromise(
+  value: LspManagedTransport | Promise<LspManagedTransport>,
+): value is Promise<LspManagedTransport> {
+  return typeof (value as Promise<LspManagedTransport>).then === 'function'
 }

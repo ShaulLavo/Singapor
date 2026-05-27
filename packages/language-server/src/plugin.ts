@@ -1,6 +1,7 @@
 import type { EditorCommandId } from '@editor/core/editor'
 import type { DocumentSessionChange } from '@editor/core/document'
 import type {
+  EditorCapabilityToken,
   EditorCommandContributionContext,
   EditorDisposable,
   EditorEditContribution,
@@ -10,36 +11,166 @@ import type {
   EditorViewContributionUpdateKind,
   EditorViewSnapshot,
 } from '@editor/core/extensions'
+import type { LspClient, LspWorkspace } from '@editor/lsp'
+import type * as lsp from 'vscode-languageserver-protocol'
 
 import {
   LANGUAGE_SERVER_COMPLETION_EDIT_FEATURE,
-  type LanguageServerCompletionApplication,
+  createCompletionEditFeature,
   type LanguageServerCompletionEditFeature,
 } from './completion'
 import { CompletionController } from './completionController'
 import { DiagnosticsPresenter } from './diagnosticsPresenter'
-import { DocumentSync } from './documentSync'
+import { DocumentSync, type DocumentSyncOptions } from './documentSync'
 import { HoverDefinitionController } from './hoverDefinitionController'
-import { LspConnection } from './lspConnection'
+import {
+  createWebSocketLspTransportFactory,
+  LspConnection,
+  type LspConnectionTransportFactory,
+} from './lspConnection'
+import type { DiagnosticMarkerDirection, LanguageServerNavigationCommand } from './pluginTypes'
 import type {
-  DiagnosticMarkerDirection,
-  LanguageServerNavigationCommand,
-  LanguageServerResolvedOptions,
-} from './pluginTypes'
-import type { LanguageServerPlugin, LanguageServerPluginOptions } from './types'
+  LanguageServerDefinitionTarget,
+  LanguageServerDiagnosticSummary,
+  LanguageServerNavigationOptions,
+  LanguageServerPlugin,
+  LanguageServerPluginOptions,
+  LanguageServerReferencesResult,
+  LanguageServerStatus,
+} from './types'
 
 export type { LanguageServerResolvedOptions } from './pluginTypes'
 
 const DEFAULT_TIMEOUT_MS = 15000
+const DEFAULT_PLUGIN_NAME = 'editor.language-server'
+const DEFAULT_HIGHLIGHT_PREFIX = 'editor-language-server'
+const DEFAULT_NAMESPACE = 'language-server'
+const DEFAULT_TIMING_PREFIX = 'languageServer'
+const DEFAULT_DIAGNOSTICS_SOURCE_ID = 'editor.language-server.diagnostics'
+const DEFAULT_COMPLETION_ACCEPT_TIMING_NAME = 'languageServer.completion.accept'
+
+export type LanguageServerConnectionContext = {
+  readonly client: LspClient
+  readonly workspace: LspWorkspace
+}
+
+export type LanguageServerCommandTarget = {
+  goToDefinitionFromSelection(): boolean
+  runNavigationCommand(command: LanguageServerNavigationCommand): boolean
+  moveDiagnosticMarker(direction: DiagnosticMarkerDirection): boolean
+}
+
+export type LanguageServerCommandSpec = {
+  readonly id: EditorCommandId
+  run(target: LanguageServerCommandTarget): boolean
+}
+
+export type LanguageServerCorePluginOptions = {
+  readonly name: string
+  readonly rootUri?: lsp.DocumentUri | null
+  readonly hoverMarkdownCodeBackground?: boolean
+  readonly initializationOptions?: unknown
+  readonly timeoutMs?: number
+  createTransport(): ReturnType<LspConnectionTransportFactory>
+  readonly defaultHighlightPrefix?: string
+  readonly documentSync?: Omit<DocumentSyncOptions, 'onDocumentClosed'>
+  readonly diagnostics?: {
+    readonly minimapSourceId?: string
+    readonly highlightNameNamespace?: string
+    readonly markerTimingNamePrefix?: string
+  }
+  readonly completion?: {
+    readonly editFeature?: EditorCapabilityToken<LanguageServerCompletionEditFeature>
+    readonly acceptTimingName?: string
+    readonly widgetClassNamespace?: string
+  }
+  readonly hoverDefinition?: {
+    readonly linkHighlightNameNamespace?: string
+    readonly tooltipClassNamespace?: string
+    readonly navigationTimingNamePrefix?: string
+  }
+  readonly commands?: readonly LanguageServerCommandSpec[]
+  onConnectionCreated?(context: LanguageServerConnectionContext): EditorDisposable | void
+  onConnected?(context: LanguageServerConnectionContext): void
+  readonly onStatusChange?: (status: LanguageServerStatus) => void
+  readonly onDiagnostics?: (summary: LanguageServerDiagnosticSummary) => void
+  readonly onInteractiveReady?: () => void
+  readonly onOpenDefinition?: (
+    target: LanguageServerDefinitionTarget,
+    options?: LanguageServerNavigationOptions,
+  ) => void | boolean
+  readonly onOpenReferences?: (result: LanguageServerReferencesResult) => void | boolean
+  readonly onError?: (error: unknown) => void
+}
+
+type LanguageServerResolvedCoreOptions = {
+  readonly name: string
+  readonly rootUri: lsp.DocumentUri | null
+  readonly hoverMarkdownCodeBackground: boolean
+  readonly initializationOptions: unknown
+  readonly timeoutMs: number
+  createTransport(): ReturnType<LspConnectionTransportFactory>
+  readonly defaultHighlightPrefix: string
+  readonly documentSync: Omit<DocumentSyncOptions, 'onDocumentClosed'>
+  readonly diagnostics: {
+    readonly minimapSourceId: string
+    readonly highlightNameNamespace: string
+    readonly markerTimingNamePrefix: string
+  }
+  readonly completion: {
+    readonly editFeature: EditorCapabilityToken<LanguageServerCompletionEditFeature>
+    readonly acceptTimingName: string
+    readonly widgetClassNamespace?: string
+  }
+  readonly hoverDefinition: {
+    readonly linkHighlightNameNamespace: string
+    readonly tooltipClassNamespace: string
+    readonly navigationTimingNamePrefix: string
+  }
+  readonly commands: readonly LanguageServerCommandSpec[]
+  onConnectionCreated?(context: LanguageServerConnectionContext): EditorDisposable | void
+  onConnected?(context: LanguageServerConnectionContext): void
+  readonly onStatusChange?: (status: LanguageServerStatus) => void
+  readonly onDiagnostics?: (summary: LanguageServerDiagnosticSummary) => void
+  readonly onInteractiveReady?: () => void
+  readonly onOpenDefinition?: (
+    target: LanguageServerDefinitionTarget,
+    options?: LanguageServerNavigationOptions,
+  ) => void | boolean
+  readonly onOpenReferences?: (result: LanguageServerReferencesResult) => void | boolean
+  readonly onError?: (error: unknown) => void
+}
 
 export function createLanguageServerPlugin(
   options: LanguageServerPluginOptions,
 ): LanguageServerPlugin {
-  const resolved = resolveOptions(options)
+  return createLanguageServerCorePlugin({
+    name: DEFAULT_PLUGIN_NAME,
+    rootUri: options.rootUri,
+    hoverMarkdownCodeBackground: options.hoverMarkdownCodeBackground,
+    initializationOptions: options.initializationOptions,
+    timeoutMs: options.timeoutMs,
+    createTransport: createWebSocketLspTransportFactory(
+      options.webSocketRoute,
+      options.webSocketTransportOptions,
+    ),
+    onStatusChange: options.onStatusChange,
+    onDiagnostics: options.onDiagnostics,
+    onInteractiveReady: options.onInteractiveReady,
+    onOpenDefinition: options.onOpenDefinition,
+    onOpenReferences: options.onOpenReferences,
+    onError: options.onError,
+  })
+}
+
+export function createLanguageServerCorePlugin(
+  options: LanguageServerCorePluginOptions,
+): LanguageServerPlugin {
+  const resolved = resolveCoreOptions(options)
   const state = new LanguageServerPluginState()
 
   return {
-    name: 'editor.language-server',
+    name: resolved.name,
     activate(context) {
       return [
         context.registerViewContribution({
@@ -48,18 +179,18 @@ export function createLanguageServerPlugin(
         }),
         context.registerCommandContribution({
           createContribution: (contributionContext) =>
-            new LanguageServerCommandContribution(contributionContext, state),
+            new LanguageServerCommandContribution(contributionContext, state, resolved.commands),
         }),
         context.registerEditContribution({
           createContribution: (contributionContext) =>
-            new LanguageServerCompletionEditContribution(contributionContext),
+            new LanguageServerCompletionEditContribution(contributionContext, resolved.completion),
         }),
       ]
     },
   }
 }
 
-class LanguageServerPluginState {
+class LanguageServerPluginState implements LanguageServerCommandTarget {
   private readonly contributions = new Set<LanguageServerContribution>()
 
   public register(contribution: LanguageServerContribution): void {
@@ -100,8 +231,9 @@ class LanguageServerCommandContribution implements EditorDisposable {
   public constructor(
     context: EditorCommandContributionContext,
     private readonly state: LanguageServerPluginState,
+    commands: readonly LanguageServerCommandSpec[],
   ) {
-    this.commands = LANGUAGE_SERVER_COMMANDS.map((command) =>
+    this.commands = commands.map((command) =>
       context.registerCommand(command.id, () => command.run(this.state)),
     )
   }
@@ -114,10 +246,13 @@ class LanguageServerCommandContribution implements EditorDisposable {
 class LanguageServerCompletionEditContribution implements EditorEditContribution {
   private readonly completionFeature: EditorDisposable
 
-  public constructor(context: EditorEditContributionContext) {
+  public constructor(
+    context: EditorEditContributionContext,
+    options: LanguageServerResolvedCoreOptions['completion'],
+  ) {
     this.completionFeature = context.registerFeature(
-      LANGUAGE_SERVER_COMPLETION_EDIT_FEATURE,
-      completionEditFeature(context),
+      options.editFeature,
+      createCompletionEditFeature(context, options.acceptTimingName),
     )
   }
 
@@ -132,28 +267,44 @@ class LanguageServerContribution implements EditorViewContribution {
   private readonly documentSync: DocumentSync
   private readonly completion: CompletionController
   private readonly hoverDefinition: HoverDefinitionController
+  private readonly connectionRegistration: EditorDisposable | null
   private disposed = false
 
   public constructor(
     context: EditorViewContributionContext,
     private readonly state: LanguageServerPluginState,
-    private readonly options: LanguageServerResolvedOptions,
+    private readonly options: LanguageServerResolvedCoreOptions,
   ) {
-    const prefix = context.highlightPrefix ?? 'editor-language-server'
-    this.diagnostics = new DiagnosticsPresenter(context, prefix, options.onDiagnostics)
-    this.connection = new LspConnection(options, {
-      onConnected: () => undefined,
-      onUnavailable: () => this.clearRequestUi(),
-      onPublishDiagnostics: (params) => this.documentSync.publishDiagnostics(params),
-      onStatusChange: options.onStatusChange,
-      onError: options.onError,
+    const prefix = context.highlightPrefix ?? options.defaultHighlightPrefix
+    this.diagnostics = new DiagnosticsPresenter(context, prefix, {
+      ...options.diagnostics,
+      onDiagnostics: options.onDiagnostics,
     })
+    this.connection = new LspConnection(
+      {
+        rootUri: options.rootUri,
+        initializationOptions: options.initializationOptions,
+        timeoutMs: options.timeoutMs,
+        createTransport: options.createTransport,
+      },
+      {
+        onConnected: () => this.handleConnected(),
+        onUnavailable: () => this.clearRequestUi(),
+        onPublishDiagnostics: (params) => this.documentSync.publishDiagnostics(params),
+        onStatusChange: options.onStatusChange,
+        onError: options.onError,
+      },
+    )
+    this.connectionRegistration = options.onConnectionCreated?.(this.connectionContext()) ?? null
     this.documentSync = new DocumentSync(this.connection.workspace, this.diagnostics, {
+      ...options.documentSync,
       onDocumentClosed: () => this.completion.hide(),
     })
     this.completion = new CompletionController({
       context,
       client: this.connection.client,
+      completionEditFeature: options.completion.editFeature,
+      completionWidgetClassNamespace: options.completion.widgetClassNamespace,
       getActiveDocument: () => this.documentSync.activeDocument,
       ignorePointerTarget: (target) => this.hoverDefinition.containsTarget(target),
       onBeforeShow: () => this.hoverDefinition.clearPointerUi(),
@@ -164,6 +315,10 @@ class LanguageServerContribution implements EditorViewContribution {
       context,
       client: this.connection.client,
       hoverMarkdownCodeBackground: options.hoverMarkdownCodeBackground,
+      defaultHighlightPrefix: options.defaultHighlightPrefix,
+      linkHighlightNameNamespace: options.hoverDefinition.linkHighlightNameNamespace,
+      tooltipClassNamespace: options.hoverDefinition.tooltipClassNamespace,
+      navigationTimingNamePrefix: options.hoverDefinition.navigationTimingNamePrefix,
       getActiveDocument: () => this.documentSync.activeDocument,
       getDiagnostics: () => this.documentSync.diagnostics,
       completionContainsTarget: (target) => this.completion.containsTarget(target),
@@ -195,6 +350,7 @@ class LanguageServerContribution implements EditorViewContribution {
 
     this.disposed = true
     this.state.unregister(this)
+    this.connectionRegistration?.dispose()
     this.hoverDefinition.dispose()
     this.completion.hide()
     this.documentSync.close()
@@ -221,6 +377,17 @@ class LanguageServerContribution implements EditorViewContribution {
     )
   }
 
+  private handleConnected(): void {
+    this.options.onConnected?.(this.connectionContext())
+  }
+
+  private connectionContext(): LanguageServerConnectionContext {
+    return {
+      client: this.connection.client,
+      workspace: this.connection.workspace,
+    }
+  }
+
   private clearRequestUi(): void {
     this.hoverDefinition.clearPointerUi()
     this.completion.hide()
@@ -232,32 +399,24 @@ class LanguageServerContribution implements EditorViewContribution {
   }
 }
 
-function completionEditFeature(
-  context: EditorEditContributionContext,
-): LanguageServerCompletionEditFeature {
+function resolveCoreOptions(
+  options: LanguageServerCorePluginOptions,
+): LanguageServerResolvedCoreOptions {
   return {
-    applyCompletion(application: LanguageServerCompletionApplication): boolean {
-      if (!context.hasDocument()) return false
-
-      context.applyEdits(
-        application.edits,
-        'languageServer.completion.accept',
-        application.selection,
-      )
-      context.focusEditor()
-      return true
-    },
-  }
-}
-
-function resolveOptions(options: LanguageServerPluginOptions): LanguageServerResolvedOptions {
-  return {
+    name: options.name,
     rootUri: options.rootUri ?? 'file:///',
     hoverMarkdownCodeBackground: options.hoverMarkdownCodeBackground ?? false,
     initializationOptions: options.initializationOptions,
     timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-    webSocketRoute: options.webSocketRoute,
-    webSocketTransportOptions: options.webSocketTransportOptions,
+    createTransport: options.createTransport,
+    defaultHighlightPrefix: options.defaultHighlightPrefix ?? DEFAULT_HIGHLIGHT_PREFIX,
+    documentSync: options.documentSync ?? {},
+    diagnostics: resolveDiagnosticsOptions(options),
+    completion: resolveCompletionOptions(options),
+    hoverDefinition: resolveHoverDefinitionOptions(options),
+    commands: options.commands ?? LANGUAGE_SERVER_COMMANDS,
+    onConnectionCreated: options.onConnectionCreated,
+    onConnected: options.onConnected,
     onStatusChange: options.onStatusChange,
     onDiagnostics: options.onDiagnostics,
     onInteractiveReady: options.onInteractiveReady,
@@ -267,10 +426,40 @@ function resolveOptions(options: LanguageServerPluginOptions): LanguageServerRes
   }
 }
 
-const LANGUAGE_SERVER_COMMANDS: readonly {
-  readonly id: EditorCommandId
-  run(state: LanguageServerPluginState): boolean
-}[] = [
+function resolveDiagnosticsOptions(
+  options: LanguageServerCorePluginOptions,
+): LanguageServerResolvedCoreOptions['diagnostics'] {
+  return {
+    minimapSourceId: options.diagnostics?.minimapSourceId ?? DEFAULT_DIAGNOSTICS_SOURCE_ID,
+    highlightNameNamespace: options.diagnostics?.highlightNameNamespace ?? DEFAULT_NAMESPACE,
+    markerTimingNamePrefix:
+      options.diagnostics?.markerTimingNamePrefix ?? `${DEFAULT_TIMING_PREFIX}.marker`,
+  }
+}
+
+function resolveCompletionOptions(
+  options: LanguageServerCorePluginOptions,
+): LanguageServerResolvedCoreOptions['completion'] {
+  return {
+    editFeature: options.completion?.editFeature ?? LANGUAGE_SERVER_COMPLETION_EDIT_FEATURE,
+    acceptTimingName: options.completion?.acceptTimingName ?? DEFAULT_COMPLETION_ACCEPT_TIMING_NAME,
+    widgetClassNamespace: options.completion?.widgetClassNamespace,
+  }
+}
+
+function resolveHoverDefinitionOptions(
+  options: LanguageServerCorePluginOptions,
+): LanguageServerResolvedCoreOptions['hoverDefinition'] {
+  return {
+    linkHighlightNameNamespace:
+      options.hoverDefinition?.linkHighlightNameNamespace ?? DEFAULT_NAMESPACE,
+    tooltipClassNamespace: options.hoverDefinition?.tooltipClassNamespace ?? DEFAULT_NAMESPACE,
+    navigationTimingNamePrefix:
+      options.hoverDefinition?.navigationTimingNamePrefix ?? DEFAULT_TIMING_PREFIX,
+  }
+}
+
+const LANGUAGE_SERVER_COMMANDS: readonly LanguageServerCommandSpec[] = [
   {
     id: 'goToDefinition',
     run: (state) => state.goToDefinitionFromSelection(),

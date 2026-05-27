@@ -13,11 +13,8 @@ import {
   type LanguageServerDiagnosticSeverity,
 } from './diagnostics'
 import { DIAGNOSTIC_STYLES } from './plugin.styles'
-import type { ActiveDocument, DiagnosticMarkerDirection } from './pluginTypes'
-import type { LanguageServerDiagnosticSummary } from './types'
 import type { OffsetRange } from './definitionNavigation'
 
-const LANGUAGE_SERVER_MINIMAP_SOURCE_ID = 'editor.language-server.diagnostics'
 const LSP_DIAGNOSTIC_ERROR = 1
 const LSP_DIAGNOSTIC_WARNING = 2
 const LSP_DIAGNOSTIC_INFORMATION = 3
@@ -44,17 +41,28 @@ const DIAGNOSTIC_MINIMAP_Z_INDEX: Record<LanguageServerDiagnosticSeverity, numbe
   hint: 10,
 }
 
+export type DiagnosticsPresenterActiveDocument = {
+  readonly fullText: string
+}
+
+export type DiagnosticsPresenterMarkerDirection = 'next' | 'previous'
+
+export type DiagnosticsPresenterOptions = {
+  readonly minimapSourceId: string
+  readonly highlightNameNamespace: string
+  readonly markerTimingNamePrefix: string
+  readonly onDiagnostics?: (summary: ReturnType<typeof summarizeDiagnostics>) => void
+}
+
 export class DiagnosticsPresenter {
   private readonly highlightNames: Record<LanguageServerDiagnosticSeverity, string>
 
   public constructor(
     private readonly context: EditorViewContributionContext,
     prefix: string,
-    private readonly onDiagnostics:
-      | ((summary: LanguageServerDiagnosticSummary) => void)
-      | undefined,
+    private readonly options: DiagnosticsPresenterOptions,
   ) {
-    this.highlightNames = createHighlightNames(prefix)
+    this.highlightNames = createHighlightNames(prefix, options.highlightNameNamespace)
   }
 
   public render(text: string, diagnostics: readonly lsp.Diagnostic[]): void {
@@ -74,13 +82,13 @@ export class DiagnosticsPresenter {
     version: number | null,
     diagnostics: readonly lsp.Diagnostic[],
   ): void {
-    this.onDiagnostics?.(summarizeDiagnostics(uri, version, diagnostics))
+    this.options.onDiagnostics?.(summarizeDiagnostics(uri, version, diagnostics))
   }
 
   public moveMarker(
-    active: ActiveDocument | null,
+    active: DiagnosticsPresenterActiveDocument | null,
     diagnostics: readonly lsp.Diagnostic[],
-    direction: DiagnosticMarkerDirection,
+    direction: DiagnosticsPresenterMarkerDirection,
   ): boolean {
     if (!active) return false
 
@@ -95,7 +103,7 @@ export class DiagnosticsPresenter {
     )
     if (!range) return false
 
-    const timingName = `languageServer.marker.${direction}`
+    const timingName = `${this.options.markerTimingNamePrefix}.${direction}`
     this.context.setSelection(range.start, range.end, timingName, range.start)
     this.context.focusEditor()
     return true
@@ -119,13 +127,13 @@ export class DiagnosticsPresenter {
     if (!minimap) return
 
     minimap.setDecorations(
-      LANGUAGE_SERVER_MINIMAP_SOURCE_ID,
+      this.options.minimapSourceId,
       diagnosticMinimapDecorations(this.context.getSnapshot().lineCount, diagnostics),
     )
   }
 
   private clearMinimapMarkers(): void {
-    this.minimapFeature()?.clearDecorations(LANGUAGE_SERVER_MINIMAP_SOURCE_ID)
+    this.minimapFeature()?.clearDecorations(this.options.minimapSourceId)
   }
 
   private minimapFeature(): EditorMinimapFeature | null {
@@ -133,12 +141,15 @@ export class DiagnosticsPresenter {
   }
 }
 
-function createHighlightNames(prefix: string): Record<LanguageServerDiagnosticSeverity, string> {
+function createHighlightNames(
+  prefix: string,
+  namespace: string,
+): Record<LanguageServerDiagnosticSeverity, string> {
   return {
-    error: `${prefix}-language-server-error`,
-    warning: `${prefix}-language-server-warning`,
-    information: `${prefix}-language-server-information`,
-    hint: `${prefix}-language-server-hint`,
+    error: `${prefix}-${namespace}-error`,
+    warning: `${prefix}-${namespace}-warning`,
+    information: `${prefix}-${namespace}-information`,
+    hint: `${prefix}-${namespace}-hint`,
   }
 }
 
@@ -199,7 +210,7 @@ function diagnosticMarkerTarget(
   text: string,
   diagnostics: readonly lsp.Diagnostic[],
   offset: number,
-  direction: DiagnosticMarkerDirection,
+  direction: DiagnosticsPresenterMarkerDirection,
 ): OffsetRange | null {
   const ranges = diagnostics
     .flatMap((diagnostic) => diagnosticRange(text, diagnostic))

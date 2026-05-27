@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeTooltipMarkdown, renderTooltipMarkdown } from '../src/markdownTooltip'
+import type { EditorTheme } from '@editor/core/rendering'
+import {
+  normalizeTooltipMarkdown,
+  renderTooltipMarkdown as renderLanguageServerTooltipMarkdown,
+  type TooltipMarkdownRenderOptions,
+} from '@editor/language-server/markdown-tooltip'
 
 describe('tooltip Markdown rendering', () => {
   it('renders TypeScript fenced code blocks as pre/code', () => {
@@ -128,3 +133,15 @@ describe('tooltip Markdown rendering', () => {
     expect(normalizeTooltipMarkdown('**value**').trim()).toBe('**value**')
   })
 })
+
+function renderTooltipMarkdown(
+  document: Document,
+  markdown: string,
+  theme?: EditorTheme | null,
+  options: TooltipMarkdownRenderOptions = {},
+): HTMLElement {
+  return renderLanguageServerTooltipMarkdown(document, markdown, theme, {
+    ...options,
+    classNamespace: 'typescript-lsp',
+  })
+}

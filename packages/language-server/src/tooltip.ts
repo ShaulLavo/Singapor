@@ -56,6 +56,7 @@ let nextTooltipAnchorId = 0
 
 type TooltipAnchorNames = {
   readonly anchorName: string
+  readonly classNamespace: string
 }
 
 export type TooltipShowOptions = {
@@ -87,6 +88,7 @@ export type TooltipOptions = {
   readonly reentryElement: HTMLElement
   /** Render additional filled backgrounds behind Markdown inline and fenced code. */
   readonly markdownCodeBackground?: boolean
+  readonly classNamespace?: string
 }
 
 export type TooltipController = {
@@ -114,8 +116,9 @@ export type TooltipController = {
 
 export function createTooltipController(options: TooltipOptions): TooltipController {
   const { document, themeSource, reentryElement } = options
-  const names = nextTooltipAnchorNames()
-  const anchor = createTooltipAnchorElement(document, names.anchorName)
+  const classNamespace = options.classNamespace ?? 'language-server'
+  const names = nextTooltipAnchorNames(classNamespace)
+  const anchor = createTooltipAnchorElement(document, names)
   const tooltip = createTooltipElement(document, names)
   document.body.append(anchor, tooltip)
 
@@ -161,6 +164,7 @@ export function createTooltipController(options: TooltipOptions): TooltipControl
       diagnostics: showOptions.diagnostics,
       theme: showOptions.theme,
       markdownCodeBackground: options.markdownCodeBackground ?? false,
+      classNamespace,
     })
     placeTooltip(tooltip, showOptions.anchor, placement)
   }
@@ -235,29 +239,30 @@ export function createTooltipController(options: TooltipOptions): TooltipControl
   }
 }
 
-function nextTooltipAnchorNames(): TooltipAnchorNames {
+function nextTooltipAnchorNames(classNamespace: string): TooltipAnchorNames {
   nextTooltipAnchorId += 1
   return {
-    anchorName: `--editor-language-server-hover-${nextTooltipAnchorId}`,
+    anchorName: `--editor-${classNamespace}-hover-${nextTooltipAnchorId}`,
+    classNamespace,
   }
 }
 
-function createTooltipAnchorElement(document: Document, anchorName: string): HTMLDivElement {
+function createTooltipAnchorElement(document: Document, names: TooltipAnchorNames): HTMLDivElement {
   const element = document.createElement('div')
-  element.className = 'editor-language-server-hover-anchor'
+  element.className = tooltipClassName(names.classNamespace, 'anchor')
   Object.assign(element.style, {
     position: 'fixed',
     display: 'none',
     opacity: '0',
     pointerEvents: 'none',
   })
-  element.style.setProperty('anchor-name', anchorName)
+  element.style.setProperty('anchor-name', names.anchorName)
   return element
 }
 
 function createTooltipElement(document: Document, names: TooltipAnchorNames): HTMLDivElement {
   const element = document.createElement('div')
-  element.className = 'editor-language-server-hover'
+  element.className = tooltipClassName(names.classNamespace)
   element.hidden = true
   Object.assign(element.style, {
     position: 'fixed',
@@ -294,13 +299,14 @@ function renderTooltip(
     readonly diagnostics: readonly lsp.Diagnostic[]
     readonly theme?: EditorTheme | null
     readonly markdownCodeBackground: boolean
+    readonly classNamespace: string
   },
 ): void {
   element.replaceChildren()
   element.style.maxHeight = defaultTooltipMaxHeight()
 
   const body = element.ownerDocument.createElement('div')
-  body.className = 'editor-language-server-hover-body'
+  body.className = tooltipClassName(content.classNamespace, 'body')
   Object.assign(body.style, {
     minWidth: '0',
     minHeight: '0',
@@ -314,6 +320,7 @@ function renderTooltip(
     body.append(
       renderTooltipMarkdown(element.ownerDocument, content.hoverText, content.theme, {
         codeBackground: content.markdownCodeBackground,
+        classNamespace: content.classNamespace,
       }),
     )
   }
@@ -321,14 +328,21 @@ function renderTooltip(
     body.append(diagnosticSection(element.ownerDocument, content.diagnostics))
   }
 
-  element.append(createCopyButton(element.ownerDocument, tooltipCopyText(content)), body)
+  element.append(
+    createCopyButton(element.ownerDocument, tooltipCopyText(content), content.classNamespace),
+    body,
+  )
   element.hidden = false
 }
 
-function createCopyButton(document: Document, copyText: string): HTMLButtonElement {
+function createCopyButton(
+  document: Document,
+  copyText: string,
+  classNamespace: string,
+): HTMLButtonElement {
   const button = document.createElement('button')
   button.type = 'button'
-  button.className = 'editor-language-server-hover-copy'
+  button.className = tooltipClassName(classNamespace, 'copy')
   Object.assign(button.style, {
     display: 'inline-grid',
     placeItems: 'center',
@@ -570,10 +584,25 @@ function defaultTooltipBodyMaxHeight(): string {
 }
 
 function setTooltipBodyMaxHeight(element: HTMLDivElement, maxHeight: number): void {
-  const body = element.querySelector<HTMLElement>('.editor-language-server-hover-body')
+  const body = element.querySelector<HTMLElement>(`.${tooltipClassNameForElement(element, 'body')}`)
   if (!body) return
 
   body.style.maxHeight = `${Math.max(1, maxHeight - TOOLTIP_BODY_CHROME_PX)}px`
+}
+
+function tooltipClassName(classNamespace: string, part?: string): string {
+  const base = `editor-${classNamespace}-hover`
+  return part ? `${base}-${part}` : base
+}
+
+function tooltipClassNameForElement(element: HTMLElement, part: string): string {
+  const namespace = tooltipNamespaceFromClassName(element.className)
+  return tooltipClassName(namespace, part)
+}
+
+function tooltipNamespaceFromClassName(className: string): string {
+  const match = /^editor-(.+)-hover(?:\s|$)/.exec(className)
+  return match?.[1] ?? 'language-server'
 }
 
 function tooltipViewportHeight(document: Document): number {

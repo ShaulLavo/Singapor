@@ -162,6 +162,9 @@ export function offsetToX(
   row: MountedVirtualizedTextRow,
   offset: number,
 ): number {
+  // TODO: Add BiDi/RTL-aware geometry. The current mapping assumes logical offsets
+  // advance left-to-right, so Hebrew and mixed-direction runs assign the wrong
+  // visual edge to offsets and break caret positions, hit testing, and selection widths.
   const geometry = ensureRowGeometry(view, row)
   const clamped = clamp(offset, row.startOffset, row.endOffset)
   return xForOffset(geometry.boundaries, clamped)

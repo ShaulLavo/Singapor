@@ -6,12 +6,23 @@ import type { LspWorkspace } from '@editor/lsp'
 import type * as lsp from 'vscode-languageserver-protocol'
 
 import { editsForChange, projectDiagnosticsInSnapshot } from './diagnosticProjection'
-import type { DiagnosticsPresenter } from './diagnosticsPresenter'
 import { pathOrUriToDocumentUri } from './paths'
 import type { ActiveDocument, DocumentDescriptor } from './pluginTypes'
 
-type DocumentSyncCallbacks = {
+export type DocumentSyncDiagnosticsPresenter = {
+  clear(): void
+  render(text: string, diagnostics: readonly lsp.Diagnostic[]): void
+  publishSummary(
+    uri: lsp.DocumentUri,
+    version: number | null,
+    diagnostics: readonly lsp.Diagnostic[],
+  ): void
+}
+
+export type DocumentSyncOptions = {
   onDocumentClosed(): void
+  shouldSyncLanguageId?(languageId: string, snapshot: EditorViewSnapshot): boolean
+  shouldSyncUri?(uri: lsp.DocumentUri, snapshot: EditorViewSnapshot): boolean
 }
 
 export class DocumentSync {
@@ -20,8 +31,8 @@ export class DocumentSync {
 
   public constructor(
     private readonly workspace: LspWorkspace,
-    private readonly presenter: DiagnosticsPresenter,
-    private readonly callbacks: DocumentSyncCallbacks,
+    private readonly presenter: DocumentSyncDiagnosticsPresenter,
+    private readonly options: DocumentSyncOptions,
   ) {}
 
   public get activeDocument(): ActiveDocument | null {
@@ -39,7 +50,7 @@ export class DocumentSync {
   }
 
   public sync(snapshot: EditorViewSnapshot, change: DocumentSessionChange | null): void {
-    const descriptor = documentDescriptor(snapshot)
+    const descriptor = documentDescriptor(snapshot, this.options)
     if (!descriptor) {
       this.close()
       return
@@ -52,7 +63,7 @@ export class DocumentSync {
     const active = this.document
     this.document = null
     this.diagnosticItems = []
-    this.callbacks.onDocumentClosed()
+    this.options.onDocumentClosed()
     if (!active) return
 
     this.presenter.clear()
@@ -121,11 +132,17 @@ export class DocumentSync {
   }
 }
 
-function documentDescriptor(snapshot: EditorViewSnapshot): DocumentDescriptor | null {
+function documentDescriptor(
+  snapshot: EditorViewSnapshot,
+  options: DocumentSyncOptions,
+): DocumentDescriptor | null {
   if (!snapshot.documentId) return null
   if (!snapshot.languageId) return null
+  if (options.shouldSyncLanguageId?.(snapshot.languageId, snapshot) === false) return null
 
   const uri = pathOrUriToDocumentUri(snapshot.documentId)
+  if (options.shouldSyncUri?.(uri, snapshot) === false) return null
+
   return defineLazyFullTextProperty({
     uri,
     languageId: snapshot.languageId,

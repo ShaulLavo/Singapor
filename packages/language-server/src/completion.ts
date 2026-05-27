@@ -1,5 +1,5 @@
 import type { DocumentSessionChange, TextEdit } from '@editor/core/document'
-import type { EditorSelectionRange } from '@editor/core/extensions'
+import type { EditorEditContributionContext, EditorSelectionRange } from '@editor/core/extensions'
 import { createEditorCapabilityToken } from '@editor/core/extensions'
 import { lspPositionToOffset } from '@editor/lsp'
 import type * as lsp from 'vscode-languageserver-protocol'
@@ -46,13 +46,20 @@ export type CompletionWidgetController = {
 export type CompletionWidgetOptions = {
   readonly document: Document
   readonly themeSource: HTMLElement
+  readonly classNamespace?: string
   onSelect(index: number): void
+}
+
+type CompletionWidgetClassNames = {
+  readonly root: string
+  readonly item: string
 }
 
 const COMPLETION_WIDGET_GAP_PX = 4
 const COMPLETION_WIDGET_WIDTH_PX = 320
 const COMPLETION_WIDGET_MAX_HEIGHT_PX = 280
 const COMPLETION_WIDGET_MARGIN_PX = 12
+const COMPLETION_WIDGET_CLASS_NAMESPACE = 'language-server'
 const COMPLETION_TRIGGER_CHARACTERS = new Set(['.', '"', "'", '`', '/', '@', '<', '#'])
 const COMPLETION_THEME_VARIABLES = [
   '--editor-background',
@@ -63,7 +70,8 @@ const COMPLETION_THEME_VARIABLES = [
 export function createCompletionWidgetController(
   options: CompletionWidgetOptions,
 ): CompletionWidgetController {
-  const element = createCompletionWidgetElement(options.document)
+  const classNames = completionWidgetClassNames(options.classNamespace)
+  const element = createCompletionWidgetElement(options.document, classNames)
   options.document.body.append(element)
 
   let items: readonly lsp.CompletionItem[] = []
@@ -73,9 +81,9 @@ export function createCompletionWidgetController(
   const render = (): void => {
     element.replaceChildren()
     for (let index = 0; index < items.length; index += 1) {
-      element.append(completionRowElement(element.ownerDocument, items[index]!, index))
+      element.append(completionRowElement(element.ownerDocument, items[index]!, index, classNames))
     }
-    syncSelectedRows(element, selectedIndex)
+    syncSelectedRows(element, selectedIndex, classNames)
   }
 
   const show = (showOptions: CompletionWidgetShowOptions): void => {
@@ -98,19 +106,19 @@ export function createCompletionWidgetController(
     if (items.length === 0) return
 
     selectedIndex = wrapIndex(selectedIndex + delta, items.length)
-    syncSelectedRows(element, selectedIndex)
+    syncSelectedRows(element, selectedIndex, classNames)
   }
 
   const selectedItem = (): lsp.CompletionItem | null => items[selectedIndex] ?? null
 
   const handlePointerDown = (event: PointerEvent): void => {
-    const row = completionRowTarget(event.target)
+    const row = completionRowTarget(event.target, classNames)
     if (!row) return
 
     event.preventDefault()
     event.stopPropagation()
     selectedIndex = rowIndex(row)
-    syncSelectedRows(element, selectedIndex)
+    syncSelectedRows(element, selectedIndex, classNames)
     options.onSelect(selectedIndex)
   }
 
@@ -187,9 +195,27 @@ export function completionAnchorRange(
   return { start: end - 1, end }
 }
 
-function createCompletionWidgetElement(document: Document): HTMLDivElement {
+export function createCompletionEditFeature(
+  context: EditorEditContributionContext,
+  timingName: string,
+): LanguageServerCompletionEditFeature {
+  return {
+    applyCompletion(application: LanguageServerCompletionApplication): boolean {
+      if (!context.hasDocument()) return false
+
+      context.applyEdits(application.edits, timingName, application.selection)
+      context.focusEditor()
+      return true
+    },
+  }
+}
+
+function createCompletionWidgetElement(
+  document: Document,
+  classNames: CompletionWidgetClassNames,
+): HTMLDivElement {
   const element = document.createElement('div')
-  element.className = 'editor-language-server-completion'
+  element.className = classNames.root
   element.hidden = true
   element.setAttribute('role', 'listbox')
   Object.assign(element.style, {
@@ -219,9 +245,10 @@ function completionRowElement(
   document: Document,
   item: lsp.CompletionItem,
   index: number,
+  classNames: CompletionWidgetClassNames,
 ): HTMLDivElement {
   const row = document.createElement('div')
-  row.className = 'editor-language-server-completion-item'
+  row.className = classNames.item
   row.dataset.index = String(index)
   row.setAttribute('role', 'option')
   Object.assign(row.style, {
@@ -283,8 +310,12 @@ function completionDetailElement(document: Document, item: lsp.CompletionItem): 
   return element
 }
 
-function syncSelectedRows(element: HTMLDivElement, selectedIndex: number): void {
-  const rows = element.querySelectorAll<HTMLElement>('.editor-language-server-completion-item')
+function syncSelectedRows(
+  element: HTMLDivElement,
+  selectedIndex: number,
+  classNames: CompletionWidgetClassNames,
+): void {
+  const rows = element.querySelectorAll<HTMLElement>(`.${classNames.item}`)
   for (const row of rows) syncSelectedRow(row, rowIndex(row) === selectedIndex)
 }
 
@@ -395,9 +426,22 @@ function plainCompletionText(text: string, format: lsp.InsertTextFormat | undefi
   return text.replace(/\$\{\d+:([^}]*)\}/g, '$1').replace(/\$\d+/g, '')
 }
 
-function completionRowTarget(target: EventTarget | null): HTMLElement | null {
+function completionRowTarget(
+  target: EventTarget | null,
+  classNames: CompletionWidgetClassNames,
+): HTMLElement | null {
   if (!(target instanceof Element)) return null
-  return target.closest<HTMLElement>('.editor-language-server-completion-item')
+  return target.closest<HTMLElement>(`.${classNames.item}`)
+}
+
+function completionWidgetClassNames(
+  namespace = COMPLETION_WIDGET_CLASS_NAMESPACE,
+): CompletionWidgetClassNames {
+  const root = `editor-${namespace}-completion`
+  return {
+    root,
+    item: `${root}-item`,
+  }
 }
 
 function rowIndex(row: HTMLElement): number {

@@ -3,9 +3,9 @@ export { createTypeScriptLspPlugin } from './pluginWithWorker'
 export {
   diagnosticHighlightGroups,
   summarizeDiagnostics,
-  type TypeScriptLspDiagnosticHighlightGroups,
-  type TypeScriptLspDiagnosticSeverity,
-} from './diagnostics'
+  type LanguageServerDiagnosticHighlightGroups as TypeScriptLspDiagnosticHighlightGroups,
+  type LanguageServerDiagnosticSeverity as TypeScriptLspDiagnosticSeverity,
+} from '@editor/language-server/diagnostics'
 export {
   documentUriToFileName,
   fileNameToDocumentUri,

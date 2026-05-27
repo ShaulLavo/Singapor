@@ -1,5 +1,17 @@
-export { type LanguageServerResolvedOptions } from './plugin'
-export { createLanguageServerPlugin } from './plugin'
+export {
+  createLanguageServerCorePlugin,
+  createLanguageServerPlugin,
+  type LanguageServerCommandSpec,
+  type LanguageServerCommandTarget,
+  type LanguageServerConnectionContext,
+  type LanguageServerCorePluginOptions,
+  type LanguageServerResolvedOptions,
+} from './plugin'
+export {
+  createWebSocketLspTransportFactory,
+  createWorkerLspTransportFactory,
+  type LspConnectionTransportFactory,
+} from './lspConnection'
 export {
   diagnosticHighlightGroups,
   summarizeDiagnostics,

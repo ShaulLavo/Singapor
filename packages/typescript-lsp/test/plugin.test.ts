@@ -332,6 +332,148 @@ describe('createTypeScriptLspPlugin', () => {
     expect(worker.sent.filter(hasMethod('editor/typescript/setWorkspaceFiles'))).toHaveLength(0)
   })
 
+  it('reports hover request timeouts through the TypeScript adapter controller', async () => {
+    vi.useFakeTimers()
+    const worker = new FakeWorker()
+    const errors: unknown[] = []
+    const context = viewContributionContext(editorSnapshot())
+    const plugin = createTypeScriptLspPlugin({
+      timeoutMs: 20,
+      workerFactory: () => worker,
+      onError: (error) => errors.push(error),
+    })
+    const provider = activatePlugin(plugin)
+    provider.createContribution(context)
+
+    worker.receive(initializeResponse(message(worker.sent[0])))
+    await flushPromises()
+    context.scrollElement.dispatchEvent(
+      new PointerEvent('pointermove', { clientX: 12, clientY: 16, buttons: 0 }),
+    )
+    await vi.advanceTimersByTimeAsync(260)
+
+    expect(worker.sent.some(hasMethod('textDocument/hover'))).toBe(true)
+
+    await vi.advanceTimersByTimeAsync(25)
+    await flushPromises()
+
+    expect(errors.map(errorMessage)).toEqual(['LSP request timed out: textDocument/hover'])
+  })
+
+  it('cancels stale completion requests through the TypeScript adapter controller', async () => {
+    vi.useFakeTimers()
+    const worker = new FakeWorker()
+    const errors: unknown[] = []
+    const context = viewContributionContext(
+      editorSnapshot({
+        fullText: 'const va',
+        selections: [collapsedSelection(8)],
+      }),
+    )
+    const plugin = createTypeScriptLspPlugin({
+      workerFactory: () => worker,
+      onError: (error) => errors.push(error),
+    })
+    const provider = activatePlugin(plugin)
+    const contribution = provider.createContribution(context)
+    if (!contribution) throw new Error('missing contribution')
+
+    worker.receive(initializeResponse(message(worker.sent[0])))
+    await flushPromises()
+    contribution.update(
+      editorSnapshot({
+        fullText: 'const val',
+        textVersion: 2,
+        selections: [collapsedSelection(9)],
+      }),
+      'content',
+      documentChange([{ from: 8, to: 8, text: 'l' }]),
+    )
+    await vi.advanceTimersByTimeAsync(90)
+
+    const firstRequest = latestMessage(worker.sent, 'textDocument/completion')
+    contribution.update(
+      editorSnapshot({
+        fullText: 'const valu',
+        textVersion: 3,
+        selections: [collapsedSelection(10)],
+      }),
+      'content',
+      documentChange([{ from: 9, to: 9, text: 'u' }]),
+    )
+    await flushPromises()
+
+    expect(worker.sent.find(hasCancelRequestFor(firstRequest.id))).toBeTruthy()
+    expect(errors).toHaveLength(0)
+
+    await vi.advanceTimersByTimeAsync(90)
+    expect(latestMessage(worker.sent, 'textDocument/completion').params).toMatchObject({
+      position: { line: 0, character: 10 },
+    })
+  })
+
+  it('keeps worker and WebSocket transports equivalent for initialization and sync', async () => {
+    FakeWebSocket.instances.length = 0
+    const worker = new FakeWorker()
+    const workerContext = viewContributionContext(
+      editorSnapshot({ fullText: 'export const value = 1;' }),
+    )
+    const workerPlugin = createTypeScriptLspPlugin({
+      compilerOptions: { strict: true },
+      diagnosticDelayMs: 7,
+      workerFactory: () => worker,
+    })
+    const workerProvider = activatePlugin(workerPlugin)
+    workerProvider.createContribution(workerContext)
+
+    worker.receive(initializeResponse(message(worker.sent[0])))
+    await flushPromises()
+
+    const socketContext = viewContributionContext(
+      editorSnapshot({ fullText: 'export const value = 1;' }),
+    )
+    const socketPlugin = createTypeScriptLspPlugin({
+      compilerOptions: { strict: true },
+      diagnosticDelayMs: 7,
+      webSocketRoute: 'ws://localhost/lsp/typescript',
+      webSocketTransportOptions: { WebSocketCtor: FakeWebSocket },
+    })
+    const socketProvider = activatePlugin(socketPlugin)
+    socketProvider.createContribution(socketContext)
+    const socket = FakeWebSocket.instances[0]
+    if (!socket) throw new Error('missing socket')
+
+    socket.open()
+    await flushPromises()
+    socket.receive(initializeResponse(jsonMessage(socket.sent[0])))
+    await flushPromises()
+
+    const workerParity = transportParityMessages(worker.sent.map(message))
+    const socketParity = transportParityMessages(socket.sent.map(jsonMessage))
+    expect(workerParity).toEqual(socketParity)
+    expect(workerParity.map((item) => item.method)).toEqual([
+      'initialize',
+      'initialized',
+      'textDocument/didOpen',
+      'editor/typescript/setWorkspaceFiles',
+    ])
+    expect(workerParity[0]?.params).toMatchObject({
+      rootUri: 'file:///',
+      initializationOptions: {
+        compilerOptions: { strict: true },
+        diagnosticDelayMs: 7,
+      },
+    })
+    expect(workerParity[2]?.params).toEqual({
+      textDocument: {
+        uri: 'file:///src/index.ts',
+        languageId: 'typescript',
+        version: 0,
+        text: 'export const value = 1;',
+      },
+    })
+  })
+
   it('can connect through a WebSocket route and keep diagnostics and hover working', async () => {
     vi.useFakeTimers()
     FakeWebSocket.instances.length = 0
@@ -1476,6 +1618,37 @@ function textDocumentFor(item: unknown): unknown {
 function contentChangesFor(item: JsonMessage): unknown {
   const params = item.params as { readonly contentChanges: unknown }
   return params.contentChanges
+}
+
+function latestMessage(items: readonly unknown[], method: string): JsonMessage {
+  return message(items.toReversed().find(hasMethod(method)))
+}
+
+function hasCancelRequestFor(id: unknown): (item: unknown) => boolean {
+  return (item) => {
+    const current = message(item)
+    const params = current.params as { readonly id?: unknown } | undefined
+    return current.method === '$/cancelRequest' && params?.id === id
+  }
+}
+
+function transportParityMessages(
+  messages: readonly JsonMessage[],
+): readonly { readonly id: unknown; readonly method: unknown; readonly params: unknown }[] {
+  const methods = new Set([
+    'initialize',
+    'initialized',
+    'textDocument/didOpen',
+    'editor/typescript/setWorkspaceFiles',
+  ])
+  return messages
+    .filter((item) => typeof item.method === 'string' && methods.has(item.method))
+    .map((item) => ({ id: item.id, method: item.method, params: item.params }))
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  return String(error)
 }
 
 function latestRangeHighlightRanges(

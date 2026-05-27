@@ -34,10 +34,14 @@ import type {
   LanguageServerReferencesResult,
 } from './types'
 
-type HoverDefinitionControllerOptions = {
+export type HoverDefinitionControllerOptions = {
   readonly context: EditorViewContributionContext
   readonly client: LspClient
   readonly hoverMarkdownCodeBackground: boolean
+  readonly defaultHighlightPrefix?: string
+  readonly linkHighlightNameNamespace?: string
+  readonly tooltipClassNamespace?: string
+  readonly navigationTimingNamePrefix?: string
   getActiveDocument(): ActiveDocument | null
   getDiagnostics(): readonly lsp.Diagnostic[]
   completionContainsTarget(target: EventTarget | null): boolean
@@ -46,7 +50,7 @@ type HoverDefinitionControllerOptions = {
     options?: LanguageServerNavigationOptions,
   ): void | boolean
   onOpenReferences?(result: LanguageServerReferencesResult): void | boolean
-  onRequestSuccess(): void
+  onRequestSuccess?(): void
   onRequestError(error: unknown): void
 }
 
@@ -68,14 +72,13 @@ export class HoverDefinitionController {
   public constructor(private readonly options: HoverDefinitionControllerOptions) {
     this.context = options.context
     this.client = options.client
-    this.linkHighlightName = `${
-      this.context.highlightPrefix ?? 'editor-language-server'
-    }-language-server-definition-link`
+    this.linkHighlightName = definitionLinkHighlightName(this.context, options)
     this.tooltip = createTooltipController({
       document: this.context.container.ownerDocument,
       themeSource: this.context.scrollElement,
       reentryElement: this.context.scrollElement,
       markdownCodeBackground: options.hoverMarkdownCodeBackground,
+      classNamespace: options.tooltipClassNamespace ?? 'language-server',
     })
     this.installHandlers()
   }
@@ -244,7 +247,7 @@ export class HoverDefinitionController {
         } satisfies lsp.TextDocumentPositionParams,
         { signal: abort.signal },
       )
-      this.options.onRequestSuccess()
+      this.options.onRequestSuccess?.()
       this.renderHoverResult(requestId, active, offset, hover)
     } catch (error) {
       this.options.onRequestError(error)
@@ -402,8 +405,14 @@ export class HoverDefinitionController {
         setSelection: this.context.setSelection.bind(this.context),
         focusEditor: this.context.focusEditor.bind(this.context),
       },
-      navigationTimingName(command.kind),
+      this.navigationTimingName(command.kind),
     )
+  }
+
+  private navigationTimingName(kind: LanguageServerNavigationKind): string {
+    const prefix = this.options.navigationTimingNamePrefix ?? 'languageServer'
+    if (kind === 'typeDefinition') return `${prefix}.goToTypeDefinition`
+    return `${prefix}.goTo${capitalize(kind)}`
   }
 
   private openDefinitionTarget(
@@ -455,11 +464,6 @@ function defaultDefinitionOptions(
   }
 }
 
-function navigationTimingName(kind: LanguageServerNavigationKind): string {
-  if (kind === 'typeDefinition') return 'languageServer.goToTypeDefinition'
-  return `languageServer.goTo${capitalize(kind)}`
-}
-
 function hoverText(hover: lsp.Hover | null): string | null {
   if (!hover) return null
 
@@ -506,4 +510,14 @@ function isNavigationModifier(event: {
 
 function capitalize(value: string): string {
   return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`
+}
+
+function definitionLinkHighlightName(
+  context: EditorViewContributionContext,
+  options: HoverDefinitionControllerOptions,
+): string {
+  const prefix =
+    context.highlightPrefix ?? options.defaultHighlightPrefix ?? 'editor-language-server'
+  const namespace = options.linkHighlightNameNamespace ?? 'language-server'
+  return `${prefix}-${namespace}-definition-link`
 }

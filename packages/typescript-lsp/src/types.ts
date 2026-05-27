@@ -1,5 +1,15 @@
 import type { EditorPlugin } from '@editor/core/extensions'
 import type { LspWebSocketTransportOptions, LspWorkerLike } from '@editor/lsp'
+import type {
+  LanguageServerDefinitionTarget,
+  LanguageServerDiagnosticCounts,
+  LanguageServerDiagnosticSummary,
+  LanguageServerNavigationKind,
+  LanguageServerNavigationOpenMode,
+  LanguageServerNavigationOptions,
+  LanguageServerReferencesResult,
+  LanguageServerStatus,
+} from '@editor/language-server'
 import type ts from 'typescript'
 import type * as lsp from 'vscode-languageserver-protocol'
 
@@ -8,46 +18,21 @@ export type TypeScriptLspSourceFile = {
   readonly text: string
 }
 
-export type TypeScriptLspStatus = 'idle' | 'loading' | 'ready' | 'error'
+export type TypeScriptLspStatus = LanguageServerStatus
 
-export type TypeScriptLspDiagnosticCounts = {
-  readonly error: number
-  readonly warning: number
-  readonly information: number
-  readonly hint: number
-  readonly total: number
-}
+export type TypeScriptLspDiagnosticCounts = LanguageServerDiagnosticCounts
 
-export type TypeScriptLspDiagnosticSummary = {
-  readonly uri: lsp.DocumentUri | null
-  readonly version: number | null
-  readonly diagnostics: readonly lsp.Diagnostic[]
-  readonly counts: TypeScriptLspDiagnosticCounts
-}
+export type TypeScriptLspDiagnosticSummary = LanguageServerDiagnosticSummary
 
-export type TypeScriptLspDefinitionTarget = {
-  readonly uri: lsp.DocumentUri
-  readonly path: string
-  readonly range: lsp.Range
-}
+export type TypeScriptLspDefinitionTarget = LanguageServerDefinitionTarget
 
-export type TypeScriptLspNavigationKind =
-  | 'definition'
-  | 'references'
-  | 'implementation'
-  | 'typeDefinition'
+export type TypeScriptLspNavigationKind = LanguageServerNavigationKind
 
-export type TypeScriptLspNavigationOpenMode = 'default' | 'peek' | 'aside'
+export type TypeScriptLspNavigationOpenMode = LanguageServerNavigationOpenMode
 
-export type TypeScriptLspNavigationOptions = {
-  readonly kind: TypeScriptLspNavigationKind
-  readonly openMode: TypeScriptLspNavigationOpenMode
-}
+export type TypeScriptLspNavigationOptions = LanguageServerNavigationOptions
 
-export type TypeScriptLspReferencesResult = {
-  readonly uri: lsp.DocumentUri
-  readonly targets: readonly TypeScriptLspDefinitionTarget[]
-}
+export type TypeScriptLspReferencesResult = LanguageServerReferencesResult
 
 export type TypeScriptLspPluginOptions = {
   readonly rootUri?: lsp.DocumentUri | null

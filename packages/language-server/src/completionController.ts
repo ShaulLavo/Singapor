@@ -1,5 +1,6 @@
 import type { DocumentSessionChange } from '@editor/core/document'
 import type {
+  EditorCapabilityToken,
   EditorViewContributionContext,
   EditorViewContributionUpdateKind,
   EditorViewSnapshot,
@@ -26,13 +27,15 @@ type CompletionSession = {
   readonly offset: number
 }
 
-type CompletionControllerOptions = {
+export type CompletionControllerOptions = {
   readonly context: EditorViewContributionContext
   readonly client: LspClient
+  readonly completionEditFeature?: EditorCapabilityToken<LanguageServerCompletionEditFeature>
+  readonly completionWidgetClassNamespace?: string
   getActiveDocument(): ActiveDocument | null
   ignorePointerTarget(target: EventTarget | null): boolean
   onBeforeShow(): void
-  onRequestSuccess(): void
+  onRequestSuccess?(): void
   onRequestError(error: unknown): void
 }
 
@@ -52,6 +55,7 @@ export class CompletionController {
     this.completion = createCompletionWidgetController({
       document: this.context.container.ownerDocument,
       themeSource: this.context.scrollElement,
+      classNamespace: options.completionWidgetClassNamespace,
       onSelect: () => {
         this.acceptCompletion()
       },
@@ -176,7 +180,7 @@ export class CompletionController {
         } satisfies lsp.CompletionParams,
         { signal: abort.signal },
       )
-      this.options.onRequestSuccess()
+      this.options.onRequestSuccess?.()
       this.renderCompletionResult(requestId, active, offset, completionItems(result))
     } catch (error) {
       this.options.onRequestError(error)
@@ -222,7 +226,8 @@ export class CompletionController {
   }
 
   private completionEditFeature(): LanguageServerCompletionEditFeature | null {
-    return this.context.getFeature?.(LANGUAGE_SERVER_COMPLETION_EDIT_FEATURE) ?? null
+    const token = this.options.completionEditFeature ?? LANGUAGE_SERVER_COMPLETION_EDIT_FEATURE
+    return this.context.getFeature?.(token) ?? null
   }
 
   private cancelCompletionRequest(): void {
