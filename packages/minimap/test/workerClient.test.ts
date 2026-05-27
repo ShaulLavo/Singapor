@@ -303,8 +303,52 @@ describe('MinimapWorkerClient', () => {
 
       expect(applyEdit.type).toBe('applyEdit')
       expect('tokens' in applyEdit.document).toBe(false)
-      expect(applyEdit.document.summary.lineStarts).toEqual([0, 8, 15])
-      expect(applyEdit.document.summary.lines[0]).toEqual({ text: 'line 1x', length: 7 })
+      expect(applyEdit.document.summaryPatch).toMatchObject({
+        lineStarts: [0, 8, 15],
+        startLine: 0,
+        deleteCount: 1,
+        lines: [{ text: 'line 1x', length: 7 }],
+      })
+
+      client.dispose()
+      host.root.remove()
+      host.colorScope.remove()
+    } finally {
+      runtime.restore()
+    }
+  })
+
+  it('builds edit summary patches through the secondary projection text snapshot', () => {
+    const runtime = installMinimapRuntime()
+    try {
+      const host = createHost()
+      const client = new MinimapWorkerClient({
+        host,
+        options: resolveMinimapOptions(),
+        snapshot: snapshotWithThrowingFullText('line 1\nline 2\nline 3'),
+        decorations: [],
+        onLayoutWidth: vi.fn(),
+      })
+      const worker = runtime.workers[0]!
+      worker.send(renderedResponse(1))
+      worker.postMessage.mockClear()
+
+      const edit: TextEdit = { from: 6, to: 6, text: 'x' }
+      client.update(
+        snapshotWithThrowingFullText('line 1x\nline 2\nline 3'),
+        'content',
+        documentEdit(edit, 'line 1x\nline 2\nline 3'),
+      )
+      runtime.flushAnimationFrames()
+
+      const applyEdit = worker.postMessage.mock.calls[0]?.[0] as Extract<
+        MinimapWorkerRequest,
+        { type: 'applyEdit' }
+      >
+
+      expect(applyEdit.type).toBe('applyEdit')
+      expect('text' in applyEdit.document).toBe(false)
+      expect(applyEdit.document.summaryPatch.lines).toEqual([{ text: 'line 1x', length: 7 }])
 
       client.dispose()
       host.root.remove()
@@ -388,6 +432,53 @@ describe('MinimapWorkerClient', () => {
     }
   })
 
+  it('includes the touched old line when building multi-line paste summary patches', () => {
+    const runtime = installMinimapRuntime()
+    try {
+      const host = createHost()
+      const client = new MinimapWorkerClient({
+        host,
+        options: resolveMinimapOptions(),
+        snapshot: snapshot({}, { fullText: 'a\nb' }),
+        decorations: [],
+        onLayoutWidth: vi.fn(),
+      })
+      const worker = runtime.workers[0]!
+      worker.send(renderedResponse(1))
+      worker.postMessage.mockClear()
+
+      const edit: TextEdit = { from: 2, to: 2, text: 'x\ny\n' }
+      client.update(
+        snapshot({}, { fullText: 'a\nx\ny\nb' }),
+        'content',
+        documentEdit(edit, 'a\nx\ny\nb'),
+      )
+      runtime.flushAnimationFrames()
+
+      const applyEdit = worker.postMessage.mock.calls[0]?.[0] as Extract<
+        MinimapWorkerRequest,
+        { type: 'applyEdit' }
+      >
+
+      expect(applyEdit.type).toBe('applyEdit')
+      expect(applyEdit.document.summaryPatch).toMatchObject({
+        startLine: 1,
+        deleteCount: 1,
+        lines: [
+          { text: 'x', length: 1 },
+          { text: 'y', length: 1 },
+          { text: 'b', length: 1 },
+        ],
+      })
+
+      client.dispose()
+      host.root.remove()
+      host.colorScope.remove()
+    } finally {
+      runtime.restore()
+    }
+  })
+
   it('queues incremental edits while a render is in flight', () => {
     const runtime = installMinimapRuntime()
     try {
@@ -441,7 +532,11 @@ describe('MinimapWorkerClient', () => {
         'render',
       ])
       expect(applyEdits.edits).toEqual([secondEdit, thirdEdit])
-      expect(applyEdits.document.summary.lines[0]).toEqual({ text: 'line 1xyz', length: 9 })
+      expect(applyEdits.document.summaryPatch).toMatchObject({
+        startLine: 0,
+        deleteCount: 1,
+        lines: [{ text: 'line 1xyz', length: 9 }],
+      })
 
       client.dispose()
       host.root.remove()
@@ -489,7 +584,11 @@ describe('MinimapWorkerClient', () => {
         { from: 0, to: 0, text: 'x' },
         { from: 5, to: 5, text: 'y' },
       ])
-      expect(applyEdits.document.summary.lines[0]).toEqual({ text: 'xabc ydef ghi', length: 13 })
+      expect(applyEdits.document.summaryPatch).toMatchObject({
+        startLine: 0,
+        deleteCount: 1,
+        lines: [{ text: 'xabc ydef ghi', length: 13 }],
+      })
 
       client.dispose()
       host.root.remove()

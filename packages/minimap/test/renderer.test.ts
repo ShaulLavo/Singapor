@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { MinimapWorkerRenderer, projectMinimapTokensThroughEdit } from '../src/renderer'
 import { resolveMinimapOptions } from '../src/options'
-import type { MinimapDocumentPayload, MinimapDocumentSummaryPayload } from '../src/types'
+import type {
+  MinimapDocumentPayload,
+  MinimapDocumentSummaryPatch,
+  MinimapDocumentSummaryPayload,
+} from '../src/types'
 
 describe('MinimapWorkerRenderer', () => {
   it('ignores updates before initialization', () => {
@@ -82,7 +86,7 @@ describe('MinimapWorkerRenderer', () => {
 
     renderer.applyEdit(
       { from: insertionPoint, to: insertionPoint, text: '// MARK: Inserted\n' },
-      { selections: [], summary: documentSummary(nextText) },
+      { selections: [], summaryPatch: documentSummaryPatch(nextText, 2, 0, 3) },
     )
 
     const document = rendererDocument(renderer)
@@ -97,6 +101,19 @@ describe('MinimapWorkerRenderer', () => {
       { line: 3, text: 'Inserted' },
       { line: 4, text: 'Render' },
     ])
+  })
+
+  it('splices edited line summaries without replacing unaffected lines', () => {
+    const renderer = createInitializedRenderer()
+    renderer.setDocument(documentPayload('one\ntwo\nthree'))
+
+    renderer.applyEdit(
+      { from: 4, to: 7, text: 'TWO' },
+      { selections: [], summaryPatch: documentSummaryPatch('one\nTWO\nthree', 1, 1, 2) },
+    )
+
+    const document = rendererDocument(renderer)
+    expect(document.lines.map((line) => line.text)).toEqual(['one', 'TWO', 'three'])
   })
 })
 
@@ -144,6 +161,22 @@ function documentSummary(text: string): MinimapDocumentSummaryPayload {
     textLength: text.length,
     lineStarts: starts,
     lines: starts.map((startOffset, index) => lineSummary(text, starts, startOffset, index)),
+  }
+}
+
+function documentSummaryPatch(
+  text: string,
+  startLine: number,
+  deleteCount: number,
+  insertEndLine: number,
+): MinimapDocumentSummaryPatch {
+  const summary = documentSummary(text)
+  return {
+    textLength: summary.textLength,
+    lineStarts: summary.lineStarts,
+    startLine,
+    deleteCount,
+    lines: summary.lines.slice(startLine, insertEndLine),
   }
 }
 

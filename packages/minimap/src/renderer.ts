@@ -16,6 +16,7 @@ import type {
   MinimapBaseStyles,
   MinimapDocumentEditPayload,
   MinimapDocumentPayload,
+  MinimapDocumentSummaryPatch,
   MinimapDocumentSummaryPayload,
   MinimapMetrics,
   MinimapRenderLayout,
@@ -115,7 +116,7 @@ export class MinimapWorkerRenderer {
     }
 
     const previous = this.state.document
-    const next = applyTextEditsToMinimapDocument(previous, edits, document.summary)
+    const next = applyTextEditsToMinimapDocument(previous, edits, document.summaryPatch)
     this.setEditedDocument(previous, next, edits, document.selections)
   }
 
@@ -747,7 +748,7 @@ function emptyRenderResult(): RenderResult {
 function applyTextEditsToMinimapDocument(
   document: Pick<MinimapDocumentPayload, 'lineStarts' | 'lines' | 'textLength' | 'tokens'>,
   edits: readonly TextEdit[],
-  summary: MinimapDocumentSummaryPayload,
+  summaryPatch: MinimapDocumentSummaryPatch,
 ): MinimapDocumentSummaryPayload & Pick<MinimapDocumentPayload, 'tokens'> {
   let tokens = document.tokens
 
@@ -755,7 +756,26 @@ function applyTextEditsToMinimapDocument(
     tokens = projectMinimapTokensThroughEdit(tokens, edit, tokenProjectionText(document))
   }
 
+  const summary = applyMinimapDocumentSummaryPatch(document, summaryPatch)
   return { ...summary, tokens }
+}
+
+function applyMinimapDocumentSummaryPatch(
+  document: Pick<MinimapDocumentPayload, 'lines'>,
+  patch: MinimapDocumentSummaryPatch,
+): MinimapDocumentSummaryPayload {
+  const startLine = Math.min(Math.max(0, patch.startLine), document.lines.length)
+  const deleteCount = Math.min(Math.max(0, patch.deleteCount), document.lines.length - startLine)
+
+  return {
+    textLength: patch.textLength,
+    lineStarts: patch.lineStarts,
+    lines: [
+      ...document.lines.slice(0, startLine),
+      ...patch.lines,
+      ...document.lines.slice(startLine + deleteCount),
+    ],
+  }
 }
 
 function lineIndexForOffset(lineStarts: readonly number[], offset: number): number {

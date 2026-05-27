@@ -537,10 +537,11 @@ Purpose: make secondary surfaces consume editor projections instead of cloning e
   length, line starts, and clipped line summaries instead of serializing full document text.
 - Reworked the minimap worker renderer to store summarized lines, render from those summaries, and
   keep section-header scanning on summarized line input.
+- Optimized minimap content edits to send affected-line summary patches instead of whole-document
+  line summaries, while still preserving exact text length and line starts for layout.
 
 ### Remaining Work
 
-- Optimize minimap content edits from whole-document summaries to affected-line summary deltas.
 - Move diff syntax highlighting fully onto the syntax service contract, including the Shiki path.
 - Replace diff's private scroll/selection primitives with shared secondary-view helpers where the
   current text-surface wrapper is still too low-level.

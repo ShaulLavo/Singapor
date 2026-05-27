@@ -105,6 +105,14 @@ export type MinimapDocumentSummaryPayload = {
   readonly lines: readonly MinimapDocumentLineSummary[]
 }
 
+export type MinimapDocumentSummaryPatch = {
+  readonly textLength: number
+  readonly lineStarts: readonly number[]
+  readonly startLine: number
+  readonly deleteCount: number
+  readonly lines: readonly MinimapDocumentLineSummary[]
+}
+
 export type MinimapDocumentPayload = MinimapDocumentSummaryPayload & {
   readonly tokens: readonly MinimapToken[]
   readonly selections: readonly MinimapSelection[]
@@ -114,7 +122,7 @@ export type MinimapDocumentPayload = MinimapDocumentSummaryPayload & {
 
 export type MinimapDocumentEditPayload = {
   readonly selections: readonly MinimapSelection[]
-  readonly summary: MinimapDocumentSummaryPayload
+  readonly summaryPatch: MinimapDocumentSummaryPatch
 }
 
 export type MinimapRenderLayout = {
