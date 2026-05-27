@@ -1,4 +1,5 @@
 import type * as lsp from 'vscode-languageserver-protocol'
+import type { LspRequestId } from './protocol'
 
 export type LspTransportHandler = (message: string) => void
 
@@ -27,6 +28,17 @@ export type LspTextDocumentSnapshot = {
 
 export type LspDocumentSyncMode = 'none' | 'full' | 'incremental'
 
+export type LspDocumentSaveSync = {
+  readonly enabled: boolean
+  readonly includeText: boolean
+}
+
+export type LspDocumentSyncOptions = {
+  readonly change: LspDocumentSyncMode
+  readonly openClose: boolean
+  readonly save: LspDocumentSaveSync
+}
+
 export type LspDocumentOpenOptions = {
   readonly uri: lsp.DocumentUri
   readonly languageId: string
@@ -47,6 +59,25 @@ export type LspWorkspaceSnapshotEditOptions = LspTextDocumentSnapshot & {
   readonly edits?: readonly LspTextEdit[]
 }
 
+export type LspDocumentChange = {
+  readonly edits: readonly LspTextEdit[]
+  readonly previousSnapshot?: LspTextDocumentSnapshot
+  readonly previousText?: string
+}
+
+export type LspWorkspaceSyncTarget = {
+  didOpenDocument(document: LspDocument): void
+  didChangeDocument(document: LspDocument, change: LspDocumentChange): void
+  didSaveDocument(document: LspDocument): void
+  didCloseDocument(document: LspDocument): void
+}
+
+export type LspRequestHandle<TResult = unknown> = {
+  readonly id: LspRequestId
+  readonly response: Promise<TResult>
+  cancel(): void
+}
+
 export type PublishDiagnosticsNotificationParams = {
   readonly uri: lsp.DocumentUri
   readonly version?: number
@@ -64,4 +95,16 @@ export type LspUnhandledNotificationHandler<TClient = unknown> = (
   method: string,
   params: unknown,
   message: lsp.NotificationMessage,
+) => void
+
+export type LspServerMessageNotification = {
+  readonly method: 'window/logMessage' | 'window/showMessage'
+  readonly type: number
+  readonly message: string | null
+  readonly params: unknown
+}
+
+export type LspServerMessageHandler<TClient = unknown> = (
+  client: TClient,
+  notification: LspServerMessageNotification,
 ) => void

@@ -1,4 +1,9 @@
-export { defaultClientCapabilities, documentSyncModeFromCapabilities } from './capabilities'
+export {
+  clientSupportsDidSave,
+  defaultClientCapabilities,
+  documentSyncModeFromCapabilities,
+  documentSyncOptionsFromCapabilities,
+} from './capabilities'
 export { LspClient, type LspClientConfig, type LspClientState } from './client'
 export {
   createLspContentChanges,
@@ -40,9 +45,15 @@ export {
 } from './transports'
 export type {
   LspDocument,
+  LspDocumentChange,
+  LspDocumentSaveSync,
   LspDocumentOpenOptions,
   LspDocumentSyncMode,
+  LspDocumentSyncOptions,
   LspNotificationHandler,
+  LspRequestHandle,
+  LspServerMessageHandler,
+  LspServerMessageNotification,
   PublishDiagnosticsNotificationParams,
   LspTextDocumentSnapshot,
   LspTextEdit,
@@ -50,6 +61,7 @@ export type {
   LspTransport,
   LspTransportHandler,
   LspUnhandledNotificationHandler,
+  LspWorkspaceSyncTarget,
   LspWorkspaceEditOptions,
   LspWorkspaceSnapshotEditOptions,
 } from './types'

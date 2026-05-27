@@ -1,5 +1,5 @@
 import type * as lsp from 'vscode-languageserver-protocol'
-import type { LspDocumentSyncMode } from './types'
+import type { LspDocumentSaveSync, LspDocumentSyncMode, LspDocumentSyncOptions } from './types'
 
 const TEXT_DOCUMENT_SYNC_NONE = 0
 const TEXT_DOCUMENT_SYNC_FULL = 1
@@ -40,11 +40,45 @@ export const mergeClientCapabilities = (
 export const documentSyncModeFromCapabilities = (
   capabilities: lsp.ServerCapabilities | null,
 ): LspDocumentSyncMode => {
-  if (!capabilities?.textDocumentSync) return 'none'
+  return documentSyncOptionsFromCapabilities(capabilities).change
+}
 
-  const sync = capabilities.textDocumentSync
-  if (typeof sync === 'number') return syncModeFromKind(sync)
-  return syncModeFromKind(sync.change ?? TEXT_DOCUMENT_SYNC_NONE)
+export const documentSyncOptionsFromCapabilities = (
+  capabilities: lsp.ServerCapabilities | null,
+): LspDocumentSyncOptions => {
+  const sync = capabilities?.textDocumentSync
+  if (!sync) return noDocumentSync()
+  if (typeof sync === 'number') return numericDocumentSync(sync)
+
+  return {
+    change: syncModeFromKind(sync.change ?? TEXT_DOCUMENT_SYNC_NONE),
+    openClose: sync.openClose === true,
+    save: saveSyncFromOptions(sync.save),
+  }
+}
+
+export const clientSupportsDidSave = (capabilities: lsp.ClientCapabilities): boolean =>
+  capabilities.textDocument?.synchronization?.didSave === true
+
+const noDocumentSync = (): LspDocumentSyncOptions => ({
+  change: 'none',
+  openClose: false,
+  save: { enabled: false, includeText: false },
+})
+
+const numericDocumentSync = (kind: number): LspDocumentSyncOptions => {
+  const change = syncModeFromKind(kind)
+  return {
+    change,
+    openClose: change !== 'none',
+    save: { enabled: false, includeText: false },
+  }
+}
+
+const saveSyncFromOptions = (save: boolean | lsp.SaveOptions | undefined): LspDocumentSaveSync => {
+  if (!save) return { enabled: false, includeText: false }
+  if (save === true) return { enabled: true, includeText: false }
+  return { enabled: true, includeText: save.includeText === true }
 }
 
 const syncModeFromKind = (kind: number): LspDocumentSyncMode => {

@@ -1,7 +1,8 @@
 import type * as lsp from 'vscode-languageserver-protocol'
 import {
+  clientSupportsDidSave,
   defaultClientCapabilities,
-  documentSyncModeFromCapabilities,
+  documentSyncOptionsFromCapabilities,
   mergeClientCapabilities,
 } from './capabilities'
 import {
@@ -18,11 +19,13 @@ import {
 import { createLspContentChanges, createLspContentChangesInSnapshot } from './positions'
 import { measureLspPerformance } from './performanceDiagnostics'
 import type {
+  LspDocumentChange,
+  LspDocumentSaveSync,
   LspDocument,
   LspDocumentSyncMode,
   LspNotificationHandler,
-  LspTextDocumentSnapshot,
-  LspTextEdit,
+  LspRequestHandle,
+  LspServerMessageHandler,
   LspTransport,
   LspUnhandledNotificationHandler,
 } from './types'
@@ -42,12 +45,12 @@ export type LspClientConfig = {
   readonly workspace?: LspWorkspace
   readonly notificationHandlers?: Readonly<Record<string, LspNotificationHandler<LspClient>>>
   readonly unhandledNotification?: LspUnhandledNotificationHandler<LspClient>
+  readonly serverMessageHandler?: LspServerMessageHandler<LspClient>
 }
 
 type PendingRequest = {
   readonly id: LspRequestId
   readonly method: string
-  readonly params: unknown
   readonly timeout: ReturnType<typeof setTimeout>
   readonly resolve: (result: unknown) => void
   readonly reject: (error: unknown) => void
@@ -59,12 +62,6 @@ type RequestOptions = {
   readonly signal?: AbortSignal
 }
 
-type LspDocumentChange = {
-  readonly edits: readonly LspTextEdit[]
-  readonly previousSnapshot?: LspTextDocumentSnapshot
-  readonly previousText?: string
-}
-
 export class LspClient {
   public readonly workspace: LspWorkspace
   public serverCapabilities: lsp.ServerCapabilities | null = null
@@ -72,17 +69,24 @@ export class LspClient {
 
   private readonly config: LspClientConfig
   private readonly timeoutMs: number
+  private readonly clientCapabilities: lsp.ClientCapabilities
   private transport: LspTransport | null = null
   private state: LspClientState = 'disconnected'
   private nextRequestId = 1
   private initializePromise: Promise<void> | null = null
   private syncMode: LspDocumentSyncMode = 'none'
+  private syncOpenClose = false
+  private syncSave: LspDocumentSaveSync = { enabled: false, includeText: false }
   private readonly pendingRequests = new Map<LspRequestId, PendingRequest>()
   private readonly syncedDocuments = new Set<lsp.DocumentUri>()
 
   public constructor(config: LspClientConfig = {}) {
     this.config = config
     this.timeoutMs = config.timeoutMs ?? 3000
+    this.clientCapabilities = mergeClientCapabilities(
+      defaultClientCapabilities(),
+      this.config.capabilities,
+    )
     this.workspace = config.workspace ?? new LspWorkspace()
     this.workspace.attachClient(this)
     this.receiveMessage = this.receiveMessage.bind(this)
@@ -119,6 +123,8 @@ export class LspClient {
     this.initializeResult = null
     this.serverCapabilities = null
     this.syncMode = 'none'
+    this.syncOpenClose = false
+    this.syncSave = { enabled: false, includeText: false }
     this.syncedDocuments.clear()
     this.rejectPendingRequests(new Error('LSP client disconnected'))
     this.workspace.disconnected()
@@ -137,11 +143,26 @@ export class LspClient {
     params?: TParams,
     options: RequestOptions = {},
   ): Promise<TResult> {
-    if (!this.transport) return Promise.reject(new Error('LSP client is not connected'))
-    if (this.state === 'ready') return this.requestInner<TResult>(method, params, options)
-    return this.awaitInitialization().then(() =>
-      this.requestInner<TResult>(method, params, options),
-    )
+    return this.requestHandle<TResult, TParams>(method, params, options).response
+  }
+
+  public requestHandle<TResult = unknown, TParams = unknown>(
+    method: string,
+    params?: TParams,
+    options: RequestOptions = {},
+  ): LspRequestHandle<TResult> {
+    const id = this.allocateRequestId()
+    let cancelled = false
+    const response = this.sendHandledRequest<TResult>(id, method, params, options, () => cancelled)
+
+    return {
+      id,
+      response,
+      cancel: () => {
+        cancelled = true
+        this.abortRequest(id)
+      },
+    }
   }
 
   public notify<TParams = unknown>(method: string, params?: TParams): Promise<void> {
@@ -155,13 +176,6 @@ export class LspClient {
     return this.notify(method, params)
   }
 
-  public cancelRequest(params: unknown): void {
-    const pending = this.pendingRequestForParams(params)
-    if (!pending) return
-
-    this.trySendNotification('$/cancelRequest', { id: pending.id })
-  }
-
   public hasCapability(name: keyof lsp.ServerCapabilities): boolean | null {
     if (!this.serverCapabilities) return null
     return Boolean(this.serverCapabilities[name])
@@ -169,10 +183,12 @@ export class LspClient {
 
   public didOpenDocument(document: LspDocument): void {
     if (this.state !== 'ready') return
-    if (this.syncMode === 'none') return
     if (this.syncedDocuments.has(document.uri)) return
+    if (!this.shouldTrackDocumentSync()) return
 
     this.syncedDocuments.add(document.uri)
+    if (!this.syncOpenClose) return
+
     this.trySendNotification('textDocument/didOpen', {
       textDocument: {
         uri: document.uri,
@@ -194,9 +210,21 @@ export class LspClient {
     })
   }
 
+  public didSaveDocument(document: LspDocument): void {
+    if (this.state !== 'ready') return
+    if (!this.syncSave.enabled) return
+    if (!this.syncedDocuments.has(document.uri)) return
+
+    this.trySendNotification('textDocument/didSave', {
+      textDocument: { uri: document.uri },
+      ...(this.syncSave.includeText ? { text: document.text } : {}),
+    })
+  }
+
   public didCloseDocument(document: LspDocument): void {
     if (this.state !== 'ready') return
     if (!this.syncedDocuments.delete(document.uri)) return
+    if (!this.syncOpenClose) return
 
     this.trySendNotification('textDocument/didClose', {
       textDocument: { uri: document.uri },
@@ -224,7 +252,7 @@ export class LspClient {
       clientInfo: this.config.clientInfo ?? { name: '@editor/lsp' },
       locale: this.config.locale,
       rootUri: this.config.rootUri ?? null,
-      capabilities: mergeClientCapabilities(defaultClientCapabilities(), this.config.capabilities),
+      capabilities: this.clientCapabilities,
       initializationOptions: this.config.initializationOptions,
       workspaceFolders: this.config.workspaceFolders ? [...this.config.workspaceFolders] : null,
     }
@@ -233,8 +261,17 @@ export class LspClient {
   private applyInitializeResult(result: lsp.InitializeResult): void {
     this.initializeResult = result
     this.serverCapabilities = result.capabilities
-    this.syncMode = documentSyncModeFromCapabilities(result.capabilities)
+    const sync = documentSyncOptionsFromCapabilities(result.capabilities)
+    this.syncMode = sync.change
+    this.syncOpenClose = sync.openClose
+    this.syncSave = clientSupportsDidSave(this.clientCapabilities)
+      ? sync.save
+      : { enabled: false, includeText: false }
     this.state = 'ready'
+  }
+
+  private shouldTrackDocumentSync(): boolean {
+    return this.syncOpenClose || this.syncMode !== 'none' || this.syncSave.enabled
   }
 
   private contentChangesForDocumentChange(
@@ -275,16 +312,48 @@ export class LspClient {
     params: unknown,
     options: RequestOptions = {},
   ): Promise<TResult> {
+    return this.requestInnerWithId(this.allocateRequestId(), method, params, options)
+  }
+
+  private sendHandledRequest<TResult>(
+    id: LspRequestId,
+    method: string,
+    params: unknown,
+    options: RequestOptions,
+    isCancelled: () => boolean,
+  ): Promise<TResult> {
+    if (!this.transport) return Promise.reject(new Error('LSP client is not connected'))
+    if (this.state === 'ready')
+      return this.sendReadyHandledRequest(id, method, params, options, isCancelled)
+    return this.awaitInitialization().then(() =>
+      this.sendReadyHandledRequest(id, method, params, options, isCancelled),
+    )
+  }
+
+  private sendReadyHandledRequest<TResult>(
+    id: LspRequestId,
+    method: string,
+    params: unknown,
+    options: RequestOptions,
+    isCancelled: () => boolean,
+  ): Promise<TResult> {
+    if (isCancelled()) return Promise.reject(new LspRequestCancelledError())
+    return this.requestInnerWithId<TResult>(id, method, params, options)
+  }
+
+  private requestInnerWithId<TResult>(
+    id: LspRequestId,
+    method: string,
+    params: unknown,
+    options: RequestOptions,
+  ): Promise<TResult> {
     const transport = this.requireTransport()
-    const id = this.nextRequestId
-    this.nextRequestId += 1
     const message = createRequestMessage(id, method, params)
 
     return new Promise<TResult>((resolve, reject) => {
       const pending = this.createPendingRequest(
         id,
         method,
-        params,
         (result) => resolve(result as TResult),
         reject,
         options,
@@ -294,16 +363,21 @@ export class LspClient {
     })
   }
 
+  private allocateRequestId(): LspRequestId {
+    const id = this.nextRequestId
+    this.nextRequestId += 1
+    return id
+  }
+
   private createPendingRequest(
     id: LspRequestId,
     method: string,
-    params: unknown,
     resolve: (result: unknown) => void,
     reject: (error: unknown) => void,
     options: RequestOptions,
   ): PendingRequest {
     const timeout = setTimeout(() => this.timeoutRequest(id), options.timeoutMs ?? this.timeoutMs)
-    const pending: PendingRequest = { id, method, params, timeout, resolve, reject }
+    const pending: PendingRequest = { id, method, timeout, resolve, reject }
     if (!options.signal) return pending
 
     const abort = () => this.abortRequest(id)
@@ -385,8 +459,24 @@ export class LspClient {
   private handleNotification(message: lsp.NotificationMessage): void {
     const handler = this.config.notificationHandlers?.[message.method]
     if (handler?.(this, message.params, message)) return
-    if (defaultNotificationHandler(this, message)) return
+    if (this.handleDefaultNotification(message)) return
     this.config.unhandledNotification?.(this, message.method, message.params, message)
+  }
+
+  private handleDefaultNotification(message: lsp.NotificationMessage): boolean {
+    if (message.method === 'window/logMessage') return this.handleServerMessage(message)
+    if (message.method === 'window/showMessage') return this.handleServerMessage(message)
+    return false
+  }
+
+  private handleServerMessage(message: lsp.NotificationMessage): boolean {
+    this.config.serverMessageHandler?.(this, {
+      method: message.method as 'window/logMessage' | 'window/showMessage',
+      type: messageType(message.params),
+      message: messageText(message.params),
+      params: message.params,
+    })
+    return true
   }
 
   private handleRequest(message: lsp.RequestMessage): void {
@@ -414,14 +504,6 @@ export class LspClient {
     this.trySendNotification('$/cancelRequest', { id })
     this.deletePendingRequest(id)
     pending.reject(new LspRequestCancelledError())
-  }
-
-  private pendingRequestForParams(params: unknown): PendingRequest | null {
-    for (const pending of this.pendingRequests.values()) {
-      if (pending.params === params) return pending
-    }
-
-    return null
   }
 
   private deletePendingRequest(id: LspRequestId): void {
@@ -458,37 +540,6 @@ export class LspClient {
     if (this.transport) return this.transport
     throw new Error('LSP client is not connected')
   }
-}
-
-const defaultNotificationHandler = (
-  _client: LspClient,
-  message: lsp.NotificationMessage,
-): boolean => {
-  if (message.method === 'window/logMessage') return handleWindowLogMessage(message.params)
-  if (message.method === 'window/showMessage') return handleWindowShowMessage(message.params)
-  return false
-}
-
-const handleWindowLogMessage = (params: unknown): boolean => {
-  const message = messageText(params)
-  if (!message) return true
-
-  const type = messageType(params)
-  if (type === 1) console.error(`[lsp] ${message}`)
-  else if (type === 2) console.warn(`[lsp] ${message}`)
-  else console.info(`[lsp] ${message}`)
-  return true
-}
-
-const handleWindowShowMessage = (params: unknown): boolean => {
-  const message = messageText(params)
-  if (!message) return true
-
-  const type = messageType(params)
-  if (type === 1) console.error(`[lsp] ${message}`)
-  else if (type === 2) console.warn(`[lsp] ${message}`)
-  else console.info(`[lsp] ${message}`)
-  return true
 }
 
 const messageText = (params: unknown): string | null => {

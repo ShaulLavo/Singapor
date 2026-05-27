@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   LspClient,
+  LspRequestCancelledError,
   LspResponseError,
   LspWorkspace,
   METHOD_NOT_FOUND,
@@ -125,21 +126,40 @@ describe('LspClient', () => {
     await rejected
   })
 
-  it('sends cancellation notifications for matching request params', async () => {
+  it('sends cancellation notifications for explicit request handles', async () => {
     const { client, transport } = await initializedClient()
 
-    const params = { query: 'name' }
-    const request = client.request('workspace/symbol', params)
-    request.catch(() => undefined)
+    const request = client.requestHandle('workspace/symbol', { query: 'name' })
+    request.response.catch(() => undefined)
     const pendingRequest = transport.lastMessage()
 
-    client.cancelRequest(params)
+    request.cancel()
 
     const cancel = transport.lastMessage()
     expect(cancel.method).toBe('$/cancelRequest')
-    expect(cancel.params).toEqual({ id: pendingRequest.id })
+    expect(cancel.params).toEqual({ id: request.id })
+    expect(request.id).toBe(pendingRequest.id)
+    await expect(request.response).rejects.toBeInstanceOf(LspRequestCancelledError)
 
     client.disconnect()
+  })
+
+  it('routes server messages to the configured handler without logging by default', async () => {
+    const serverMessageHandler = vi.fn()
+    const { transport } = await initializedClientWithConfig({ serverMessageHandler })
+
+    transport.receive({
+      jsonrpc: '2.0',
+      method: 'window/logMessage',
+      params: { type: 2, message: 'indexing' },
+    })
+
+    expect(serverMessageHandler).toHaveBeenCalledWith(expect.any(LspClient), {
+      method: 'window/logMessage',
+      type: 2,
+      message: 'indexing',
+      params: { type: 2, message: 'indexing' },
+    })
   })
 
   it('dispatches configured notifications and reports unhandled notifications', async () => {
@@ -347,6 +367,40 @@ describe('LspClient', () => {
     expect(didClose.method).toBe('textDocument/didClose')
     expect(didClose.params).toEqual({
       textDocument: { uri: 'file:///repo/close.ts' },
+    })
+  })
+
+  it('sends open, change, save, and close in document lifecycle order', async () => {
+    const { client, transport } = await initializedClientWithConfig(
+      {
+        capabilities: { textDocument: { synchronization: { didSave: true } } },
+        timeoutMs: 1000,
+      },
+      { textDocumentSync: { openClose: true, change: 2, save: { includeText: true } } },
+    )
+
+    client.workspace.openDocument({
+      uri: 'file:///repo/lifecycle.ts',
+      languageId: 'typescript',
+      text: 'let value = 1;',
+    })
+    client.workspace.updateDocument('file:///repo/lifecycle.ts', 'let value = 2;', {
+      edits: [{ from: 12, to: 13, text: '2' }],
+    })
+    client.workspace.saveDocument('file:///repo/lifecycle.ts')
+    client.workspace.closeDocument('file:///repo/lifecycle.ts')
+
+    expect(transport.sent.map((message) => message.method)).toEqual([
+      'initialize',
+      'initialized',
+      'textDocument/didOpen',
+      'textDocument/didChange',
+      'textDocument/didSave',
+      'textDocument/didClose',
+    ])
+    expect(transport.message(4).params).toEqual({
+      textDocument: { uri: 'file:///repo/lifecycle.ts' },
+      text: 'let value = 2;',
     })
   })
 })

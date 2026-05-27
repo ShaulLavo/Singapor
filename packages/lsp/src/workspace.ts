@@ -1,11 +1,11 @@
 import type * as lsp from 'vscode-languageserver-protocol'
-import type { LspClient } from './client'
 import type {
   LspDocument,
   LspDocumentOpenOptions,
   LspTextDocumentSnapshot,
   LspTextSnapshot,
   LspTextEdit,
+  LspWorkspaceSyncTarget,
   LspWorkspaceEditOptions,
   LspWorkspaceSnapshotEditOptions,
 } from './types'
@@ -22,13 +22,13 @@ type MutableLspDocument = {
 export class LspWorkspace {
   private readonly documentsByUri = new Map<lsp.DocumentUri, MutableLspDocument>()
   private readonly versionsByUri = new Map<lsp.DocumentUri, number>()
-  private client: LspClient | null = null
+  private client: LspWorkspaceSyncTarget | null = null
 
   public get documents(): readonly LspDocument[] {
     return Array.from(this.documentsByUri.values()).map(cloneDocument)
   }
 
-  public attachClient(client: LspClient): void {
+  public attachClient(client: LspWorkspaceSyncTarget): void {
     this.client = client
   }
 
@@ -99,6 +99,13 @@ export class LspWorkspace {
 
     this.documentsByUri.delete(uri)
     this.client?.didCloseDocument(cloneDocument(document))
+  }
+
+  public saveDocument(uri: lsp.DocumentUri): void {
+    const document = this.documentsByUri.get(uri)
+    if (!document) return
+
+    this.client?.didSaveDocument(cloneDocument(document))
   }
 
   public getDocument(uri: lsp.DocumentUri): LspDocument | null {
