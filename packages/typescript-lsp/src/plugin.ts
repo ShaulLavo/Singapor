@@ -5,7 +5,6 @@ import {
   createLanguageServerCorePlugin,
   createWebSocketLspTransportFactory,
   createWorkerLspTransportFactory,
-  type LanguageServerCommandSpec,
   type LanguageServerConnectionContext,
   type LspConnectionTransportFactory,
 } from '@editor/language-server'
@@ -74,7 +73,6 @@ export function createTypeScriptLspPlugin(
       tooltipClassNamespace: 'typescript-lsp',
       navigationTimingNamePrefix: 'typescriptLsp',
     },
-    commands: TYPESCRIPT_LSP_COMMANDS,
     onConnectionCreated: (context) =>
       registerTypeScriptConnection(context, workspaceFiles, resolved),
     onConnected: (context) => workspaceFiles.syncClient(context.client),
@@ -192,58 +190,6 @@ function isTypeScriptLspLanguage(languageId: string): boolean {
     languageId === 'typescriptreact'
   )
 }
-
-const TYPESCRIPT_LSP_COMMANDS: readonly LanguageServerCommandSpec[] = [
-  {
-    id: 'goToDefinition',
-    run: (state) => state.goToDefinitionFromSelection(),
-  },
-  {
-    id: 'editor.action.goToDefinition',
-    run: (state) => state.goToDefinitionFromSelection(),
-  },
-  {
-    id: 'editor.action.peekDefinition',
-    run: (state) => state.runNavigationCommand({ kind: 'definition', openMode: 'peek' }),
-  },
-  {
-    id: 'editor.action.revealDefinitionAside',
-    run: (state) => state.runNavigationCommand({ kind: 'definition', openMode: 'aside' }),
-  },
-  {
-    id: 'editor.action.goToImplementation',
-    run: (state) =>
-      state.runNavigationCommand({
-        kind: 'implementation',
-        openMode: 'default',
-      }),
-  },
-  {
-    id: 'editor.action.goToTypeDefinition',
-    run: (state) =>
-      state.runNavigationCommand({
-        kind: 'typeDefinition',
-        openMode: 'default',
-      }),
-  },
-  {
-    id: 'editor.action.goToReferences',
-    run: (state) =>
-      state.runNavigationCommand({
-        kind: 'references',
-        openMode: 'peek',
-        includeDeclaration: true,
-      }),
-  },
-  {
-    id: 'editor.action.marker.next',
-    run: (state) => state.moveDiagnosticMarker('next'),
-  },
-  {
-    id: 'editor.action.marker.prev',
-    run: (state) => state.moveDiagnosticMarker('previous'),
-  },
-]
 
 function ignoreConnectionError(): void {
   return undefined

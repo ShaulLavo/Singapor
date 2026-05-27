@@ -19,14 +19,6 @@ export {
   type LspContentChangeOptions,
 } from './positions'
 export {
-  createLspPlugin,
-  type LspPluginDocumentUriResolver,
-  type LspPluginLanguageIdResolver,
-  type LspPluginOptions,
-  type LspPluginRoute,
-  type LspPluginStatus,
-} from './plugin'
-export {
   LspRequestCancelledError,
   LspResponseError,
   METHOD_NOT_FOUND,

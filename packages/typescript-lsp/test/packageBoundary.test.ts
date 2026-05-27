@@ -8,7 +8,6 @@ type PackageJson = {
 }
 
 const TYPE_SCRIPT_SPECIALIZATION_FILES = [
-  'diagnosticProjection.ts',
   'index.ts',
   'paths.ts',
   'plugin.ts',
@@ -23,6 +22,7 @@ const SHARED_LANGUAGE_SERVER_FILES = [
   'completion.ts',
   'completionController.ts',
   'definitionNavigation.ts',
+  'diagnosticProjection.ts',
   'diagnostics.ts',
   'diagnosticsPresenter.ts',
   'documentSync.ts',

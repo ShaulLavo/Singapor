@@ -2,6 +2,7 @@ import type { DocumentSessionChange, TextEdit } from '@editor/core/document'
 import type { LspTextDocumentSnapshot, LspTextSnapshot } from '@editor/lsp'
 import { describe, expect, it } from 'vitest'
 import type * as lsp from 'vscode-languageserver-protocol'
+
 import { projectDiagnosticsInSnapshot } from '../src/diagnosticProjection'
 
 describe('diagnostic projection', () => {
@@ -16,7 +17,7 @@ describe('diagnostic projection', () => {
     expect(projected).toEqual([
       {
         severity: 1,
-        source: 'typescript',
+        source: 'language-server',
         message: 'message',
         range: {
           start: { line: 0, character: 2 },
@@ -41,7 +42,7 @@ describe('diagnostic projection', () => {
 function diagnostic(line: number, start: number, end: number): lsp.Diagnostic {
   return {
     severity: 1,
-    source: 'typescript',
+    source: 'language-server',
     message: 'message',
     range: {
       start: { line, character: start },

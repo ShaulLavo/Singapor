@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest'
 import {
   LspClient,
   LspWorkspace,
-  createLspPlugin,
   createWorkerLspTransport,
   defaultClientCapabilities,
   offsetToLspPosition,
@@ -22,7 +21,6 @@ describe('public API facade', () => {
 
     expect(LspClient).toBeTypeOf('function')
     expect(LspWorkspace).toBeTypeOf('function')
-    expect(createLspPlugin).toBeTypeOf('function')
     expect(createWorkerLspTransport).toBeTypeOf('function')
     expect(defaultClientCapabilities().textDocument?.synchronization?.didSave).toBe(false)
     expect(offsetToLspPosition('abc', 1)).toEqual({ line: 0, character: 1 })
