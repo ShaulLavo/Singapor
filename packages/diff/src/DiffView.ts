@@ -752,8 +752,7 @@ export class DiffView {
         viewport: pane.side,
       },
       run: (context) => this.loadSyntaxHighlighting(pane, file, context, sessions),
-      apply: (result, context) =>
-        this.applySyntaxHighlightingResult(pane, result, sessions, context),
+      apply: (result) => this.applySyntaxHighlightingResult(pane, result, sessions),
       fail: () => disposeMutableSessions(sessions),
       cancel: () => disposeMutableSessions(sessions),
     })
@@ -816,9 +815,8 @@ export class DiffView {
     pane: MountedPane,
     result: DiffSyntaxHighlightResult | null,
     sessions: { dispose(): void }[],
-    context: EditorSecondaryWorkContext,
   ): void {
-    if (!context.isCurrent() || !result) {
+    if (!result) {
       disposeMutableSessions(sessions)
       return
     }
@@ -1051,7 +1049,7 @@ function syntaxDocument(file: DiffFile, source: DiffSyntaxSource): DiffSyntaxDoc
   const request: EditorSyntaxServiceRequest = {
     editSummary: null,
     language: createSyntaxLanguageConfiguration({
-      includeCaptures: false,
+      includeCaptures: true,
       includeHighlights: true,
       languageId,
       mode: 'full',

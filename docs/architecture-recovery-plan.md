@@ -541,12 +541,13 @@ Purpose: make secondary surfaces consume editor projections instead of cloning e
   line summaries, while still preserving exact text length and line starts for layout.
 - Moved diff syntax highlighting onto per-source syntax service requests so both Tree-sitter and
   Shiki consume full old/new file snapshots and project syntax result tokens into diff rows.
+- Added regression coverage for compact large-file diff projections and rapid minimap edit
+  coalescing through summary and token patch payloads.
 
 ### Remaining Work
 
 - Replace diff's private scroll/selection primitives with shared secondary-view helpers where the
   current text-surface wrapper is still too low-level.
-- Add large-file diff and rapid-edit minimap regression tests around the new summary payload path.
 
 ### Work
 

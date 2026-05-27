@@ -46,6 +46,7 @@ type HoverDefinitionControllerOptions = {
     options?: LanguageServerNavigationOptions,
   ): void | boolean
   onOpenReferences?(result: LanguageServerReferencesResult): void | boolean
+  onRequestSuccess(): void
   onRequestError(error: unknown): void
 }
 
@@ -243,6 +244,7 @@ export class HoverDefinitionController {
         } satisfies lsp.TextDocumentPositionParams,
         { signal: abort.signal },
       )
+      this.options.onRequestSuccess()
       this.renderHoverResult(requestId, active, offset, hover)
     } catch (error) {
       this.options.onRequestError(error)

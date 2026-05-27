@@ -21,6 +21,7 @@ export type LanguageServerResolvedOptions = {
   readonly webSocketTransportOptions?: LspWebSocketTransportOptions
   readonly onStatusChange?: (status: LanguageServerStatus) => void
   readonly onDiagnostics?: (summary: LanguageServerDiagnosticSummary) => void
+  readonly onInteractiveReady?: () => void
   readonly onOpenDefinition?: (
     target: LanguageServerDefinitionTarget,
     options?: LanguageServerNavigationOptions,

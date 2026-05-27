@@ -32,6 +32,7 @@ type CompletionControllerOptions = {
   getActiveDocument(): ActiveDocument | null
   ignorePointerTarget(target: EventTarget | null): boolean
   onBeforeShow(): void
+  onRequestSuccess(): void
   onRequestError(error: unknown): void
 }
 
@@ -175,6 +176,7 @@ export class CompletionController {
         } satisfies lsp.CompletionParams,
         { signal: abort.signal },
       )
+      this.options.onRequestSuccess()
       this.renderCompletionResult(requestId, active, offset, completionItems(result))
     } catch (error) {
       this.options.onRequestError(error)

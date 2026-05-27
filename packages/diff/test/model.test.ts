@@ -238,4 +238,48 @@ describe('diff projections', () => {
 
     expect(projection.rows.some((row) => row.text.includes('@@ -255'))).toBe(false)
   })
+
+  it('keeps large split diffs compact while preserving deep line numbers', () => {
+    const targetLine = 8_000
+    const file = createLargeSingleLineDiff(targetLine)
+    const projection = createSplitProjection(file)
+
+    expect(file.oldLines).toHaveLength(10_001)
+    expect(file.hunks).toHaveLength(1)
+    expect(projection.leftRows).toHaveLength(2)
+    expect(projection.rightRows).toHaveLength(2)
+    expect(projection.leftRows[0]).toMatchObject({
+      expandable: true,
+      skippedLines: targetLine - 1,
+      text: `Show ${targetLine - 1} unmodified lines`,
+      type: 'hunk',
+    })
+    expect(projection.leftRows[1]).toMatchObject({
+      oldLineNumber: targetLine,
+      text: `old ${targetLine}`,
+      type: 'deletion',
+    })
+    expect(projection.rightRows[1]).toMatchObject({
+      newLineNumber: targetLine,
+      text: `new ${targetLine}`,
+      type: 'addition',
+    })
+  })
 })
+
+function createLargeSingleLineDiff(targetLine: number) {
+  return createTextDiff({
+    contextLines: 0,
+    oldFile: { path: 'large.ts', text: largeFileText(targetLine, `old ${targetLine}`) },
+    newFile: { path: 'large.ts', text: largeFileText(targetLine, `new ${targetLine}`) },
+  })
+}
+
+function largeFileText(targetLine: number, targetText: string): string {
+  const lines = Array.from({ length: 10_000 }, (_value, index) => {
+    const lineNumber = index + 1
+    if (lineNumber === targetLine) return targetText
+    return `line ${lineNumber}`
+  })
+  return `${lines.join('\n')}\n`
+}

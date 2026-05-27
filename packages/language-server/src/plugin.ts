@@ -157,6 +157,7 @@ class LanguageServerContribution implements EditorViewContribution {
       getActiveDocument: () => this.documentSync.activeDocument,
       ignorePointerTarget: (target) => this.hoverDefinition.containsTarget(target),
       onBeforeShow: () => this.hoverDefinition.clearPointerUi(),
+      onRequestSuccess: () => options.onInteractiveReady?.(),
       onRequestError: (error) => this.handleRequestError(error),
     })
     this.hoverDefinition = new HoverDefinitionController({
@@ -168,6 +169,7 @@ class LanguageServerContribution implements EditorViewContribution {
       completionContainsTarget: (target) => this.completion.containsTarget(target),
       onOpenDefinition: options.onOpenDefinition,
       onOpenReferences: options.onOpenReferences,
+      onRequestSuccess: () => options.onInteractiveReady?.(),
       onRequestError: (error) => this.handleRequestError(error),
     })
     this.state.register(this)
@@ -258,6 +260,7 @@ function resolveOptions(options: LanguageServerPluginOptions): LanguageServerRes
     webSocketTransportOptions: options.webSocketTransportOptions,
     onStatusChange: options.onStatusChange,
     onDiagnostics: options.onDiagnostics,
+    onInteractiveReady: options.onInteractiveReady,
     onOpenDefinition: options.onOpenDefinition,
     onOpenReferences: options.onOpenReferences,
     onError: options.onError,

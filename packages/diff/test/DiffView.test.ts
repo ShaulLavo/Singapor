@@ -1,6 +1,11 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EditorTheme } from '@editor/core/rendering'
-import { createEmptySyntaxResult, type EditorSyntaxSessionOptions } from '@editor/core/syntax'
+import {
+  createEmptySyntaxResult,
+  type EditorSyntaxSessionOptions,
+  type EditorToken,
+} from '@editor/core/syntax'
+import { EditorSecondaryTextView } from '@editor/core/secondary-views'
 import { createTextDiff, DiffView } from '../src'
 import { diffSyntaxBackend, projectDiffSyntaxTokens } from '../src/DiffView'
 import type {
@@ -228,13 +233,41 @@ describe('DiffView split panes', () => {
       expect.objectContaining({
         documentId: 'note.ts:old',
         fullText: 'keep\nold\nskip\n',
-        includeCaptures: false,
+        includeCaptures: true,
         includeHighlights: true,
         languageId: 'typescript',
         syntaxMode: 'full',
       }),
     )
     expect(sessionOptions[0]?.textSnapshot?.readRange(0, 4)).toBe('keep')
+  })
+
+  it('applies tree-sitter syntax service tokens to rendered diff panes', async () => {
+    const setTokens = vi.spyOn(EditorSecondaryTextView.prototype, 'setTokens')
+
+    try {
+      renderDiffView({
+        file: typescriptDiff(),
+        syntaxBackend: createTokenSyntaxBackend(),
+        syntaxHighlight: true,
+      })
+
+      await flushUntil(() => treeSitterTokenCalls(setTokens).length >= 2)
+
+      const tokenCalls = treeSitterTokenCalls(setTokens)
+      expect(tokenCalls).toHaveLength(2)
+      expect(tokenCalls.flat()).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            end: expect.any(Number),
+            start: expect.any(Number),
+            style: { color: 'rgb(1, 2, 3)' },
+          }),
+        ]),
+      )
+    } finally {
+      setTokens.mockRestore()
+    }
   })
 
   it('routes shiki highlighting through full-file syntax service documents', async () => {
@@ -390,8 +423,71 @@ function createRecordingSyntaxBackend(
   }
 }
 
+function createTokenSyntaxBackend(): DiffSyntaxBackend {
+  return {
+    kind: 'tree-sitter',
+    provider: {
+      createSession(options) {
+        return {
+          applyChange: async () => syntaxResultForOptions(options),
+          dispose: () => undefined,
+          getResult: () => syntaxResultForOptions(options),
+          getSnapshotVersion: () => 0,
+          getTokens: () => syntaxResultForOptions(options).tokens,
+          refresh: async () => syntaxResultForOptions(options),
+        }
+      },
+    },
+  }
+}
+
+function syntaxResultForOptions(options: EditorSyntaxSessionOptions) {
+  const target = options.documentId.endsWith(':old') ? 'old' : 'new'
+  const start = options.fullText.indexOf(target)
+  const tokens =
+    start === -1
+      ? []
+      : [
+          {
+            end: start + target.length,
+            start,
+            style: { color: 'rgb(1, 2, 3)' },
+          },
+        ]
+
+  return {
+    ...createEmptySyntaxResult({
+      language: {
+        includeCaptures: true,
+        includeHighlights: true,
+        languageId: options.languageId,
+        mode: 'full',
+      },
+      requestedRanges: [{ startIndex: 0, endIndex: options.snapshot.length }],
+      snapshot: {
+        documentId: options.documentId,
+        length: options.snapshot.length,
+        version: 1,
+      },
+    }),
+    tokens,
+  }
+}
+
 function emptySyntaxResult() {
   return createEmptySyntaxResult()
+}
+
+type SetTokensSpy = {
+  readonly mock: {
+    readonly calls: readonly [readonly EditorToken[]][]
+  }
+}
+
+function treeSitterTokenCalls(setTokens: SetTokensSpy) {
+  return setTokens.mock.calls
+    .map(([tokens]) => tokens)
+    .filter((tokens) => tokens.some((token) => token.style.color === 'rgb(1, 2, 3)'))
 }
 
 async function flushPromises(): Promise<void> {

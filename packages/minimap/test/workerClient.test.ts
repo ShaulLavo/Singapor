@@ -546,6 +546,65 @@ describe('MinimapWorkerClient', () => {
     }
   })
 
+  it('coalesces rapid same-line edits into one summary patch before flushing', () => {
+    const runtime = installMinimapRuntime()
+    try {
+      const host = createHost()
+      const client = new MinimapWorkerClient({
+        host,
+        options: resolveMinimapOptions(),
+        snapshot: snapshotWithThrowingFullText('line 1\nline 2\nline 3'),
+        decorations: [],
+        onLayoutWidth: vi.fn(),
+      })
+      const worker = runtime.workers[0]!
+      worker.send(renderedResponse(1))
+      worker.postMessage.mockClear()
+
+      client.update(
+        snapshotWithThrowingFullText('line 1x\nline 2\nline 3'),
+        'content',
+        documentEdit({ from: 6, to: 6, text: 'x' }, 'line 1x\nline 2\nline 3'),
+      )
+      client.update(
+        snapshotWithThrowingFullText('line 1xy\nline 2\nline 3'),
+        'content',
+        documentEdit({ from: 7, to: 7, text: 'y' }, 'line 1xy\nline 2\nline 3'),
+      )
+      runtime.flushFrames()
+
+      expect(worker.postMessage).not.toHaveBeenCalled()
+
+      runtime.flushTimers()
+      runtime.flushFrames()
+
+      const requests = worker.postMessage.mock.calls.map((call) => call[0] as MinimapWorkerRequest)
+      const applyEdits = requests[0] as Extract<MinimapWorkerRequest, { type: 'applyEdits' }>
+
+      expect(requests.map((request) => request.type)).toEqual([
+        'applyEdits',
+        'updateViewport',
+        'render',
+      ])
+      expect(applyEdits.edits).toEqual([
+        { from: 6, to: 6, text: 'x' },
+        { from: 7, to: 7, text: 'y' },
+      ])
+      expect('text' in applyEdits.document).toBe(false)
+      expect(applyEdits.document.summaryPatch).toMatchObject({
+        startLine: 0,
+        deleteCount: 1,
+        lines: [{ text: 'line 1xy', length: 8 }],
+      })
+
+      client.dispose()
+      host.root.remove()
+      host.colorScope.remove()
+    } finally {
+      runtime.restore()
+    }
+  })
+
   it('uses incremental updates for batched same-line edits', () => {
     const runtime = installMinimapRuntime()
     try {
@@ -588,6 +647,75 @@ describe('MinimapWorkerClient', () => {
         startLine: 0,
         deleteCount: 1,
         lines: [{ text: 'xabc ydef ghi', length: 13 }],
+      })
+
+      client.dispose()
+      host.root.remove()
+      host.colorScope.remove()
+    } finally {
+      runtime.restore()
+    }
+  })
+
+  it('coalesces pending content edits with token range patches', () => {
+    const runtime = installMinimapRuntime()
+    try {
+      const host = createHost()
+      const client = new MinimapWorkerClient({
+        host,
+        options: resolveMinimapOptions(),
+        snapshot: snapshot(
+          {},
+          {
+            tokens: [
+              { start: 0, end: 6, style: { color: '#ff0000' } },
+              { start: 7, end: 13, style: { color: '#00ff00' } },
+            ],
+          },
+        ),
+        decorations: [],
+        onLayoutWidth: vi.fn(),
+      })
+      const worker = runtime.workers[0]!
+      worker.send(renderedResponse(1))
+      worker.postMessage.mockClear()
+
+      const projectedTokens = [
+        { start: 0, end: 7, style: { color: '#ff0000' } },
+        { start: 8, end: 14, style: { color: '#00ff00' } },
+      ]
+      const refreshedTokens = [
+        projectedTokens[0]!,
+        { start: 8, end: 14, style: { color: '#0000ff' } },
+      ]
+      const edit: TextEdit = { from: 6, to: 6, text: 'x' }
+      client.update(
+        snapshot({}, { fullText: 'line 1x\nline 2\nline 3', tokens: projectedTokens }),
+        'content',
+        documentEdit(edit, 'line 1x\nline 2\nline 3'),
+      )
+      client.update(
+        snapshot({}, { fullText: 'line 1x\nline 2\nline 3', tokens: refreshedTokens }),
+        'tokens',
+      )
+      runtime.flushAnimationFrames()
+
+      const requests = worker.postMessage.mock.calls.map((call) => call[0] as MinimapWorkerRequest)
+      const applyEdit = requests[0] as Extract<MinimapWorkerRequest, { type: 'applyEdit' }>
+      const tokenPatch = requests[1] as Extract<MinimapWorkerRequest, { type: 'updateTokenRange' }>
+
+      expect(requests.map((request) => request.type)).toEqual([
+        'applyEdit',
+        'updateTokenRange',
+        'updateViewport',
+        'render',
+      ])
+      expect('tokens' in applyEdit.document).toBe(false)
+      expect(applyEdit.document.summaryPatch.lines).toEqual([{ text: 'line 1x', length: 7 }])
+      expect(tokenPatch.patch).toMatchObject({
+        start: 1,
+        deleteCount: 1,
+        tokens: [{ start: 8, end: 14 }],
       })
 
       client.dispose()
