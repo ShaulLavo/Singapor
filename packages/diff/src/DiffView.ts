@@ -1,5 +1,14 @@
-import { createPieceTableSnapshot } from '@editor/core/document'
-import type { EditorToken } from '@editor/core/syntax'
+import { createDocumentTextSnapshot, createPieceTableSnapshot } from '@editor/core/document'
+import {
+  createEmptySyntaxResult,
+  createSyntaxLanguageConfiguration,
+  createSyntaxSnapshotTag,
+  type EditorSyntaxProvider,
+  type EditorSyntaxResult,
+  type EditorSyntaxServiceRequest,
+  type EditorSyntaxSessionOptions,
+  type EditorToken,
+} from '@editor/core/syntax'
 import type {
   VirtualizedTextHighlightRange,
   VirtualizedTextRowDecoration,
@@ -53,11 +62,27 @@ type DiffSyntaxHighlightResult = {
   readonly tokens: readonly EditorToken[]
 }
 
+type DiffSyntaxDocument = DiffSyntaxSource & {
+  readonly documentId: string
+  readonly languageId: string | null
+  readonly request: EditorSyntaxServiceRequest
+}
+
+type DiffSyntaxService = {
+  createSession(document: DiffSyntaxDocument): Promise<DiffSyntaxServiceSession | null>
+}
+
+type DiffSyntaxServiceSession = {
+  refresh(): Promise<EditorSyntaxResult>
+  dispose(): void
+}
+
 const DEFAULT_THEME = 'github-dark'
 const DEFAULT_DIFF_OVERSCAN = 8
 const WHEEL_LINE_DELTA = 40
 let nextDiffViewId = 0
 let nextMountedPaneId = 0
+let shikiModulePromise: Promise<typeof import('@editor/core/shiki')> | null = null
 
 export class DiffView {
   private readonly root: HTMLDivElement
@@ -741,48 +766,39 @@ export class DiffView {
     sessions: { dispose(): void }[],
   ): Promise<DiffSyntaxHighlightResult | null> {
     if (this.options.syntaxHighlight === false) return null
-    const syntaxBackend = diffSyntaxBackend(this.options)
-    if (syntaxBackend.kind === 'tree-sitter') {
-      return this.loadSyntaxProviderHighlighting(pane, file, context, sessions, syntaxBackend)
-    }
+    const service = await diffSyntaxService(diffSyntaxBackend(this.options), file)
+    if (!context.isCurrent()) return null
+    if (!service) return null
 
-    return this.loadShikiHighlighting(pane, file, context, sessions, syntaxBackend)
+    return this.loadSyntaxServiceHighlighting(pane, file, context, sessions, service)
   }
 
-  private async loadSyntaxProviderHighlighting(
+  private async loadSyntaxServiceHighlighting(
     pane: MountedPane,
     file: DiffFile,
     context: EditorSecondaryWorkContext,
     sessions: { dispose(): void }[],
-    backend: Extract<DiffSyntaxBackend, { readonly kind: 'tree-sitter' }>,
+    service: DiffSyntaxService,
   ): Promise<DiffSyntaxHighlightResult | null> {
-    if (!backend.provider) return null
-
-    const sources = syntaxSourcesForPane(file, pane.side)
+    const documents = syntaxDocumentsForPane(file, pane.side)
     const tokenSources: DiffSyntaxTokenSource[] = []
 
-    for (const source of sources) {
+    for (const document of documents) {
       if (!context.isCurrent()) return null
 
-      const snapshot = createPieceTableSnapshot(source.text)
-      const session = backend.provider.createSession({
-        documentId: `${file.path}:${source.side}`,
-        languageId: file.languageId ?? shikiLanguageForFile(file),
-        fullText: source.text,
-        snapshot,
-      })
+      const session = await service.createSession(document)
       if (!session) continue
 
       sessions.push(session)
-      const result = await session.refresh(snapshot, source.text)
+      const result = await session.refresh()
       if (!context.isCurrent()) {
         disposeMutableSessions(sessions)
         return null
       }
 
       tokenSources.push({
-        lineStarts: source.lineStarts,
-        side: source.side,
+        lineStarts: document.lineStarts,
+        side: document.side,
         tokens: result.tokens,
       })
     }
@@ -794,45 +810,6 @@ export class DiffView {
         sources: tokenSources,
       }),
     }
-  }
-
-  private async loadShikiHighlighting(
-    pane: MountedPane,
-    file: DiffFile,
-    context: EditorSecondaryWorkContext,
-    sessions: { dispose(): void }[],
-    backend: Extract<DiffSyntaxBackend, { readonly kind: 'shiki' }>,
-  ): Promise<DiffSyntaxHighlightResult | null> {
-    const { canUseShikiWorker, createShikiHighlighterSession } = await import('@editor/core/shiki')
-    if (!context.isCurrent()) return null
-    if (!canUseShikiWorker()) return null
-
-    const syntaxText = joinSyntaxLines(pane.rows)
-    const lang = shikiLanguageForFile(file)
-    if (!lang) return null
-
-    const themeName = shikiThemeName(backend.shikiTheme)
-    const snapshot = createPieceTableSnapshot(syntaxText)
-    const session = createShikiHighlighterSession({
-      documentId: `${file.path}:${pane.side}`,
-      languageId: file.languageId ?? lang,
-      fullText: syntaxText,
-      snapshot,
-      langs: [lang],
-      lang,
-      theme: themeName,
-      themes: [themeName],
-    })
-    if (!session) return null
-
-    sessions.push(session)
-    const result = await session.refresh(snapshot, syntaxText)
-    if (!context.isCurrent()) {
-      disposeMutableSessions(sessions)
-      return null
-    }
-
-    return { tokens: result.tokens as readonly EditorToken[] }
   }
 
   private applySyntaxHighlightingResult(
@@ -893,6 +870,127 @@ export function diffSyntaxBackend(options: DiffViewOptions): DiffSyntaxBackend {
   return options.syntaxBackend ?? { kind: 'tree-sitter' }
 }
 
+async function diffSyntaxService(
+  backend: DiffSyntaxBackend,
+  file: DiffFile,
+): Promise<DiffSyntaxService | null> {
+  if (backend.kind === 'tree-sitter') return treeSitterDiffSyntaxService(backend.provider ?? null)
+  return shikiDiffSyntaxService(file, backend)
+}
+
+function treeSitterDiffSyntaxService(
+  provider: EditorSyntaxProvider | null,
+): DiffSyntaxService | null {
+  if (!provider) return null
+
+  return {
+    createSession: async (document) => treeSitterDiffSyntaxSession(provider, document),
+  }
+}
+
+function treeSitterDiffSyntaxSession(
+  provider: EditorSyntaxProvider,
+  document: DiffSyntaxDocument,
+): DiffSyntaxServiceSession | null {
+  const session = provider.createSession(syntaxSessionOptions(document))
+  if (!session) return null
+
+  return {
+    dispose: () => session.dispose(),
+    refresh: () => session.refresh(document.request.snapshot, document.text),
+  }
+}
+
+async function shikiDiffSyntaxService(
+  file: DiffFile,
+  backend: Extract<DiffSyntaxBackend, { readonly kind: 'shiki' }>,
+): Promise<DiffSyntaxService | null> {
+  const { canUseShikiWorker, createShikiHighlighterSession } = await loadShikiModule()
+  if (!canUseShikiWorker()) return null
+
+  const lang = shikiLanguageForFile(file)
+  if (!lang) return null
+
+  const themeName = shikiThemeName(backend.shikiTheme)
+  return {
+    createSession: async (document) => {
+      const session = createShikiHighlighterSession({
+        ...syntaxHighlighterSessionOptions(document),
+        lang,
+        langs: [lang],
+        theme: themeName,
+        themes: [themeName],
+      })
+      if (!session) return null
+
+      return shikiDiffSyntaxSession(document, session)
+    },
+  }
+}
+
+function loadShikiModule(): Promise<typeof import('@editor/core/shiki')> {
+  shikiModulePromise ??= import('@editor/core/shiki')
+  return shikiModulePromise
+}
+
+function shikiDiffSyntaxSession(
+  document: DiffSyntaxDocument,
+  session: {
+    refresh(
+      snapshot: EditorSyntaxServiceRequest['snapshot'],
+      fullText?: string,
+    ): Promise<{ readonly tokens: readonly EditorToken[] }>
+    dispose(): void
+  },
+): DiffSyntaxServiceSession {
+  return {
+    dispose: () => session.dispose(),
+    refresh: async () => {
+      const result = await session.refresh(document.request.snapshot, document.text)
+      return syntaxResultFromTokens(document.request, result.tokens)
+    },
+  }
+}
+
+function syntaxSessionOptions(document: DiffSyntaxDocument): EditorSyntaxSessionOptions {
+  return {
+    documentId: document.documentId,
+    fullText: document.text,
+    includeCaptures: document.request.language.includeCaptures,
+    includeHighlights: document.request.language.includeHighlights,
+    languageId: document.languageId,
+    snapshot: document.request.snapshot,
+    syntaxMode: document.request.language.mode === 'range' ? 'range' : 'full',
+    textSnapshot: document.request.textSnapshot,
+  }
+}
+
+function syntaxHighlighterSessionOptions(
+  document: DiffSyntaxDocument,
+): Omit<EditorSyntaxSessionOptions, 'includeCaptures' | 'includeHighlights' | 'syntaxMode'> {
+  return {
+    documentId: document.documentId,
+    fullText: document.text,
+    languageId: document.languageId,
+    snapshot: document.request.snapshot,
+    textSnapshot: document.request.textSnapshot,
+  }
+}
+
+function syntaxResultFromTokens(
+  request: EditorSyntaxServiceRequest,
+  tokens: readonly EditorToken[],
+): EditorSyntaxResult {
+  return {
+    ...createEmptySyntaxResult({
+      language: request.language,
+      requestedRanges: request.requestedRanges,
+      snapshot: request.snapshotTag,
+    }),
+    tokens,
+  }
+}
+
 function shikiThemeName(theme: string | (() => string) | undefined): string {
   if (typeof theme === 'function') return theme()
   return theme ?? DEFAULT_THEME
@@ -936,6 +1034,42 @@ function syntaxSource(lines: readonly string[], side: DiffSyntaxSourceSide): Dif
     side,
     text,
   }
+}
+
+function syntaxDocumentsForPane(
+  file: DiffFile,
+  side: MountedPane['side'],
+): readonly DiffSyntaxDocument[] {
+  return syntaxSourcesForPane(file, side).map((source) => syntaxDocument(file, source))
+}
+
+function syntaxDocument(file: DiffFile, source: DiffSyntaxSource): DiffSyntaxDocument {
+  const snapshot = createPieceTableSnapshot(source.text)
+  const textSnapshot = createDocumentTextSnapshot(snapshot, source.text)
+  const documentId = `${file.path}:${source.side}`
+  const languageId = diffSyntaxLanguageId(file)
+  const request: EditorSyntaxServiceRequest = {
+    editSummary: null,
+    language: createSyntaxLanguageConfiguration({
+      includeCaptures: false,
+      includeHighlights: true,
+      languageId,
+      mode: 'full',
+    }),
+    requestedRanges: [{ startIndex: 0, endIndex: snapshot.length }],
+    snapshot,
+    snapshotTag: createSyntaxSnapshotTag({
+      documentId,
+      length: snapshot.length,
+      version: 0,
+    }),
+    textSnapshot,
+  }
+  return { ...source, documentId, languageId, request }
+}
+
+function diffSyntaxLanguageId(file: DiffFile): string | null {
+  return file.languageId ?? languageIdForPath(file.path)
 }
 
 export function projectDiffSyntaxTokens({
@@ -1133,18 +1267,6 @@ function decorationForRow(row: DiffRenderRow): VirtualizedTextRowDecoration {
     className: `editor-diff-row editor-diff-row-${suffix}${expandable}`,
     gutterClassName: `editor-diff-gutter-row editor-diff-gutter-row-${suffix}`,
   }
-}
-
-function joinSyntaxLines(rows: readonly DiffRenderRow[]): string {
-  return rows.map(syntaxLineText).join('\n')
-}
-
-function syntaxLineText(row: DiffRenderRow): string {
-  if (row.type === 'context' || row.type === 'addition' || row.type === 'deletion') {
-    return row.text
-  }
-
-  return ' '.repeat(row.text.length)
 }
 
 function shikiLanguageForFile(file: DiffFile): string | null {

@@ -1,6 +1,6 @@
-import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EditorTheme } from '@editor/core/rendering'
-import { createEmptySyntaxResult } from '@editor/core/syntax'
+import { createEmptySyntaxResult, type EditorSyntaxSessionOptions } from '@editor/core/syntax'
 import { createTextDiff, DiffView } from '../src'
 import { diffSyntaxBackend, projectDiffSyntaxTokens } from '../src/DiffView'
 import type {
@@ -10,8 +10,33 @@ import type {
   DiffSyntaxBackend,
 } from '../src'
 
+const shikiMock = vi.hoisted(() => ({
+  canUseShikiWorker: vi.fn(() => true),
+  createShikiHighlighterSession: vi.fn(),
+  refreshTexts: [] as string[],
+}))
+
+vi.mock('@editor/core/shiki', () => ({
+  canUseShikiWorker: shikiMock.canUseShikiWorker,
+  createShikiHighlighterSession: shikiMock.createShikiHighlighterSession,
+}))
+
 beforeAll(() => {
   installHighlightPolyfill()
+})
+
+beforeEach(() => {
+  shikiMock.refreshTexts.length = 0
+  shikiMock.canUseShikiWorker.mockReset()
+  shikiMock.canUseShikiWorker.mockReturnValue(true)
+  shikiMock.createShikiHighlighterSession.mockReset()
+  shikiMock.createShikiHighlighterSession.mockImplementation(() => ({
+    dispose: vi.fn(),
+    refresh: vi.fn(async (_snapshot, fullText?: string) => {
+      shikiMock.refreshTexts.push(fullText ?? '')
+      return { tokens: [{ start: 0, end: 3, style: { color: 'gold' } }] }
+    }),
+  }))
 })
 
 describe('DiffView split panes', () => {
@@ -187,6 +212,54 @@ describe('DiffView split panes', () => {
     expect(parsedTexts).toContain('one\ntwo\n')
   })
 
+  it('creates tree-sitter sessions from diff syntax service requests', async () => {
+    const sessionOptions: EditorSyntaxSessionOptions[] = []
+    const syntaxBackend = createRecordingSyntaxBackend([], sessionOptions)
+
+    renderDiffView({
+      file: typescriptDiff(),
+      syntaxBackend,
+      syntaxHighlight: true,
+    })
+
+    await flushPromises()
+
+    expect(sessionOptions).toContainEqual(
+      expect.objectContaining({
+        documentId: 'note.ts:old',
+        fullText: 'keep\nold\nskip\n',
+        includeCaptures: false,
+        includeHighlights: true,
+        languageId: 'typescript',
+        syntaxMode: 'full',
+      }),
+    )
+    expect(sessionOptions[0]?.textSnapshot?.readRange(0, 4)).toBe('keep')
+  })
+
+  it('routes shiki highlighting through full-file syntax service documents', async () => {
+    renderDiffView({
+      file: typescriptDiff(),
+      syntaxBackend: { kind: 'shiki', shikiTheme: 'github-light' },
+      syntaxHighlight: true,
+    })
+
+    await flushPromises()
+    await flushUntil(() => shikiMock.refreshTexts.length >= 2)
+
+    expect(shikiMock.createShikiHighlighterSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        documentId: 'note.ts:old',
+        fullText: 'keep\nold\nskip\n',
+        lang: 'typescript',
+        languageId: 'typescript',
+        theme: 'github-light',
+      }),
+    )
+    expect(shikiMock.refreshTexts).toContain('keep\nold\nskip\n')
+    expect(shikiMock.refreshTexts).toContain('keep\nnew\nskip\n')
+  })
+
   it('defaults syntax highlighting to tree-sitter instead of shiki', () => {
     expect(diffSyntaxBackend({})).toEqual({ kind: 'tree-sitter' })
     expect(diffSyntaxBackend({ theme: { backgroundColor: '#ffffff' } })).toEqual({
@@ -250,6 +323,14 @@ function prefixSkippedDiff() {
   })
 }
 
+function typescriptDiff() {
+  return createTextDiff({
+    contextLines: 0,
+    oldFile: { path: 'note.ts', text: 'keep\nold\nskip\n', languageId: 'typescript' },
+    newFile: { path: 'note.ts', text: 'keep\nnew\nskip\n', languageId: 'typescript' },
+  })
+}
+
 function querySplit(container: HTMLElement): HTMLElement {
   const split = container.querySelector<HTMLElement>('.editor-diff-split')
   if (!split) throw new Error('Expected split diff')
@@ -286,11 +367,15 @@ function pointerEvent(type: string, clientY: number): MouseEvent {
   })
 }
 
-function createRecordingSyntaxBackend(parsedTexts: string[]): DiffSyntaxBackend {
+function createRecordingSyntaxBackend(
+  parsedTexts: string[],
+  sessionOptions: EditorSyntaxSessionOptions[] = [],
+): DiffSyntaxBackend {
   return {
     kind: 'tree-sitter',
     provider: {
       createSession(options) {
+        sessionOptions.push(options)
         parsedTexts.push(options.fullText)
         return {
           applyChange: async () => emptySyntaxResult(),
@@ -314,6 +399,13 @@ async function flushPromises(): Promise<void> {
   await Promise.resolve()
   await new Promise((resolve) => setTimeout(resolve, 0))
   await Promise.resolve()
+}
+
+async function flushUntil(done: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    if (done()) return
+    await flushPromises()
+  }
 }
 
 type HighlightConstructor = new (...ranges: AbstractRange[]) => Highlight

@@ -539,10 +539,11 @@ Purpose: make secondary surfaces consume editor projections instead of cloning e
   keep section-header scanning on summarized line input.
 - Optimized minimap content edits to send affected-line summary patches instead of whole-document
   line summaries, while still preserving exact text length and line starts for layout.
+- Moved diff syntax highlighting onto per-source syntax service requests so both Tree-sitter and
+  Shiki consume full old/new file snapshots and project syntax result tokens into diff rows.
 
 ### Remaining Work
 
-- Move diff syntax highlighting fully onto the syntax service contract, including the Shiki path.
 - Replace diff's private scroll/selection primitives with shared secondary-view helpers where the
   current text-surface wrapper is still too low-level.
 - Add large-file diff and rapid-edit minimap regression tests around the new summary payload path.
