@@ -78,7 +78,7 @@ export class HoverDefinitionController {
       themeSource: this.context.scrollElement,
       reentryElement: this.context.scrollElement,
       markdownCodeBackground: options.hoverMarkdownCodeBackground,
-      classNamespace: options.tooltipClassNamespace ?? 'language-server',
+      classNamespace: options.tooltipClassNamespace ?? 'lsp-plugin',
     })
     this.installHandlers()
   }
@@ -410,7 +410,7 @@ export class HoverDefinitionController {
   }
 
   private navigationTimingName(kind: LanguageServerNavigationKind): string {
-    const prefix = this.options.navigationTimingNamePrefix ?? 'languageServer'
+    const prefix = this.options.navigationTimingNamePrefix ?? 'lspPlugin'
     if (kind === 'typeDefinition') return `${prefix}.goToTypeDefinition`
     return `${prefix}.goTo${capitalize(kind)}`
   }
@@ -516,8 +516,7 @@ function definitionLinkHighlightName(
   context: EditorViewContributionContext,
   options: HoverDefinitionControllerOptions,
 ): string {
-  const prefix =
-    context.highlightPrefix ?? options.defaultHighlightPrefix ?? 'editor-language-server'
-  const namespace = options.linkHighlightNameNamespace ?? 'language-server'
+  const prefix = context.highlightPrefix ?? options.defaultHighlightPrefix ?? 'editor-lsp-plugin'
+  const namespace = options.linkHighlightNameNamespace ?? 'lsp-plugin'
   return `${prefix}-${namespace}-definition-link`
 }

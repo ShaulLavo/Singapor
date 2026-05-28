@@ -5,7 +5,7 @@ export {
   summarizeDiagnostics,
   type LanguageServerDiagnosticHighlightGroups as TypeScriptLspDiagnosticHighlightGroups,
   type LanguageServerDiagnosticSeverity as TypeScriptLspDiagnosticSeverity,
-} from '@editor/language-server/diagnostics'
+} from '@editor/lsp-plugin/diagnostics'
 export {
   documentUriToFileName,
   fileNameToDocumentUri,

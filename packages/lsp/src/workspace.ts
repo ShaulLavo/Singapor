@@ -9,6 +9,7 @@ import type {
   LspWorkspaceEditOptions,
   LspWorkspaceSnapshotEditOptions,
 } from './types'
+import { registerDefaultLspWorkspaceFactory } from './workspaceFactory'
 
 type MutableLspDocument = {
   uri: lsp.DocumentUri
@@ -199,3 +200,5 @@ const hasEffectiveEdits = (edits: readonly LspTextEdit[] | undefined): boolean =
   if (!edits) return false
   return edits.some((edit) => edit.from !== edit.to || edit.text.length > 0)
 }
+
+registerDefaultLspWorkspaceFactory(() => new LspWorkspace())

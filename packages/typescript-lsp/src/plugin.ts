@@ -2,13 +2,13 @@ import type { EditorDisposable } from '@editor/core/extensions'
 import { createEditorCapabilityToken } from '@editor/core/extensions'
 import type { LspClient, LspWebSocketTransportOptions, LspWorkerLike } from '@editor/lsp'
 import {
-  createLanguageServerCorePlugin,
+  createLanguageServerAdapterPlugin,
   createWebSocketLspTransportFactory,
   createWorkerLspTransportFactory,
   type LanguageServerConnectionContext,
   type LspConnectionTransportFactory,
-} from '@editor/language-server'
-import type { LanguageServerCompletionEditFeature } from '@editor/language-server/completion'
+} from '@editor/lsp-plugin'
+import type { LanguageServerCompletionEditFeature } from '@editor/lsp-plugin/completion'
 
 import { isTypeScriptLspSourceFileName } from './paths'
 import type {
@@ -46,7 +46,7 @@ export function createTypeScriptLspPlugin(
 ): TypeScriptLspPlugin {
   const resolved = resolveOptions(options)
   const workspaceFiles = new TypeScriptWorkspaceFiles()
-  const plugin = createLanguageServerCorePlugin({
+  const plugin = createLanguageServerAdapterPlugin({
     name: 'editor.typescript-lsp',
     rootUri: resolved.rootUri,
     hoverMarkdownCodeBackground: resolved.hoverMarkdownCodeBackground,

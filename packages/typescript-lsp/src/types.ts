@@ -9,7 +9,7 @@ import type {
   LanguageServerNavigationOptions,
   LanguageServerReferencesResult,
   LanguageServerStatus,
-} from '@editor/language-server'
+} from '@editor/lsp-plugin'
 import type ts from 'typescript'
 import type * as lsp from 'vscode-languageserver-protocol'
 

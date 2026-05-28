@@ -45,7 +45,7 @@ function diagnostic(
 ): lsp.Diagnostic {
   return {
     severity,
-    source: 'language-server',
+    source: 'lsp-plugin',
     message: 'message',
     range: {
       start: { line, character: start },

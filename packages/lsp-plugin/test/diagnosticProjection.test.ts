@@ -17,7 +17,7 @@ describe('diagnostic projection', () => {
     expect(projected).toEqual([
       {
         severity: 1,
-        source: 'language-server',
+        source: 'lsp-plugin',
         message: 'message',
         range: {
           start: { line: 0, character: 2 },
@@ -42,7 +42,7 @@ describe('diagnostic projection', () => {
 function diagnostic(line: number, start: number, end: number): lsp.Diagnostic {
   return {
     severity: 1,
-    source: 'language-server',
+    source: 'lsp-plugin',
     message: 'message',
     range: {
       start: { line, character: start },

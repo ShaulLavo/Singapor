@@ -1,14 +1,7 @@
 #!/usr/bin/env bun
 
 import { createHash } from 'node:crypto'
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -32,13 +25,13 @@ const config = {
     { name: 'editor', root: 'packages/editor/src' },
     { name: 'editor-virtualization', root: 'packages/editor/src/virtualization' },
     { name: 'lsp-core', root: 'packages/lsp/src' },
-    { name: 'language-server-lsp', root: 'packages/language-server/src' },
+    { name: 'lsp-plugin', root: 'packages/lsp-plugin/src' },
     { name: 'typescript-lsp', root: 'packages/typescript-lsp/src' },
   ],
   duplicateModuleGroups: [
     {
-      name: 'language-server-vs-typescript-lsp',
-      roots: ['packages/language-server/src', 'packages/typescript-lsp/src'],
+      name: 'lsp-plugin-vs-typescript-lsp',
+      roots: ['packages/lsp-plugin/src', 'packages/typescript-lsp/src'],
     },
   ],
   productionSourceRoots: ['packages', 'examples'],
@@ -119,15 +112,26 @@ function collectPublicApiBaseline() {
 }
 
 function collectTimerBaseline(previous) {
-  const previousById = new Map()
-  for (const entry of previous?.timers ?? []) previousById.set(entry.id, entry)
+  const previousTimers = previousTimerLookup(previous)
 
   return {
     schemaVersion: 1,
     reviewPolicy:
       'Production timers must name why they are scheduler-safe or why they remain legacy debt.',
-    timers: timerUsages(previousById),
+    timers: timerUsages(previousTimers),
   }
+}
+
+function previousTimerLookup(previous) {
+  const byId = new Map()
+  const bySignature = new Map()
+
+  for (const entry of previous?.timers ?? []) {
+    byId.set(entry.id, entry)
+    bySignature.set(timerSignature(entry.file, entry.api, entry.snippet), entry)
+  }
+
+  return { byId, bySignature }
 }
 
 function workspacePackages() {
@@ -309,7 +313,9 @@ function duplicateModulesForGroup(group) {
 
   for (const root of group.roots) {
     for (const file of sourceFiles(root)) {
-      const modulePath = normalizePath(path.relative(path.join(repoRoot, root), path.join(repoRoot, file)))
+      const modulePath = normalizePath(
+        path.relative(path.join(repoRoot, root), path.join(repoRoot, file)),
+      )
       const entries = byModule.get(modulePath) ?? []
       entries.push(file)
       byModule.set(modulePath, entries)
@@ -390,7 +396,12 @@ function starReExports(content, source, seen) {
   for (const match of content.matchAll(pattern)) {
     const target = resolveRelativeModule(source, match[2])
     if (!target) {
-      exports.push({ name: '*', kind: match[1] ? 'type' : 'unknown', source: match[2], via: source })
+      exports.push({
+        name: '*',
+        kind: match[1] ? 'type' : 'unknown',
+        source: match[2],
+        via: source,
+      })
       continue
     }
 
@@ -404,11 +415,12 @@ function starReExports(content, source, seen) {
 
 function localExportLists(content, source) {
   const exports = []
-  const pattern = /\bexport\s+(type\s+)?\{([\s\S]*?)\}(?!\s+from\b)/g
+  const pattern = /\bexport\s+(type\s+)?\{([^{}]*?)\}(?!\s*from\b)/g
 
   for (const match of content.matchAll(pattern)) {
     const kind = match[1] ? 'type' : 'unknown'
-    for (const name of exportSpecifierNames(match[2])) exports.push({ name, kind, source, via: source })
+    for (const name of exportSpecifierNames(match[2]))
+      exports.push({ name, kind, source, via: source })
   }
 
   return exports
@@ -437,7 +449,13 @@ function exportSpecifierNames(block) {
     .map((item) => item.trim())
     .filter(Boolean)
     .map((item) => item.replace(/^type\s+/, ''))
-    .map((item) => item.split(/\s+as\s+/).at(-1)?.trim() ?? '')
+    .map(
+      (item) =>
+        item
+          .split(/\s+as\s+/)
+          .at(-1)
+          ?.trim() ?? '',
+    )
     .filter(Boolean)
 }
 
@@ -446,21 +464,21 @@ function exportDeclarationKind(kind) {
   return 'value'
 }
 
-function timerUsages(previousById) {
+function timerUsages(previousTimers) {
   const timers = []
   const occurrences = new Map()
 
   for (const file of productionSourceFiles()) {
     const lines = readText(file).split(/\r?\n/)
     for (const [index, line] of lines.entries()) {
-      addTimersFromLine(timers, previousById, occurrences, file, index, line)
+      addTimersFromLine(timers, previousTimers, occurrences, file, index, line)
     }
   }
 
   return timers.sort((left, right) => left.id.localeCompare(right.id))
 }
 
-function addTimersFromLine(timers, previousById, occurrences, file, index, line) {
+function addTimersFromLine(timers, previousTimers, occurrences, file, index, line) {
   const pattern =
     /\b(setTimeout|setInterval|requestIdleCallback|requestAnimationFrame|queueMicrotask)\s*\(/g
 
@@ -469,7 +487,7 @@ function addTimersFromLine(timers, previousById, occurrences, file, index, line)
     const snippet = line.trim()
     const occurrence = nextOccurrence(occurrences, file, api, snippet)
     const id = timerId(file, api, snippet, occurrence)
-    const previous = previousById.get(id)
+    const previous = previousTimer(previousTimers, id, file, api, snippet)
     timers.push({
       id,
       api,
@@ -479,6 +497,17 @@ function addTimersFromLine(timers, previousById, occurrences, file, index, line)
       justification: previous?.justification ?? 'TODO: explain why this timer is scheduler-safe.',
     })
   }
+}
+
+function previousTimer(previousTimers, id, file, api, snippet) {
+  return (
+    previousTimers.byId.get(id) ??
+    previousTimers.bySignature.get(timerSignature(file, api, snippet))
+  )
+}
+
+function timerSignature(file, api, snippet) {
+  return `${file}\0${api}\0${snippet}`
 }
 
 function nextOccurrence(occurrences, file, api, snippet) {
@@ -553,7 +582,14 @@ function isIgnored(relative) {
 }
 
 function stronglyConnectedComponents(graph) {
-  const state = { index: 0, stack: [], indices: new Map(), lowlinks: new Map(), onStack: new Set(), components: [] }
+  const state = {
+    index: 0,
+    stack: [],
+    indices: new Map(),
+    lowlinks: new Map(),
+    onStack: new Set(),
+    components: [],
+  }
 
   for (const node of [...graph.keys()].sort()) {
     if (state.indices.has(node)) continue
@@ -642,10 +678,7 @@ function publicApiKeys(inventory) {
 }
 
 function compareTimers(current, baseline) {
-  return [
-    ...timerIdFailures(current, baseline),
-    ...timerJustificationFailures(current),
-  ]
+  return [...timerIdFailures(current, baseline), ...timerJustificationFailures(current)]
 }
 
 function timerIdFailures(current, baseline) {
@@ -700,9 +733,13 @@ function printSummary(current) {
     0,
   )
 
-  console.log(`packages: ${Object.keys(current.health.missingPackageScripts).length} with missing expected scripts`)
+  console.log(
+    `packages: ${Object.keys(current.health.missingPackageScripts).length} with missing expected scripts`,
+  )
   console.log(`package cycles: ${current.health.packageCycles.length}`)
-  console.log(`source cycle components: ${sourceCycleCount} across ${sourceCycleScopes.length} scopes`)
+  console.log(
+    `source cycle components: ${sourceCycleCount} across ${sourceCycleScopes.length} scopes`,
+  )
   console.log(`public API entrypoints: ${current.publicApi.entrypoints.length}`)
   console.log(`production timers: ${current.timers.timers.length}`)
 }

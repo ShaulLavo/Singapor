@@ -10,13 +10,15 @@ import {
   type EditorViewContributionProvider,
   type EditorViewSnapshot,
 } from '@editor/core/extensions'
-import type { LspManagedTransport, LspTransportHandler } from '@editor/lsp'
+import type { LspManagedTransport, LspTransportHandler, LspWebSocketLike } from '@editor/lsp'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { type LanguageServerCompletionEditFeature } from '../src/completion'
-import { createLanguageServerCorePlugin } from '../src/plugin'
+import { createLanguageServerAdapterPlugin, createLanguageServerPlugin } from '../src/plugin'
+import type { LanguageServerPlugin } from '../src/types'
 
 type JsonMessage = Record<string, unknown>
+type Listener = (event: Event) => void
 
 class FakeTransport implements LspManagedTransport {
   public readonly sent: string[] = []
@@ -44,19 +46,74 @@ class FakeTransport implements LspManagedTransport {
   }
 }
 
-describe('createLanguageServerCorePlugin', () => {
+class FakeWebSocket implements LspWebSocketLike {
+  public static readonly instances: FakeWebSocket[] = []
+  public readonly sent: string[] = []
+  public readyState = 0
+  private readonly listeners = new Map<string, Set<Listener>>()
+
+  public constructor(public readonly url: string | URL) {
+    FakeWebSocket.instances.push(this)
+  }
+
+  public send(message: string): void {
+    this.sent.push(message)
+  }
+
+  public close(): void {
+    this.readyState = 3
+    this.emit('close')
+  }
+
+  public addEventListener(type: 'open' | 'message' | 'error' | 'close', handler: Listener): void {
+    this.listenersFor(type).add(handler)
+  }
+
+  public removeEventListener(
+    type: 'open' | 'message' | 'error' | 'close',
+    handler: Listener,
+  ): void {
+    this.listenersFor(type).delete(handler)
+  }
+
+  public open(): void {
+    this.readyState = 1
+    this.emit('open')
+  }
+
+  public receive(message: unknown): void {
+    this.emit('message', JSON.stringify(message))
+  }
+
+  private emit(type: string, data?: unknown): void {
+    const event = data === undefined ? new Event(type) : new MessageEvent(type, { data })
+    for (const listener of this.listenersFor(type)) listener(event)
+  }
+
+  private listenersFor(type: string): Set<Listener> {
+    let listeners = this.listeners.get(type)
+    if (listeners) return listeners
+
+    listeners = new Set()
+    this.listeners.set(type, listeners)
+    return listeners
+  }
+}
+
+describe('createLanguageServerAdapterPlugin', () => {
   afterEach(() => {
+    FakeWebSocket.instances.length = 0
     document.body.replaceChildren()
   })
 
   it('owns generic LSP document sync, diagnostics, and adapter naming', async () => {
     const transport = new FakeTransport()
     const completionToken = createEditorCapabilityToken<LanguageServerCompletionEditFeature>(
-      'test.language-server.completion',
+      'test.lsp-plugin.completion',
     )
     const applyEdits = vi.fn<EditorEditContributionContext['applyEdits']>()
     const { commands, features, provider } = activatePlugin(
-      createLanguageServerCorePlugin({
+      createLanguageServerAdapterPlugin({
         name: 'editor.test-lsp',
         createTransport: () => transport,
         defaultHighlightPrefix: 'editor-test',
@@ -116,6 +173,41 @@ describe('createLanguageServerCorePlugin', () => {
       { anchor: 5, head: 5 },
     )
   })
+
+  it('keeps the public custom-server plugin as the bring-your-own-server path', async () => {
+    const statuses: string[] = []
+    const applyEdits = vi.fn<EditorEditContributionContext['applyEdits']>()
+    const { provider, features } = activatePlugin(
+      createLanguageServerPlugin({
+        webSocketRoute: 'ws://localhost/lsp/custom',
+        rootUri: 'file:///repo',
+        webSocketTransportOptions: { WebSocketCtor: FakeWebSocket },
+        onStatusChange: (status) => statuses.push(status),
+      }),
+      { applyEdits },
+    )
+    const context = viewContributionContext(editorSnapshot(), { features })
+    const contribution = provider.createContribution(context)
+    if (!contribution) throw new Error('missing contribution')
+
+    const socket = FakeWebSocket.instances[0]
+    if (!socket) throw new Error('missing socket')
+
+    socket.open()
+    await flushPromises()
+    socket.receive(initializeResponse(jsonMessage(socket.sent[0])))
+    await flushPromises()
+
+    expect(socket.url).toBe('ws://localhost/lsp/custom')
+    expect(sentMethods(socket)).toEqual(['initialize', 'initialized', 'textDocument/didOpen'])
+    expect(textDocumentFor(socket.sent[2])).toEqual({
+      uri: 'file:///README.md',
+      languageId: 'markdown',
+      version: 0,
+      text: '# Notes',
+    })
+    expect(statuses).toEqual(['loading', 'ready'])
+  })
 })
 
 type ActivationOptions = {
@@ -123,7 +215,7 @@ type ActivationOptions = {
 }
 
 function activatePlugin(
-  plugin: ReturnType<typeof createLanguageServerCorePlugin>,
+  plugin: LanguageServerPlugin,
   options: ActivationOptions,
 ): {
   readonly provider: EditorViewContributionProvider
@@ -310,6 +402,10 @@ function jsonMessage(item: unknown): JsonMessage {
 
 function hasMethod(method: string): (item: string) => boolean {
   return (item) => jsonMessage(item).method === method
+}
+
+function sentMethods(socket: FakeWebSocket): readonly unknown[] {
+  return socket.sent.map((message) => jsonMessage(message).method)
 }
 
 async function flushPromises(): Promise<void> {

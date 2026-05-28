@@ -1,5 +1,5 @@
 {
-  "name": "@editor/language-server",
+  "name": "@editor/lsp-plugin",
   "version": "0.0.0",
   "private": true,
   "type": "module",

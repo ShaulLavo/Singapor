@@ -42,12 +42,12 @@ import type {
 export type { LanguageServerResolvedOptions } from './pluginTypes'
 
 const DEFAULT_TIMEOUT_MS = 15000
-const DEFAULT_PLUGIN_NAME = 'editor.language-server'
-const DEFAULT_HIGHLIGHT_PREFIX = 'editor-language-server'
-const DEFAULT_NAMESPACE = 'language-server'
-const DEFAULT_TIMING_PREFIX = 'languageServer'
-const DEFAULT_DIAGNOSTICS_SOURCE_ID = 'editor.language-server.diagnostics'
-const DEFAULT_COMPLETION_ACCEPT_TIMING_NAME = 'languageServer.completion.accept'
+const DEFAULT_PLUGIN_NAME = 'editor.lsp-plugin'
+const DEFAULT_HIGHLIGHT_PREFIX = 'editor-lsp-plugin'
+const DEFAULT_NAMESPACE = 'lsp-plugin'
+const DEFAULT_TIMING_PREFIX = 'lspPlugin'
+const DEFAULT_DIAGNOSTICS_SOURCE_ID = 'editor.lsp-plugin.diagnostics'
+const DEFAULT_COMPLETION_ACCEPT_TIMING_NAME = 'lspPlugin.completion.accept'
 
 export type LanguageServerConnectionContext = {
   readonly client: LspClient
@@ -65,7 +65,7 @@ export type LanguageServerCommandSpec = {
   run(target: LanguageServerCommandTarget): boolean
 }
 
-export type LanguageServerCorePluginOptions = {
+export type LanguageServerAdapterPluginOptions = {
   readonly name: string
   readonly rootUri?: lsp.DocumentUri | null
   readonly hoverMarkdownCodeBackground?: boolean
@@ -103,7 +103,7 @@ export type LanguageServerCorePluginOptions = {
   readonly onError?: (error: unknown) => void
 }
 
-type LanguageServerResolvedCoreOptions = {
+type LanguageServerResolvedAdapterOptions = {
   readonly name: string
   readonly rootUri: lsp.DocumentUri | null
   readonly hoverMarkdownCodeBackground: boolean
@@ -144,7 +144,7 @@ type LanguageServerResolvedCoreOptions = {
 export function createLanguageServerPlugin(
   options: LanguageServerPluginOptions,
 ): LanguageServerPlugin {
-  return createLanguageServerCorePlugin({
+  return createLanguageServerAdapterPlugin({
     name: DEFAULT_PLUGIN_NAME,
     rootUri: options.rootUri,
     hoverMarkdownCodeBackground: options.hoverMarkdownCodeBackground,
@@ -163,10 +163,10 @@ export function createLanguageServerPlugin(
   })
 }
 
-export function createLanguageServerCorePlugin(
-  options: LanguageServerCorePluginOptions,
+export function createLanguageServerAdapterPlugin(
+  options: LanguageServerAdapterPluginOptions,
 ): LanguageServerPlugin {
-  const resolved = resolveCoreOptions(options)
+  const resolved = resolveAdapterOptions(options)
   const state = new LanguageServerPluginState()
 
   return {
@@ -248,7 +248,7 @@ class LanguageServerCompletionEditContribution implements EditorEditContribution
 
   public constructor(
     context: EditorEditContributionContext,
-    options: LanguageServerResolvedCoreOptions['completion'],
+    options: LanguageServerResolvedAdapterOptions['completion'],
   ) {
     this.completionFeature = context.registerFeature(
       options.editFeature,
@@ -273,7 +273,7 @@ class LanguageServerContribution implements EditorViewContribution {
   public constructor(
     context: EditorViewContributionContext,
     private readonly state: LanguageServerPluginState,
-    private readonly options: LanguageServerResolvedCoreOptions,
+    private readonly options: LanguageServerResolvedAdapterOptions,
   ) {
     const prefix = context.highlightPrefix ?? options.defaultHighlightPrefix
     this.diagnostics = new DiagnosticsPresenter(context, prefix, {
@@ -399,9 +399,9 @@ class LanguageServerContribution implements EditorViewContribution {
   }
 }
 
-function resolveCoreOptions(
-  options: LanguageServerCorePluginOptions,
-): LanguageServerResolvedCoreOptions {
+function resolveAdapterOptions(
+  options: LanguageServerAdapterPluginOptions,
+): LanguageServerResolvedAdapterOptions {
   return {
     name: options.name,
     rootUri: options.rootUri ?? 'file:///',
@@ -427,8 +427,8 @@ function resolveCoreOptions(
 }
 
 function resolveDiagnosticsOptions(
-  options: LanguageServerCorePluginOptions,
-): LanguageServerResolvedCoreOptions['diagnostics'] {
+  options: LanguageServerAdapterPluginOptions,
+): LanguageServerResolvedAdapterOptions['diagnostics'] {
   return {
     minimapSourceId: options.diagnostics?.minimapSourceId ?? DEFAULT_DIAGNOSTICS_SOURCE_ID,
     highlightNameNamespace: options.diagnostics?.highlightNameNamespace ?? DEFAULT_NAMESPACE,
@@ -438,8 +438,8 @@ function resolveDiagnosticsOptions(
 }
 
 function resolveCompletionOptions(
-  options: LanguageServerCorePluginOptions,
-): LanguageServerResolvedCoreOptions['completion'] {
+  options: LanguageServerAdapterPluginOptions,
+): LanguageServerResolvedAdapterOptions['completion'] {
   return {
     editFeature: options.completion?.editFeature ?? LANGUAGE_SERVER_COMPLETION_EDIT_FEATURE,
     acceptTimingName: options.completion?.acceptTimingName ?? DEFAULT_COMPLETION_ACCEPT_TIMING_NAME,
@@ -448,8 +448,8 @@ function resolveCompletionOptions(
 }
 
 function resolveHoverDefinitionOptions(
-  options: LanguageServerCorePluginOptions,
-): LanguageServerResolvedCoreOptions['hoverDefinition'] {
+  options: LanguageServerAdapterPluginOptions,
+): LanguageServerResolvedAdapterOptions['hoverDefinition'] {
   return {
     linkHighlightNameNamespace:
       options.hoverDefinition?.linkHighlightNameNamespace ?? DEFAULT_NAMESPACE,

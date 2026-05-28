@@ -55,7 +55,7 @@ export type NavigationEditor = {
   focusEditor(): void
 }
 
-const SET_SELECTION_TIMING_NAME = 'languageServer.goToDefinition'
+const SET_SELECTION_TIMING_NAME = 'lspPlugin.goToDefinition'
 
 const REQUEST_METHODS: Record<Exclude<LanguageServerNavigationKind, 'references'>, string> = {
   definition: 'textDocument/definition',

@@ -135,7 +135,7 @@ export function renderTooltipMarkdown(
 function tooltipMarkdownRenderContext(
   options: TooltipMarkdownRenderOptions,
 ): TooltipMarkdownRenderContext {
-  const classNamespace = options.classNamespace ?? 'language-server'
+  const classNamespace = options.classNamespace ?? 'lsp-plugin'
   return {
     classNamespace,
     inlineCodeBackgroundVariable: `--editor-${classNamespace}-hover-inline-code-background`,

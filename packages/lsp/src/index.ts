@@ -42,6 +42,7 @@ export type {
   LspDocumentOpenOptions,
   LspDocumentSyncMode,
   LspDocumentSyncOptions,
+  LspClientWorkspace,
   LspNotificationHandler,
   LspRequestHandle,
   LspServerMessageHandler,
@@ -55,6 +56,7 @@ export type {
   LspUnhandledNotificationHandler,
   LspWorkspaceSyncTarget,
   LspWorkspaceEditOptions,
+  LspWorkspaceFactory,
   LspWorkspaceSnapshotEditOptions,
 } from './types'
 export { LspWorkspace } from './workspace'

@@ -72,6 +72,24 @@ export type LspWorkspaceSyncTarget = {
   didCloseDocument(document: LspDocument): void
 }
 
+export type LspClientWorkspace = {
+  readonly documents: readonly LspDocument[]
+  attachClient(client: LspWorkspaceSyncTarget): void
+  openDocument(options: LspDocumentOpenOptions): LspDocument
+  updateDocument(uri: lsp.DocumentUri, text: string, options?: LspWorkspaceEditOptions): LspDocument
+  updateDocumentSnapshot(
+    uri: lsp.DocumentUri,
+    options: LspWorkspaceSnapshotEditOptions,
+  ): LspDocument
+  closeDocument(uri: lsp.DocumentUri): void
+  saveDocument(uri: lsp.DocumentUri): void
+  getDocument(uri: lsp.DocumentUri): LspDocument | null
+  connected(): void
+  disconnected(): void
+}
+
+export type LspWorkspaceFactory = () => LspClientWorkspace
+
 export type LspRequestHandle<TResult = unknown> = {
   readonly id: LspRequestId
   readonly response: Promise<TResult>

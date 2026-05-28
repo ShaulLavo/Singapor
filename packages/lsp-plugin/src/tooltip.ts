@@ -116,7 +116,7 @@ export type TooltipController = {
 
 export function createTooltipController(options: TooltipOptions): TooltipController {
   const { document, themeSource, reentryElement } = options
-  const classNamespace = options.classNamespace ?? 'language-server'
+  const classNamespace = options.classNamespace ?? 'lsp-plugin'
   const names = nextTooltipAnchorNames(classNamespace)
   const anchor = createTooltipAnchorElement(document, names)
   const tooltip = createTooltipElement(document, names)
@@ -602,7 +602,7 @@ function tooltipClassNameForElement(element: HTMLElement, part: string): string 
 
 function tooltipNamespaceFromClassName(className: string): string {
   const match = /^editor-(.+)-hover(?:\s|$)/.exec(className)
-  return match?.[1] ?? 'language-server'
+  return match?.[1] ?? 'lsp-plugin'
 }
 
 function tooltipViewportHeight(document: Document): number {

@@ -4,7 +4,7 @@ import { createEditorCapabilityToken } from '@editor/core/extensions'
 import { lspPositionToOffset } from '@editor/lsp'
 import type * as lsp from 'vscode-languageserver-protocol'
 
-export const LANGUAGE_SERVER_COMPLETION_EDIT_FEATURE_ID = 'editor.language-server.completion-edit'
+export const LANGUAGE_SERVER_COMPLETION_EDIT_FEATURE_ID = 'editor.lsp-plugin.completion-edit'
 
 export const COMPLETION_REQUEST_DEBOUNCE_MS = 80
 
@@ -59,7 +59,7 @@ const COMPLETION_WIDGET_GAP_PX = 4
 const COMPLETION_WIDGET_WIDTH_PX = 320
 const COMPLETION_WIDGET_MAX_HEIGHT_PX = 280
 const COMPLETION_WIDGET_MARGIN_PX = 12
-const COMPLETION_WIDGET_CLASS_NAMESPACE = 'language-server'
+const COMPLETION_WIDGET_CLASS_NAMESPACE = 'lsp-plugin'
 const COMPLETION_TRIGGER_CHARACTERS = new Set(['.', '"', "'", '`', '/', '@', '<', '#'])
 const COMPLETION_THEME_VARIABLES = [
   '--editor-background',

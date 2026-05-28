@@ -589,17 +589,25 @@ Purpose: stop clone-and-modify language server architecture.
   - transport
   - feature adapters
   - editor integration
+- Keep `@editor/lsp` headless: it must not export `EditorPlugin` factories or
+  `createLspPlugin`.
 - Break the `client` <-> `workspace` import cycle by depending on interfaces.
 - Replace object-identity cancellation with request IDs or typed handles.
-- Create one language-server core package.
-- Make TypeScript support an adapter package over the shared core.
+- Create one generic `@editor/lsp-plugin` editor-integration package.
+- Make TypeScript support an adapter package over the shared integration.
+- Name the shared specialization hook `createLanguageServerAdapterPlugin`; reserve
+  `createLanguageServerPlugin` for custom servers.
+- Keep `@editor/typescript-lsp` as the public TypeScript product package. It
+  owns the TS worker/server, TS diagnostics, TS path/source filters, and a thin
+  `createTypeScriptLspPlugin` wrapper that configures `@editor/lsp-plugin`.
 - Move shared completion, hover, diagnostics, and workspace behavior into one implementation.
 - Add conformance tests for LSP open/change/save/close ordering.
 - Add timeout and cancellation tests.
 
 ### Must Delete
 
-- Duplicated `language-server` and `typescript-lsp` implementations.
+- Duplicated `lsp-plugin` and `typescript-lsp` implementations.
+- Any `createLspPlugin` API or editor-plugin exports from `@editor/lsp`.
 - Client/workspace circular imports.
 - Cancellation APIs based on caller-retained params object identity.
 - Console logging as default error handling.
@@ -607,6 +615,8 @@ Purpose: stop clone-and-modify language server architecture.
 ### Exit Criteria
 
 - TypeScript LSP support is a specialization, not a fork.
+- The TypeScript package exposes a complete usable plugin without owning generic
+  editor integration or cloned LSP feature controllers.
 - The LSP dependency graph is acyclic.
 - Request lifetime and cancellation are explicit.
 

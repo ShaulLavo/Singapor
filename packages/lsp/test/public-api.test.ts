@@ -1,5 +1,8 @@
+import { readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
+import * as lspApi from '../src/index.ts'
 import {
   LspClient,
   LspWorkspace,
@@ -27,4 +30,31 @@ describe('public API facade', () => {
     expect(edit).toEqual({ from: 0, to: 0, text: 'x' })
     expect(transport).toBeTruthy()
   })
+
+  it('does not export editor plugin factories', () => {
+    expect(lspApi).not.toHaveProperty('createLspPlugin')
+    expect(Object.keys(lspApi).filter((name) => name.includes('Plugin'))).toEqual([])
+  })
+
+  it('stays independent from editor plugin APIs', () => {
+    const packageJson = JSON.parse(readFileSync('package.json', 'utf8')) as {
+      readonly dependencies?: Record<string, string>
+      readonly peerDependencies?: Record<string, string>
+      readonly devDependencies?: Record<string, string>
+    }
+    const text = sourceText()
+
+    expect(packageJson.dependencies ?? {}).not.toHaveProperty('@editor/core')
+    expect(packageJson.peerDependencies ?? {}).not.toHaveProperty('@editor/core')
+    expect(packageJson.devDependencies ?? {}).not.toHaveProperty('@editor/core')
+    expect(text).not.toContain('@editor/core')
+    expect(text).not.toContain('EditorPlugin')
+  })
 })
+
+function sourceText(): string {
+  return readdirSync('src')
+    .filter((file) => file.endsWith('.ts'))
+    .map((file) => readFileSync(join('src', file), 'utf8'))
+    .join('\n')
+}

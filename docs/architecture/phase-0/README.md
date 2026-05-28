@@ -27,10 +27,10 @@ pushes to `main`, and manual dispatch.
   and VCS/cache directories are excluded from health source scans.
 - Package-level cycles between workspace packages.
 - Source-level import cycles in `packages/editor/src`, editor virtualization, `packages/lsp/src`,
-  `packages/language-server/src`, and `packages/typescript-lsp/src`.
+  `packages/lsp-plugin/src`, and `packages/typescript-lsp/src`.
 - Missing package scripts for the root Turborepo contract: `build`, `test`, `typecheck`, `lint`,
   `format`, and `format:check`.
-- Duplicate LSP module candidates between `@editor/language-server` and `@editor/typescript-lsp`.
+- Duplicate LSP module candidates between `@editor/lsp-plugin` and `@editor/typescript-lsp`.
 - The current `@editor/core` public export inventory.
 - Production timer usage that must stay justified until Phase 3 scheduling work replaces it.
 
@@ -39,7 +39,7 @@ pushes to `main`, and manual dispatch.
 - Package cycles: none reported in the Phase 0 baseline.
 - Source cycles: editor/plugin/virtualization cycles remain in `@editor/core`, and one client/workspace
   cycle remains in `@editor/lsp`.
-- Duplicate modules: the language-server and TypeScript-LSP packages share 18 same-name modules.
+- Duplicate modules: the LSP plugin and TypeScript-LSP packages share 18 same-name modules.
 - Package scripts: 14 workspace packages are missing at least one expected script, mostly `build` and
   package-level `test`.
 - Public API leaks: `@editor/core` still exposes broad `export *` surfaces from document, piece-table,

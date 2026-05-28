@@ -26,10 +26,11 @@ import type {
   LspNotificationHandler,
   LspRequestHandle,
   LspServerMessageHandler,
+  LspClientWorkspace,
   LspTransport,
   LspUnhandledNotificationHandler,
 } from './types'
-import { LspWorkspace } from './workspace'
+import { createDefaultLspWorkspace } from './workspaceFactory'
 
 export type LspClientState = 'disconnected' | 'initializing' | 'ready' | 'failed'
 
@@ -42,7 +43,7 @@ export type LspClientConfig = {
   readonly timeoutMs?: number
   readonly processId?: number | null
   readonly locale?: string
-  readonly workspace?: LspWorkspace
+  readonly workspace?: LspClientWorkspace
   readonly notificationHandlers?: Readonly<Record<string, LspNotificationHandler<LspClient>>>
   readonly unhandledNotification?: LspUnhandledNotificationHandler<LspClient>
   readonly serverMessageHandler?: LspServerMessageHandler<LspClient>
@@ -63,7 +64,7 @@ type RequestOptions = {
 }
 
 export class LspClient {
-  public readonly workspace: LspWorkspace
+  public readonly workspace: LspClientWorkspace
   public serverCapabilities: lsp.ServerCapabilities | null = null
   public initializeResult: lsp.InitializeResult | null = null
 
@@ -87,7 +88,7 @@ export class LspClient {
       defaultClientCapabilities(),
       this.config.capabilities,
     )
-    this.workspace = config.workspace ?? new LspWorkspace()
+    this.workspace = config.workspace ?? createDefaultLspWorkspace()
     this.workspace.attachClient(this)
     this.receiveMessage = this.receiveMessage.bind(this)
   }

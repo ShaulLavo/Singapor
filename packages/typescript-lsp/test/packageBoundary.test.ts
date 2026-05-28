@@ -18,7 +18,7 @@ const TYPE_SCRIPT_SPECIALIZATION_FILES = [
   'typescriptLsp.worker.ts',
 ] as const
 
-const SHARED_LANGUAGE_SERVER_FILES = [
+const SHARED_LSP_PLUGIN_FILES = [
   'completion.ts',
   'completionController.ts',
   'definitionNavigation.ts',
@@ -36,12 +36,12 @@ const SHARED_LANGUAGE_SERVER_FILES = [
 ] as const
 
 describe('@editor/typescript-lsp package boundary', () => {
-  it('keeps generic LSP implementation files owned by @editor/language-server', () => {
+  it('keeps generic LSP implementation files owned by @editor/lsp-plugin', () => {
     const files = sourceFiles()
 
     expect([...files].sort()).toEqual([...TYPE_SCRIPT_SPECIALIZATION_FILES].sort())
-    for (const file of SHARED_LANGUAGE_SERVER_FILES) {
-      expect(files.has(file), `${file} belongs in @editor/language-server`).toBe(false)
+    for (const file of SHARED_LSP_PLUGIN_FILES) {
+      expect(files.has(file), `${file} belongs in @editor/lsp-plugin`).toBe(false)
     }
   })
 
@@ -54,7 +54,7 @@ describe('@editor/typescript-lsp package boundary', () => {
       './ts-diagnostics': './src/tsDiagnostics.ts',
     })
     expect(packageJson.dependencies).toMatchObject({
-      '@editor/language-server': 'workspace:*',
+      '@editor/lsp-plugin': 'workspace:*',
     })
     expect(packageJson.dependencies).not.toHaveProperty('unified')
     expect(packageJson.dependencies).not.toHaveProperty('remark-parse')

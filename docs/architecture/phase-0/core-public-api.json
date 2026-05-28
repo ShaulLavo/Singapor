@@ -148,6 +148,30 @@
         },
         {
           "kind": "type",
+          "name": "EditorCapabilityContribution",
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorCapabilityContributionContext",
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorCapabilityContributionProvider",
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorCapabilityToken",
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
           "name": "EditorChangeHandler",
           "source": "packages/editor/src/editor.ts",
           "via": "packages/editor/src/index.ts"
@@ -156,6 +180,24 @@
           "kind": "type",
           "name": "EditorCommandContext",
           "source": "packages/editor/src/editor.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorCommandContribution",
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorCommandContributionContext",
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorCommandContributionProvider",
+          "source": "packages/editor/src/public/extensions.ts",
           "via": "packages/editor/src/index.ts"
         },
         {
@@ -184,6 +226,24 @@
         },
         {
           "kind": "type",
+          "name": "EditorDecorationContribution",
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorDecorationContributionContext",
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorDecorationContributionProvider",
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
           "name": "EditorDisposable",
           "source": "packages/editor/src/public/extensions.ts",
           "via": "packages/editor/src/index.ts"
@@ -208,6 +268,24 @@
         },
         {
           "kind": "type",
+          "name": "EditorEditContribution",
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorEditContributionContext",
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorEditContributionProvider",
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
           "name": "EditorEditHistoryMode",
           "source": "packages/editor/src/editor.ts",
           "via": "packages/editor/src/index.ts"
@@ -228,24 +306,6 @@
           "kind": "type",
           "name": "EditorEditSelection",
           "source": "packages/editor/src/editor.ts",
-          "via": "packages/editor/src/index.ts"
-        },
-        {
-          "kind": "type",
-          "name": "EditorFeatureContribution",
-          "source": "packages/editor/src/public/extensions.ts",
-          "via": "packages/editor/src/index.ts"
-        },
-        {
-          "kind": "type",
-          "name": "EditorFeatureContributionContext",
-          "source": "packages/editor/src/public/extensions.ts",
-          "via": "packages/editor/src/index.ts"
-        },
-        {
-          "kind": "type",
-          "name": "EditorFeatureContributionProvider",
-          "source": "packages/editor/src/public/extensions.ts",
           "via": "packages/editor/src/index.ts"
         },
         {
@@ -334,6 +394,42 @@
         },
         {
           "kind": "type",
+          "name": "EditorLogEditorContext",
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorLogError",
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorLogEvent",
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorLogger",
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorLogInput",
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorLogLevel",
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
           "name": "EditorMergeConflictFeature",
           "source": "packages/editor/src/editor.ts",
           "via": "packages/editor/src/index.ts"
@@ -400,6 +496,12 @@
         },
         {
           "kind": "type",
+          "name": "EditorPluginLifecycleState",
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
           "name": "EditorRangeDecoration",
           "source": "packages/editor/src/editor.ts",
           "via": "packages/editor/src/index.ts"
@@ -460,6 +562,18 @@
         },
         {
           "kind": "type",
+          "name": "EditorSyntaxDegradedState",
+          "source": "packages/editor/src/public/syntax.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSyntaxEditSummary",
+          "source": "packages/editor/src/public/syntax.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
           "name": "EditorSyntaxError",
           "source": "packages/editor/src/public/syntax.ts",
           "via": "packages/editor/src/index.ts"
@@ -472,7 +586,25 @@
         },
         {
           "kind": "type",
+          "name": "EditorSyntaxLanguageConfiguration",
+          "source": "packages/editor/src/public/syntax.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
           "name": "EditorSyntaxLanguageId",
+          "source": "packages/editor/src/public/syntax.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSyntaxMode",
+          "source": "packages/editor/src/public/syntax.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSyntaxProjectionTag",
           "source": "packages/editor/src/public/syntax.ts",
           "via": "packages/editor/src/index.ts"
         },
@@ -496,6 +628,18 @@
         },
         {
           "kind": "type",
+          "name": "EditorSyntaxResultOptions",
+          "source": "packages/editor/src/public/syntax.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSyntaxServiceRequest",
+          "source": "packages/editor/src/public/syntax.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
           "name": "EditorSyntaxSession",
           "source": "packages/editor/src/public/syntax.ts",
           "via": "packages/editor/src/index.ts"
@@ -509,6 +653,12 @@
         {
           "kind": "type",
           "name": "EditorSyntaxSessionOptions",
+          "source": "packages/editor/src/public/syntax.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSyntaxSnapshotTag",
           "source": "packages/editor/src/public/syntax.ts",
           "via": "packages/editor/src/index.ts"
         },
@@ -778,6 +928,30 @@
         },
         {
           "kind": "unknown",
+          "name": "createEditorCapabilityToken",
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "createEditorConsoleLogger",
+          "source": "packages/editor/src/logging/index.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "createEditorConsoleLoggingPlugin",
+          "source": "packages/editor/src/logging/index.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "createEditorLoggingPlugin",
+          "source": "packages/editor/src/logging/index.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "unknown",
           "name": "createEditorSyntaxSession",
           "source": "packages/editor/src/public/syntax.ts",
           "via": "packages/editor/src/index.ts"
@@ -826,6 +1000,24 @@
         },
         {
           "kind": "unknown",
+          "name": "createSyntaxLanguageConfiguration",
+          "source": "packages/editor/src/public/syntax.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "createSyntaxProjectionTag",
+          "source": "packages/editor/src/public/syntax.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "createSyntaxSnapshotTag",
+          "source": "packages/editor/src/public/syntax.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "unknown",
           "name": "defaultEditorCommandPacks",
           "source": "packages/editor/src/editor/keymap.ts",
           "via": "packages/editor/src/index.ts"
@@ -850,13 +1042,37 @@
         },
         {
           "kind": "unknown",
+          "name": "EDITOR_FIND_FEATURE_ID",
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "EDITOR_FIND_FEATURE",
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "unknown",
           "name": "EDITOR_MERGE_CONFLICT_FEATURE_ID",
           "source": "packages/editor/src/editor.ts",
           "via": "packages/editor/src/index.ts"
         },
         {
           "kind": "unknown",
+          "name": "EDITOR_MERGE_CONFLICT_FEATURE",
+          "source": "packages/editor/src/editor.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "unknown",
           "name": "EDITOR_MINIMAP_FEATURE_ID",
+          "source": "packages/editor/src/public/extensions.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "EDITOR_MINIMAP_FEATURE",
           "source": "packages/editor/src/public/extensions.ts",
           "via": "packages/editor/src/index.ts"
         },
@@ -934,12 +1150,6 @@
         },
         {
           "kind": "unknown",
-          "name": "getPieceTableText",
-          "source": "packages/editor/src/public/document.ts",
-          "via": "packages/editor/src/index.ts"
-        },
-        {
-          "kind": "unknown",
           "name": "insertIntoPieceTable",
           "source": "packages/editor/src/public/document.ts",
           "via": "packages/editor/src/index.ts"
@@ -948,6 +1158,12 @@
           "kind": "unknown",
           "name": "isEditorSyntaxLanguage",
           "source": "packages/editor/src/public/syntax.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "materializePieceTableFullText",
+          "source": "packages/editor/src/public/document.ts",
           "via": "packages/editor/src/index.ts"
         },
         {
@@ -984,6 +1200,12 @@
           "kind": "unknown",
           "name": "readonlySafeEditorCommandPacks",
           "source": "packages/editor/src/editor/keymap.ts",
+          "via": "packages/editor/src/index.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "readPieceTableTextRange",
+          "source": "packages/editor/src/public/document.ts",
           "via": "packages/editor/src/index.ts"
         },
         {
@@ -1108,6 +1330,18 @@
         },
         {
           "kind": "type",
+          "name": "DocumentTransaction",
+          "source": "packages/editor/src/documentSession.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "type",
+          "name": "DocumentTransactionMetadata",
+          "source": "packages/editor/src/documentSession.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "type",
           "name": "EditorDocument",
           "source": "packages/editor/src/tokens.ts",
           "via": "packages/editor/src/public/document.ts"
@@ -1150,8 +1384,20 @@
         },
         {
           "kind": "type",
+          "name": "TextCharacterClass",
+          "source": "packages/editor/src/textRanges.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "type",
           "name": "TextEdit",
           "source": "packages/editor/src/tokens.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "type",
+          "name": "TextOffsetRange",
+          "source": "packages/editor/src/textRanges.ts",
           "via": "packages/editor/src/public/document.ts"
         },
         {
@@ -1188,6 +1434,36 @@
           "kind": "unknown",
           "name": "applyBatchToPieceTable",
           "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "characterClassAt",
+          "source": "packages/editor/src/textRanges.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "clampTextOffset",
+          "source": "packages/editor/src/textRanges.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "clampTextOffsetRange",
+          "source": "packages/editor/src/textRanges.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "codePointSizeAt",
+          "source": "packages/editor/src/textRanges.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "compareTextOffsetRanges",
+          "source": "packages/editor/src/textRanges.ts",
           "via": "packages/editor/src/public/document.ts"
         },
         {
@@ -1240,14 +1516,56 @@
         },
         {
           "kind": "unknown",
-          "name": "getPieceTableText",
+          "name": "insertIntoPieceTable",
           "source": "packages/editor/src/pieceTable/index.ts",
           "via": "packages/editor/src/public/document.ts"
         },
         {
           "kind": "unknown",
-          "name": "insertIntoPieceTable",
+          "name": "isWholeWordRange",
+          "source": "packages/editor/src/textRanges.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "isWordCodePointAt",
+          "source": "packages/editor/src/textRanges.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "isWordCodePointBefore",
+          "source": "packages/editor/src/textRanges.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "lineRangeAtOffset",
+          "source": "packages/editor/src/textRanges.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "materializePieceTableFullText",
           "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "nextCodePointOffset",
+          "source": "packages/editor/src/textRanges.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "nextWordOffset",
+          "source": "packages/editor/src/textRanges.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "normalizeTextOffsetRanges",
+          "source": "packages/editor/src/textRanges.ts",
           "via": "packages/editor/src/public/document.ts"
         },
         {
@@ -1270,8 +1588,50 @@
         },
         {
           "kind": "unknown",
+          "name": "previousCodePointOffset",
+          "source": "packages/editor/src/textRanges.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "previousCodePointStart",
+          "source": "packages/editor/src/textRanges.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "previousWordOffset",
+          "source": "packages/editor/src/textRanges.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "readPieceTableTextRange",
+          "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
           "name": "resolveAnchor",
           "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "streamPieceTablePieces",
+          "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "streamPieceTableTextChunks",
+          "source": "packages/editor/src/pieceTable/index.ts",
+          "via": "packages/editor/src/public/document.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "wordRangeAtOffset",
+          "source": "packages/editor/src/textRanges.ts",
           "via": "packages/editor/src/public/document.ts"
         }
       ],
@@ -1354,6 +1714,24 @@
         },
         {
           "kind": "type",
+          "name": "EditorCapabilityContribution",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/editor.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorCapabilityContributionContext",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/editor.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorCapabilityContributionProvider",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/editor.ts"
+        },
+        {
+          "kind": "type",
           "name": "EditorChangeHandler",
           "source": "packages/editor/src/editor/types.ts",
           "via": "packages/editor/src/editor.ts"
@@ -1362,6 +1740,24 @@
           "kind": "type",
           "name": "EditorCommandContext",
           "source": "packages/editor/src/editor/commands.ts",
+          "via": "packages/editor/src/editor.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorCommandContribution",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/editor.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorCommandContributionContext",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/editor.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorCommandContributionProvider",
+          "source": "packages/editor/src/plugins.ts",
           "via": "packages/editor/src/editor.ts"
         },
         {
@@ -1390,6 +1786,24 @@
         },
         {
           "kind": "type",
+          "name": "EditorDecorationContribution",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/editor.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorDecorationContributionContext",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/editor.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorDecorationContributionProvider",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/editor.ts"
+        },
+        {
+          "kind": "type",
           "name": "EditorDisposable",
           "source": "packages/editor/src/plugins.ts",
           "via": "packages/editor/src/editor.ts"
@@ -1404,6 +1818,24 @@
           "kind": "type",
           "name": "EditorEditability",
           "source": "packages/editor/src/editor/types.ts",
+          "via": "packages/editor/src/editor.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorEditContribution",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/editor.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorEditContributionContext",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/editor.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorEditContributionProvider",
+          "source": "packages/editor/src/plugins.ts",
           "via": "packages/editor/src/editor.ts"
         },
         {
@@ -1428,24 +1860,6 @@
           "kind": "type",
           "name": "EditorEditSelection",
           "source": "packages/editor/src/editor/types.ts",
-          "via": "packages/editor/src/editor.ts"
-        },
-        {
-          "kind": "type",
-          "name": "EditorFeatureContribution",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/editor.ts"
-        },
-        {
-          "kind": "type",
-          "name": "EditorFeatureContributionContext",
-          "source": "packages/editor/src/plugins.ts",
-          "via": "packages/editor/src/editor.ts"
-        },
-        {
-          "kind": "type",
-          "name": "EditorFeatureContributionProvider",
-          "source": "packages/editor/src/plugins.ts",
           "via": "packages/editor/src/editor.ts"
         },
         {
@@ -1534,6 +1948,42 @@
         },
         {
           "kind": "type",
+          "name": "EditorLogEditorContext",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/editor.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorLogError",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/editor.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorLogEvent",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/editor.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorLogger",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/editor.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorLogInput",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/editor.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorLogLevel",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/editor.ts"
+        },
+        {
+          "kind": "type",
           "name": "EditorMergeConflictFeature",
           "source": "packages/editor/src/mergeConflictPlugin.ts",
           "via": "packages/editor/src/editor.ts"
@@ -1565,6 +2015,12 @@
         {
           "kind": "type",
           "name": "EditorPluginContext",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/editor.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorPluginLifecycleState",
           "source": "packages/editor/src/plugins.ts",
           "via": "packages/editor/src/editor.ts"
         },
@@ -1762,6 +2218,24 @@
         },
         {
           "kind": "unknown",
+          "name": "createEditorConsoleLogger",
+          "source": "packages/editor/src/logging/index.ts",
+          "via": "packages/editor/src/editor.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "createEditorConsoleLoggingPlugin",
+          "source": "packages/editor/src/logging/index.ts",
+          "via": "packages/editor/src/editor.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "createEditorLoggingPlugin",
+          "source": "packages/editor/src/logging/index.ts",
+          "via": "packages/editor/src/editor.ts"
+        },
+        {
+          "kind": "unknown",
           "name": "createMergeConflictDocumentText",
           "source": "packages/editor/src/mergeConflicts.ts",
           "via": "packages/editor/src/editor.ts"
@@ -1793,6 +2267,12 @@
         {
           "kind": "unknown",
           "name": "EDITOR_MERGE_CONFLICT_FEATURE_ID",
+          "source": "packages/editor/src/mergeConflictPlugin.ts",
+          "via": "packages/editor/src/editor.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "EDITOR_MERGE_CONFLICT_FEATURE",
           "source": "packages/editor/src/mergeConflictPlugin.ts",
           "via": "packages/editor/src/editor.ts"
         },
@@ -1900,7 +2380,67 @@
       "exports": [
         {
           "kind": "type",
+          "name": "EditorCapabilityContribution",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorCapabilityContributionContext",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorCapabilityContributionProvider",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorCapabilityToken",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorCommandContribution",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorCommandContributionContext",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorCommandContributionProvider",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
           "name": "EditorCommandHandler",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorDecorationContribution",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorDecorationContributionContext",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorDecorationContributionProvider",
           "source": "packages/editor/src/plugins.ts",
           "via": "packages/editor/src/public/extensions.ts"
         },
@@ -1912,19 +2452,19 @@
         },
         {
           "kind": "type",
-          "name": "EditorFeatureContribution",
+          "name": "EditorEditContribution",
           "source": "packages/editor/src/plugins.ts",
           "via": "packages/editor/src/public/extensions.ts"
         },
         {
           "kind": "type",
-          "name": "EditorFeatureContributionContext",
+          "name": "EditorEditContributionContext",
           "source": "packages/editor/src/plugins.ts",
           "via": "packages/editor/src/public/extensions.ts"
         },
         {
           "kind": "type",
-          "name": "EditorFeatureContributionProvider",
+          "name": "EditorEditContributionProvider",
           "source": "packages/editor/src/plugins.ts",
           "via": "packages/editor/src/public/extensions.ts"
         },
@@ -1990,6 +2530,42 @@
         },
         {
           "kind": "type",
+          "name": "EditorLogEditorContext",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorLogError",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorLogEvent",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorLogger",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorLogInput",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorLogLevel",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
           "name": "EditorMinimapDecoration",
           "source": "packages/editor/src/plugins.ts",
           "via": "packages/editor/src/public/extensions.ts"
@@ -2027,6 +2603,12 @@
         {
           "kind": "type",
           "name": "EditorPluginContext",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorPluginLifecycleState",
           "source": "packages/editor/src/plugins.ts",
           "via": "packages/editor/src/public/extensions.ts"
         },
@@ -2086,7 +2668,31 @@
         },
         {
           "kind": "unknown",
+          "name": "createEditorCapabilityToken",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "EDITOR_FIND_FEATURE_ID",
+          "source": "packages/editor/src/editor/findFeature.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "EDITOR_FIND_FEATURE",
+          "source": "packages/editor/src/editor/findFeature.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "unknown",
           "name": "EDITOR_MINIMAP_FEATURE_ID",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/public/extensions.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "EDITOR_MINIMAP_FEATURE",
           "source": "packages/editor/src/plugins.ts",
           "via": "packages/editor/src/public/extensions.ts"
         }
@@ -2100,6 +2706,114 @@
           "kind": "type",
           "name": "AnchorSelection",
           "source": "packages/editor/src/selections.ts",
+          "via": "packages/editor/src/internal.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorDocumentContributionContext",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/internal.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorFeatureContribution",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/internal.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorFeatureContributionContext",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/internal.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorFeatureContributionProvider",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/internal.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorFeatureDomContributionContext",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/internal.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorInternalPluginContext",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/internal.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorRangeHighlightContributionContext",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/internal.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorRowDecorationContributionContext",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/internal.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorScheduledWorkHandle",
+          "source": "packages/editor/src/editor/workScheduler.ts",
+          "via": "packages/editor/src/internal.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorScheduleWorkOptions",
+          "source": "packages/editor/src/editor/workScheduler.ts",
+          "via": "packages/editor/src/internal.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSelectionContributionContext",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/internal.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorWorkContext",
+          "source": "packages/editor/src/editor/workScheduler.ts",
+          "via": "packages/editor/src/internal.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorWorkEvent",
+          "source": "packages/editor/src/editor/workScheduler.ts",
+          "via": "packages/editor/src/internal.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorWorkEventType",
+          "source": "packages/editor/src/editor/workScheduler.ts",
+          "via": "packages/editor/src/internal.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorWorkPriority",
+          "source": "packages/editor/src/editor/workScheduler.ts",
+          "via": "packages/editor/src/internal.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorWorkSchedulerOptions",
+          "source": "packages/editor/src/editor/workScheduler.ts",
+          "via": "packages/editor/src/internal.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorWorkTags",
+          "source": "packages/editor/src/editor/workScheduler.ts",
+          "via": "packages/editor/src/internal.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorWorkTaskClass",
+          "source": "packages/editor/src/editor/workScheduler.ts",
           "via": "packages/editor/src/internal.ts"
         },
         {
@@ -2134,7 +2848,7 @@
         },
         {
           "kind": "unknown",
-          "name": "defineLazyTextProperty",
+          "name": "defineLazyFullTextProperty",
           "source": "packages/editor/src/documentTextSnapshot.ts",
           "via": "packages/editor/src/internal.ts"
         },
@@ -2142,6 +2856,12 @@
           "kind": "unknown",
           "name": "documentSessionChangeTextSnapshot",
           "source": "packages/editor/src/documentSession.ts",
+          "via": "packages/editor/src/internal.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "EditorWorkScheduler",
+          "source": "packages/editor/src/editor/workScheduler.ts",
           "via": "packages/editor/src/internal.ts"
         },
         {
@@ -2171,6 +2891,126 @@
       ],
       "source": "packages/editor/src/internal.ts",
       "specifier": "./internal"
+    },
+    {
+      "exports": [
+        {
+          "kind": "type",
+          "name": "EditorConsoleLoggingPluginOptions",
+          "source": "packages/editor/src/logging/index.ts",
+          "via": "packages/editor/src/logging/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorLogEditorContext",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/logging/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorLogError",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/logging/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorLogEvent",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/logging/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorLogger",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/logging/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorLoggingPluginOptions",
+          "source": "packages/editor/src/logging/index.ts",
+          "via": "packages/editor/src/logging/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorLogInput",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/logging/index.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorLogLevel",
+          "source": "packages/editor/src/plugins.ts",
+          "via": "packages/editor/src/logging/index.ts"
+        },
+        {
+          "kind": "value",
+          "name": "createEditorConsoleLogger",
+          "source": "packages/editor/src/logging/index.ts",
+          "via": "packages/editor/src/logging/index.ts"
+        },
+        {
+          "kind": "value",
+          "name": "createEditorConsoleLoggingPlugin",
+          "source": "packages/editor/src/logging/index.ts",
+          "via": "packages/editor/src/logging/index.ts"
+        },
+        {
+          "kind": "value",
+          "name": "createEditorLoggingPlugin",
+          "source": "packages/editor/src/logging/index.ts",
+          "via": "packages/editor/src/logging/index.ts"
+        }
+      ],
+      "source": "packages/editor/src/logging/index.ts",
+      "specifier": "./logging"
+    },
+    {
+      "exports": [
+        {
+          "kind": "type",
+          "name": "EditorEvlogLoggingPluginOptions",
+          "source": "packages/editor/src/logging/evlog.ts",
+          "via": "packages/editor/src/logging/evlog.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorLogEvent",
+          "source": "packages/editor/src/logging/evlog.ts",
+          "via": "packages/editor/src/logging/evlog.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorLogger",
+          "source": "packages/editor/src/logging/evlog.ts",
+          "via": "packages/editor/src/logging/evlog.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorLogLevel",
+          "source": "packages/editor/src/logging/evlog.ts",
+          "via": "packages/editor/src/logging/evlog.ts"
+        },
+        {
+          "kind": "value",
+          "name": "createEditorEvlogLogger",
+          "source": "packages/editor/src/logging/evlog.ts",
+          "via": "packages/editor/src/logging/evlog.ts"
+        },
+        {
+          "kind": "value",
+          "name": "createEditorEvlogLoggingPlugin",
+          "source": "packages/editor/src/logging/evlog.ts",
+          "via": "packages/editor/src/logging/evlog.ts"
+        },
+        {
+          "kind": "value",
+          "name": "createEditorEvlogPlugin",
+          "source": "packages/editor/src/logging/evlog.ts",
+          "via": "packages/editor/src/logging/evlog.ts"
+        }
+      ],
+      "source": "packages/editor/src/logging/evlog.ts",
+      "specifier": "./logging/evlog"
     },
     {
       "exports": [
@@ -2338,6 +3178,138 @@
       "exports": [
         {
           "kind": "type",
+          "name": "EditorSecondaryScheduledWorkHandle",
+          "source": "packages/editor/src/editor/workScheduler.ts",
+          "via": "packages/editor/src/public/secondaryViews.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSecondaryScheduleWorkOptions",
+          "source": "packages/editor/src/editor/workScheduler.ts",
+          "via": "packages/editor/src/public/secondaryViews.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSecondaryTextViewOptions",
+          "source": "packages/editor/src/virtualization/index.ts",
+          "via": "packages/editor/src/public/secondaryViews.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSecondaryTextViewState",
+          "source": "packages/editor/src/virtualization/index.ts",
+          "via": "packages/editor/src/public/secondaryViews.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSecondaryViewDecoration",
+          "source": "packages/editor/src/public/secondaryViews.ts",
+          "via": "packages/editor/src/public/secondaryViews.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSecondaryViewFoldSummary",
+          "source": "packages/editor/src/public/secondaryViews.ts",
+          "via": "packages/editor/src/public/secondaryViews.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSecondaryViewLineModel",
+          "source": "packages/editor/src/public/secondaryViews.ts",
+          "via": "packages/editor/src/public/secondaryViews.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSecondaryViewProjection",
+          "source": "packages/editor/src/public/secondaryViews.ts",
+          "via": "packages/editor/src/public/secondaryViews.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSecondaryViewProjectionOptions",
+          "source": "packages/editor/src/public/secondaryViews.ts",
+          "via": "packages/editor/src/public/secondaryViews.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSecondaryViewSyntaxColors",
+          "source": "packages/editor/src/public/secondaryViews.ts",
+          "via": "packages/editor/src/public/secondaryViews.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSecondaryViewTextProjection",
+          "source": "packages/editor/src/public/secondaryViews.ts",
+          "via": "packages/editor/src/public/secondaryViews.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSecondaryWorkContext",
+          "source": "packages/editor/src/editor/workScheduler.ts",
+          "via": "packages/editor/src/public/secondaryViews.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSecondaryWorkEvent",
+          "source": "packages/editor/src/editor/workScheduler.ts",
+          "via": "packages/editor/src/public/secondaryViews.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSecondaryWorkEventType",
+          "source": "packages/editor/src/editor/workScheduler.ts",
+          "via": "packages/editor/src/public/secondaryViews.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSecondaryWorkPriority",
+          "source": "packages/editor/src/editor/workScheduler.ts",
+          "via": "packages/editor/src/public/secondaryViews.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSecondaryWorkSchedulerOptions",
+          "source": "packages/editor/src/editor/workScheduler.ts",
+          "via": "packages/editor/src/public/secondaryViews.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSecondaryWorkTags",
+          "source": "packages/editor/src/editor/workScheduler.ts",
+          "via": "packages/editor/src/public/secondaryViews.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSecondaryWorkTaskClass",
+          "source": "packages/editor/src/editor/workScheduler.ts",
+          "via": "packages/editor/src/public/secondaryViews.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "EditorSecondaryTextView",
+          "source": "packages/editor/src/virtualization/index.ts",
+          "via": "packages/editor/src/public/secondaryViews.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "EditorSecondaryViewScheduler",
+          "source": "packages/editor/src/editor/workScheduler.ts",
+          "via": "packages/editor/src/public/secondaryViews.ts"
+        },
+        {
+          "kind": "value",
+          "name": "createEditorSecondaryViewProjection",
+          "source": "packages/editor/src/public/secondaryViews.ts",
+          "via": "packages/editor/src/public/secondaryViews.ts"
+        }
+      ],
+      "source": "packages/editor/src/public/secondaryViews.ts",
+      "specifier": "./secondary-views"
+    },
+    {
+      "exports": [
+        {
+          "kind": "type",
           "name": "CreateIncrementalTokenizerOptions",
           "source": "packages/editor/src/shiki/tokenizer.ts",
           "via": "packages/editor/src/shiki/index.ts"
@@ -2482,6 +3454,18 @@
         },
         {
           "kind": "type",
+          "name": "EditorSyntaxDegradedState",
+          "source": "packages/editor/src/syntax/index.ts",
+          "via": "packages/editor/src/public/syntax.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSyntaxEditSummary",
+          "source": "packages/editor/src/syntax/index.ts",
+          "via": "packages/editor/src/public/syntax.ts"
+        },
+        {
+          "kind": "type",
           "name": "EditorSyntaxError",
           "source": "packages/editor/src/syntax/index.ts",
           "via": "packages/editor/src/public/syntax.ts"
@@ -2494,7 +3478,25 @@
         },
         {
           "kind": "type",
+          "name": "EditorSyntaxLanguageConfiguration",
+          "source": "packages/editor/src/syntax/index.ts",
+          "via": "packages/editor/src/public/syntax.ts"
+        },
+        {
+          "kind": "type",
           "name": "EditorSyntaxLanguageId",
+          "source": "packages/editor/src/syntax/index.ts",
+          "via": "packages/editor/src/public/syntax.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSyntaxMode",
+          "source": "packages/editor/src/syntax/index.ts",
+          "via": "packages/editor/src/public/syntax.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSyntaxProjectionTag",
           "source": "packages/editor/src/syntax/index.ts",
           "via": "packages/editor/src/public/syntax.ts"
         },
@@ -2518,6 +3520,18 @@
         },
         {
           "kind": "type",
+          "name": "EditorSyntaxResultOptions",
+          "source": "packages/editor/src/syntax/index.ts",
+          "via": "packages/editor/src/public/syntax.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSyntaxServiceRequest",
+          "source": "packages/editor/src/syntax/index.ts",
+          "via": "packages/editor/src/public/syntax.ts"
+        },
+        {
+          "kind": "type",
           "name": "EditorSyntaxSession",
           "source": "packages/editor/src/syntax/index.ts",
           "via": "packages/editor/src/public/syntax.ts"
@@ -2525,6 +3539,12 @@
         {
           "kind": "type",
           "name": "EditorSyntaxSessionOptions",
+          "source": "packages/editor/src/syntax/index.ts",
+          "via": "packages/editor/src/public/syntax.ts"
+        },
+        {
+          "kind": "type",
+          "name": "EditorSyntaxSnapshotTag",
           "source": "packages/editor/src/syntax/index.ts",
           "via": "packages/editor/src/public/syntax.ts"
         },
@@ -2561,6 +3581,24 @@
         {
           "kind": "unknown",
           "name": "createEmptySyntaxSession",
+          "source": "packages/editor/src/syntax/index.ts",
+          "via": "packages/editor/src/public/syntax.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "createSyntaxLanguageConfiguration",
+          "source": "packages/editor/src/syntax/index.ts",
+          "via": "packages/editor/src/public/syntax.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "createSyntaxProjectionTag",
+          "source": "packages/editor/src/syntax/index.ts",
+          "via": "packages/editor/src/public/syntax.ts"
+        },
+        {
+          "kind": "unknown",
+          "name": "createSyntaxSnapshotTag",
           "source": "packages/editor/src/syntax/index.ts",
           "via": "packages/editor/src/public/syntax.ts"
         },

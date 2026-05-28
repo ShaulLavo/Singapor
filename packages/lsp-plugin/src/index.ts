@@ -1,10 +1,10 @@
 export {
-  createLanguageServerCorePlugin,
+  createLanguageServerAdapterPlugin,
   createLanguageServerPlugin,
   type LanguageServerCommandSpec,
   type LanguageServerCommandTarget,
   type LanguageServerConnectionContext,
-  type LanguageServerCorePluginOptions,
+  type LanguageServerAdapterPluginOptions,
   type LanguageServerResolvedOptions,
 } from './plugin'
 export {

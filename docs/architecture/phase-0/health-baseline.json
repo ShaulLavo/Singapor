@@ -1,131 +1,33 @@
 {
   "duplicateModules": {
-    "language-server-vs-typescript-lsp": [
+    "lsp-plugin-vs-typescript-lsp": [
       {
         "files": [
-          "packages/language-server/src/completion.ts",
-          "packages/typescript-lsp/src/completion.ts"
-        ],
-        "modulePath": "completion.ts"
-      },
-      {
-        "files": [
-          "packages/language-server/src/completionController.ts",
-          "packages/typescript-lsp/src/completionController.ts"
-        ],
-        "modulePath": "completionController.ts"
-      },
-      {
-        "files": [
-          "packages/language-server/src/definitionNavigation.ts",
-          "packages/typescript-lsp/src/definitionNavigation.ts"
-        ],
-        "modulePath": "definitionNavigation.ts"
-      },
-      {
-        "files": [
-          "packages/language-server/src/diagnosticProjection.ts",
-          "packages/typescript-lsp/src/diagnosticProjection.ts"
-        ],
-        "modulePath": "diagnosticProjection.ts"
-      },
-      {
-        "files": [
-          "packages/language-server/src/diagnostics.ts",
-          "packages/typescript-lsp/src/diagnostics.ts"
-        ],
-        "modulePath": "diagnostics.ts"
-      },
-      {
-        "files": [
-          "packages/language-server/src/diagnosticsPresenter.ts",
-          "packages/typescript-lsp/src/diagnosticsPresenter.ts"
-        ],
-        "modulePath": "diagnosticsPresenter.ts"
-      },
-      {
-        "files": [
-          "packages/language-server/src/documentSync.ts",
-          "packages/typescript-lsp/src/documentSync.ts"
-        ],
-        "modulePath": "documentSync.ts"
-      },
-      {
-        "files": [
-          "packages/language-server/src/hoverDefinitionController.ts",
-          "packages/typescript-lsp/src/hoverDefinitionController.ts"
-        ],
-        "modulePath": "hoverDefinitionController.ts"
-      },
-      {
-        "files": [
-          "packages/language-server/src/index.ts",
+          "packages/lsp-plugin/src/index.ts",
           "packages/typescript-lsp/src/index.ts"
         ],
         "modulePath": "index.ts"
       },
       {
         "files": [
-          "packages/language-server/src/lspConnection.ts",
-          "packages/typescript-lsp/src/lspConnection.ts"
-        ],
-        "modulePath": "lspConnection.ts"
-      },
-      {
-        "files": [
-          "packages/language-server/src/markdownTooltip.ts",
-          "packages/typescript-lsp/src/markdownTooltip.ts"
-        ],
-        "modulePath": "markdownTooltip.ts"
-      },
-      {
-        "files": [
-          "packages/language-server/src/paths.ts",
+          "packages/lsp-plugin/src/paths.ts",
           "packages/typescript-lsp/src/paths.ts"
         ],
         "modulePath": "paths.ts"
       },
       {
         "files": [
-          "packages/language-server/src/plugin.styles.ts",
-          "packages/typescript-lsp/src/plugin.styles.ts"
-        ],
-        "modulePath": "plugin.styles.ts"
-      },
-      {
-        "files": [
-          "packages/language-server/src/plugin.ts",
+          "packages/lsp-plugin/src/plugin.ts",
           "packages/typescript-lsp/src/plugin.ts"
         ],
         "modulePath": "plugin.ts"
       },
       {
         "files": [
-          "packages/language-server/src/pluginTypes.ts",
-          "packages/typescript-lsp/src/pluginTypes.ts"
-        ],
-        "modulePath": "pluginTypes.ts"
-      },
-      {
-        "files": [
-          "packages/language-server/src/tooltip.ts",
-          "packages/typescript-lsp/src/tooltip.ts"
-        ],
-        "modulePath": "tooltip.ts"
-      },
-      {
-        "files": [
-          "packages/language-server/src/types.ts",
+          "packages/lsp-plugin/src/types.ts",
           "packages/typescript-lsp/src/types.ts"
         ],
         "modulePath": "types.ts"
-      },
-      {
-        "files": [
-          "packages/language-server/src/websocket.ts",
-          "packages/typescript-lsp/src/websocket.ts"
-        ],
-        "modulePath": "websocket.ts"
       }
     ]
   },
@@ -149,57 +51,46 @@
   ],
   "missingPackageScripts": {
     "@editor/core": [
-      "build",
-      "test"
+      "build"
     ],
     "@editor/diff": [
       "build"
     ],
     "@editor/find": [
-      "build",
-      "test"
+      "build"
     ],
     "@editor/gutters": [
-      "build",
-      "test"
-    ],
-    "@editor/language-server": [
-      "build",
-      "test"
+      "build"
     ],
     "@editor/lsp": [
-      "build",
-      "test"
+      "build"
+    ],
+    "@editor/lsp-plugin": [
+      "build"
     ],
     "@editor/minimap": [
-      "build",
-      "test"
+      "build"
     ],
     "@editor/panes": [
       "build"
     ],
     "@editor/react": [
-      "build",
-      "test"
+      "build"
     ],
     "@editor/scope-lines": [
-      "build",
-      "test"
+      "build"
     ],
     "@editor/solid": [
       "build"
     ],
     "@editor/tree-sitter": [
-      "build",
-      "test"
+      "build"
     ],
     "@editor/tree-sitter-languages": [
-      "build",
-      "test"
+      "build"
     ],
     "@editor/typescript-lsp": [
-      "build",
-      "test"
+      "build"
     ]
   },
   "packageCycles": [],
@@ -226,13 +117,8 @@
         "packages/editor/src/virtualization/virtualizedTextViewLayout.ts"
       ]
     ],
-    "language-server-lsp": [],
-    "lsp-core": [
-      [
-        "packages/lsp/src/client.ts",
-        "packages/lsp/src/workspace.ts"
-      ]
-    ],
+    "lsp-core": [],
+    "lsp-plugin": [],
     "typescript-lsp": []
   }
 }

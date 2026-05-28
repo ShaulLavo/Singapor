@@ -108,8 +108,23 @@
         "vitest": "^3.1.1",
       },
     },
-    "packages/language-server": {
-      "name": "@editor/language-server",
+    "packages/lsp": {
+      "name": "@editor/lsp",
+      "version": "0.0.0",
+      "dependencies": {
+        "vscode-languageserver-protocol": "^3.17.5",
+      },
+      "devDependencies": {
+        "@typescript/native-preview": "7.0.0-dev.20260524.1",
+        "happy-dom": "^20.8.9",
+        "oxfmt": "0.51.0",
+        "oxlint": "1.66.0",
+        "typescript": "~5.9.3",
+        "vitest": "^3.1.1",
+      },
+    },
+    "packages/lsp-plugin": {
+      "name": "@editor/lsp-plugin",
       "version": "0.0.0",
       "dependencies": {
         "@editor/lsp": "workspace:*",
@@ -130,21 +145,6 @@
       },
       "peerDependencies": {
         "@editor/core": "workspace:*",
-      },
-    },
-    "packages/lsp": {
-      "name": "@editor/lsp",
-      "version": "0.0.0",
-      "dependencies": {
-        "vscode-languageserver-protocol": "^3.17.5",
-      },
-      "devDependencies": {
-        "@typescript/native-preview": "7.0.0-dev.20260524.1",
-        "happy-dom": "^20.8.9",
-        "oxfmt": "0.51.0",
-        "oxlint": "1.66.0",
-        "typescript": "~5.9.3",
-        "vitest": "^3.1.1",
       },
     },
     "packages/minimap": {
@@ -286,8 +286,8 @@
       "name": "@editor/typescript-lsp",
       "version": "0.0.0",
       "dependencies": {
-        "@editor/language-server": "workspace:*",
         "@editor/lsp": "workspace:*",
+        "@editor/lsp-plugin": "workspace:*",
         "@typescript/vfs": "^1.6.4",
         "typescript": "~5.9.3",
         "vscode-languageserver-protocol": "^3.17.5",
@@ -326,9 +326,9 @@
 
     "@editor/gutters": ["@editor/gutters@workspace:packages/gutters"],
 
-    "@editor/language-server": ["@editor/language-server@workspace:packages/language-server"],
-
     "@editor/lsp": ["@editor/lsp@workspace:packages/lsp"],
+
+    "@editor/lsp-plugin": ["@editor/lsp-plugin@workspace:packages/lsp-plugin"],
 
     "@editor/minimap": ["@editor/minimap@workspace:packages/minimap"],
 
