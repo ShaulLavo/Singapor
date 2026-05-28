@@ -40,47 +40,200 @@ type PendingRequest = {
 
 const supportsWorkers = (): boolean => typeof Worker !== 'undefined'
 
-let worker: Worker | null = null
-let nextRequestId = 1
-const pendingRequests = new Map<number, PendingRequest>()
-const themeRequests = new Map<string, Promise<EditorTheme | null | undefined>>()
+export type ShikiWorkerLifecycleState = 'idle' | 'ready' | 'disposing' | 'disposed' | 'crashed'
+
+export type ShikiWorkerCacheSnapshot = {
+  readonly themeRequests: number
+}
+
+export type ShikiWorkerOwnerSnapshot = {
+  readonly lifecycle: ShikiWorkerLifecycleState
+  readonly pendingRequests: number
+  readonly cache: ShikiWorkerCacheSnapshot
+  readonly workerGeneration: number
+  readonly lastError: string | null
+}
+
+export type ShikiWorkerOwnerOptions = {
+  readonly workerFactory?: () => Worker
+  readonly onError?: (error: Error) => void
+}
 
 export const canUseShikiWorker = (): boolean => supportsWorkers()
 
 export function createShikiHighlighterSession(
   options: ShikiHighlighterSessionOptions,
 ): EditorHighlighterSession | null {
-  if (!canUseShikiWorker()) return null
-  return new ShikiHighlighterSession(options)
+  return defaultShikiWorkerOwner().createSession(options)
 }
 
 export async function loadShikiTheme(
   options: ShikiThemeOptions,
 ): Promise<EditorTheme | null | undefined> {
-  if (!canUseShikiWorker()) return undefined
-
-  const key = shikiThemeRequestKey(options)
-  const existing = themeRequests.get(key)
-  if (existing) return existing
-
-  const request = requestShikiTheme(options).catch((error) => {
-    themeRequests.delete(key)
-    throw error
-  })
-  themeRequests.set(key, request)
-  return request
+  return defaultShikiWorkerOwner().loadTheme(options)
 }
 
 export async function disposeShikiWorker(): Promise<void> {
-  if (!worker) return
+  await compatibilityWorkerOwner?.dispose()
+  compatibilityWorkerOwner = null
+}
 
-  try {
-    await postRequest({ type: 'dispose' })
-  } finally {
-    worker.terminate()
-    worker = null
-    themeRequests.clear()
-    rejectPendingRequests(new Error('Shiki worker disposed'))
+export function createShikiWorkerOwner(options: ShikiWorkerOwnerOptions = {}): ShikiWorkerOwner {
+  return new ShikiWorkerOwner(options)
+}
+
+export class ShikiWorkerOwner {
+  private worker: Worker | null = null
+  private nextRequestId = 1
+  private workerGeneration = 0
+  private lifecycle: ShikiWorkerLifecycleState = 'idle'
+  private lastError: Error | null = null
+  private readonly pendingRequests = new Map<number, PendingRequest>()
+  private readonly themeRequests = new Map<string, Promise<EditorTheme | null | undefined>>()
+
+  public constructor(private readonly options: ShikiWorkerOwnerOptions = {}) {}
+
+  public canUseWorker(): boolean {
+    return Boolean(this.options.workerFactory) || supportsWorkers()
+  }
+
+  public inspect(): ShikiWorkerOwnerSnapshot {
+    return {
+      lifecycle: this.lifecycle,
+      pendingRequests: this.pendingRequests.size,
+      cache: { themeRequests: this.themeRequests.size },
+      workerGeneration: this.workerGeneration,
+      lastError: this.lastError?.message ?? null,
+    }
+  }
+
+  public createSession(options: ShikiHighlighterSessionOptions): EditorHighlighterSession | null {
+    if (!this.canUseWorker()) return null
+    return new ShikiHighlighterSession(options, this)
+  }
+
+  public async loadTheme(options: ShikiThemeOptions): Promise<EditorTheme | null | undefined> {
+    if (!this.canUseWorker()) return undefined
+
+    const key = shikiThemeRequestKey(options)
+    const existing = this.themeRequests.get(key)
+    if (existing) return existing
+
+    const request = requestShikiTheme(this, options).catch((error) => {
+      this.themeRequests.delete(key)
+      throw error
+    })
+    this.themeRequests.set(key, request)
+    return request
+  }
+
+  public request(payload: ShikiWorkerRequestPayload): Promise<ShikiWorkerResult | undefined> {
+    return this.postRequest(payload, true)
+  }
+
+  public disposeDocument(documentId: string): void {
+    if (!this.worker) return
+
+    void this.postRequest({ type: 'disposeDocument', documentId }, false).catch(() => undefined)
+  }
+
+  public async dispose(): Promise<void> {
+    const handle = this.worker
+    if (!handle) {
+      this.clearRetainedState('disposed')
+      return
+    }
+
+    this.lifecycle = 'disposing'
+    try {
+      await this.postRequest({ type: 'dispose' }, false)
+    } finally {
+      handle.terminate()
+      if (this.worker === handle) this.worker = null
+      this.clearRetainedState('disposed')
+      this.rejectPendingRequests(new Error('Shiki worker disposed'))
+    }
+  }
+
+  private getWorker(createIfMissing: boolean): Worker | null {
+    if (this.worker) return this.worker
+    if (!createIfMissing) return null
+    if (!this.canUseWorker()) return null
+
+    const handle = this.createWorker()
+    this.worker = handle
+    this.workerGeneration += 1
+    this.lifecycle = 'ready'
+    this.lastError = null
+    return handle
+  }
+
+  private createWorker(): Worker {
+    const handle =
+      this.options.workerFactory?.() ??
+      new Worker(new URL('./shiki.worker.ts', import.meta.url), { type: 'module' })
+    handle.onmessage = this.handleWorkerMessage
+    handle.onerror = (event) => this.handleWorkerError(handle, event)
+    return handle
+  }
+
+  private postRequest(
+    payload: ShikiWorkerRequestPayload,
+    createIfMissing: boolean,
+  ): Promise<ShikiWorkerResult | undefined> {
+    const handle = this.getWorker(createIfMissing)
+    if (!handle) return Promise.resolve(undefined)
+
+    const id = this.nextRequestId
+    this.nextRequestId += 1
+    const request: ShikiWorkerRequest = { id, payload }
+
+    return new Promise((resolve, reject) => {
+      this.pendingRequests.set(id, { resolve, reject })
+      try {
+        handle.postMessage(request)
+      } catch (error) {
+        this.pendingRequests.delete(id)
+        reject(workerRequestError(error))
+      }
+    })
+  }
+
+  private readonly handleWorkerMessage = (event: MessageEvent<ShikiWorkerResponse>): void => {
+    const response = event.data
+    const pending = this.pendingRequests.get(response.id)
+    if (!pending) return
+
+    this.pendingRequests.delete(response.id)
+    if (response.ok) {
+      pending.resolve(response.result)
+      return
+    }
+
+    pending.reject(new Error(response.error))
+  }
+
+  private handleWorkerError(failedWorker: Worker, event: ErrorEvent): void {
+    if (failedWorker !== this.worker) return
+
+    const error = new Error(event.message || 'Shiki worker failed')
+    this.lastError = error
+    this.lifecycle = 'crashed'
+    this.themeRequests.clear()
+    this.rejectPendingRequests(error)
+    failedWorker.terminate()
+    this.worker = null
+    this.options.onError?.(error)
+  }
+
+  private rejectPendingRequests(error: Error): void {
+    for (const request of this.pendingRequests.values()) request.reject(error)
+    this.pendingRequests.clear()
+  }
+
+  private clearRetainedState(lifecycle: ShikiWorkerLifecycleState): void {
+    this.lifecycle = lifecycle
+    this.themeRequests.clear()
   }
 }
 
@@ -96,7 +249,10 @@ class ShikiHighlighterSession implements EditorHighlighterSession {
   private disposed = false
   private task: Promise<void> = Promise.resolve()
 
-  public constructor(options: ShikiHighlighterSessionOptions) {
+  public constructor(
+    options: ShikiHighlighterSessionOptions,
+    private readonly owner: ShikiWorkerOwner,
+  ) {
     this.documentId = options.documentId
     this.lang = options.lang
     this.theme = options.theme
@@ -114,7 +270,7 @@ class ShikiHighlighterSession implements EditorHighlighterSession {
     return this.enqueueRequest(async () => {
       const textSnapshot = createDocumentTextSnapshot(snapshot, fullText)
       const documentText = textSnapshot.materializeFullText()
-      const result = await postRequest({
+      const result = await this.owner.request({
         type: 'open',
         ...this.documentOptions(documentText),
         text: documentText,
@@ -132,7 +288,7 @@ class ShikiHighlighterSession implements EditorHighlighterSession {
     return this.enqueueRequest(async () => {
       const nextTextSnapshot = documentSessionChangeTextSnapshot(change)
       const payload = this.editPayloadForChange(change, nextTextSnapshot)
-      const result = await postRequest(payload)
+      const result = await this.owner.request(payload)
       this.snapshot = change.snapshot
       this.textSnapshot = nextTextSnapshot
       this.opened = true
@@ -144,9 +300,7 @@ class ShikiHighlighterSession implements EditorHighlighterSession {
   public dispose(): void {
     this.disposed = true
     this.opened = false
-    void postRequest({ type: 'disposeDocument', documentId: this.documentId }).catch(
-      () => undefined,
-    )
+    this.owner.disposeDocument(this.documentId)
   }
 
   private enqueueRequest(
@@ -195,55 +349,6 @@ class ShikiHighlighterSession implements EditorHighlighterSession {
   }
 }
 
-const getWorker = (): Worker | null => {
-  if (!supportsWorkers()) return null
-  if (worker) return worker
-
-  worker = new Worker(new URL('./shiki.worker.ts', import.meta.url), { type: 'module' })
-  worker.onmessage = handleWorkerMessage
-  worker.onerror = handleWorkerError
-  return worker
-}
-
-const postRequest = (
-  payload: ShikiWorkerRequestPayload,
-): Promise<ShikiWorkerResult | undefined> => {
-  const handle = getWorker()
-  if (!handle) return Promise.resolve(undefined)
-
-  const id = nextRequestId++
-  const request: ShikiWorkerRequest = { id, payload }
-
-  return new Promise((resolve, reject) => {
-    pendingRequests.set(id, { resolve, reject })
-    handle.postMessage(request)
-  })
-}
-
-const handleWorkerMessage = (event: MessageEvent<ShikiWorkerResponse>): void => {
-  const response = event.data
-  const pending = pendingRequests.get(response.id)
-  if (!pending) return
-
-  pendingRequests.delete(response.id)
-  if (response.ok) {
-    pending.resolve(response.result)
-    return
-  }
-
-  pending.reject(new Error(response.error))
-}
-
-const handleWorkerError = (event: ErrorEvent): void => {
-  themeRequests.clear()
-  rejectPendingRequests(new Error(event.message || 'Shiki worker failed'))
-}
-
-const rejectPendingRequests = (error: Error): void => {
-  for (const request of pendingRequests.values()) request.reject(error)
-  pendingRequests.clear()
-}
-
 export const createTextDiffEdit = (previousText: string, nextText: string) => {
   if (previousText === nextText) return null
 
@@ -289,9 +394,10 @@ const incrementalEditForChange = (snapshot: PieceTableSnapshot, change: Document
 }
 
 async function requestShikiTheme(
+  owner: ShikiWorkerOwner,
   options: ShikiThemeOptions,
 ): Promise<EditorTheme | null | undefined> {
-  const result = await postRequest({
+  const result = await owner.request({
     type: 'theme',
     theme: options.theme,
     themes: options.themes ?? [],
@@ -304,4 +410,16 @@ function shikiThemeRequestKey(options: ShikiThemeOptions): string {
     theme: options.theme,
     themes: (options.themes ?? []).toSorted(),
   })
+}
+
+function workerRequestError(error: unknown): Error {
+  if (error instanceof Error) return error
+  return new Error(String(error))
+}
+
+let compatibilityWorkerOwner: ShikiWorkerOwner | null = null
+
+function defaultShikiWorkerOwner(): ShikiWorkerOwner {
+  if (!compatibilityWorkerOwner) compatibilityWorkerOwner = new ShikiWorkerOwner()
+  return compatibilityWorkerOwner
 }
