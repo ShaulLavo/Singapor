@@ -9,6 +9,7 @@ export {
   Editor,
   EDITOR_MERGE_CONFLICT_FEATURE,
   EDITOR_MERGE_CONFLICT_FEATURE_ID,
+  observeEditorMountTiming,
   parseMergeConflicts,
   resolveMergeConflict,
 } from './editor'
