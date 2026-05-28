@@ -2,6 +2,7 @@ import { createHighlighter, type HighlighterGeneric } from 'shiki'
 import { createIncrementalTokenizer, type IncrementalTokenizer } from './tokenizer'
 import { snapshotToEditorTokens } from './editor-tokens'
 import type { EditorTheme } from '../theme'
+import { EDITOR_SHIKI_SYNTAX_SCOPE_MAPPINGS, type EditorShikiThemeSettingLike } from './theme'
 import type {
   ShikiWorkerDocumentOptions,
   ShikiWorkerEditRequest,
@@ -24,101 +25,9 @@ type ShikiThemeLike = {
   readonly bg?: string
   readonly fg?: string
   readonly colors?: Readonly<Record<string, string | undefined>>
-  readonly tokenColors?: readonly ShikiThemeSettingLike[]
-  readonly settings?: readonly ShikiThemeSettingLike[]
+  readonly tokenColors?: readonly EditorShikiThemeSettingLike[]
+  readonly settings?: readonly EditorShikiThemeSettingLike[]
 }
-
-type ShikiThemeSettingLike = {
-  readonly scope?: string | readonly string[]
-  readonly settings?: {
-    readonly foreground?: string
-  }
-}
-
-type SyntaxScopeMapping = {
-  readonly key: keyof NonNullable<EditorTheme['syntax']>
-  readonly scopes: readonly string[]
-}
-
-const SYNTAX_SCOPE_MAPPINGS: readonly SyntaxScopeMapping[] = [
-  {
-    key: 'attribute',
-    scopes: ['entity.other.attribute-name', 'meta.attribute', 'support.type.property-name'],
-  },
-  {
-    key: 'bracket',
-    scopes: ['punctuation.section', 'punctuation.definition', 'meta.brace'],
-  },
-  {
-    key: 'comment',
-    scopes: ['comment'],
-  },
-  {
-    key: 'constant',
-    scopes: ['constant.language', 'constant.character', 'variable.other.constant'],
-  },
-  {
-    key: 'function',
-    scopes: ['entity.name.function', 'support.function', 'meta.function-call'],
-  },
-  {
-    key: 'keyword',
-    scopes: ['keyword', 'storage.modifier', 'storage.type', 'storage'],
-  },
-  {
-    key: 'keywordDeclaration',
-    scopes: ['keyword.declaration', 'storage.type', 'storage', 'keyword.operator.new'],
-  },
-  {
-    key: 'keywordImport',
-    scopes: [
-      'keyword.control.import',
-      'keyword.control.from',
-      'keyword.operator.expression.import',
-    ],
-  },
-  {
-    key: 'namespace',
-    scopes: ['entity.name.namespace', 'entity.name.module', 'support.module'],
-  },
-  {
-    key: 'number',
-    scopes: ['constant.numeric'],
-  },
-  {
-    key: 'property',
-    scopes: [
-      'meta.property-name',
-      'variable.other.property',
-      'meta.object-literal.key',
-      'support.type.property-name',
-    ],
-  },
-  {
-    key: 'string',
-    scopes: ['string', 'string.quoted'],
-  },
-  {
-    key: 'type',
-    scopes: ['support.type', 'support.class', 'entity.name.type', 'entity.name.class'],
-  },
-  {
-    key: 'typeDefinition',
-    scopes: ['entity.name.type.class', 'entity.name.class', 'entity.name.type'],
-  },
-  {
-    key: 'typeParameter',
-    scopes: ['entity.name.type.type-parameter', 'meta.type.parameters'],
-  },
-  {
-    key: 'variable',
-    scopes: ['variable.other', 'variable.parameter', 'identifier'],
-  },
-  {
-    key: 'variableBuiltin',
-    scopes: ['variable.language', 'support.variable', 'support.constant'],
-  },
-]
 
 const documents = new Map<string, DocumentState>()
 const documentTasks = new Map<string, Promise<ShikiWorkerResult | undefined>>()
@@ -328,7 +237,7 @@ function editorSyntaxThemeFromShikiTheme(
   theme: ShikiThemeLike,
 ): NonNullable<EditorTheme['syntax']> | undefined {
   const syntax: NonNullable<EditorTheme['syntax']> = {}
-  for (const mapping of SYNTAX_SCOPE_MAPPINGS) {
+  for (const mapping of EDITOR_SHIKI_SYNTAX_SCOPE_MAPPINGS) {
     const color = themeColorForScopes(theme, mapping.scopes)
     if (color !== undefined) syntax[mapping.key] = color
   }
@@ -360,12 +269,12 @@ type ScopeColorMatch = {
   readonly score: number
 }
 
-function shikiThemeSettings(theme: ShikiThemeLike): readonly ShikiThemeSettingLike[] {
+function shikiThemeSettings(theme: ShikiThemeLike): readonly EditorShikiThemeSettingLike[] {
   return theme.tokenColors ?? theme.settings ?? []
 }
 
 function settingColorMatch(
-  setting: ShikiThemeSettingLike | undefined,
+  setting: EditorShikiThemeSettingLike | undefined,
   targetScopes: readonly string[],
   order: number,
 ): ScopeColorMatch | null {
@@ -379,7 +288,7 @@ function settingColorMatch(
 }
 
 function settingScopeMatchScore(
-  setting: ShikiThemeSettingLike,
+  setting: EditorShikiThemeSettingLike,
   targetScopes: readonly string[],
 ): number {
   let bestScore = 0
