@@ -4,20 +4,26 @@ import { createPieceTableSnapshot } from '../../src'
 import type { EditorHighlighterProvider, EditorPluginContext } from '../../src/plugins'
 import { createShikiHighlighterPlugin } from '../../src/shiki'
 
-const canUseShikiWorker = vi.hoisted(() => vi.fn(() => true))
-const createShikiHighlighterSession = vi.hoisted(() => vi.fn(() => null))
-const loadShikiTheme = vi.hoisted(() => vi.fn())
+const workerOwner = vi.hoisted(() => ({
+  canUseWorker: vi.fn(() => true),
+  createSession: vi.fn(() => null),
+  dispose: vi.fn(async () => undefined),
+  loadTheme: vi.fn(),
+}))
+const createShikiWorkerOwner = vi.hoisted(() => vi.fn(() => workerOwner))
 
 vi.mock('../../src/shiki/workerClient', () => ({
-  canUseShikiWorker,
-  createShikiHighlighterSession,
-  loadShikiTheme,
+  createShikiWorkerOwner,
 }))
 
 describe('createShikiHighlighterPlugin', () => {
   beforeEach(() => {
-    createShikiHighlighterSession.mockClear()
-    loadShikiTheme.mockClear()
+    createShikiWorkerOwner.mockClear()
+    workerOwner.canUseWorker.mockClear()
+    workerOwner.canUseWorker.mockReturnValue(true)
+    workerOwner.createSession.mockClear()
+    workerOwner.dispose.mockClear()
+    workerOwner.loadTheme.mockClear()
   })
 
   it('maps .tsx TypeScript documents to Shiki TSX', () => {
@@ -31,7 +37,7 @@ describe('createShikiHighlighterPlugin', () => {
       snapshot: createPieceTableSnapshot(text),
     })
 
-    expect(createShikiHighlighterSession).toHaveBeenCalledWith(
+    expect(workerOwner.createSession).toHaveBeenCalledWith(
       expect.objectContaining({
         lang: 'tsx',
       }),
@@ -49,7 +55,7 @@ describe('createShikiHighlighterPlugin', () => {
       snapshot: createPieceTableSnapshot(text),
     })
 
-    expect(createShikiHighlighterSession).toHaveBeenCalledWith(
+    expect(workerOwner.createSession).toHaveBeenCalledWith(
       expect.objectContaining({
         lang: 'jsx',
       }),
@@ -67,14 +73,14 @@ describe('createShikiHighlighterPlugin', () => {
       snapshot: createPieceTableSnapshot(text),
     })
 
-    expect(createShikiHighlighterSession).toHaveBeenCalledWith(
+    expect(workerOwner.createSession).toHaveBeenCalledWith(
       expect.objectContaining({
         lang: 'typescript',
       }),
     )
   })
 
-  it('reuses equivalent shared highlighter providers', () => {
+  it('creates an explicit worker owner for each activation', () => {
     const first = activateHighlighterProvider({
       preloadLanguages: ['typescript', 'tsx'],
       preloadThemes: ['github-dark'],
@@ -84,7 +90,8 @@ describe('createShikiHighlighterPlugin', () => {
       preloadThemes: ['github-dark'],
     })
 
-    expect(second).toBe(first)
+    expect(createShikiWorkerOwner).toHaveBeenCalledTimes(2)
+    expect(second).not.toBe(first)
   })
 })
 

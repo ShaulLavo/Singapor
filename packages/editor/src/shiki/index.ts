@@ -5,14 +5,7 @@ export {
   editorThemeToShikiTheme,
   editorThemeToShikiTokenColors,
 } from './theme'
-export {
-  canUseShikiWorker,
-  createShikiHighlighterSession,
-  createShikiWorkerOwner,
-  disposeShikiWorker,
-  loadShikiTheme,
-  ShikiWorkerOwner,
-} from './workerClient'
+export { canUseShikiWorker, createShikiWorkerOwner, ShikiWorkerOwner } from './workerClient'
 
 export { snapshotToEditorTokens, tokenLinesToEditorTokens } from './editor-tokens'
 

@@ -61,35 +61,6 @@ export type ShikiWorkerOwnerOptions = {
 
 export const canUseShikiWorker = (): boolean => supportsWorkers()
 
-/**
- * @deprecated Phase 11 compatibility singleton. Prefer creating a `ShikiWorkerOwner` with
- * `createShikiWorkerOwner()` and owning its lifetime explicitly.
- */
-export function createShikiHighlighterSession(
-  options: ShikiHighlighterSessionOptions,
-): EditorHighlighterSession | null {
-  return defaultShikiWorkerOwner().createSession(options)
-}
-
-/**
- * @deprecated Phase 11 compatibility singleton. Prefer loading themes through an explicitly owned
- * `ShikiWorkerOwner`.
- */
-export async function loadShikiTheme(
-  options: ShikiThemeOptions,
-): Promise<EditorTheme | null | undefined> {
-  return defaultShikiWorkerOwner().loadTheme(options)
-}
-
-/**
- * @deprecated Phase 11 compatibility singleton disposal. Dispose the explicit `ShikiWorkerOwner`
- * created by the caller instead.
- */
-export async function disposeShikiWorker(): Promise<void> {
-  await compatibilityWorkerOwner?.dispose()
-  compatibilityWorkerOwner = null
-}
-
 export function createShikiWorkerOwner(options: ShikiWorkerOwnerOptions = {}): ShikiWorkerOwner {
   return new ShikiWorkerOwner(options)
 }
@@ -440,11 +411,4 @@ function shikiThemeRequestKey(options: ShikiThemeOptions): string {
 function workerRequestError(error: unknown): Error {
   if (error instanceof Error) return error
   return new Error(String(error))
-}
-
-let compatibilityWorkerOwner: ShikiWorkerOwner | null = null
-
-function defaultShikiWorkerOwner(): ShikiWorkerOwner {
-  if (!compatibilityWorkerOwner) compatibilityWorkerOwner = new ShikiWorkerOwner()
-  return compatibilityWorkerOwner
 }

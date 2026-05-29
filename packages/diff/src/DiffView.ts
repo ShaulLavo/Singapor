@@ -70,6 +70,7 @@ type DiffSyntaxDocument = DiffSyntaxSource & {
 
 type DiffSyntaxService = {
   createSession(document: DiffSyntaxDocument): Promise<DiffSyntaxServiceSession | null>
+  dispose?(): void
 }
 
 type DiffSyntaxServiceSession = {
@@ -781,6 +782,7 @@ export class DiffView {
   ): Promise<DiffSyntaxHighlightResult | null> {
     const documents = syntaxDocumentsForPane(file, pane.side)
     const tokenSources: DiffSyntaxTokenSource[] = []
+    if (service.dispose) sessions.push({ dispose: () => service.dispose?.() })
 
     for (const document of documents) {
       if (!context.isCurrent()) return null
@@ -903,16 +905,21 @@ async function shikiDiffSyntaxService(
   file: DiffFile,
   backend: Extract<DiffSyntaxBackend, { readonly kind: 'shiki' }>,
 ): Promise<DiffSyntaxService | null> {
-  const { canUseShikiWorker, createShikiHighlighterSession } = await loadShikiModule()
-  if (!canUseShikiWorker()) return null
+  const shiki = await loadShikiModule()
+  if (!shiki.canUseShikiWorker()) return null
 
   const lang = shikiLanguageForFile(file)
   if (!lang) return null
 
   const themeName = shikiThemeName(backend.shikiTheme)
+  const owner = shiki.createShikiWorkerOwner()
+
   return {
+    dispose: () => {
+      void owner.dispose().catch(() => undefined)
+    },
     createSession: async (document) => {
-      const session = createShikiHighlighterSession({
+      const session = owner.createSession({
         ...syntaxHighlighterSessionOptions(document),
         lang,
         langs: [lang],

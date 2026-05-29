@@ -7,7 +7,7 @@ import {
   resolveSelection,
   type SelectionSet,
 } from '@editor/core/internal'
-import { selectWithTreeSitter } from './treeSitter/workerClient'
+import type { TreeSitterBackend } from './treeSitter/workerClient'
 import type {
   TreeSitterLanguageId,
   TreeSitterSelectionRange,
@@ -25,6 +25,7 @@ export type TreeSitterSelectionCommandOptions = {
   readonly snapshotVersion: number
   readonly snapshot: PieceTableSnapshot
   readonly selections: SelectionSet<PieceTableAnchor>
+  readonly backend: Pick<TreeSitterBackend, 'select'>
   readonly state?: TreeSitterSelectionExpansionState
 }
 
@@ -73,7 +74,7 @@ const requestSelectionRanges = (
   options: TreeSitterSelectionCommandOptions,
   action: 'selectToken' | 'expand',
 ): Promise<TreeSitterSelectionResult | undefined> =>
-  selectWithTreeSitter({
+  options.backend.select({
     documentId: options.documentId,
     languageId: options.languageId,
     snapshotVersion: options.snapshotVersion,

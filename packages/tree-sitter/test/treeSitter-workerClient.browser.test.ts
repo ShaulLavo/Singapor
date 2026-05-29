@@ -9,29 +9,26 @@ import {
   resolveTreeSitterLanguageContribution,
   selectTreeSitterToken,
   shrinkTreeSitterSelection,
+  TreeSitterWorkerClient,
 } from '../src'
 import { createTreeSitterEditPayload } from '../src/session.ts'
-import {
-  disposeTreeSitterWorker,
-  editWithTreeSitter,
-  parseWithTreeSitter,
-  queryRangeWithTreeSitter,
-  registerTreeSitterLanguagesWithWorker,
-} from '../src/treeSitter/workerClient.ts'
 
 describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () => {
+  let workerClient: TreeSitterWorkerClient
+
   beforeEach(async () => {
-    await registerDefaultLanguages()
+    workerClient = new TreeSitterWorkerClient()
+    await registerDefaultLanguages(workerClient)
   })
 
   afterEach(async () => {
-    await disposeTreeSitterWorker()
+    await workerClient.dispose()
   })
 
   it('parses and edits through the real browser Worker', async () => {
     const documentId = 'file.ts'
     const snapshot = createPieceTableSnapshot('const answer = 1;\n')
-    const parsed = await parseWithTreeSitter({
+    const parsed = await workerClient.parse({
       documentId,
       snapshotVersion: 1,
       languageId: 'typescript',
@@ -53,7 +50,7 @@ describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () =
       nextSnapshot,
       edits,
     })
-    const edited = payload ? await editWithTreeSitter(payload) : undefined
+    const edited = payload ? await workerClient.edit(payload) : undefined
 
     expect(edited?.documentId).toBe(documentId)
     expect(edited?.snapshotVersion).toBe(2)
@@ -72,7 +69,7 @@ describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () =
       ');',
     ].join('\n')
     const snapshot = createPieceTableSnapshot(text)
-    const parsed = await parseWithTreeSitter({
+    const parsed = await workerClient.parse({
       documentId,
       snapshotVersion: 1,
       languageId: 'typescript',
@@ -116,7 +113,7 @@ describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () =
       (_value, index) => `export const value${index} = ${index};`,
     ).join('\n')
     const snapshot = createPieceTableSnapshot(text)
-    await parseWithTreeSitter({
+    await workerClient.parse({
       documentId,
       snapshotVersion: 1,
       languageId: 'typescript',
@@ -124,7 +121,7 @@ describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () =
       snapshot,
     })
 
-    const topResult = await queryRangeWithTreeSitter({
+    const topResult = await workerClient.queryRange({
       documentId,
       snapshotVersion: 1,
       languageId: 'typescript',
@@ -133,7 +130,7 @@ describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () =
       range: { startIndex: 0, endIndex: 1_000 },
     })
     const target = text.indexOf('value10000')
-    const result = await queryRangeWithTreeSitter({
+    const result = await workerClient.queryRange({
       documentId,
       snapshotVersion: 1,
       languageId: 'typescript',
@@ -164,7 +161,7 @@ describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () =
       resultMode: 'parseOnly',
     })
 
-    const result = payload ? await editWithTreeSitter(payload) : 'missing-payload'
+    const result = payload ? await workerClient.edit(payload) : 'missing-payload'
 
     expect(result).toBeUndefined()
   })
@@ -180,7 +177,7 @@ describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () =
       '}',
     ].join('\n')
     const snapshot = createPieceTableSnapshot(text)
-    await parseWithTreeSitter({
+    await workerClient.parse({
       documentId,
       snapshotVersion: 1,
       languageId: 'typescript',
@@ -199,8 +196,8 @@ describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () =
       nextSnapshot,
       edits: [edit],
     })
-    const incremental = payload ? await editWithTreeSitter(payload) : undefined
-    const full = await parseWithTreeSitter({
+    const incremental = payload ? await workerClient.edit(payload) : undefined
+    const full = await workerClient.parse({
       documentId: `${documentId}:full`,
       snapshotVersion: 1,
       languageId: 'typescript',
@@ -223,7 +220,7 @@ describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () =
       '};',
     ].join('\n')
     const snapshot = createPieceTableSnapshot(text)
-    await parseWithTreeSitter({
+    await workerClient.parse({
       documentId,
       snapshotVersion: 1,
       languageId: 'typescript',
@@ -242,8 +239,8 @@ describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () =
       nextSnapshot,
       edits: [edit],
     })
-    const incremental = payload ? await editWithTreeSitter(payload) : undefined
-    const full = await parseWithTreeSitter({
+    const incremental = payload ? await workerClient.edit(payload) : undefined
+    const full = await workerClient.parse({
       documentId: `${documentId}:full`,
       snapshotVersion: 1,
       languageId: 'typescript',
@@ -258,7 +255,7 @@ describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () =
   it('matches a full parse after inserting inside the real document session source', async () => {
     const documentId = 'document-session-source.ts'
     const snapshot = createPieceTableSnapshot(documentSessionSource)
-    await parseWithTreeSitter({
+    await workerClient.parse({
       documentId,
       snapshotVersion: 1,
       languageId: 'typescript',
@@ -280,8 +277,8 @@ describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () =
       nextSnapshot,
       edits: [edit],
     })
-    const incremental = payload ? await editWithTreeSitter(payload) : undefined
-    const full = await parseWithTreeSitter({
+    const incremental = payload ? await workerClient.edit(payload) : undefined
+    const full = await workerClient.parse({
       documentId: `${documentId}:full`,
       snapshotVersion: 1,
       languageId: 'typescript',
@@ -297,7 +294,7 @@ describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () =
     const documentId = 'index.html'
     const text = '<style>.x { color: red; }</style><script>const a = 1;</script>'
     const snapshot = createPieceTableSnapshot(text)
-    const parsed = await parseWithTreeSitter({
+    const parsed = await workerClient.parse({
       documentId,
       snapshotVersion: 1,
       languageId: 'html',
@@ -325,7 +322,7 @@ describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () =
       '</script>',
     ].join('\n')
     const snapshot = createPieceTableSnapshot(text)
-    const parsed = await parseWithTreeSitter({
+    const parsed = await workerClient.parse({
       documentId,
       snapshotVersion: 1,
       languageId: 'html',
@@ -347,7 +344,7 @@ describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () =
         return contribution.id === 'javascript'
       })!,
     )
-    await registerTreeSitterLanguagesWithWorker([
+    await workerClient.registerLanguages([
       {
         ...javascript,
         id: 'consumer-javascript',
@@ -358,7 +355,7 @@ describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () =
 
     const text = 'const answer = 1;\n'
     const snapshot = createPieceTableSnapshot(text)
-    const parsed = await parseWithTreeSitter({
+    const parsed = await workerClient.parse({
       documentId: 'file.consumer-js',
       snapshotVersion: 1,
       languageId: 'consumer-javascript',
@@ -379,7 +376,7 @@ describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () =
       'const data = json`{"ok": true}`;',
     ].join('\n')
     const snapshot = createPieceTableSnapshot(text)
-    const parsed = await parseWithTreeSitter({
+    const parsed = await workerClient.parse({
       documentId,
       snapshotVersion: 1,
       languageId: 'typescript',
@@ -399,7 +396,7 @@ describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () =
     const documentId = 'index.html'
     const text = '<style>.x { color: red; }</style>'
     const snapshot = createPieceTableSnapshot(text)
-    await parseWithTreeSitter({
+    await workerClient.parse({
       documentId,
       snapshotVersion: 1,
       languageId: 'html',
@@ -417,7 +414,7 @@ describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () =
       nextSnapshot,
       edits,
     })
-    const edited = payload ? await editWithTreeSitter(payload) : undefined
+    const edited = payload ? await workerClient.edit(payload) : undefined
 
     expect(edited?.injections.map((injection) => injection.languageId)).toContain('css')
     expect(edited?.captures.some((capture) => capture.languageId === 'css')).toBe(true)
@@ -427,7 +424,7 @@ describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () =
     const documentId = 'index.html'
     const text = '<style>.x { color: red; }</style>'
     const snapshot = createPieceTableSnapshot(text)
-    await parseWithTreeSitter({
+    await workerClient.parse({
       documentId,
       snapshotVersion: 1,
       languageId: 'html',
@@ -448,7 +445,7 @@ describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () =
       nextSnapshot,
       edits,
     })
-    const edited = payload ? await editWithTreeSitter(payload) : undefined
+    const edited = payload ? await workerClient.edit(payload) : undefined
     const colorStart = cssStart + nextCss.indexOf('color')
 
     expect(edited?.injections.map((injection) => injection.languageId)).toContain('css')
@@ -467,7 +464,7 @@ describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () =
         return contribution.id === 'typescript'
       })!,
     )
-    await registerTreeSitterLanguagesWithWorker([
+    await workerClient.registerLanguages([
       {
         ...typescript,
         id: 'combined-typescript',
@@ -487,7 +484,7 @@ describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () =
 
     const text = 'const styles = css`.x { color: ${theme.color}; background: red; }`;'
     const snapshot = createPieceTableSnapshot(text)
-    const parsed = await parseWithTreeSitter({
+    const parsed = await workerClient.parse({
       documentId: 'style.combined-ts',
       snapshotVersion: 1,
       languageId: 'combined-typescript',
@@ -502,7 +499,7 @@ describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () =
   it('expands and shrinks structural selections through the cached syntax tree', async () => {
     const documentId = 'file.ts'
     const snapshot = createPieceTableSnapshot('const answer = 1;\n')
-    await parseWithTreeSitter({
+    await workerClient.parse({
       documentId,
       snapshotVersion: 1,
       languageId: 'typescript',
@@ -511,6 +508,7 @@ describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () =
 
     const selections = createSelectionSet([createAnchorSelection(snapshot, 7)])
     const token = await selectTreeSitterToken({
+      backend: workerClient,
       documentId,
       languageId: 'typescript',
       snapshotVersion: 1,
@@ -518,6 +516,7 @@ describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () =
       selections,
     })
     const expanded = await expandTreeSitterSelection({
+      backend: workerClient,
       documentId,
       languageId: 'typescript',
       snapshotVersion: 1,
@@ -526,6 +525,7 @@ describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () =
       state: token.state,
     })
     const shrunk = shrinkTreeSitterSelection({
+      backend: workerClient,
       documentId,
       languageId: 'typescript',
       snapshotVersion: 1,
@@ -546,7 +546,7 @@ describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () =
     const documentId = 'index.html'
     const text = '<style>.x { color: red; }</style>'
     const snapshot = createPieceTableSnapshot(text)
-    await parseWithTreeSitter({
+    await workerClient.parse({
       documentId,
       snapshotVersion: 1,
       languageId: 'html',
@@ -556,6 +556,7 @@ describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () =
     const offset = text.indexOf('color')
     const selections = createSelectionSet([createAnchorSelection(snapshot, offset)])
     const token = await selectTreeSitterToken({
+      backend: workerClient,
       documentId,
       languageId: 'html',
       snapshotVersion: 1,
@@ -568,11 +569,11 @@ describe.skipIf(typeof Worker === 'undefined')('tree-sitter worker client', () =
   })
 })
 
-async function registerDefaultLanguages(): Promise<void> {
+async function registerDefaultLanguages(workerClient: TreeSitterWorkerClient): Promise<void> {
   const descriptors = await Promise.all(
     TREE_SITTER_LANGUAGE_CONTRIBUTIONS.map(resolveTreeSitterLanguageContribution),
   )
-  await registerTreeSitterLanguagesWithWorker(descriptors)
+  await workerClient.registerLanguages(descriptors)
 }
 
 type CaptureSignatureInput = {

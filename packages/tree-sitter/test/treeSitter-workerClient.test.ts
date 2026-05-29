@@ -14,11 +14,12 @@ import type {
 import type { TreeSitterParsePayload } from '../src/treeSitter/workerClient.ts'
 
 type WorkerClientModule = typeof import('../src/treeSitter/workerClient.ts')
+type WorkerClient = InstanceType<WorkerClientModule['TreeSitterWorkerClient']>
 
 type FakeWorkerRequest = TreeSitterWorkerRequest
 
 const fakeWorkers: FakeWorker[] = []
-let currentClient: WorkerClientModule | null = null
+let currentClient: WorkerClient | null = null
 
 class FakeWorker {
   static autoResolve = true
@@ -65,7 +66,7 @@ class FakeWorker {
 describe('tree-sitter worker client language registration cache', () => {
   afterEach(async () => {
     FakeWorker.autoResolve = true
-    await currentClient?.disposeTreeSitterWorker()
+    await currentClient?.dispose()
     currentClient = null
     fakeWorkers.length = 0
     vi.unstubAllGlobals()
@@ -76,8 +77,8 @@ describe('tree-sitter worker client language registration cache', () => {
     const client = await loadWorkerClient()
     const descriptor = languageDescriptor('typescript')
 
-    await client.registerTreeSitterLanguagesWithWorker([descriptor])
-    await client.registerTreeSitterLanguagesWithWorker([descriptor])
+    await client.registerLanguages([descriptor])
+    await client.registerLanguages([descriptor])
 
     expect(registerLanguageRequests()).toHaveLength(1)
   })
@@ -85,8 +86,8 @@ describe('tree-sitter worker client language registration cache', () => {
   it('posts changed descriptors for the same language id', async () => {
     const client = await loadWorkerClient()
 
-    await client.registerTreeSitterLanguagesWithWorker([languageDescriptor('typescript')])
-    await client.registerTreeSitterLanguagesWithWorker([
+    await client.registerLanguages([languageDescriptor('typescript')])
+    await client.registerLanguages([
       languageDescriptor('typescript', '(identifier) @variable.builtin'),
     ])
 
@@ -97,9 +98,9 @@ describe('tree-sitter worker client language registration cache', () => {
     const client = await loadWorkerClient()
     const descriptor = languageDescriptor('typescript')
 
-    await client.registerTreeSitterLanguagesWithWorker([descriptor])
-    await client.disposeTreeSitterWorker()
-    await client.registerTreeSitterLanguagesWithWorker([descriptor])
+    await client.registerLanguages([descriptor])
+    await client.dispose()
+    await client.registerLanguages([descriptor])
 
     expect(registerLanguageRequests()).toHaveLength(2)
   })
@@ -107,13 +108,13 @@ describe('tree-sitter worker client language registration cache', () => {
   it('creates a fresh worker after a worker error rejects an in-flight request', async () => {
     const client = await loadWorkerClient()
     const descriptor = languageDescriptor('typescript')
-    const registration = client.registerTreeSitterLanguagesWithWorker([descriptor])
+    const registration = client.registerLanguages([descriptor])
     const firstWorker = fakeWorkerAt(0)
 
     firstWorker.onerror?.({ message: 'boom' } as ErrorEvent)
 
     await expect(registration).rejects.toThrow('boom')
-    expect(client.inspectTreeSitterWorker()).toMatchObject({
+    expect(client.inspect()).toMatchObject({
       cache: {
         registeredLanguages: 0,
         sourceChunks: { documents: 0, sentChunks: 0, sourceEpochs: 0 },
@@ -122,7 +123,7 @@ describe('tree-sitter worker client language registration cache', () => {
       lifecycle: 'crashed',
       pendingRequests: 0,
     })
-    await client.registerTreeSitterLanguagesWithWorker([descriptor])
+    await client.registerLanguages([descriptor])
     const nextWorker = fakeWorkerAt(1)
 
     expect(firstWorker.isTerminated).toBe(true)
@@ -136,7 +137,7 @@ describe('tree-sitter worker client language registration cache', () => {
   it('exposes worker lifecycle and source chunk cache accounting', async () => {
     FakeWorker.autoResolve = false
     const client = await loadWorkerClient()
-    const owner = new client.TreeSitterWorkerClient()
+    const owner = client
 
     expect(owner.inspect()).toMatchObject({
       cache: {
@@ -194,7 +195,7 @@ describe('tree-sitter worker client language registration cache', () => {
     FakeWorker.autoResolve = false
     const client = await loadWorkerClient()
     const snapshot = createPieceTableSnapshot('const answer = 1;')
-    const firstParse = client.parseWithTreeSitter(parsePayload(snapshot, 1))
+    const firstParse = client.parse(parsePayload(snapshot, 1))
     const worker = fakeWorkerAt(0)
 
     worker.resolveRequest(requestOfType(worker, 'init'))
@@ -205,7 +206,7 @@ describe('tree-sitter worker client language registration cache', () => {
     worker.rejectRequest(failedRequest, 'parse failed')
     await expect(firstParse).rejects.toThrow('parse failed')
 
-    const retryParse = client.parseWithTreeSitter(parsePayload(snapshot, 2))
+    const retryParse = client.parse(parsePayload(snapshot, 2))
     await flushMicrotasks()
     const retryRequest = parseRequests(worker)[1]!
 
@@ -218,7 +219,7 @@ describe('tree-sitter worker client language registration cache', () => {
     FakeWorker.autoResolve = false
     const client = await loadWorkerClient()
     const snapshot = createPieceTableSnapshot('const answer = 1;')
-    const parse = client.parseWithTreeSitter(parsePayload(snapshot, 1))
+    const parse = client.parse(parsePayload(snapshot, 1))
     const worker = fakeWorkerAt(0)
 
     worker.resolveRequest(requestOfType(worker, 'init'))
@@ -226,11 +227,11 @@ describe('tree-sitter worker client language registration cache', () => {
     const staleRequest = parseRequests(worker)[0]!
     expect(staleRequest.payload.source.chunks.length).toBeGreaterThan(0)
 
-    client.disposeTreeSitterDocument('doc.ts')
+    client.disposeDocument('doc.ts')
     worker.resolveRequest(staleRequest, parseResult(1))
     await expect(parse).resolves.toMatchObject({ snapshotVersion: 1 })
 
-    const retryParse = client.parseWithTreeSitter(parsePayload(snapshot, 2))
+    const retryParse = client.parse(parsePayload(snapshot, 2))
     await flushMicrotasks()
     const retryRequest = parseRequests(worker)[1]!
 
@@ -243,7 +244,7 @@ describe('tree-sitter worker client language registration cache', () => {
     FakeWorker.autoResolve = false
     const client = await loadWorkerClient()
     const snapshot = createPieceTableSnapshot('const answer = 1;')
-    const firstParse = client.parseWithTreeSitter(parsePayload(snapshot, 1))
+    const firstParse = client.parse(parsePayload(snapshot, 1))
     const worker = fakeWorkerAt(0)
 
     worker.resolveRequest(requestOfType(worker, 'init'))
@@ -252,25 +253,25 @@ describe('tree-sitter worker client language registration cache', () => {
     expect(firstRequest.payload.source.chunks.length).toBeGreaterThan(0)
     worker.resolveRequest(firstRequest, parseResult(1))
     await expect(firstParse).resolves.toMatchObject({ snapshotVersion: 1 })
-    expect(client.inspectTreeSitterWorker().cache.sourceChunks).toMatchObject({
+    expect(client.inspect().cache.sourceChunks).toMatchObject({
       documents: 1,
       sentChunks: 1,
       sourceEpochs: 0,
     })
 
-    const failedParse = client.parseWithTreeSitter(parsePayload(snapshot, 2))
+    const failedParse = client.parse(parsePayload(snapshot, 2))
     await flushMicrotasks()
     const failedRequest = parseRequests(worker)[1]!
     expect(failedRequest.payload.source.chunks).toHaveLength(0)
     worker.rejectRequest(failedRequest, 'Tree-sitter source chunk "buffer:2:0" is missing')
     await expect(failedParse).rejects.toThrow('Tree-sitter source chunk')
-    expect(client.inspectTreeSitterWorker().cache.sourceChunks).toMatchObject({
+    expect(client.inspect().cache.sourceChunks).toMatchObject({
       documents: 1,
       sentChunks: 0,
       sourceEpochs: 1,
     })
 
-    const retryParse = client.parseWithTreeSitter(parsePayload(snapshot, 3))
+    const retryParse = client.parse(parsePayload(snapshot, 3))
     await flushMicrotasks()
     const retryRequest = parseRequests(worker)[2]!
 
@@ -283,7 +284,7 @@ describe('tree-sitter worker client language registration cache', () => {
     FakeWorker.autoResolve = false
     const client = await loadWorkerClient()
     const snapshot = createPieceTableSnapshot('const answer = 1;')
-    const parse = client.parseWithTreeSitter({
+    const parse = client.parse({
       ...parsePayload(snapshot, 1),
       includeCaptures: false,
     })
@@ -297,7 +298,7 @@ describe('tree-sitter worker client language registration cache', () => {
     worker.resolveRequest(request, parseResult(1))
     await expect(parse).resolves.toMatchObject({ snapshotVersion: 1 })
 
-    const defaultParse = client.parseWithTreeSitter(parsePayload(snapshot, 2))
+    const defaultParse = client.parse(parsePayload(snapshot, 2))
     await flushMicrotasks()
     const defaultRequest = parseRequests(worker)[1]!
 
@@ -310,7 +311,7 @@ describe('tree-sitter worker client language registration cache', () => {
     FakeWorker.autoResolve = false
     const client = await loadWorkerClient()
     const snapshot = createPieceTableSnapshot('const answer = 1;')
-    const parse = client.parseWithTreeSitter({
+    const parse = client.parse({
       ...parsePayload(snapshot, 1),
       resultMode: 'parseOnly',
     })
@@ -333,16 +334,16 @@ describe('tree-sitter worker client language registration cache', () => {
     FakeWorker.autoResolve = false
     const client = await loadWorkerClient()
     const snapshot = createPieceTableSnapshot('const answer = 1;')
-    const parse = client.parseWithTreeSitter(parsePayload(snapshot, 1))
+    const parse = client.parse(parsePayload(snapshot, 1))
     const worker = fakeWorkerAt(0)
 
     worker.resolveRequest(requestOfType(worker, 'init'))
     await flushMicrotasks()
     const parseRequest = parseRequests(worker)[0]!
-    const firstRange = client.queryRangeWithTreeSitter(rangePayload(1, 0, 5))
+    const firstRange = client.queryRange(rangePayload(1, 0, 5))
     await flushMicrotasks()
     const firstRangeRequest = rangeRequests(worker)[0]!
-    const secondRange = client.queryRangeWithTreeSitter(rangePayload(1, 5, 12))
+    const secondRange = client.queryRange(rangePayload(1, 5, 12))
     await flushMicrotasks()
     const secondRangeRequest = rangeRequests(worker)[1]!
 
@@ -360,11 +361,12 @@ describe('tree-sitter worker client language registration cache', () => {
   })
 })
 
-async function loadWorkerClient(): Promise<WorkerClientModule> {
+async function loadWorkerClient(): Promise<WorkerClient> {
   vi.resetModules()
   fakeWorkers.length = 0
   vi.stubGlobal('Worker', FakeWorker)
-  currentClient = await import('../src/treeSitter/workerClient.ts')
+  const workerClientModule = await import('../src/treeSitter/workerClient.ts')
+  currentClient = new workerClientModule.TreeSitterWorkerClient()
   return currentClient
 }
 
@@ -489,7 +491,7 @@ function rangePayload(
   snapshotVersion: number,
   startIndex: number,
   endIndex: number,
-): Parameters<WorkerClientModule['queryRangeWithTreeSitter']>[0] {
+): Parameters<WorkerClient['queryRange']>[0] {
   return {
     documentId: 'doc.ts',
     includeHighlights: true,

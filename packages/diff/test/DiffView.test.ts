@@ -17,13 +17,17 @@ import type {
 
 const shikiMock = vi.hoisted(() => ({
   canUseShikiWorker: vi.fn(() => true),
-  createShikiHighlighterSession: vi.fn(),
+  createShikiWorkerOwner: vi.fn(),
+  owner: {
+    createSession: vi.fn(),
+    dispose: vi.fn(async () => undefined),
+  },
   refreshTexts: [] as string[],
 }))
 
 vi.mock('@editor/core/shiki', () => ({
   canUseShikiWorker: shikiMock.canUseShikiWorker,
-  createShikiHighlighterSession: shikiMock.createShikiHighlighterSession,
+  createShikiWorkerOwner: shikiMock.createShikiWorkerOwner,
 }))
 
 beforeAll(() => {
@@ -34,8 +38,11 @@ beforeEach(() => {
   shikiMock.refreshTexts.length = 0
   shikiMock.canUseShikiWorker.mockReset()
   shikiMock.canUseShikiWorker.mockReturnValue(true)
-  shikiMock.createShikiHighlighterSession.mockReset()
-  shikiMock.createShikiHighlighterSession.mockImplementation(() => ({
+  shikiMock.createShikiWorkerOwner.mockReset()
+  shikiMock.createShikiWorkerOwner.mockReturnValue(shikiMock.owner)
+  shikiMock.owner.dispose.mockClear()
+  shikiMock.owner.createSession.mockReset()
+  shikiMock.owner.createSession.mockImplementation(() => ({
     dispose: vi.fn(),
     refresh: vi.fn(async (_snapshot, fullText?: string) => {
       shikiMock.refreshTexts.push(fullText ?? '')
@@ -280,7 +287,7 @@ describe('DiffView split panes', () => {
     await flushPromises()
     await flushUntil(() => shikiMock.refreshTexts.length >= 2)
 
-    expect(shikiMock.createShikiHighlighterSession).toHaveBeenCalledWith(
+    expect(shikiMock.owner.createSession).toHaveBeenCalledWith(
       expect.objectContaining({
         documentId: 'note.ts:old',
         fullText: 'keep\nold\nskip\n',

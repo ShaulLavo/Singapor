@@ -5,10 +5,9 @@ import type {
 } from '../plugins'
 import type { EditorSyntaxLanguageId } from '../syntax/session'
 import {
-  canUseShikiWorker,
-  createShikiHighlighterSession,
-  loadShikiTheme,
+  createShikiWorkerOwner,
   type ShikiHighlighterSessionOptions,
+  type ShikiWorkerOwner,
 } from './workerClient'
 
 export type ShikiLanguageMap = Partial<Record<EditorSyntaxLanguageId, string>>
@@ -21,13 +20,6 @@ export type ShikiHighlighterPluginOptions = {
 }
 
 const DEFAULT_THEME = 'github-dark'
-const SHARED_SHIKI_PROVIDER_STATE_KEY = Symbol.for('@editor/shiki/highlighter-provider-state')
-
-type SharedShikiProviderState = {
-  readonly providers: Map<string, EditorHighlighterProvider>
-  readonly themeFunctionIds: WeakMap<() => string, number>
-  nextThemeFunctionId: number
-}
 
 const DEFAULT_LANGUAGE_MAP: ShikiLanguageMap = {
   css: 'css',
@@ -43,56 +35,45 @@ const DEFAULT_LANGUAGE_MAP: ShikiLanguageMap = {
 export function createShikiHighlighterPlugin(
   options: ShikiHighlighterPluginOptions = {},
 ): EditorPlugin {
-  const provider = sharedHighlighterProvider(options)
-
   return {
     name: 'shiki-highlighter',
     activate(context) {
-      return context.registerHighlighter(provider)
+      const owner = createShikiWorkerOwner()
+      const provider = createHighlighterProvider(options, owner)
+
+      return [
+        context.registerHighlighter(provider),
+        {
+          dispose: () => {
+            void owner.dispose().catch(() => undefined)
+          },
+        },
+      ]
     },
   }
 }
 
-const sharedHighlighterProvider = (
+const createHighlighterProvider = (
   options: ShikiHighlighterPluginOptions,
+  owner: ShikiWorkerOwner,
 ): EditorHighlighterProvider => {
-  const cache = sharedHighlighterProviderState().providers
-  const key = highlighterProviderKey(options)
-  const existing = cache.get(key)
-  if (existing) return existing
-
-  const provider = {
-    loadTheme: () => loadConfiguredTheme(options),
-    createSession: (sessionOptions) => createSession(sessionOptions, options),
-  } satisfies EditorHighlighterProvider
-  cache.set(key, provider)
-  return provider
-}
-
-const sharedHighlighterProviderState = (): SharedShikiProviderState => {
-  const state = globalThis as Record<PropertyKey, unknown>
-  const existing = state[SHARED_SHIKI_PROVIDER_STATE_KEY] as SharedShikiProviderState | undefined
-  if (existing) return existing
-
-  const next = {
-    providers: new Map<string, EditorHighlighterProvider>(),
-    themeFunctionIds: new WeakMap<() => string, number>(),
-    nextThemeFunctionId: 1,
+  return {
+    loadTheme: () => loadConfiguredTheme(options, owner),
+    createSession: (sessionOptions) => createSession(sessionOptions, options, owner),
   }
-  state[SHARED_SHIKI_PROVIDER_STATE_KEY] = next
-  return next
 }
 
 const createSession = (
   sessionOptions: EditorHighlighterSessionOptions,
   pluginOptions: ShikiHighlighterPluginOptions,
+  owner: ShikiWorkerOwner,
 ) => {
-  if (!canUseShikiWorker()) return null
+  if (!owner.canUseWorker()) return null
 
   const lang = shikiLanguageForSession(sessionOptions, pluginOptions.languages)
   if (!lang) return null
 
-  return createShikiHighlighterSession({
+  return owner.createSession({
     ...sessionOptions,
     lang,
     theme: shikiThemeName(pluginOptions),
@@ -101,8 +82,8 @@ const createSession = (
   } satisfies ShikiHighlighterSessionOptions)
 }
 
-const loadConfiguredTheme = (options: ShikiHighlighterPluginOptions) =>
-  loadShikiTheme({
+const loadConfiguredTheme = (options: ShikiHighlighterPluginOptions, owner: ShikiWorkerOwner) =>
+  owner.loadTheme({
     theme: shikiThemeName(options),
     themes: options.preloadThemes,
   })
@@ -112,27 +93,6 @@ const shikiThemeName = (options: ShikiHighlighterPluginOptions): string => {
   if (typeof theme === 'function') return theme()
 
   return theme ?? DEFAULT_THEME
-}
-
-const highlighterProviderKey = (options: ShikiHighlighterPluginOptions): string =>
-  JSON.stringify({
-    languages: sortedEntries(options.languages),
-    preloadLanguages: sortedItems(options.preloadLanguages),
-    preloadThemes: sortedItems(options.preloadThemes),
-    theme: themeKey(options.theme),
-  })
-
-const themeKey = (theme: ShikiHighlighterPluginOptions['theme']): string => {
-  if (typeof theme !== 'function') return theme ?? DEFAULT_THEME
-
-  const state = sharedHighlighterProviderState()
-  const existing = state.themeFunctionIds.get(theme)
-  if (existing) return `fn:${existing}`
-
-  const id = state.nextThemeFunctionId
-  state.nextThemeFunctionId += 1
-  state.themeFunctionIds.set(theme, id)
-  return `fn:${id}`
 }
 
 const shikiLanguageForSession = (
@@ -152,16 +112,6 @@ const preloadLanguages = (
   lang: string,
   options: ShikiHighlighterPluginOptions,
 ): readonly string[] => [lang, ...Array.from(options.preloadLanguages ?? [])]
-
-const sortedEntries = (
-  values: ShikiLanguageMap | undefined,
-): readonly (readonly [string, string])[] =>
-  Object.entries(values ?? {})
-    .filter((entry): entry is [string, string] => entry[1] !== undefined)
-    .sort(([left], [right]) => left.localeCompare(right))
-
-const sortedItems = (items: readonly string[] | undefined): readonly string[] =>
-  (items ?? []).toSorted()
 
 const shikiLanguageForDocumentExtension = (
   documentId: string,

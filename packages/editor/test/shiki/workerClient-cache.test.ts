@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createPieceTableSnapshot } from '../../src/public/document'
 
 type WorkerClientModule = typeof import('../../src/shiki/workerClient')
+type ShikiWorkerOwner = ReturnType<WorkerClientModule['createShikiWorkerOwner']>
 
 type FakeWorkerRequest = {
   readonly id: number
@@ -9,7 +10,7 @@ type FakeWorkerRequest = {
 }
 
 const fakeWorkers: FakeWorker[] = []
-let currentClient: WorkerClientModule | null = null
+let currentOwner: ShikiWorkerOwner | null = null
 
 class FakeWorker {
   public static autoResolve = true
@@ -55,40 +56,41 @@ class FakeWorker {
 describe('Shiki worker client theme cache', () => {
   afterEach(async () => {
     FakeWorker.autoResolve = true
-    await currentClient?.disposeShikiWorker()
-    currentClient = null
+    await currentOwner?.dispose()
+    currentOwner = null
     fakeWorkers.length = 0
     vi.unstubAllGlobals()
     vi.resetModules()
   })
 
   it('shares in-flight and resolved theme requests', async () => {
-    const client = await loadWorkerClient()
-    const first = client.loadShikiTheme({ theme: 'github-dark' })
-    const second = client.loadShikiTheme({ theme: 'github-dark' })
+    const owner = await loadWorkerOwner()
+    const first = owner.loadTheme({ theme: 'github-dark' })
+    const second = owner.loadTheme({ theme: 'github-dark' })
 
     await expect(Promise.all([first, second])).resolves.toEqual([
       { backgroundColor: 'github-dark' },
       { backgroundColor: 'github-dark' },
     ])
-    await client.loadShikiTheme({ theme: 'github-dark' })
+    await owner.loadTheme({ theme: 'github-dark' })
 
     expect(themeRequests()).toHaveLength(1)
   }, 20_000)
 
   it('clears theme cache when the worker is disposed', async () => {
-    const client = await loadWorkerClient()
+    const owner = await loadWorkerOwner()
 
-    await client.loadShikiTheme({ theme: 'github-dark' })
-    await client.disposeShikiWorker()
-    await client.loadShikiTheme({ theme: 'github-dark' })
+    await owner.loadTheme({ theme: 'github-dark' })
+    await owner.dispose()
+    currentOwner = null
+    const nextOwner = await loadWorkerOwner()
+    await nextOwner.loadTheme({ theme: 'github-dark' })
 
     expect(themeRequests()).toHaveLength(2)
   }, 20_000)
 
   it('exposes owner lifecycle and cache accounting', async () => {
-    const client = await loadWorkerClient()
-    const owner = client.createShikiWorkerOwner()
+    const owner = await loadWorkerOwner()
 
     expect(owner.inspect()).toMatchObject({
       lifecycle: 'idle',
@@ -119,8 +121,8 @@ describe('Shiki worker client theme cache', () => {
 
   it('creates a fresh worker after a worker error rejects in-flight requests', async () => {
     FakeWorker.autoResolve = false
-    const client = await loadWorkerClient()
-    const theme = client.loadShikiTheme({ theme: 'github-dark' })
+    const owner = await loadWorkerOwner()
+    const theme = owner.loadTheme({ theme: 'github-dark' })
     const firstWorker = fakeWorkerAt(0)
 
     firstWorker.onerror?.({ message: 'boom' } as ErrorEvent)
@@ -129,7 +131,7 @@ describe('Shiki worker client theme cache', () => {
     expect(firstWorker.isTerminated).toBe(true)
 
     FakeWorker.autoResolve = true
-    await expect(client.loadShikiTheme({ theme: 'github-dark' })).resolves.toEqual({
+    await expect(owner.loadTheme({ theme: 'github-dark' })).resolves.toEqual({
       backgroundColor: 'github-dark',
     })
 
@@ -138,8 +140,7 @@ describe('Shiki worker client theme cache', () => {
 
   it('ignores tokenizer results that arrive after highlighter session disposal', async () => {
     FakeWorker.autoResolve = false
-    const client = await loadWorkerClient()
-    const owner = client.createShikiWorkerOwner()
+    const owner = await loadWorkerOwner()
     const snapshot = createPieceTableSnapshot('const value = 1;')
     const session = owner.createSession({
       documentId: 'file.ts',
@@ -183,12 +184,12 @@ describe('Shiki worker client theme cache', () => {
   }, 20_000)
 })
 
-async function loadWorkerClient(): Promise<WorkerClientModule> {
+async function loadWorkerOwner(): Promise<ShikiWorkerOwner> {
   vi.resetModules()
-  fakeWorkers.length = 0
   vi.stubGlobal('Worker', FakeWorker)
-  currentClient = await import('../../src/shiki/workerClient')
-  return currentClient
+  const client = await import('../../src/shiki/workerClient')
+  currentOwner = client.createShikiWorkerOwner()
+  return currentOwner
 }
 
 function themeRequests(): FakeWorkerRequest[] {

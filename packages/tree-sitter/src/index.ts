@@ -24,13 +24,6 @@ export type {
 export {
   canUseTreeSitterWorker,
   createTreeSitterWorkerBackend,
-  disposeTreeSitterDocument,
-  disposeTreeSitterWorker,
-  editWithTreeSitter,
-  inspectTreeSitterWorker,
-  parseWithTreeSitter,
-  registerTreeSitterLanguagesWithWorker,
-  selectWithTreeSitter,
   TreeSitterWorkerClient,
   type TreeSitterBackend,
   type TreeSitterEditPayload,

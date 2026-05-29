@@ -9,12 +9,7 @@ import {
 } from '@editor/core/document'
 import { resolveTreeSitterLanguageContribution } from '../src'
 import { createTreeSitterEditPayload } from '../src/session'
-import {
-  disposeTreeSitterWorker,
-  editWithTreeSitter,
-  parseWithTreeSitter,
-  registerTreeSitterLanguagesWithWorker,
-} from '../src/treeSitter/workerClient'
+import { TreeSitterWorkerClient } from '../src/treeSitter/workerClient'
 import type { TreeSitterParseResult } from '../src/treeSitter/types'
 
 declare const Bun: { gc?: (force?: boolean) => void } | undefined
@@ -97,13 +92,16 @@ const editForSnapshot = (snapshot: PieceTableSnapshot): TextEdit => {
   return { from: midpoint, to: midpoint, text: '/* syntax-bench */' }
 }
 
-const measureSyntax = async (lines: number): Promise<SyntaxSample> => {
+const measureSyntax = async (
+  workerClient: TreeSitterWorkerClient,
+  lines: number,
+): Promise<SyntaxSample> => {
   const text = buildText(lines)
   const snapshot = createPieceTableSnapshot(text)
   const documentId = `bench-${lines}.ts`
 
   const parseStart = performance.now()
-  const parsed = await parseWithTreeSitter({
+  const parsed = await workerClient.parse({
     documentId,
     snapshotVersion: 1,
     languageId: 'typescript',
@@ -127,7 +125,7 @@ const measureSyntax = async (lines: number): Promise<SyntaxSample> => {
   if (!payload) throw new Error('failed to create syntax edit payload')
 
   const editStart = performance.now()
-  const edited = await editWithTreeSitter(payload)
+  const edited = await workerClient.edit(payload)
   const editTotalMs = performance.now() - editStart
   if (!edited) throw new Error(`incremental parse cancelled for ${lines} lines`)
 
@@ -176,19 +174,21 @@ const printSample = (sample: SyntaxSample): void => {
   console.log('')
 }
 
+const workerClient = new TreeSitterWorkerClient()
+
 try {
-  await registerDefaultLanguages()
+  await registerDefaultLanguages(workerClient)
 
   for (const lines of LINE_COUNTS) {
-    printSample(await measureSyntax(lines))
+    printSample(await measureSyntax(workerClient, lines))
   }
 } finally {
-  await disposeTreeSitterWorker()
+  await workerClient.dispose()
 }
 
-async function registerDefaultLanguages(): Promise<void> {
+async function registerDefaultLanguages(workerClient: TreeSitterWorkerClient): Promise<void> {
   const descriptors = await Promise.all(
     TREE_SITTER_LANGUAGE_CONTRIBUTIONS.map(resolveTreeSitterLanguageContribution),
   )
-  await registerTreeSitterLanguagesWithWorker(descriptors)
+  await workerClient.registerLanguages(descriptors)
 }

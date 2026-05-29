@@ -18,21 +18,20 @@ owning disposal, and defining what happens after a worker failure.
 There is not yet a separate document worker owner. The main-thread document engine remains the
 document truth until that Phase 11 item is implemented.
 
-## Compatibility Singleton Paths
+## Removed Compatibility Singleton Paths
 
-These helpers are compatibility shims, not the target ownership model.
+These package-level helpers were removed from the first-party route so callers must own worker
+lifetimes explicitly.
 
-| Runtime | Compatibility path | Preferred owner path | Removal condition |
+| Runtime | Removed path | Required owner path | Current status |
 |---|---|---|---|
-| Tree-sitter | `registerTreeSitterLanguagesWithWorker`, `parseWithTreeSitter`, `editWithTreeSitter`, `queryRangeWithTreeSitter`, `selectWithTreeSitter`, `disposeTreeSitterDocument`, `disposeTreeSitterWorker`, `inspectTreeSitterWorker` | `TreeSitterWorkerClient` or `createTreeSitterWorkerBackend()` owned by the editor runtime or syntax provider | Narrow or remove after first-party syntax callers create owners explicitly. |
-| Shiki tokenizer | `createShikiHighlighterSession`, `loadShikiTheme`, `disposeShikiWorker` | `createShikiWorkerOwner()` owned by the editor runtime or highlighter provider | Narrow or remove after first-party Shiki and diff callers create owners explicitly. |
+| Tree-sitter | `registerTreeSitterLanguagesWithWorker`, `parseWithTreeSitter`, `editWithTreeSitter`, `queryRangeWithTreeSitter`, `selectWithTreeSitter`, `disposeTreeSitterDocument`, `disposeTreeSitterWorker`, `inspectTreeSitterWorker` | `TreeSitterWorkerClient` or `createTreeSitterWorkerBackend()` owned by the editor runtime or syntax provider | Removed from the worker client and package index. First-party tests, benchmarks, and structural selection create or receive an owner explicitly. |
+| Shiki tokenizer | `createShikiHighlighterSession`, `loadShikiTheme`, `disposeShikiWorker` | `createShikiWorkerOwner()` owned by the editor runtime, highlighter provider, or diff syntax service | Removed from the worker client and Shiki package index. The Shiki plugin and diff syntax service create owners explicitly. |
 | Minimap | None | `MinimapWorkerOwner` owned by the minimap client | No singleton compatibility path exists. |
 | TypeScript LSP | None | `TypeScriptLspWorkerOwner` owned by the plugin transport or server session | No singleton compatibility path exists. |
 
-Do not add new callers to compatibility helpers. New integration code must accept an explicit owner,
-backend, or session factory and must dispose that owner during editor/runtime teardown. During
-migration these helpers may remain as package-level convenience wrappers only; once first-party
-callers are migrated, narrow them to a compatibility/test entry point or remove them.
+Do not reintroduce package-level worker singletons. New integration code must accept an explicit
+owner, backend, or session factory and must dispose that owner during editor/runtime teardown.
 
 ## Tree-sitter Syntax Worker
 
