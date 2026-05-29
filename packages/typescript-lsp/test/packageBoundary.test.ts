@@ -16,6 +16,7 @@ const TYPE_SCRIPT_SPECIALIZATION_FILES = [
   'tsDiagnostics.ts',
   'types.ts',
   'typescriptLsp.worker.ts',
+  'workerOwner.ts',
 ] as const
 
 const SHARED_LSP_PLUGIN_FILES = [

@@ -39,9 +39,18 @@ class FakeWorker implements LspWorkerLike {
     this.terminated = true
   }
 
+  public listenerCount(type: string): number {
+    return this.listenersFor(type).size
+  }
+
   public receive(message: unknown): void {
     const event = new MessageEvent('message', { data: message })
     for (const listener of this.listenersFor('message')) listener(event)
+  }
+
+  public fail(message: string): void {
+    const event = errorEvent(message)
+    for (const listener of this.listenersFor('error')) listener(event)
   }
 
   private listenersFor(type: string): Set<Listener> {
@@ -174,6 +183,27 @@ describe('createTypeScriptLspPlugin', () => {
 
     contribution.dispose()
     expect(worker.terminated).toBe(true)
+  })
+
+  it('routes worker crashes through owned worker transport', () => {
+    const worker = new FakeWorker()
+    const errors: unknown[] = []
+    const plugin = createTypeScriptLspPlugin({
+      workerFactory: () => worker,
+      onError: (error) => errors.push(error),
+    })
+    const provider = activatePlugin(plugin)
+    const contribution = provider.createContribution(viewContributionContext(editorSnapshot()))
+    if (!contribution) throw new Error('missing contribution')
+
+    worker.fail('worker crashed')
+
+    expect(errorMessage(errors[0])).toBe('worker crashed')
+    expect(worker.terminated).toBe(true)
+    expect(worker.listenerCount('message')).toBe(0)
+    expect(worker.listenerCount('error')).toBe(0)
+
+    contribution.dispose()
   })
 
   it('syncs active JavaScript documents through the TypeScript language service', async () => {
@@ -1649,6 +1679,11 @@ function transportParityMessages(
 function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message
   return String(error)
+}
+
+function errorEvent(message: string): Event {
+  if (typeof ErrorEvent !== 'undefined') return new ErrorEvent('error', { message })
+  return { message } as ErrorEvent
 }
 
 function latestRangeHighlightRanges(

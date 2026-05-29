@@ -53,10 +53,162 @@ export type MinimapWorkerClientOptions = {
   readonly onLayoutWidth: (width: number) => void
 }
 
+export type MinimapWorkerLifecycleState = 'ready' | 'disposing' | 'disposed' | 'crashed'
+
+export type MinimapWorkerOwnerSnapshot = {
+  readonly lifecycle: MinimapWorkerLifecycleState
+  readonly postedRequests: number
+  readonly disposalAcknowledged: boolean
+  readonly lastError: string | null
+}
+
+export type MinimapWorkerOwnerOptions = {
+  readonly onMessage: (response: MinimapWorkerResponse) => void
+  readonly onError?: (error: Error) => void
+  readonly workerFactory?: () => Worker
+}
+
+export class MinimapWorkerOwner {
+  private worker: Worker | null = null
+  private lifecycle: MinimapWorkerLifecycleState = 'ready'
+  private postedRequests = 0
+  private disposalAcknowledged = false
+  private lastError: Error | null = null
+  private disposalPromise: Promise<void> | null = null
+  private resolveDisposal: (() => void) | null = null
+  private rejectDisposal: ((error: Error) => void) | null = null
+
+  public constructor(private readonly options: MinimapWorkerOwnerOptions) {
+    this.worker = this.createWorker()
+  }
+
+  public inspect(): MinimapWorkerOwnerSnapshot {
+    return {
+      lifecycle: this.lifecycle,
+      postedRequests: this.postedRequests,
+      disposalAcknowledged: this.disposalAcknowledged,
+      lastError: this.lastError?.message ?? null,
+    }
+  }
+
+  public post(request: MinimapWorkerRequest, transfer?: Transferable[]): boolean {
+    const handle = this.worker
+    if (!this.canPost(handle)) return false
+
+    this.postedRequests += 1
+    try {
+      this.postToWorker(handle, request, transfer)
+      return true
+    } catch (error) {
+      this.fail(workerRequestError(error))
+      return false
+    }
+  }
+
+  public dispose(): Promise<void> {
+    if (this.lifecycle === 'disposed') return Promise.resolve()
+    if (this.disposalPromise) return this.disposalPromise
+
+    const handle = this.worker
+    if (!handle) {
+      this.finishDisposal()
+      return Promise.resolve()
+    }
+
+    this.lifecycle = 'disposing'
+    this.disposalPromise = new Promise((resolve, reject) => {
+      this.resolveDisposal = resolve
+      this.rejectDisposal = reject
+    })
+    if (!this.post({ type: 'dispose' }))
+      this.rejectDisposal?.(this.lastError ?? workerDisposedError())
+    return this.disposalPromise
+  }
+
+  private createWorker(): Worker {
+    const handle =
+      this.options.workerFactory?.() ??
+      new Worker(new URL('./minimap.worker.ts', import.meta.url), { type: 'module' })
+    handle.onmessage = this.handleWorkerMessage
+    handle.onerror = this.handleWorkerError
+    return handle
+  }
+
+  private canPost(handle: Worker | null): handle is Worker {
+    if (!handle) return false
+    if (this.lifecycle === 'disposed') return false
+    return this.lifecycle !== 'crashed'
+  }
+
+  private postToWorker(
+    handle: Worker,
+    request: MinimapWorkerRequest,
+    transfer?: Transferable[],
+  ): void {
+    if (transfer) {
+      handle.postMessage(request, transfer)
+      return
+    }
+
+    handle.postMessage(request)
+  }
+
+  private readonly handleWorkerMessage = (event: MessageEvent<MinimapWorkerResponse>): void => {
+    const response = event.data
+    if (response.type === 'disposed') {
+      this.disposalAcknowledged = true
+      this.finishDisposal()
+      return
+    }
+
+    if (response.type === 'error') {
+      this.recordError(new Error(response.message))
+      return
+    }
+
+    this.options.onMessage(response)
+  }
+
+  private readonly handleWorkerError = (event: ErrorEvent): void => {
+    this.fail(new Error(event.message || 'Minimap worker failed'))
+  }
+
+  private recordError(error: Error): void {
+    this.lastError = error
+    this.options.onError?.(error)
+  }
+
+  private fail(error: Error): void {
+    this.lastError = error
+    this.lifecycle = 'crashed'
+    this.terminateWorker()
+    this.rejectDisposal?.(error)
+    this.clearDisposalHandlers()
+    this.options.onError?.(error)
+  }
+
+  private finishDisposal(): void {
+    this.lifecycle = 'disposed'
+    this.terminateWorker()
+    this.resolveDisposal?.()
+    this.clearDisposalHandlers()
+  }
+
+  private terminateWorker(): void {
+    this.worker?.terminate()
+    this.worker = null
+  }
+
+  private clearDisposalHandlers(): void {
+    this.resolveDisposal = null
+    this.rejectDisposal = null
+  }
+}
+
 export class MinimapWorkerClient {
   private readonly host: MinimapHost
   private readonly options: ResolvedMinimapOptions
-  private readonly worker: Worker
+  private readonly workerOwner: MinimapWorkerOwner
   private readonly colorResolver: ColorResolver
   private readonly scheduler = new EditorSecondaryViewScheduler()
   private readonly onLayoutWidth: (width: number) => void
@@ -83,10 +235,15 @@ export class MinimapWorkerClient {
     this.latestSnapshot = options.snapshot
     this.latestTokenSource = options.snapshot.tokens
     this.colorResolver = new ColorResolver(options.host.colorScope)
-    this.worker = new Worker(new URL('./minimap.worker.ts', import.meta.url), { type: 'module' })
-    this.worker.onmessage = this.handleWorkerMessage
-    this.worker.onerror = this.handleWorkerError
+    this.workerOwner = new MinimapWorkerOwner({
+      onError: this.handleWorkerError,
+      onMessage: this.handleWorkerMessage,
+    })
     this.init(options.snapshot)
+  }
+
+  public inspectWorker(): MinimapWorkerOwnerSnapshot {
+    return this.workerOwner.inspect()
   }
 
   public update(
@@ -133,8 +290,7 @@ export class MinimapWorkerClient {
     this.disposed = true
     this.cancelScheduledFlush()
     this.scheduler.dispose()
-    this.post({ type: 'dispose' })
-    this.worker.terminate()
+    void this.workerOwner.dispose().catch(() => undefined)
     this.colorResolver.dispose()
   }
 
@@ -548,8 +704,7 @@ export class MinimapWorkerClient {
     setStyleValue(this.host.decorationsCanvas, 'height', height)
   }
 
-  private handleWorkerMessage = (event: MessageEvent<MinimapWorkerResponse>): void => {
-    const response = event.data
+  private handleWorkerMessage = (response: MinimapWorkerResponse): void => {
     if (response.type === 'layout') {
       this.applyLayout(
         response.layout.width,
@@ -572,7 +727,6 @@ export class MinimapWorkerClient {
       this.applyRenderedResponse(response)
       return
     }
-    if (response.type === 'error') console.warn(response.message)
   }
 
   private applyLayout(width: number, canvasWidth: number, canvasHeight: number): void {
@@ -601,20 +755,15 @@ export class MinimapWorkerClient {
     )
   }
 
-  private handleWorkerError = (event: ErrorEvent): void => {
-    console.warn(event.message || 'Minimap worker failed')
+  private handleWorkerError = (error: Error): void => {
+    console.warn(error.message)
   }
 
   private post(request: MinimapWorkerRequest, transfer?: Transferable[]): void {
     measureMinimapPerformance(
       'minimap.post',
       () => {
-        if (transfer) {
-          this.worker.postMessage(request, transfer)
-          return
-        }
-
-        this.worker.postMessage(request)
+        this.workerOwner.post(request, transfer)
       },
       () => requestDiagnostics(request),
     )
@@ -667,6 +816,15 @@ export function canUseMinimapWorker(): boolean {
     typeof HTMLCanvasElement !== 'undefined' &&
     'transferControlToOffscreen' in HTMLCanvasElement.prototype
   )
+}
+
+function workerRequestError(error: unknown): Error {
+  if (error instanceof Error) return error
+  return new Error(String(error))
+}
+
+function workerDisposedError(): Error {
+  return new Error('Minimap worker is disposed')
 }
 
 function selections(selections: readonly EditorResolvedSelection[]): readonly MinimapSelection[] {

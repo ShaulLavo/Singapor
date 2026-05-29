@@ -27,13 +27,18 @@ export {
   disposeTreeSitterDocument,
   disposeTreeSitterWorker,
   editWithTreeSitter,
+  inspectTreeSitterWorker,
   parseWithTreeSitter,
   registerTreeSitterLanguagesWithWorker,
   selectWithTreeSitter,
+  TreeSitterWorkerClient,
   type TreeSitterBackend,
   type TreeSitterEditPayload,
   type TreeSitterParsePayload,
   type TreeSitterSelectionPayload,
+  type TreeSitterWorkerCacheSnapshot,
+  type TreeSitterWorkerLifecycleState,
+  type TreeSitterWorkerOwnerSnapshot,
 } from './treeSitter/workerClient'
 export {
   createTreeSitterSourceDescriptor,
@@ -43,6 +48,7 @@ export {
   type TreeSitterSourceCache,
   type TreeSitterSourceDescriptor,
 } from './treeSitter/source'
+export type { TreeSitterSourceChunkRetentionSnapshot } from './treeSitter/sourceChunkRetention'
 export {
   TreeSitterSyntaxSession,
   createTextDiffEdit,

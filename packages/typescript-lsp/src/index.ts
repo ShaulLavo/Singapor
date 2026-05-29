@@ -1,6 +1,13 @@
 export { type TypeScriptLspResolvedOptions } from './plugin'
 export { createTypeScriptLspPlugin } from './pluginWithWorker'
 export {
+  TypeScriptLspWorkerOwner,
+  createTypeScriptLspWorkerOwner,
+  type TypeScriptLspWorkerLifecycleState,
+  type TypeScriptLspWorkerOwnerOptions,
+  type TypeScriptLspWorkerOwnerSnapshot,
+} from './workerOwner'
+export {
   diagnosticHighlightGroups,
   summarizeDiagnostics,
   type LanguageServerDiagnosticHighlightGroups as TypeScriptLspDiagnosticHighlightGroups,

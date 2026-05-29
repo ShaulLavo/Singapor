@@ -63,6 +63,7 @@ function handleRequest(request: MinimapWorkerRequest): void {
       return
     case 'dispose':
       renderer.dispose()
+      post({ type: 'disposed' })
       return
   }
 }

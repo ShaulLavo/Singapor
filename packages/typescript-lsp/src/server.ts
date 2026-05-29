@@ -1,7 +1,13 @@
 import type { LspWorkerLike } from '@editor/lsp'
+import {
+  createTypeScriptLspWorkerOwner,
+  workerEventError,
+  type TypeScriptLspWorkerOwnerSnapshot,
+} from './workerOwner'
 
 export type TypeScriptLspServerSession = {
   receive(message: string | ArrayBuffer | ArrayBufferView | unknown): void
+  inspectWorker(): TypeScriptLspWorkerOwnerSnapshot
   dispose(): void
 }
 
@@ -14,14 +20,14 @@ export type TypeScriptLspServerSessionOptions = {
 export function createTypeScriptLspServerSession(
   options: TypeScriptLspServerSessionOptions,
 ): TypeScriptLspServerSession {
-  const worker = (options.workerFactory ?? defaultWorkerFactory)()
+  const worker = createTypeScriptLspWorkerOwner({ workerFactory: options.workerFactory })
   const handleMessage = (event: Event): void => {
     const message = messageEventData(event)
     if (message === null) return
     options.send(message)
   }
   const handleError = (event: Event): void => {
-    options.onError?.(event)
+    options.onError?.(workerEventError(event))
   }
 
   worker.addEventListener('message', handleMessage)
@@ -31,16 +37,15 @@ export function createTypeScriptLspServerSession(
     receive(message) {
       worker.postMessage(decodeSocketMessage(message))
     },
+    inspectWorker() {
+      return worker.inspect()
+    },
     dispose() {
       worker.removeEventListener('message', handleMessage)
       worker.removeEventListener('error', handleError)
-      worker.terminate?.()
+      worker.terminate()
     },
   }
-}
-
-function defaultWorkerFactory(): Worker {
-  return new Worker(new URL('./typescriptLsp.worker.ts', import.meta.url), { type: 'module' })
 }
 
 function decodeSocketMessage(message: string | ArrayBuffer | ArrayBufferView | unknown): unknown {

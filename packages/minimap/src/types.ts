@@ -194,6 +194,7 @@ export type MinimapWorkerRequest =
 
 export type MinimapWorkerResponse =
   | { readonly type: 'layout'; readonly sequence: number; readonly layout: MinimapRenderLayout }
+  | { readonly type: 'disposed' }
   | {
       readonly type: 'rendered'
       readonly sequence: number

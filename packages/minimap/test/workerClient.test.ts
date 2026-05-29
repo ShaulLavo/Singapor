@@ -10,6 +10,112 @@ import { MinimapWorkerClient, type MinimapHost } from '../src/workerClient'
 import type { MinimapWorkerRequest, MinimapWorkerResponse } from '../src/types'
 
 describe('MinimapWorkerClient', () => {
+  it('exposes worker lifecycle and waits for disposal acknowledgement before terminating', () => {
+    const runtime = installMinimapRuntime()
+    try {
+      const host = createHost()
+      const client = new MinimapWorkerClient({
+        host,
+        options: resolveMinimapOptions(),
+        snapshot: snapshot(),
+        decorations: [],
+        onLayoutWidth: vi.fn(),
+      })
+      const worker = runtime.workers[0]!
+
+      expect(client.inspectWorker()).toMatchObject({
+        disposalAcknowledged: false,
+        lifecycle: 'ready',
+        lastError: null,
+      })
+
+      client.dispose()
+
+      expect(worker.postMessage.mock.calls.at(-1)?.[0]).toEqual({ type: 'dispose' })
+      expect(worker.terminate).not.toHaveBeenCalled()
+      expect(client.inspectWorker()).toMatchObject({
+        disposalAcknowledged: false,
+        lifecycle: 'disposing',
+      })
+
+      worker.send({ type: 'disposed' })
+
+      expect(worker.terminate).toHaveBeenCalledTimes(1)
+      expect(client.inspectWorker()).toMatchObject({
+        disposalAcknowledged: true,
+        lifecycle: 'disposed',
+      })
+
+      host.root.remove()
+      host.colorScope.remove()
+    } finally {
+      runtime.restore()
+    }
+  })
+
+  it('records worker error responses on the owner error channel', () => {
+    const runtime = installMinimapRuntime()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      const host = createHost()
+      const client = new MinimapWorkerClient({
+        host,
+        options: resolveMinimapOptions(),
+        snapshot: snapshot(),
+        decorations: [],
+        onLayoutWidth: vi.fn(),
+      })
+      const worker = runtime.workers[0]!
+
+      worker.send({ type: 'error', message: 'render failed' })
+
+      expect(client.inspectWorker()).toMatchObject({
+        lastError: 'render failed',
+        lifecycle: 'ready',
+      })
+      expect(warn).toHaveBeenCalledWith('render failed')
+
+      client.dispose()
+      host.root.remove()
+      host.colorScope.remove()
+    } finally {
+      warn.mockRestore()
+      runtime.restore()
+    }
+  })
+
+  it('records native worker failures and terminates the owner', () => {
+    const runtime = installMinimapRuntime()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      const host = createHost()
+      const client = new MinimapWorkerClient({
+        host,
+        options: resolveMinimapOptions(),
+        snapshot: snapshot(),
+        decorations: [],
+        onLayoutWidth: vi.fn(),
+      })
+      const worker = runtime.workers[0]!
+
+      worker.fail('worker crashed')
+
+      expect(worker.terminate).toHaveBeenCalledTimes(1)
+      expect(client.inspectWorker()).toMatchObject({
+        lastError: 'worker crashed',
+        lifecycle: 'crashed',
+      })
+      expect(warn).toHaveBeenCalledWith('worker crashed')
+
+      client.dispose()
+      host.root.remove()
+      host.colorScope.remove()
+    } finally {
+      warn.mockRestore()
+      runtime.restore()
+    }
+  })
+
   it('posts an initial render after the startup scheduler tick', () => {
     const runtime = installMinimapRuntime()
     try {
@@ -1086,6 +1192,10 @@ class MockWorker {
 
   public send(response: MinimapWorkerResponse): void {
     this.onmessage?.({ data: response } as MessageEvent<MinimapWorkerResponse>)
+  }
+
+  public fail(message: string): void {
+    this.onerror?.({ message } as ErrorEvent)
   }
 }
 

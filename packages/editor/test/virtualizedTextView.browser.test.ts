@@ -84,6 +84,26 @@ describe.skipIf(typeof globalThis.Highlight === 'undefined')(
       expect(view!.scrollElement.style.getPropertyValue('--editor-gutter-width')).toMatch(/px$/)
     })
 
+    it('uses the editor font for line gutter labels by default', () => {
+      view?.dispose()
+      view = new VirtualizedTextView(container, {
+        rowHeight: 20,
+        overscan: 0,
+        gutterContributions: [createLineGutterContribution()],
+      })
+      view!.setText('first\nsecond')
+      view!.setScrollMetrics(0, 40, 360)
+
+      const label = container.querySelector<HTMLElement>('.editor-virtualized-gutter-label')
+      expect(label).not.toBeNull()
+
+      const editorStyle = getComputedStyle(view!.scrollElement)
+      const labelStyle = getComputedStyle(label!)
+      expect(labelStyle.fontFamily).toBe(editorStyle.fontFamily)
+      expect(labelStyle.fontSize).toBe(editorStyle.fontSize)
+      expect(labelStyle.fontWeight).toBe(editorStyle.fontWeight)
+    })
+
     it('keeps fold gutter cursor-line backgrounds above fold button base styles', () => {
       view?.dispose()
       view = new VirtualizedTextView(container, {

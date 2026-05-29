@@ -113,6 +113,15 @@ describe('tree-sitter worker client language registration cache', () => {
     firstWorker.onerror?.({ message: 'boom' } as ErrorEvent)
 
     await expect(registration).rejects.toThrow('boom')
+    expect(client.inspectTreeSitterWorker()).toMatchObject({
+      cache: {
+        registeredLanguages: 0,
+        sourceChunks: { documents: 0, sentChunks: 0, sourceEpochs: 0 },
+      },
+      lastError: 'boom',
+      lifecycle: 'crashed',
+      pendingRequests: 0,
+    })
     await client.registerTreeSitterLanguagesWithWorker([descriptor])
     const nextWorker = fakeWorkerAt(1)
 
@@ -122,6 +131,63 @@ describe('tree-sitter worker client language registration cache', () => {
     expect(
       nextWorker.messages.some((message) => message.payload.type === 'registerLanguages'),
     ).toBe(true)
+  })
+
+  it('exposes worker lifecycle and source chunk cache accounting', async () => {
+    FakeWorker.autoResolve = false
+    const client = await loadWorkerClient()
+    const owner = new client.TreeSitterWorkerClient()
+
+    expect(owner.inspect()).toMatchObject({
+      cache: {
+        registeredLanguages: 0,
+        sourceChunks: { documents: 0, sentChunks: 0, sourceEpochs: 0 },
+      },
+      lifecycle: 'idle',
+      pendingRequests: 0,
+      workerGeneration: 0,
+    })
+
+    const snapshot = createPieceTableSnapshot('const answer = 1;')
+    const parse = owner.parse(parsePayload(snapshot, 1))
+    const worker = fakeWorkerAt(0)
+
+    expect(owner.inspect()).toMatchObject({
+      lifecycle: 'initializing',
+      pendingRequests: 1,
+      workerGeneration: 1,
+    })
+
+    worker.resolveRequest(requestOfType(worker, 'init'))
+    await flushMicrotasks()
+    const request = parseRequests(worker)[0]!
+
+    expect(owner.inspect()).toMatchObject({
+      cache: { sourceChunks: { documents: 1, sentChunks: 0, sourceEpochs: 0 } },
+      lifecycle: 'ready',
+      pendingRequests: 1,
+    })
+
+    worker.resolveRequest(request, parseResult(1))
+    await expect(parse).resolves.toMatchObject({ snapshotVersion: 1 })
+
+    expect(owner.inspect()).toMatchObject({
+      cache: { sourceChunks: { documents: 1, sentChunks: 1, sourceEpochs: 0 } },
+      lifecycle: 'ready',
+      pendingRequests: 0,
+    })
+
+    FakeWorker.autoResolve = true
+    await owner.dispose()
+
+    expect(owner.inspect()).toMatchObject({
+      cache: {
+        registeredLanguages: 0,
+        sourceChunks: { documents: 0, sentChunks: 0, sourceEpochs: 0 },
+      },
+      lifecycle: 'disposed',
+      pendingRequests: 0,
+    })
   })
 
   it('does not mark document source chunks as sent when a request fails', async () => {
@@ -186,6 +252,11 @@ describe('tree-sitter worker client language registration cache', () => {
     expect(firstRequest.payload.source.chunks.length).toBeGreaterThan(0)
     worker.resolveRequest(firstRequest, parseResult(1))
     await expect(firstParse).resolves.toMatchObject({ snapshotVersion: 1 })
+    expect(client.inspectTreeSitterWorker().cache.sourceChunks).toMatchObject({
+      documents: 1,
+      sentChunks: 1,
+      sourceEpochs: 0,
+    })
 
     const failedParse = client.parseWithTreeSitter(parsePayload(snapshot, 2))
     await flushMicrotasks()
@@ -193,6 +264,11 @@ describe('tree-sitter worker client language registration cache', () => {
     expect(failedRequest.payload.source.chunks).toHaveLength(0)
     worker.rejectRequest(failedRequest, 'Tree-sitter source chunk "buffer:2:0" is missing')
     await expect(failedParse).rejects.toThrow('Tree-sitter source chunk')
+    expect(client.inspectTreeSitterWorker().cache.sourceChunks).toMatchObject({
+      documents: 1,
+      sentChunks: 0,
+      sourceEpochs: 1,
+    })
 
     const retryParse = client.parseWithTreeSitter(parsePayload(snapshot, 3))
     await flushMicrotasks()

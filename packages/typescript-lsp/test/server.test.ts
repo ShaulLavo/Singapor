@@ -25,9 +25,18 @@ class FakeWorker implements LspWorkerLike {
     this.terminated = true
   }
 
+  public listenerCount(type: string): number {
+    return this.listenersFor(type).size
+  }
+
   public receive(message: unknown): void {
     const event = new MessageEvent('message', { data: message })
     for (const listener of this.listenersFor('message')) listener(event)
+  }
+
+  public fail(message: string): void {
+    const event = errorEvent(message)
+    for (const listener of this.listenersFor('error')) listener(event)
   }
 
   private listenersFor(type: string): Set<Listener> {
@@ -57,6 +66,15 @@ describe('createTypeScriptLspServerSession', () => {
 
     session.receive(initialize)
     expect(worker.sent).toEqual([initialize])
+    expect(worker.listenerCount('message')).toBe(1)
+    expect(worker.listenerCount('error')).toBe(1)
+    expect(session.inspectWorker()).toMatchObject({
+      lifecycle: 'ready',
+      postedMessages: 1,
+      messageListeners: 1,
+      errorListeners: 1,
+      lastError: null,
+    })
 
     worker.receive({
       jsonrpc: '2.0',
@@ -72,6 +90,14 @@ describe('createTypeScriptLspServerSession', () => {
 
     session.dispose()
     expect(worker.terminated).toBe(true)
+    expect(worker.listenerCount('message')).toBe(0)
+    expect(worker.listenerCount('error')).toBe(0)
+    expect(session.inspectWorker()).toMatchObject({
+      lifecycle: 'disposed',
+      postedMessages: 1,
+      messageListeners: 0,
+      errorListeners: 0,
+    })
   })
 
   it('decodes binary WebSocket messages before forwarding to the worker', () => {
@@ -86,4 +112,37 @@ describe('createTypeScriptLspServerSession', () => {
 
     expect(worker.sent).toEqual([message])
   })
+
+  it('records worker errors and tears down worker ownership', () => {
+    const worker = new FakeWorker()
+    const errors: unknown[] = []
+    const session = createTypeScriptLspServerSession({
+      send: vi.fn(),
+      workerFactory: () => worker,
+      onError: (error) => errors.push(error),
+    })
+
+    worker.fail('worker crashed')
+
+    expect(errorMessage(errors[0])).toBe('worker crashed')
+    expect(worker.terminated).toBe(true)
+    expect(worker.listenerCount('message')).toBe(0)
+    expect(worker.listenerCount('error')).toBe(0)
+    expect(session.inspectWorker()).toMatchObject({
+      lifecycle: 'crashed',
+      lastError: 'worker crashed',
+      messageListeners: 0,
+      errorListeners: 0,
+    })
+  })
 })
+
+function errorEvent(message: string): Event {
+  if (typeof ErrorEvent !== 'undefined') return new ErrorEvent('error', { message })
+  return { message } as ErrorEvent
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  return String(error)
+}
