@@ -467,10 +467,18 @@ const defaultTreeSitterWorkerClient = (): TreeSitterWorkerClient => {
   return compatibilityWorkerClient
 }
 
+/**
+ * @deprecated Phase 11 compatibility singleton. Prefer creating a `TreeSitterWorkerClient` or
+ * `createTreeSitterWorkerBackend()` and owning its lifetime explicitly.
+ */
 export const registerTreeSitterLanguagesWithWorker = (
   languages: readonly TreeSitterLanguageDescriptor[],
 ): Promise<void> => defaultTreeSitterWorkerClient().registerLanguages(languages)
 
+/**
+ * @deprecated Phase 11 compatibility singleton. Prefer parsing through an explicitly owned
+ * `TreeSitterWorkerClient` or `TreeSitterBackend`.
+ */
 export function parseWithTreeSitter(
   payload: TreeSitterParseOnlyPayload,
 ): Promise<TreeSitterParseResult | TreeSitterParseAckResult | undefined>
@@ -486,6 +494,10 @@ export function parseWithTreeSitter(
   return defaultTreeSitterWorkerClient().parse(payload)
 }
 
+/**
+ * @deprecated Phase 11 compatibility singleton. Prefer editing through an explicitly owned
+ * `TreeSitterWorkerClient` or `TreeSitterBackend`.
+ */
 export function editWithTreeSitter(
   payload: TreeSitterEditOnlyPayload,
 ): Promise<TreeSitterParseResult | TreeSitterParseAckResult | undefined>
@@ -501,23 +513,43 @@ export function editWithTreeSitter(
   return defaultTreeSitterWorkerClient().edit(payload)
 }
 
+/**
+ * @deprecated Phase 11 compatibility singleton. Prefer querying through an explicitly owned
+ * `TreeSitterWorkerClient` or `TreeSitterBackend`.
+ */
 export const queryRangeWithTreeSitter = (
   payload: TreeSitterRangePayload,
 ): Promise<TreeSitterRangeResult | undefined> => defaultTreeSitterWorkerClient().queryRange(payload)
 
+/**
+ * @deprecated Phase 11 compatibility singleton. Prefer selecting through an explicitly owned
+ * `TreeSitterWorkerClient` or `TreeSitterBackend`.
+ */
 export const selectWithTreeSitter = (
   payload: TreeSitterSelectionPayload,
 ): Promise<TreeSitterSelectionResult | undefined> => defaultTreeSitterWorkerClient().select(payload)
 
+/**
+ * @deprecated Phase 11 compatibility singleton. Prefer document disposal through an explicitly
+ * owned `TreeSitterWorkerClient` or `TreeSitterBackend`.
+ */
 export const disposeTreeSitterDocument = (documentId: string): void => {
   defaultTreeSitterWorkerClient().disposeDocument(documentId)
 }
 
+/**
+ * @deprecated Phase 11 compatibility singleton disposal. Dispose the explicit
+ * `TreeSitterWorkerClient` created by the caller instead.
+ */
 export const disposeTreeSitterWorker = async (): Promise<void> => {
   await compatibilityWorkerClient?.dispose()
   compatibilityWorkerClient = null
 }
 
+/**
+ * @deprecated Phase 11 compatibility singleton inspection. Inspect the explicit
+ * `TreeSitterWorkerClient` created by the caller instead.
+ */
 export const inspectTreeSitterWorker = (): TreeSitterWorkerOwnerSnapshot =>
   defaultTreeSitterWorkerClient().inspect()
 

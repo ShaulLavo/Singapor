@@ -868,6 +868,43 @@ describe('Tree-sitter syntax capture conversion', () => {
     expect(session.getResult()).toBe(result)
   })
 
+  it('ignores parse results that complete after syntax session disposal', async () => {
+    const disposedDocuments: string[] = []
+    const parse = createDeferred<TreeSitterParseResult>()
+    const backend = {
+      disposeDocument: (documentId) => {
+        disposedDocuments.push(documentId)
+      },
+      edit: async () => undefined,
+      parse: () => parse.promise,
+      registerLanguages: async () => undefined,
+      select: async () => undefined,
+    } satisfies TreeSitterBackend
+    const document = createDocumentSession('const a = 1;')
+    const session = new TreeSitterSyntaxSession({
+      backend,
+      documentId: 'file.ts',
+      languageId: 'typescript',
+      snapshot: document.getSnapshot(),
+      fullText: document.materializeFullText(),
+    })
+    const initialResult = session.getResult()
+    const refresh = session.refresh(document.getSnapshot(), document.materializeFullText())
+
+    session.dispose()
+    parse.resolve(
+      createParseResult({
+        documentId: 'file.ts',
+        languageId: 'typescript',
+        snapshotVersion: 1,
+      }),
+    )
+    await expect(refresh).resolves.toBe(initialResult)
+
+    expect(disposedDocuments).toEqual(['file.ts'])
+    expect(session.getResult()).toBe(initialResult)
+  })
+
   it('falls back to a full refresh when current incremental parsing is cancelled', async () => {
     const parseVersions: number[] = []
     const disposedDocuments: string[] = []

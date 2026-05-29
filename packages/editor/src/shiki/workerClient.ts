@@ -61,18 +61,30 @@ export type ShikiWorkerOwnerOptions = {
 
 export const canUseShikiWorker = (): boolean => supportsWorkers()
 
+/**
+ * @deprecated Phase 11 compatibility singleton. Prefer creating a `ShikiWorkerOwner` with
+ * `createShikiWorkerOwner()` and owning its lifetime explicitly.
+ */
 export function createShikiHighlighterSession(
   options: ShikiHighlighterSessionOptions,
 ): EditorHighlighterSession | null {
   return defaultShikiWorkerOwner().createSession(options)
 }
 
+/**
+ * @deprecated Phase 11 compatibility singleton. Prefer loading themes through an explicitly owned
+ * `ShikiWorkerOwner`.
+ */
 export async function loadShikiTheme(
   options: ShikiThemeOptions,
 ): Promise<EditorTheme | null | undefined> {
   return defaultShikiWorkerOwner().loadTheme(options)
 }
 
+/**
+ * @deprecated Phase 11 compatibility singleton disposal. Dispose the explicit `ShikiWorkerOwner`
+ * created by the caller instead.
+ */
 export async function disposeShikiWorker(): Promise<void> {
   await compatibilityWorkerOwner?.dispose()
   compatibilityWorkerOwner = null
@@ -267,6 +279,8 @@ class ShikiHighlighterSession implements EditorHighlighterSession {
     snapshot: ShikiHighlighterSessionOptions['snapshot'],
     fullText?: string,
   ): Promise<EditorHighlightResult> {
+    if (this.disposed) return emptyHighlightResult()
+
     return this.enqueueRequest(async () => {
       const textSnapshot = createDocumentTextSnapshot(snapshot, fullText)
       const documentText = textSnapshot.materializeFullText()
@@ -275,6 +289,7 @@ class ShikiHighlighterSession implements EditorHighlighterSession {
         ...this.documentOptions(documentText),
         text: documentText,
       })
+      if (this.disposed) return emptyHighlightResult()
 
       this.snapshot = snapshot
       this.textSnapshot = textSnapshot
@@ -285,10 +300,14 @@ class ShikiHighlighterSession implements EditorHighlighterSession {
   }
 
   public async applyChange(change: DocumentSessionChange): Promise<EditorHighlightResult> {
+    if (this.disposed) return emptyHighlightResult()
+
     return this.enqueueRequest(async () => {
       const nextTextSnapshot = documentSessionChangeTextSnapshot(change)
       const payload = this.editPayloadForChange(change, nextTextSnapshot)
       const result = await this.owner.request(payload)
+      if (this.disposed) return emptyHighlightResult()
+
       this.snapshot = change.snapshot
       this.textSnapshot = nextTextSnapshot
       this.opened = true
@@ -298,6 +317,8 @@ class ShikiHighlighterSession implements EditorHighlighterSession {
   }
 
   public dispose(): void {
+    if (this.disposed) return
+
     this.disposed = true
     this.opened = false
     this.owner.disposeDocument(this.documentId)
@@ -347,6 +368,10 @@ class ShikiHighlighterSession implements EditorHighlighterSession {
       themes: this.themes,
     }
   }
+}
+
+function emptyHighlightResult(): EditorHighlightResult {
+  return { tokens: [] }
 }
 
 export const createTextDiffEdit = (previousText: string, nextText: string) => {

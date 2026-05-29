@@ -705,6 +705,8 @@ export class MinimapWorkerClient {
   }
 
   private handleWorkerMessage = (response: MinimapWorkerResponse): void => {
+    if (this.disposed) return
+
     if (response.type === 'layout') {
       this.applyLayout(
         response.layout.width,

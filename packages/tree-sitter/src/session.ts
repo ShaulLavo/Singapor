@@ -60,6 +60,7 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
   private snapshot: PieceTableSnapshot
   private result: EditorSyntaxResult
   private languageRegistrationPromise: Promise<boolean> | null = null
+  private disposed = false
 
   public constructor(options: TreeSitterSyntaxSessionOptions) {
     this.documentId = options.documentId
@@ -79,6 +80,8 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
     snapshot: PieceTableSnapshot,
     fullText?: string,
   ): Promise<EditorSyntaxResult> {
+    if (this.disposed) return this.result
+
     const snapshotVersion = ++this.snapshotVersion
     const textSnapshot = createDocumentTextSnapshot(snapshot, fullText)
 
@@ -104,6 +107,7 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
   }
 
   public async applyChange(change: DocumentSessionChange): Promise<EditorSyntaxResult> {
+    if (this.disposed) return this.result
     if (change.kind === 'none' || change.kind === 'selection') {
       return this.result
     }
@@ -151,6 +155,7 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
   }
 
   public async queryRange(range: EditorSyntaxRange): Promise<EditorSyntaxResult> {
+    if (this.disposed) return this.result
     if (!this.backend.queryRange) {
       return this.createRangeUnavailableResult(range, 'Tree-sitter range queries are unavailable')
     }
@@ -187,6 +192,9 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
   }
 
   public dispose(): void {
+    if (this.disposed) return
+
+    this.disposed = true
     this.backend.disposeDocument(this.documentId)
   }
 
@@ -196,6 +204,7 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
   ): Promise<EditorSyntaxResult> {
     try {
       const result = await this.backend.edit(payload)
+      if (this.disposed) return this.result
       if (!this.isCurrentSnapshotVersion(payload.snapshotVersion)) {
         return this.result
       }
@@ -215,6 +224,7 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
         payload.snapshot,
       )
     } catch {
+      if (this.disposed) return this.result
       if (!this.isCurrentSnapshotVersion(payload.snapshotVersion)) {
         return this.result
       }
@@ -226,6 +236,8 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
   private reparseAfterIncrementalFailure(
     snapshot: PieceTableSnapshot,
   ): Promise<EditorSyntaxResult> {
+    if (this.disposed) return Promise.resolve(this.result)
+
     this.parsedSnapshotVersion = 0
     this.backend.disposeDocument(this.documentId)
     return this.refresh(snapshot)
@@ -256,6 +268,8 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
     textSnapshot: DocumentTextSnapshot,
     snapshot: PieceTableSnapshot,
   ): EditorSyntaxResult {
+    if (this.disposed) return this.result
+
     this.textSnapshot = textSnapshot
     this.snapshot = snapshot
     this.result = this.createEmptyResult({
@@ -275,6 +289,7 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
     textSnapshot: DocumentTextSnapshot,
     snapshot: PieceTableSnapshot,
   ): EditorSyntaxResult {
+    if (this.disposed) return this.result
     if (!result) return this.result
     if (result.snapshotVersion !== snapshotVersion) return this.result
     if (result.snapshotVersion !== this.snapshotVersion) return this.result
@@ -302,6 +317,7 @@ export class TreeSitterSyntaxSession implements EditorSyntaxSession {
     result: TreeSitterRangeResult | undefined,
     range: EditorSyntaxRange,
   ): EditorSyntaxResult {
+    if (this.disposed) return this.result
     if (!result) return this.result
     if (result.snapshotVersion !== this.parsedSnapshotVersion) return this.result
     if (!sameSyntaxRange(result.range, range)) return this.result

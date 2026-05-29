@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createPieceTableSnapshot } from '../../src/public/document'
 
 type WorkerClientModule = typeof import('../../src/shiki/workerClient')
 
@@ -35,14 +36,17 @@ class FakeWorker {
     return this.terminated
   }
 
-  public resolveRequest(message: FakeWorkerRequest): void {
+  public resolveRequest(
+    message: FakeWorkerRequest,
+    result: unknown = defaultResult(message),
+  ): void {
     if (this.terminated) return
 
     this.onmessage?.({
       data: {
         id: message.id,
         ok: true,
-        result: { theme: { backgroundColor: message.payload.theme } },
+        result,
       },
     } as MessageEvent)
   }
@@ -131,6 +135,52 @@ describe('Shiki worker client theme cache', () => {
 
     expect(fakeWorkers).toHaveLength(2)
   }, 20_000)
+
+  it('ignores tokenizer results that arrive after highlighter session disposal', async () => {
+    FakeWorker.autoResolve = false
+    const client = await loadWorkerClient()
+    const owner = client.createShikiWorkerOwner()
+    const snapshot = createPieceTableSnapshot('const value = 1;')
+    const session = owner.createSession({
+      documentId: 'file.ts',
+      lang: 'typescript',
+      theme: 'github-dark',
+      snapshot,
+      fullText: 'const value = 1;',
+    })
+    if (!session) throw new Error('missing Shiki highlighter session')
+
+    const highlight = session.refresh(snapshot, 'const value = 1;')
+    await flushMicrotasks()
+
+    const worker = fakeWorkerAt(0)
+    const openRequest = requestOfType('open')
+
+    session.dispose()
+
+    expect(requestOfType('disposeDocument').payload).toMatchObject({
+      documentId: 'file.ts',
+      type: 'disposeDocument',
+    })
+
+    worker.resolveRequest(openRequest, {
+      tokens: [{ start: 0, end: 5, style: { color: '#ff0000' } }],
+    })
+
+    await expect(highlight).resolves.toEqual({ tokens: [] })
+    expect(owner.inspect()).toMatchObject({
+      lifecycle: 'ready',
+      pendingRequests: 1,
+    })
+
+    worker.resolveRequest(requestOfType('disposeDocument'))
+    await flushMicrotasks()
+
+    expect(owner.inspect()).toMatchObject({
+      lifecycle: 'ready',
+      pendingRequests: 0,
+    })
+  }, 20_000)
 })
 
 async function loadWorkerClient(): Promise<WorkerClientModule> {
@@ -151,4 +201,23 @@ function fakeWorkerAt(index: number): FakeWorker {
   const worker = fakeWorkers[index]
   if (!worker) throw new Error(`Expected fake worker at index ${index}`)
   return worker
+}
+
+function requestOfType(type: string): FakeWorkerRequest {
+  const request = fakeWorkers
+    .flatMap((worker) => worker.messages)
+    .find((message) => {
+      return message.payload.type === type
+    })
+  if (!request) throw new Error(`Expected ${type} request`)
+  return request
+}
+
+function defaultResult(message: FakeWorkerRequest): unknown {
+  return { theme: { backgroundColor: message.payload.theme } }
+}
+
+async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve()
+  await Promise.resolve()
 }

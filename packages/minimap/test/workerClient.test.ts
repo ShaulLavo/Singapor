@@ -116,6 +116,45 @@ describe('MinimapWorkerClient', () => {
     }
   })
 
+  it('ignores rendered responses that arrive after disposal while work is in flight', () => {
+    const runtime = installMinimapRuntime()
+    try {
+      const host = createHost()
+      const client = new MinimapWorkerClient({
+        host,
+        options: resolveMinimapOptions(),
+        snapshot: snapshot(),
+        decorations: [],
+        onLayoutWidth: vi.fn(),
+      })
+      const worker = runtime.workers[0]!
+
+      runtime.flushAnimationFrames()
+      const sequence = lastRenderSequence(worker)
+
+      client.dispose()
+      worker.send(renderedResponse(sequence))
+
+      expect(host.slider.style.display).toBe('')
+      expect(host.slider.style.transform).toBe('')
+      expect(host.slider.style.height).toBe('')
+      expect(worker.terminate).not.toHaveBeenCalled()
+
+      worker.send({ type: 'disposed' })
+
+      expect(worker.terminate).toHaveBeenCalledTimes(1)
+      expect(client.inspectWorker()).toMatchObject({
+        disposalAcknowledged: true,
+        lifecycle: 'disposed',
+      })
+
+      host.root.remove()
+      host.colorScope.remove()
+    } finally {
+      runtime.restore()
+    }
+  })
+
   it('posts an initial render after the startup scheduler tick', () => {
     const runtime = installMinimapRuntime()
     try {

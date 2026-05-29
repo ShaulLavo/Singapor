@@ -624,6 +624,9 @@ Purpose: stop clone-and-modify language server architecture.
 
 Purpose: make workers resources with explicit ownership instead of global side effects.
 
+Current worker owner cache limits and restart behavior are documented in
+[Worker Topology](architecture/worker-topology.md).
+
 ### Work
 
 - Define worker owner objects for:
@@ -640,6 +643,8 @@ Purpose: make workers resources with explicit ownership instead of global side e
   - error channel
 - Replace module-global workers with owned worker pools or explicit singletons created by the editor
   runtime.
+- Remove or narrow Tree-sitter and Shiki compatibility singleton helpers once first-party callers
+  create worker owners explicitly.
 - Define source chunk ownership and retention outside the Tree-sitter client.
 - Add worker crash and restart behavior.
 - Add tests for editor disposal while work is in flight.
@@ -647,6 +652,8 @@ Purpose: make workers resources with explicit ownership instead of global side e
 ### Must Delete
 
 - Hidden module-global worker state.
+- Broad compatibility singleton worker exports after first-party callers have migrated to explicit
+  owners.
 - Fire-and-forget disposal where correctness depends on disposal.
 - Cache retention policies buried in worker implementation files.
 

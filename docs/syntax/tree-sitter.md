@@ -60,9 +60,10 @@ Open implementation details:
 - websocket backend protocol beyond the local worker backend
 - parser package loading policy for third-party language plugins
 - query asset format beyond raw highlight/fold/injection query strings
-- parse tree retention across undo/redo
-- memory limits and eviction policy
 - cancellation or superseding behavior for stale parses
+
+The current parsed snapshot retention, source chunk accounting, and worker restart policy are
+recorded in [Worker Topology](../architecture/worker-topology.md#tree-sitter-syntax-worker).
 
 ## Highlighting
 
